@@ -19,6 +19,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Health"
+  /jurisdictions:
+    get:
+      operationId: listJurisdictions
+      parameters:
+        - name: type
+          in: query
+          schema: { type: string, enum: [REGION, DISTRICT, OFFICE, CIRCLE] }
+        - name: parentId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: List of jurisdictions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JurisdictionList"
+        default: { $ref: "#/components/responses/Problem" }
+  /jurisdictions/{jurisdictionId}:
+    get:
+      operationId: getJurisdiction
+      parameters:
+        - $ref: "#/components/parameters/JurisdictionId"
+      responses:
+        "200":
+          description: Jurisdiction details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Jurisdiction"
+        default: { $ref: "#/components/responses/Problem" }
   /taxpayers:
     get:
       operationId: searchTaxpayers
@@ -96,6 +127,11 @@ components:
       in: cookie
       name: ptas_session
   parameters:
+    JurisdictionId:
+      name: jurisdictionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     AssessmentId:
       name: assessmentId
       in: path
@@ -118,6 +154,24 @@ components:
       required: [status]
       properties:
         status: { type: string, enum: [ok, degraded] }
+    Jurisdiction:
+      type: object
+      required: [id, type, code, name, activeFrom]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [REGION, DISTRICT, OFFICE, CIRCLE] }
+        code: { type: string }
+        name: { type: string }
+        parentId: { type: [string, "null"], format: uuid }
+        activeFrom: { type: string, format: date }
+        activeTo: { type: [string, "null"], format: date }
+    JurisdictionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Jurisdiction" }
     CreateTaxpayer:
       type: object
       required: [displayName, jurisdictionId]

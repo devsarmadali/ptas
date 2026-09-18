@@ -5,7 +5,9 @@ This is the minimum engineering dictionary. Field-level form mapping must be exp
 | Entity/field                   | Type          |    Required | Classification       | Rule                                                          |
 | ------------------------------ | ------------- | ----------: | -------------------- | ------------------------------------------------------------- |
 | jurisdiction.id                | UUID          |         Yes | Internal             | Stable identifier                                             |
+| jurisdiction.parent_id         | UUID          | Conditional | Internal             | Hierarchy link: CIRCLE->OFFICE->DISTRICT->REGION (root null)  |
 | jurisdiction.type              | Enum          |         Yes | Internal             | REGION/DISTRICT/OFFICE/CIRCLE                                 |
+| user_role.jurisdiction_id      | UUID          |         Yes | Internal             | Bound jurisdiction; inspector limited to 1 active circle      |
 | taxpayer.id                    | UUID          |         Yes | Restricted           | Internal identity, not printed                                |
 | taxpayer.display_name          | Text          |         Yes | Restricted           | Normalized for search; original retained where required       |
 | taxpayer.status                | Enum          |         Yes | Internal             | Effective workflow status                                     |
