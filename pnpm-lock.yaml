@@ -94,6 +94,9 @@ importers:
 
   packages/database:
     dependencies:
+      '@ptas/domain':
+        specifier: workspace:*
+        version: link:../domain
       postgres:
         specifier: 3.4.9
         version: 3.4.9

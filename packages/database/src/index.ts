@@ -1,5 +1,7 @@
 import postgres from "postgres";
 
+export * from "./audit-repository.js";
+
 export function createDatabaseClient(databaseUrl: string) {
   if (!databaseUrl.startsWith("postgresql://")) {
     throw new Error("A PostgreSQL connection URL is required");
