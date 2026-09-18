@@ -1,0 +1,6 @@
+# Replace placeholders with department-approved GitHub teams before use.
+* @ptas-engineering
+/docs/legal/ @ptas-legal @ptas-product
+/packages/database/ @ptas-engineering @ptas-security
+/docs/api/ @ptas-engineering @ptas-integrations
+/.github/ @ptas-engineering @ptas-security

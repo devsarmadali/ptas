@@ -1,0 +1,105 @@
+version: 1
+programme: PTAS
+rules:
+  max_active_story_per_agent: 1
+  require_human_review: true
+stories:
+  - id: PTAS-000
+    title: Validate and lock the repository foundation
+    authority: GREEN
+    objective: Ensure the monorepo installs, checks, tests and builds reproducibly without adding domain features.
+    acceptance:
+      - pnpm install produces a committed lockfile
+      - format, lint, typecheck, test, build and repo validation pass
+      - web health endpoint and landing page build
+      - no secret or production data is included
+      - toolchain ADR is updated for any changed version
+    exclusions:
+      - authentication provider integration
+      - database connectivity
+      - taxpayer or assessment screens
+  - id: PTAS-010
+    title: Organization and jurisdiction domain
+    authority: GREEN
+    depends_on: [PTAS-000]
+    acceptance:
+      - region, district, office and circle hierarchy is modeled
+      - one active inspector-circle assignment rule is tested
+      - authorization policy denies unrelated jurisdiction access
+  - id: PTAS-020
+    title: Accessible design-system foundation
+    authority: GREEN
+    depends_on: [PTAS-000]
+    acceptance:
+      - tokens are implemented without claiming final government branding
+      - button, field, error summary, status badge, table and page shell are documented
+      - keyboard and automated accessibility tests pass
+  - id: PTAS-030
+    title: Audit-event framework
+    authority: GREEN
+    depends_on: [PTAS-010]
+    acceptance:
+      - material command interface requires correlation and actor context
+      - append-only persistence contract exists
+      - sensitive fields are redacted in test coverage
+  - id: PTAS-040
+    title: Party and taxpayer registry prototype
+    authority: AMBER
+    depends_on: [PTAS-010, PTAS-030]
+    acceptance:
+      - synthetic taxpayer creation and jurisdiction-filtered search work
+      - duplicate candidates are surfaced, not silently merged
+      - identifier display is masked
+  - id: PTAS-050
+    title: Effective-dated legal configuration
+    authority: AMBER
+    depends_on: [PTAS-030]
+    acceptance:
+      - schedule, category, rate, form and account-head versions require approval evidence
+      - unapproved versions cannot be activated
+      - no official value is embedded in code or migration
+  - id: PTAS-060
+    title: Assessment state machine and immutable versions
+    authority: AMBER
+    depends_on: [PTAS-040, PTAS-050]
+    acceptance:
+      - one assessment per taxpayer/year is enforced
+      - submit, return, approve and revise transitions are tested
+      - approved snapshots cannot be edited
+  - id: PTAS-070
+    title: Append-only demand ledger
+    authority: AMBER
+    depends_on: [PTAS-060]
+    acceptance:
+      - approval and approved revision create balanced traceable entries
+      - update/delete attempts fail
+      - correction uses referenced adjustment entries
+  - id: PTAS-080
+    title: Document-rendering framework
+    authority: AMBER
+    depends_on: [PTAS-050, PTAS-060]
+    acceptance:
+      - template versions are effective-dated and hashable
+      - provisional templates are visibly marked non-operative
+      - generated documents reproduce approved snapshots
+  - id: PTAS-090
+    title: Payment adapter and reconciliation mocks
+    authority: AMBER
+    depends_on: [PTAS-070]
+    acceptance:
+      - signed-event interface, idempotency and duplicate handling are tested
+      - mismatch and dead-letter workflows are represented
+      - no live endpoint or credential is configured
+  - id: PTAS-900
+    title: Production activation
+    authority: RED
+    depends_on:
+      [PTAS-010, PTAS-020, PTAS-030, PTAS-040, PTAS-050, PTAS-060, PTAS-070, PTAS-080, PTAS-090]
+    blocked_by:
+      - legal approvals
+      - official forms and rates
+      - integration contracts
+      - security and privacy approval
+      - cloud procurement and ownership
+      - migration sign-off
+      - SLA, RPO, RTO and operations sign-off

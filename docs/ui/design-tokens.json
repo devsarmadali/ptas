@@ -1,0 +1,110 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "status": "draft-non-branded",
+  "note": "Official Punjab/Excise branding remains an approval gate.",
+  "color": {
+    "surface": {
+      "default": {
+        "value": "#ffffff"
+      },
+      "subtle": {
+        "value": "#f5f7f9"
+      }
+    },
+    "text": {
+      "default": {
+        "value": "#17202a"
+      },
+      "muted": {
+        "value": "#4b5563"
+      }
+    },
+    "action": {
+      "default": {
+        "value": "#0b5cab"
+      },
+      "hover": {
+        "value": "#084b8a"
+      }
+    },
+    "danger": {
+      "default": {
+        "value": "#b42318"
+      }
+    },
+    "success": {
+      "default": {
+        "value": "#067647"
+      }
+    },
+    "border": {
+      "default": {
+        "value": "#cbd5e1"
+      }
+    }
+  },
+  "spacing": {
+    "1": {
+      "value": "4px"
+    },
+    "2": {
+      "value": "8px"
+    },
+    "3": {
+      "value": "12px"
+    },
+    "4": {
+      "value": "16px"
+    },
+    "5": {
+      "value": "20px"
+    },
+    "6": {
+      "value": "24px"
+    },
+    "7": {
+      "value": "28px"
+    },
+    "8": {
+      "value": "32px"
+    },
+    "9": {
+      "value": "36px"
+    },
+    "10": {
+      "value": "40px"
+    },
+    "11": {
+      "value": "44px"
+    },
+    "12": {
+      "value": "48px"
+    }
+  },
+  "radius": {
+    "small": {
+      "value": "4px"
+    },
+    "medium": {
+      "value": "8px"
+    }
+  },
+  "font": {
+    "family": {
+      "sans": {
+        "value": "system-ui, sans-serif"
+      }
+    },
+    "size": {
+      "body": {
+        "value": "1rem"
+      },
+      "small": {
+        "value": "0.875rem"
+      },
+      "title": {
+        "value": "1.75rem"
+      }
+    }
+  }
+}

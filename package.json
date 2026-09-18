@@ -1,0 +1,31 @@
+{
+  "name": "ptas",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.13.1",
+  "engines": {
+    "node": ">=22.16"
+  },
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "test:e2e": "pnpm --filter @ptas/web test:e2e",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "repo:validate": "node scripts/validate-repo.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.9",
+    "eslint": "10.7.0",
+    "prettier": "3.9.5",
+    "turbo": "2.10.5",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10",
+    "@eslint/js": "10.0.1",
+    "typescript-eslint": "8.64.0",
+    "globals": "17.7.0"
+  }
+}

@@ -1,0 +1,468 @@
+{
+  "name": "PTAS AI Development Handoff",
+  "version": "1.0.0",
+  "created_on": "2026-07-16",
+  "planning_baseline": "Punjab Professional Tax Digitization Plan v0.5",
+  "status": "Bootstrap repository for supervised incremental development; not production authorization",
+  "recommended_first_story": "PTAS-000",
+  "verification": "See VERIFICATION_REPORT.md",
+  "toolchain": {
+    "node": "24 LTS target; repository permits 22.16 through 24 for bootstrap",
+    "pnpm": "11.13.1",
+    "next": "16.2.10",
+    "react": "19.2.7",
+    "typescript": "5.9.3"
+  },
+  "files": [
+    {
+      "path": ".editorconfig",
+      "bytes": 188,
+      "sha256": "a6b98ea7cb6d61ed8d430dd0dffa46c87012b5cf859d4ce7207898954951fdcd"
+    },
+    {
+      "path": ".env.example",
+      "bytes": 470,
+      "sha256": "ce5f2eeaa36c83005a9efb1c7c8336b9d013b0106ed439eb0d48ed2b6ccd6aa0"
+    },
+    {
+      "path": ".github/CODEOWNERS",
+      "bytes": 276,
+      "sha256": "e60ec885995781672e9ac0092010c4b68231c30891ade8933f9582d14f60de83"
+    },
+    {
+      "path": ".github/PULL_REQUEST_TEMPLATE.md",
+      "bytes": 418,
+      "sha256": "1094622dfb4029bebfa3a43492fe7c1be64335c2ea87451328783b02e4e8c1f7"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "bytes": 613,
+      "sha256": "33eaf2ce21a52a36bdabbc45700318103078f9002f4fa24ee877405bb9cd21c9"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 165,
+      "sha256": "c539a2fbd0350c6ec6c7f940e2057a310ede971fe653322a8e799b62d24e23f3"
+    },
+    {
+      "path": ".prettierignore",
+      "bytes": 68,
+      "sha256": "8d3feca46d9b769aba2318580e5b700bbaac19dc47c8912cfc927a2082bdc371"
+    },
+    {
+      "path": "AGENTS.md",
+      "bytes": 4089,
+      "sha256": "0337d79e402bec90c4931e4c888928c114d134b90612e4f7a0a44a78b1f69cf1"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1951,
+      "sha256": "1c16c34acc2e6aaaf03c1a104ef29ad1d8344d5aa411b6cb2c2db8b81bc7dd5e"
+    },
+    {
+      "path": "VERIFICATION_REPORT.md",
+      "bytes": 1178,
+      "sha256": "5c037a9b83ea44ef00a113b0c83d34efb004a5246336607739952dbb47c505d7"
+    },
+    {
+      "path": "apps/web/AGENTS.md",
+      "bytes": 619,
+      "sha256": "aaf655e4c71a81f72aa9a01f010a1454e47838db642619a4db4d711caf7ce9b9"
+    },
+    {
+      "path": "apps/web/e2e/home.spec.ts",
+      "bytes": 307,
+      "sha256": "09a1beb1302ed7f4d7daef77251be1f5260291341156afb01b39c38dca77b3cf"
+    },
+    {
+      "path": "apps/web/next-env.d.ts",
+      "bytes": 81,
+      "sha256": "879741880b6ab48da99dcc06dcc674d381c9826137b0496bf7bb368f302de9fc"
+    },
+    {
+      "path": "apps/web/next.config.ts",
+      "bytes": 597,
+      "sha256": "266caa354faf01ede2ddbbebe2fc5fbcfcdff3a77eaa840c2c310428c00f8aff"
+    },
+    {
+      "path": "apps/web/package.json",
+      "bytes": 633,
+      "sha256": "a3b73e7ece879364c8459359f4a8a524b78eae90e7439c64a4f9ca7ddcc548f5"
+    },
+    {
+      "path": "apps/web/playwright.config.ts",
+      "bytes": 268,
+      "sha256": "5ade6f44050f0599ae938b58a58f5039ce139ec90fd4f2d74c1c0810eb59850e"
+    },
+    {
+      "path": "apps/web/src/app/globals.css",
+      "bytes": 1083,
+      "sha256": "91a24413a1288adfaf323c2e76178695cc3f7824996e2fe348154f2e427a3807"
+    },
+    {
+      "path": "apps/web/src/app/health/route.ts",
+      "bytes": 175,
+      "sha256": "2204bead603de82b1b86ec748f27544aaeccf3dde3c7be45354e38f5bf156d84"
+    },
+    {
+      "path": "apps/web/src/app/layout.tsx",
+      "bytes": 446,
+      "sha256": "d723405afaf2730adce3358053184ceeff2537df962aafe360ff1cab097d1339"
+    },
+    {
+      "path": "apps/web/src/app/page.tsx",
+      "bytes": 1171,
+      "sha256": "c8b10604ec55ca9f8299f21f532ac6458a6865298d2a3fd8988003696c96c20d"
+    },
+    {
+      "path": "apps/web/tests/health.test.ts",
+      "bytes": 398,
+      "sha256": "568054c5087894cdb072245d8c09a675109668b4b89d139e1ed38f94f7d6e17d"
+    },
+    {
+      "path": "apps/web/tsconfig.json",
+      "bytes": 285,
+      "sha256": "42dcda05cf801c44aaf1e6cb0dc34481a260c46b3d238f088a3b49f441fc3b71"
+    },
+    {
+      "path": "apps/worker/package.json",
+      "bytes": 484,
+      "sha256": "2f597132027130279ea04378fdc51c0c6d8b1a24225a154a20ce1c2144e66cc6"
+    },
+    {
+      "path": "apps/worker/src/index.ts",
+      "bytes": 462,
+      "sha256": "c8d795ec7b5b1e58776d43b7bfb9247735c8a161354e99f3a2f01caceb94cd0d"
+    },
+    {
+      "path": "apps/worker/tsconfig.json",
+      "bytes": 135,
+      "sha256": "dda3da862c7cd7bede3ee816205e1ac51c8bd3228161826b4a0d18528316c665"
+    },
+    {
+      "path": "docker-compose.yml",
+      "bytes": 454,
+      "sha256": "3f5bca61861ab18c7d71e1d75bb293d6dc6fb04981d1eaf02b8a94d35f737d92"
+    },
+    {
+      "path": "docs/api/integration-contracts.md",
+      "bytes": 810,
+      "sha256": "d883c0ac06e585361195a294d95d6721a2bda61cfa112762ca9db1bee1f7aa73"
+    },
+    {
+      "path": "docs/api/openapi.yaml",
+      "bytes": 4932,
+      "sha256": "42dc5032077cb298dbc72e5e8845e93742d482788fa3e20918bef6a502f5c3ef"
+    },
+    {
+      "path": "docs/architecture/decisions/ADR-0001-toolchain.md",
+      "bytes": 706,
+      "sha256": "031c783f4402b01c2a0f69a792f538c186a377c04442f655da9ce13bc208a3ee"
+    },
+    {
+      "path": "docs/architecture/deployment-architecture.md",
+      "bytes": 1390,
+      "sha256": "924fd6479b99c9f134bd00d54902f10d6e353d446a1174d5f2d93afc2271bc5f"
+    },
+    {
+      "path": "docs/architecture/frontend-architecture.md",
+      "bytes": 1349,
+      "sha256": "359af9e40e7fdbaf7baad0ecfbc40c324c98fe977c9abc4f86966aed1deae16c"
+    },
+    {
+      "path": "docs/architecture/solution-architecture.md",
+      "bytes": 1755,
+      "sha256": "df58d60028e2d36e109488bd1fd71ade90751c733d4b786687d7f8db22b53fe9"
+    },
+    {
+      "path": "docs/backlog/backlog.yaml",
+      "bytes": 3991,
+      "sha256": "ca3271c0a9a0dfa9bec998f7b78147c0bf1635ba3cf4196b936f905b20dd893f"
+    },
+    {
+      "path": "docs/backlog/definition-of-done.md",
+      "bytes": 553,
+      "sha256": "e91172600eb50f7176f22876f274d396331d33f8ccdf60190bca45516b3de142"
+    },
+    {
+      "path": "docs/database/data-dictionary.md",
+      "bytes": 1534,
+      "sha256": "91f3ab79935912f384a69840ce1bf906c8d3210374100cd46e3d7e17be0d9717"
+    },
+    {
+      "path": "docs/database/ledger-rules.md",
+      "bytes": 587,
+      "sha256": "6a75c5f12bd5a6bdf0131de63e730485110171f7f9a4be3a16f9b17955adb89d"
+    },
+    {
+      "path": "docs/handoff/clarifications-required.md",
+      "bytes": 1388,
+      "sha256": "1ad144d5fee6834c645063388aa512c2cca9ce50cc96451337feffedfb640ca9"
+    },
+    {
+      "path": "docs/handoff/codex-task-prompts.md",
+      "bytes": 1268,
+      "sha256": "b3b7593e7aaaeaa1269b2b4707254ec59e7d6bb7772892737e08636804f494ae"
+    },
+    {
+      "path": "docs/handoff/readiness-and-authority.md",
+      "bytes": 1847,
+      "sha256": "672469926dabbcd936ab5a109643681f76824c1eac552f57c6e5a2d7472a31cd"
+    },
+    {
+      "path": "docs/legal/legal-traceability.md",
+      "bytes": 2006,
+      "sha256": "02d3bdb8f5392cfc6f23fd29965f8bad860938eeecace7d89b9013801d2c7e68"
+    },
+    {
+      "path": "docs/legal/unresolved-items.md",
+      "bytes": 1586,
+      "sha256": "e85243a2a6dcf836cf05e78429f7db012d2f7419472d21a005791993328fa7fc"
+    },
+    {
+      "path": "docs/operations/operations-model.md",
+      "bytes": 975,
+      "sha256": "38cabb1016c230dcabc60d7bffe2c3a32071ca8d90f6596b91f74e778b0c545f"
+    },
+    {
+      "path": "docs/operations/runbooks/README.md",
+      "bytes": 386,
+      "sha256": "30250510536715ed1bca722cdcd3a8324e53a8948b4767ca3f3a7e4e2bffa053"
+    },
+    {
+      "path": "docs/product/business-rules.md",
+      "bytes": 1866,
+      "sha256": "fd05b2b3e993b044ac48cf3f1772c0dc03b5f88176c7610c1ead87bf3bd4e2e0"
+    },
+    {
+      "path": "docs/product/scope.md",
+      "bytes": 1069,
+      "sha256": "69c0c9f4384a093506700a7951bfa519f37d43d59ff4eab7e1e0c1eaa01f831f"
+    },
+    {
+      "path": "docs/product/vision.md",
+      "bytes": 830,
+      "sha256": "c3187b0cc7ce84302b300f2dd6cc43bb5a5d5900dd5230d469b9cdddc5500f6c"
+    },
+    {
+      "path": "docs/product/workflow-transitions.md",
+      "bytes": 1742,
+      "sha256": "76564396a7f4e4309a1130d5181672c129f6b3ed9748d817f83a9653f7c72fca"
+    },
+    {
+      "path": "docs/reference/Professional_Tax_Master_PFT2.pdf",
+      "bytes": 132239,
+      "sha256": "5aa0a04aec2987ef93f85109831f0fb31430cda153ce13c1b1cdf70e24919c36"
+    },
+    {
+      "path": "docs/reference/Punjab_Finance_Act_1977.pdf",
+      "bytes": 425058,
+      "sha256": "cc50d25432a92cb81a0bcc6099f3a56656eb890ebd1aa0a111606485ac1ac087"
+    },
+    {
+      "path": "docs/reference/Punjab_Professional_Tax_Digitization_Plan_v0.5.docx",
+      "bytes": 934597,
+      "sha256": "c22b51f33a65f36f20ee451ad71d37359b6bc76220e0dceb859fdc843ecc970c"
+    },
+    {
+      "path": "docs/reference/Punjab_Professions_and_Trades_Tax_Rules_1977.pdf",
+      "bytes": 125769,
+      "sha256": "06fb0d786f14fa49a399a20d2aa8aefe68b431e0c6bb0d863894bad732d579de"
+    },
+    {
+      "path": "docs/reference/ptas-plan-v0.5.md",
+      "bytes": 283229,
+      "sha256": "ea21005abecb5f93a05750ab03a4054fcd847b3f6a5e228d620a40e4f577cd71"
+    },
+    {
+      "path": "docs/reference/source-register.md",
+      "bytes": 792,
+      "sha256": "1dac7b6cd47bb83d74248171c11cebc913224f9382db62d0dcebafdba27b7f5c"
+    },
+    {
+      "path": "docs/reference/source-sha256.txt",
+      "bytes": 595,
+      "sha256": "499300f3fdcc7383e2e216eba34632dfaece8aecf8a71a6e656bf8e0a06cf1a1"
+    },
+    {
+      "path": "docs/security/security-baseline.md",
+      "bytes": 1228,
+      "sha256": "8904e84c299a067aabdc92de4049388c8b95fd9dae2b99305299354a85b6f17a"
+    },
+    {
+      "path": "docs/testing/acceptance-scenarios.feature",
+      "bytes": 1289,
+      "sha256": "9ec25edc3661e001b939deb50e272df398c2b4aa0b57785c62b4e6e9a27f84fc"
+    },
+    {
+      "path": "docs/testing/quality-gates.md",
+      "bytes": 1009,
+      "sha256": "fda3a93b0d0c8ad6397d2d42e74027e03e9c3a4dba326c7c99262c230ed04902"
+    },
+    {
+      "path": "docs/ui/content-guidelines.md",
+      "bytes": 590,
+      "sha256": "e21523c8346421cecdc11688768e0d30d1e53049d24def77eb73224ce42ffe8e"
+    },
+    {
+      "path": "docs/ui/design-tokens.json",
+      "bytes": 1703,
+      "sha256": "1b509495cf0fe17c218ed15c92b5f6cf5d0743756e8afac0a2ffe33f0fe664a2"
+    },
+    {
+      "path": "docs/ui/screen-inventory.md",
+      "bytes": 1184,
+      "sha256": "a9a96783a23edf393e67f08d4fa103c2163ebd45c5585484d4c688f6ea9cbacd"
+    },
+    {
+      "path": "eslint.config.mjs",
+      "bytes": 601,
+      "sha256": "28880784f3eee19d21d750761f49e837ce58261d335aa39c8a10ae1cba8b5fb0"
+    },
+    {
+      "path": "infra/vercel/README.md",
+      "bytes": 644,
+      "sha256": "d9f6978db2b4cc612d0b4d5e39a124f6a36711f35b63f03ff8f744371a43ff54"
+    },
+    {
+      "path": "infra/vercel/vercel.json",
+      "bytes": 231,
+      "sha256": "ff444cb78f5e7e3ba6375f62365666cca59abbcc384dd149116327d1071e8dd8"
+    },
+    {
+      "path": "package.json",
+      "bytes": 756,
+      "sha256": "9f90daf9ebdd1a6bc798c9306ee0a6bf60e4b61817cccc9cdb04a67d2ba11b45"
+    },
+    {
+      "path": "packages/database/AGENTS.md",
+      "bytes": 466,
+      "sha256": "3adb4fa591d8fb1bedce328bf2b02d8479bb4bbbbab150ebf060b65be39ef540"
+    },
+    {
+      "path": "packages/database/migrations/0001_foundation.sql",
+      "bytes": 7856,
+      "sha256": "845ddb4af50861bbdfc7ea31b1b7d5cadcd462db7aa47ac15a3c8b6764fb0e48"
+    },
+    {
+      "path": "packages/database/package.json",
+      "bytes": 395,
+      "sha256": "fe605f1a8191ba016b14bbf130137ed23b07be3763ab8bb659694440f7d9da12"
+    },
+    {
+      "path": "packages/database/src/index.ts",
+      "bytes": 277,
+      "sha256": "b61eab3196825a48ceeac17c1f3514a61b2691e0ebb329b640a8f2b22de0423f"
+    },
+    {
+      "path": "packages/database/tsconfig.json",
+      "bytes": 135,
+      "sha256": "dda3da862c7cd7bede3ee816205e1ac51c8bd3228161826b4a0d18528316c665"
+    },
+    {
+      "path": "packages/domain/AGENTS.md",
+      "bytes": 406,
+      "sha256": "48880473f2426980f271c801844f38f10431e0a968028ed8cd12a64303763b22"
+    },
+    {
+      "path": "packages/domain/package.json",
+      "bytes": 396,
+      "sha256": "9eeec6a7395e4e837c65910b01a3f8caebd79b79f1241b8e20843059bf00cd1f"
+    },
+    {
+      "path": "packages/domain/src/assessment-workflow.ts",
+      "bytes": 1374,
+      "sha256": "c6f034a4d8c8d87791c21681f5a230ac7d947fdfe73844fd7531c54465abdb27"
+    },
+    {
+      "path": "packages/domain/src/index.ts",
+      "bytes": 70,
+      "sha256": "6d75e94ce8595c7dc4eb24b6bbc0db7291bed1dea240029876cc9644fc816985"
+    },
+    {
+      "path": "packages/domain/src/rates.ts",
+      "bytes": 956,
+      "sha256": "670d0ca423b02fd64bc6a5bbc7f45b2498f8e559cff6a42cb9ee79e0684f0faa"
+    },
+    {
+      "path": "packages/domain/tests/assessment-workflow.test.ts",
+      "bytes": 648,
+      "sha256": "b91a6b1856c1fc19cb9f550d5940c4af85ea5a402dee0a028ec1d28bb210f952"
+    },
+    {
+      "path": "packages/domain/tests/rates.test.ts",
+      "bytes": 644,
+      "sha256": "98f1f58545dc038d307c4ab8ec08996f1ddc534b51c183a93458d1619d6913a7"
+    },
+    {
+      "path": "packages/domain/tsconfig.json",
+      "bytes": 153,
+      "sha256": "9bed61ee71eef1e5523a79b9a25b364ae18590d9e5e6eef052d2eb06b0036b6e"
+    },
+    {
+      "path": "packages/integrations/package.json",
+      "bytes": 402,
+      "sha256": "224e804f541cc9aac3f148bd081df07a1c939e60d93440b39970bb96adae7d3a"
+    },
+    {
+      "path": "packages/integrations/src/index.ts",
+      "bytes": 672,
+      "sha256": "03ceb0597a303c72f637ab3922ec4703a8cefb912323d5d921542289ea8c3f52"
+    },
+    {
+      "path": "packages/integrations/tests/mock-payment.test.ts",
+      "bytes": 356,
+      "sha256": "612178797f15a0b4e91307c08778b3d59a7b2bd505931f7897de7231415abf4e"
+    },
+    {
+      "path": "packages/integrations/tsconfig.json",
+      "bytes": 153,
+      "sha256": "9bed61ee71eef1e5523a79b9a25b364ae18590d9e5e6eef052d2eb06b0036b6e"
+    },
+    {
+      "path": "packages/ui/package.json",
+      "bytes": 510,
+      "sha256": "f69f946ed75d0678510882ad366a406df9e46e72e638009cba598a596588984d"
+    },
+    {
+      "path": "packages/ui/src/index.ts",
+      "bytes": 32,
+      "sha256": "5f8ed2bcec7be0d1e2c52412e81447ee44d4f9f820d47daa604f14553a816549"
+    },
+    {
+      "path": "packages/ui/src/status-badge.tsx",
+      "bytes": 798,
+      "sha256": "68cd5ddcd381cb886093eedd9ad2ac45de82f175456b309543aac5a43bb3bdcc"
+    },
+    {
+      "path": "packages/ui/tsconfig.json",
+      "bytes": 171,
+      "sha256": "8eaf00b9465022b4459908e9ee54ce5464785d7feabb52c34efabc649284fda6"
+    },
+    {
+      "path": "pnpm-workspace.yaml",
+      "bytes": 36,
+      "sha256": "253208fa7c1b64372c219b9e19cef15ed70ca93b66a4d5c4c4d2297a5aff8880"
+    },
+    {
+      "path": "prettier.config.mjs",
+      "bytes": 99,
+      "sha256": "c66b7386993d02f23af914605ff50485ddbc69c7729140dd8c31df3202a0c23c"
+    },
+    {
+      "path": "scripts/validate-repo.mjs",
+      "bytes": 3062,
+      "sha256": "9b93f01f217d049798369f5c1f6a3fd66953e6d6411863a949f0affb708d48fd"
+    },
+    {
+      "path": "tsconfig.base.json",
+      "bytes": 509,
+      "sha256": "db13e7b026842c91a800aa70431b0d82326fcf43944ade0434b40291df1d274c"
+    },
+    {
+      "path": "turbo.json",
+      "bytes": 443,
+      "sha256": "8245ad0e71a25a5b672ef246f99f0895b2eeefb2ec39cd41f62b58efe34d9cc0"
+    }
+  ]
+}

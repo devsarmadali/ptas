@@ -1,0 +1,165 @@
+openapi: 3.1.0
+info:
+  title: PTAS API
+  version: 0.1.0
+  description: Foundation contract. Approval-gated fields and endpoints must not be activated from this draft alone.
+servers:
+  - url: /api/v1
+security:
+  - sessionAuth: []
+paths:
+  /health:
+    get:
+      security: []
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /taxpayers:
+    get:
+      operationId: searchTaxpayers
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string, minLength: 2 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Jurisdiction-filtered taxpayer search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxpayerPage"
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createTaxpayer
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateTaxpayer" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Taxpayer" }
+        default: { $ref: "#/components/responses/Problem" }
+  /assessments/{assessmentId}/submit:
+    post:
+      operationId: submitAssessment
+      parameters:
+        - $ref: "#/components/parameters/AssessmentId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Assessment" }
+        default: { $ref: "#/components/responses/Problem" }
+  /assessments/{assessmentId}/approve:
+    post:
+      operationId: approveAssessment
+      parameters:
+        - $ref: "#/components/parameters/AssessmentId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decisionReason, approvalEvidenceId]
+              properties:
+                decisionReason: { type: string, minLength: 5 }
+                approvalEvidenceId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Approved and demand entry created transactionally
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Assessment" }
+        default: { $ref: "#/components/responses/Problem" }
+components:
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: ptas_session
+  parameters:
+    AssessmentId:
+      name: assessmentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 16, maxLength: 128 }
+  responses:
+    Problem:
+      description: Problem details
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+  schemas:
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+    CreateTaxpayer:
+      type: object
+      required: [displayName, jurisdictionId]
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 250 }
+        jurisdictionId: { type: string, format: uuid }
+        identifiers:
+          type: array
+          items:
+            type: object
+            required: [type, value]
+            properties:
+              type: { type: string }
+              value: { type: string }
+    Taxpayer:
+      type: object
+      required: [id, displayName, status]
+      properties:
+        id: { type: string, format: uuid }
+        displayName: { type: string }
+        status: { type: string }
+    TaxpayerPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Taxpayer" }
+        nextCursor: { type: [string, "null"] }
+    Assessment:
+      type: object
+      required: [id, status, versionNo]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string }
+        versionNo: { type: integer, minimum: 1 }
+    Problem:
+      type: object
+      required: [type, title, status, correlationId]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        correlationId: { type: string }
