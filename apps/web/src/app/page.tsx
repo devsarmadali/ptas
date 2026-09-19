@@ -46,6 +46,12 @@ import {
   generateLandRevenueRecoveryCertificate,
   generateShowCausePenaltyNotice
 } from "../lib/statutory-forms";
+import {
+  type BulkSurveyParseResult,
+  convertValidSurveyUnitsToStoredUnits,
+  generateSurveyCsvTemplate,
+  parseBulkSurveyCsv
+} from "../lib/bulk-survey";
 
 export default function HomePage() {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -142,6 +148,17 @@ export default function HomePage() {
     "SERVED" | "REFUSED" | "UNTRACEABLE"
   >("SERVED");
   const [batchRecipientNote, setBatchRecipientNote] = useState("");
+
+  // Bulk Survey Ingestion State (Phase 4)
+  const [showBulkSurveyModal, setShowBulkSurveyModal] = useState(false);
+  const [bulkSurveyRawCsv, setBulkSurveyRawCsv] = useState("");
+  const [bulkSurveyFileName, setBulkSurveyFileName] = useState("");
+  const [bulkSurveyParseResult, setBulkSurveyParseResult] = useState<BulkSurveyParseResult | null>(
+    null
+  );
+  const [bulkSurveyFilter, setBulkSurveyFilter] = useState<"ALL" | "VALID" | "ERROR">("ALL");
+  const [bulkInputMode, setBulkInputMode] = useState<"FILE" | "PASTE">("FILE");
+  const [isImportingSurvey, setIsImportingSurvey] = useState(false);
 
   // New Unit Form State
   const [newLegalName, setNewLegalName] = useState("");
@@ -1156,7 +1173,7 @@ export default function HomePage() {
       orderNumber: appeal.orderNumber ?? `ETD/MLN/APP-ORD/2026/${appeal.id.slice(-4)}`,
       filingDate: appeal.filingDate,
       hearingDate: appeal.hearingDate ?? appeal.filingDate,
-      orderDate: appeal.orderDate ?? (new Date().toISOString().split("T")[0] ?? "2026-07-20"),
+      orderDate: appeal.orderDate ?? new Date().toISOString().split("T")[0] ?? "2026-07-20",
       unit,
       groundOfAppeal: appeal.groundOfAppeal,
       undisputedTaxDeposited: appeal.undisputedPaid,
@@ -1312,6 +1329,99 @@ export default function HomePage() {
       "success",
       `Recovery Certificate ${certNo} issued under Rule 12 & forwarded to ${collectorDesignation}.`
     );
+  };
+
+  // Handler: Download Survey CSV Template
+  const handleDownloadSurveyTemplate = () => {
+    const csv = generateSurveyCsvTemplate();
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "Punjab_PTAS_Vehari_Field_Survey_Template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast("info", "Official Punjab Field Survey CSV template downloaded.");
+  };
+
+  // Handler: Upload and Parse Survey CSV
+  const handleSurveyFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setBulkSurveyFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = String(event.target?.result ?? "");
+      setBulkSurveyRawCsv(content);
+      const result = parseBulkSurveyCsv(content, units);
+      setBulkSurveyParseResult(result);
+      if (result.validRowsCount > 0 && result.errorRowsCount === 0) {
+        showToast(
+          "success",
+          `Validated ${result.totalRows} survey rows: All ${result.validRowsCount} rows are valid and ready for Form PFT-3 ingestion!`
+        );
+      } else if (result.validRowsCount > 0) {
+        showToast(
+          "info",
+          `Validated ${result.totalRows} survey rows: ${result.validRowsCount} valid, ${result.errorRowsCount} error(s).`
+        );
+      } else {
+        showToast(
+          "error",
+          `CSV validation failed: 0 valid rows found, ${result.errorRowsCount} error(s).`
+        );
+      }
+    };
+    reader.readAsText(file, "UTF-8");
+  };
+
+  // Handler: Direct Paste Survey Text
+  const handleSurveyTextChange = (text: string) => {
+    setBulkSurveyRawCsv(text);
+    if (!text.trim()) {
+      setBulkSurveyParseResult(null);
+      return;
+    }
+    const result = parseBulkSurveyCsv(text, units);
+    setBulkSurveyParseResult(result);
+  };
+
+  // Handler: Execute Bulk Survey Import into Form P.F.T-3 Register
+  const handleExecuteBulkSurveyImport = () => {
+    if (!bulkSurveyParseResult || bulkSurveyParseResult.validUnits.length === 0) {
+      showToast("error", "No valid survey records available for ingestion.");
+      return;
+    }
+
+    setIsImportingSurvey(true);
+    try {
+      const { newUnits, auditItems } = convertValidSurveyUnitsToStoredUnits(
+        bulkSurveyParseResult.validUnits,
+        officer,
+        units.length
+      );
+
+      const updatedUnits = [...newUnits, ...units];
+      const updatedAudits = [...auditItems, ...auditLogs];
+      syncState(updatedUnits, updatedAudits);
+
+      showToast(
+        "success",
+        `Successfully imported ${newUnits.length} field survey units into Circle-Vehari Form P.F.T-3 Assessment Register!`
+      );
+      setShowBulkSurveyModal(false);
+      setBulkSurveyParseResult(null);
+      setBulkSurveyRawCsv("");
+      setBulkSurveyFileName("");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast("error", `Bulk survey import failed: ${msg}`);
+    } finally {
+      setIsImportingSurvey(false);
+    }
   };
 
   if (!isLoaded) {
@@ -1593,7 +1703,20 @@ export default function HomePage() {
                   governed by Section 3 of the Punjab Finance Act 1977.
                 </p>
               </div>
-              <div className="panel-actions">
+              <div className="panel-actions" style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowBulkSurveyModal(true)}
+                  className="btn-secondary"
+                  style={{
+                    backgroundColor: "#065f46",
+                    color: "#ffffff",
+                    borderColor: "#047857"
+                  }}
+                  title="Batch upload field survey records via CSV into Form P.F.T-3 Register"
+                >
+                  📥 Bulk Import Survey (CSV)
+                </button>
                 <button
                   onClick={() => setShowAddUnitModal(true)}
                   className="btn-primary"
@@ -2830,7 +2953,20 @@ export default function HomePage() {
                 </p>
               </div>
 
-              <div className="panel-actions">
+              <div className="panel-actions" style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{
+                    backgroundColor: "#065f46",
+                    color: "#ffffff",
+                    borderColor: "#047857"
+                  }}
+                  onClick={() => setShowBulkSurveyModal(true)}
+                  title="Batch upload field survey records via CSV into Form P.F.T-3 Register"
+                >
+                  📥 Bulk Import Survey (CSV)
+                </button>
                 <button
                   type="button"
                   className="btn-secondary"
@@ -6753,6 +6889,542 @@ export default function HomePage() {
               <button type="button" className="btn-primary" onClick={() => window.print()}>
                 🖨️ Print Appellate Order
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 16: BULK SURVEY IMPORT STUDIO (FORM P.F.T-3 INGESTION) */}
+      {showBulkSurveyModal && (
+        <div className="modal-overlay">
+          <div
+            className="modal-card modal-card-xl"
+            style={{ display: "flex", flexDirection: "column", maxHeight: "90vh" }}
+          >
+            <div
+              className="modal-header"
+              style={{
+                background: "linear-gradient(135deg, #0d3822 0%, #166534 100%)",
+                borderBottom: "3px solid #b45309"
+              }}
+            >
+              <div>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: "1.15rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem"
+                  }}
+                >
+                  <span>📋</span>
+                  <span>فیلڈ سروے و اندراج نوٹس جات برائے رجسٹر پی ایف ٹی-3</span>
+                </h3>
+                <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#d1fae5" }}>
+                  Bulk Field Survey Ingestion Studio &bull; Circle-Vehari (Rules 4, 5 &amp; 11)
+                </p>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => {
+                  setShowBulkSurveyModal(false);
+                  setBulkSurveyParseResult(null);
+                  setBulkSurveyRawCsv("");
+                  setBulkSurveyFileName("");
+                }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ overflowY: "auto", padding: "1.25rem" }}>
+              {/* Step 1 & 2 Toolbar Cards */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "1rem",
+                  background: "#f8fafc",
+                  padding: "1rem",
+                  borderRadius: "8px",
+                  border: "1px solid #e2e8f0"
+                }}
+              >
+                {/* Step 1: Download Standard Template */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between"
+                  }}
+                >
+                  <div>
+                    <h4 style={{ margin: "0 0 0.35rem 0", color: "#0f172a", fontSize: "0.95rem" }}>
+                      1. ڈاؤن لوڈ آفیشل سروے فارمیٹ (Download Template)
+                    </h4>
+                    <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b", lineHeight: 1.4 }}>
+                      Standard RFC-4180 CSV pre-configured with Punjab Finance Act Second Schedule
+                      headers, CNIC/NTN formats, and authentic Circle-Vehari sample trades.
+                    </p>
+                  </div>
+                  <div style={{ marginTop: "0.85rem" }}>
+                    <button
+                      type="button"
+                      onClick={handleDownloadSurveyTemplate}
+                      className="btn-secondary btn-sm"
+                      style={{
+                        backgroundColor: "#ffffff",
+                        borderColor: "#0d3822",
+                        color: "#0d3822",
+                        fontWeight: 600
+                      }}
+                    >
+                      ⬇️ Download Survey Template (.csv)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Step 2: Upload File or Direct Paste */}
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "0.35rem"
+                    }}
+                  >
+                    <h4 style={{ margin: 0, color: "#0f172a", fontSize: "0.95rem" }}>
+                      2. سروے فائل اپ لوڈ کریں (Upload or Paste Data)
+                    </h4>
+                    <div style={{ display: "flex", gap: "0.25rem", fontSize: "0.75rem" }}>
+                      <button
+                        type="button"
+                        onClick={() => setBulkInputMode("FILE")}
+                        style={{
+                          padding: "0.15rem 0.5rem",
+                          borderRadius: "4px",
+                          border: "1px solid #cbd5e1",
+                          background: bulkInputMode === "FILE" ? "#0d3822" : "#ffffff",
+                          color: bulkInputMode === "FILE" ? "#ffffff" : "#475569",
+                          fontWeight: 600,
+                          cursor: "pointer"
+                        }}
+                      >
+                        File Upload
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBulkInputMode("PASTE")}
+                        style={{
+                          padding: "0.15rem 0.5rem",
+                          borderRadius: "4px",
+                          border: "1px solid #cbd5e1",
+                          background: bulkInputMode === "PASTE" ? "#0d3822" : "#ffffff",
+                          color: bulkInputMode === "PASTE" ? "#ffffff" : "#475569",
+                          fontWeight: 600,
+                          cursor: "pointer"
+                        }}
+                      >
+                        Direct Paste
+                      </button>
+                    </div>
+                  </div>
+
+                  {bulkInputMode === "FILE" ? (
+                    <div>
+                      <input
+                        type="file"
+                        id="bulkSurveyFileInput"
+                        accept=".csv,text/csv"
+                        onChange={handleSurveyFileUpload}
+                        style={{ display: "none" }}
+                      />
+                      <label
+                        htmlFor="bulkSurveyFileInput"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "0.5rem",
+                          padding: "0.75rem",
+                          border: "2px dashed #94a3b8",
+                          borderRadius: "6px",
+                          background: "#ffffff",
+                          cursor: "pointer",
+                          color: "#334155",
+                          fontSize: "0.85rem",
+                          fontWeight: 600,
+                          marginTop: "0.35rem"
+                        }}
+                      >
+                        <span>📁</span>
+                        <span>
+                          {bulkSurveyFileName
+                            ? `File: ${bulkSurveyFileName}`
+                            : "Click to browse & upload field survey (.csv)"}
+                        </span>
+                      </label>
+                    </div>
+                  ) : (
+                    <div>
+                      <textarea
+                        rows={3}
+                        className="form-control"
+                        placeholder="Paste CSV text here (including headers)..."
+                        value={bulkSurveyRawCsv}
+                        onChange={(e) => handleSurveyTextChange(e.target.value)}
+                        style={{ fontFamily: "monospace", fontSize: "0.75rem" }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Step 3: Interactive Staging & Validation Results */}
+              {bulkSurveyParseResult ? (
+                <div style={{ marginTop: "0.75rem" }}>
+                  {/* Summary Metric Cards */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(4, 1fr)",
+                      gap: "0.75rem",
+                      marginBottom: "0.75rem"
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                        padding: "0.6rem 0.75rem",
+                        borderRadius: "6px"
+                      }}
+                    >
+                      <span style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 700 }}>
+                        TOTAL SURVEY ROWS
+                      </span>
+                      <strong style={{ display: "block", fontSize: "1.25rem", color: "#0f172a" }}>
+                        {bulkSurveyParseResult.totalRows}
+                      </strong>
+                    </div>
+                    <div
+                      style={{
+                        background: "#f0fdf4",
+                        border: "1px solid #bbf7d0",
+                        padding: "0.6rem 0.75rem",
+                        borderRadius: "6px"
+                      }}
+                    >
+                      <span style={{ fontSize: "0.7rem", color: "#166534", fontWeight: 700 }}>
+                        VALID FOR INGESTION
+                      </span>
+                      <strong style={{ display: "block", fontSize: "1.25rem", color: "#15803d" }}>
+                        {bulkSurveyParseResult.validRowsCount}
+                      </strong>
+                    </div>
+                    <div
+                      style={{
+                        background: "#fef2f2",
+                        border: "1px solid #fecaca",
+                        padding: "0.6rem 0.75rem",
+                        borderRadius: "6px"
+                      }}
+                    >
+                      <span style={{ fontSize: "0.7rem", color: "#991b1b", fontWeight: 700 }}>
+                        VALIDATION ERRORS
+                      </span>
+                      <strong style={{ display: "block", fontSize: "1.25rem", color: "#b91c1c" }}>
+                        {bulkSurveyParseResult.errorRowsCount}
+                      </strong>
+                    </div>
+                    <div
+                      style={{
+                        background: "#fffbeb",
+                        border: "1px solid #fde68a",
+                        padding: "0.6rem 0.75rem",
+                        borderRadius: "6px"
+                      }}
+                    >
+                      <span style={{ fontSize: "0.7rem", color: "#92400e", fontWeight: 700 }}>
+                        DUPLICATES DETECTED
+                      </span>
+                      <strong style={{ display: "block", fontSize: "1.25rem", color: "#b45309" }}>
+                        {bulkSurveyParseResult.duplicateCount}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {/* Filter Toolbar */}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "0.5rem"
+                    }}
+                  >
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <button
+                        type="button"
+                        onClick={() => setBulkSurveyFilter("ALL")}
+                        className="btn-secondary btn-sm"
+                        style={{
+                          background: bulkSurveyFilter === "ALL" ? "#0f172a" : "#ffffff",
+                          color: bulkSurveyFilter === "ALL" ? "#ffffff" : "#475569"
+                        }}
+                      >
+                        All Rows ({bulkSurveyParseResult.totalRows})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBulkSurveyFilter("VALID")}
+                        className="btn-secondary btn-sm"
+                        style={{
+                          background: bulkSurveyFilter === "VALID" ? "#15803d" : "#ffffff",
+                          color: bulkSurveyFilter === "VALID" ? "#ffffff" : "#15803d",
+                          borderColor: "#15803d"
+                        }}
+                      >
+                        Valid Only ({bulkSurveyParseResult.validRowsCount})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBulkSurveyFilter("ERROR")}
+                        className="btn-secondary btn-sm"
+                        style={{
+                          background: bulkSurveyFilter === "ERROR" ? "#b91c1c" : "#ffffff",
+                          color: bulkSurveyFilter === "ERROR" ? "#ffffff" : "#b91c1c",
+                          borderColor: "#b91c1c"
+                        }}
+                      >
+                        Errors &amp; Duplicates ({bulkSurveyParseResult.errorRowsCount})
+                      </button>
+                    </div>
+
+                    <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                      Circle: <strong>Circle-Vehari</strong> &bull; Assessing Authority:{" "}
+                      <strong>Tariq Mahmood (ETO)</strong>
+                    </span>
+                  </div>
+
+                  {/* Staging Table */}
+                  <div
+                    className="table-container"
+                    style={{ maxHeight: "320px", overflowY: "auto", border: "1px solid #cbd5e1" }}
+                  >
+                    <table className="gov-table" style={{ fontSize: "0.8rem" }}>
+                      <thead>
+                        <tr>
+                          <th style={{ width: "2.5rem" }}>#</th>
+                          <th style={{ width: "5.5rem" }}>Status</th>
+                          <th>Legal &amp; Trade Name</th>
+                          <th>Identifier (CNIC/NTN)</th>
+                          <th>Commercial Address</th>
+                          <th>Statutory Rule</th>
+                          <th>Rate (PKR)</th>
+                          <th>Validation Findings / Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bulkSurveyParseResult.rows
+                          .filter((r) => {
+                            if (bulkSurveyFilter === "VALID") return r.status === "VALID";
+                            if (bulkSurveyFilter === "ERROR") return r.status === "ERROR";
+                            return true;
+                          })
+                          .map((row) => (
+                            <tr
+                              key={row.rowNumber}
+                              style={{
+                                background: row.status === "ERROR" ? "#fff5f5" : "#ffffff"
+                              }}
+                            >
+                              <td>{row.rowNumber}</td>
+                              <td>
+                                {row.status === "VALID" ? (
+                                  <span
+                                    className="badge badge-approved"
+                                    style={{ fontSize: "0.65rem" }}
+                                  >
+                                    ✓ VALID
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="badge badge-returned"
+                                    style={{ fontSize: "0.65rem" }}
+                                  >
+                                    ✕ ERROR
+                                  </span>
+                                )}
+                              </td>
+                              <td>
+                                <strong>{row.rawData["legalName"] || "(Blank Legal Name)"}</strong>
+                                {row.rawData["tradeName"] && (
+                                  <span
+                                    style={{
+                                      display: "block",
+                                      fontSize: "0.7rem",
+                                      color: "#64748b"
+                                    }}
+                                  >
+                                    {row.rawData["tradeName"]}
+                                  </span>
+                                )}
+                              </td>
+                              <td style={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
+                                {row.parsedUnit
+                                  ? `${row.parsedUnit.identifierType}: ${row.parsedUnit.maskedIdentifier}`
+                                  : row.rawData["identifierValue"] || "(Empty)"}
+                              </td>
+                              <td style={{ maxWidth: "12rem", fontSize: "0.75rem" }}>
+                                {row.rawData["address"] || "(Blank Address)"}
+                              </td>
+                              <td>
+                                {row.parsedUnit ? (
+                                  <div>
+                                    <span
+                                      className="badge badge-draft"
+                                      style={{ fontSize: "0.65rem" }}
+                                    >
+                                      Entry {row.parsedUnit.statutoryRule.subclassification_code}
+                                    </span>
+                                    <span
+                                      style={{
+                                        display: "block",
+                                        fontSize: "0.68rem",
+                                        color: "#475569"
+                                      }}
+                                    >
+                                      {row.parsedUnit.statutoryRule.rule_id}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span style={{ color: "#b91c1c", fontWeight: 600 }}>
+                                    {row.rawData["statutoryRuleId"] || "(None)"}
+                                  </span>
+                                )}
+                              </td>
+                              <td>
+                                <strong>
+                                  {row.parsedUnit
+                                    ? `PKR ${row.parsedUnit.taxAmount.toLocaleString()}`
+                                    : "—"}
+                                </strong>
+                              </td>
+                              <td>
+                                {row.errors.length > 0 && (
+                                  <div
+                                    style={{
+                                      color: "#b91c1c",
+                                      fontSize: "0.725rem",
+                                      lineHeight: 1.3
+                                    }}
+                                  >
+                                    {row.errors.map((e, i) => (
+                                      <div key={i}>&bull; {e}</div>
+                                    ))}
+                                  </div>
+                                )}
+                                {row.warnings.length > 0 && (
+                                  <div
+                                    style={{
+                                      color: "#d97706",
+                                      fontSize: "0.725rem",
+                                      lineHeight: 1.3,
+                                      marginTop: "0.2rem"
+                                    }}
+                                  >
+                                    {row.warnings.map((w, i) => (
+                                      <div key={i}>⚠️ {w}</div>
+                                    ))}
+                                  </div>
+                                )}
+                                {row.errors.length === 0 && row.warnings.length === 0 && (
+                                  <span style={{ color: "#166534", fontSize: "0.725rem" }}>
+                                    ✓ Verified under Second Schedule
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding: "2.5rem 1rem",
+                    textAlign: "center",
+                    background: "#f8fafc",
+                    borderRadius: "8px",
+                    border: "1px dashed #cbd5e1",
+                    marginTop: "0.75rem"
+                  }}
+                >
+                  <span style={{ fontSize: "2rem", display: "block", marginBottom: "0.5rem" }}>
+                    📥
+                  </span>
+                  <strong style={{ fontSize: "1rem", color: "#334155" }}>
+                    No field survey data loaded yet
+                  </strong>
+                  <p style={{ fontSize: "0.8rem", color: "#64748b", margin: "0.35rem 0 0" }}>
+                    Download the official template above or select a completed CSV survey
+                    spreadsheet to validate records.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div
+              className="modal-footer"
+              style={{ justifyContent: "space-between", alignItems: "center" }}
+            >
+              <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                {bulkSurveyParseResult && bulkSurveyParseResult.validRowsCount > 0 ? (
+                  <span>
+                    Ready to import <strong>{bulkSurveyParseResult.validRowsCount}</strong> valid
+                    unit(s) into Form PFT-3 Register.
+                  </span>
+                ) : (
+                  <span>Select and validate survey spreadsheet to continue.</span>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => {
+                    setShowBulkSurveyModal(false);
+                    setBulkSurveyParseResult(null);
+                    setBulkSurveyRawCsv("");
+                    setBulkSurveyFileName("");
+                  }}
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  style={{
+                    backgroundColor: "#065f46",
+                    borderColor: "#047857"
+                  }}
+                  disabled={
+                    !bulkSurveyParseResult ||
+                    bulkSurveyParseResult.validRowsCount === 0 ||
+                    isImportingSurvey
+                  }
+                  onClick={handleExecuteBulkSurveyImport}
+                >
+                  {isImportingSurvey
+                    ? "Importing Units..."
+                    : `📥 Ingest Valid Units (${bulkSurveyParseResult ? bulkSurveyParseResult.validRowsCount : 0})`}
+                </button>
+              </div>
             </div>
           </div>
         </div>

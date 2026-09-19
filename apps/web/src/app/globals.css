@@ -481,6 +481,10 @@ textarea {
   max-width: 52rem;
 }
 
+.modal-card-xl {
+  max-width: 68rem;
+}
+
 .modal-header {
   padding: 1.25rem 1.5rem;
   background: #0d3822;

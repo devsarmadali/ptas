@@ -744,7 +744,7 @@ export function generateAppellateOrderDocument(
   const { unit } = input;
   const orderNumber = input.orderNumber ?? `ETD/MLN/APP-ORD/2026/${unit.id.slice(-4)}`;
   const hearingDate = input.hearingDate ?? "2026-08-05";
-  const orderDate = input.orderDate ?? (new Date().toISOString().split("T")[0] ?? "2026-08-05");
+  const orderDate = input.orderDate ?? new Date().toISOString().split("T")[0] ?? "2026-08-05";
   const courtTitle =
     "IN THE COURT OF THE APPELLATE AUTHORITY / DIRECTOR EXCISE & TAXATION, MULTAN DIVISION";
   const courtTitleUrdu = "عدالت اپیلٹ اتھارٹی / ڈائریکٹر ایکسائز اینڈ ٹیکسیشن، ملتان ڈویژن";
