@@ -73,6 +73,16 @@ import {
   subscribeToAuthChanges,
   verifyOfficerAuthority
 } from "../lib/supabase-auth";
+import {
+  type ExecutiveMetrics,
+  computeExecutiveMetrics,
+  downloadCsvFile,
+  exportClearanceCertificatesCsv,
+  exportDefaulterRecoveryCsv,
+  exportNoticeDispatchCsv,
+  exportPft3RegisterCsv,
+  exportReliefAdjustmentsCsv
+} from "../lib/mis-analytics";
 
 export default function HomePage() {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -81,6 +91,7 @@ export default function HomePage() {
   const [auditLogs, setAuditLogs] = useState<PilotAuditItem[]>([]);
   const [activeTab, setActiveTab] = useState<
     | "UNITS"
+    | "MIS_HUB"
     | "ASSESSMENTS"
     | "FORM_PFT1"
     | "FORM_PFT2"
@@ -245,6 +256,17 @@ export default function HomePage() {
   const [authenticatedSessionType, setAuthenticatedSessionType] = useState<"CLOUD" | "OFFLINE">(
     "CLOUD"
   );
+
+  // Phase 7: Executive MIS Hub & Report Studio
+  const [showExecutivePrintModal, setShowExecutivePrintModal] = useState(false);
+  const [executiveReportType, setExecutiveReportType] = useState<
+    | "EXECUTIVE_MIS_SUMMARY"
+    | "PFT3_REGISTER"
+    | "DEFAULTER_ROLL"
+    | "NOTICE_DISPATCH"
+    | "CLEARANCE_LOG"
+    | "RELIEF_REGISTER"
+  >("EXECUTIVE_MIS_SUMMARY");
 
   // New Unit Form State
   const [newLegalName, setNewLegalName] = useState("");
@@ -1021,6 +1043,17 @@ export default function HomePage() {
   const circleDispatchRegisterData = useMemo(() => {
     return generateCircleDispatchRegister(units, "2026-07-02");
   }, [units]);
+
+  // Phase 7: Executive MIS Analytics Metrics
+  const misMetrics: ExecutiveMetrics = useMemo(() => {
+    return computeExecutiveMetrics(
+      units,
+      appeals,
+      discontinuances,
+      refundAdjustments,
+      clearanceCertificates
+    );
+  }, [units, appeals, discontinuances, refundAdjustments, clearanceCertificates]);
 
   // Handler: Record Batch Service
   const handleRecordBatchService = (e: React.FormEvent) => {
@@ -2212,6 +2245,22 @@ export default function HomePage() {
             className={`tab-btn ${activeTab === "UNITS" ? "active" : ""}`}
           >
             🏢 Tax Units &amp; Registration
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === "MIS_HUB"}
+            onClick={() => setActiveTab("MIS_HUB")}
+            className={`tab-btn ${activeTab === "MIS_HUB" ? "active" : ""}`}
+            style={{
+              background:
+                activeTab === "MIS_HUB"
+                  ? "linear-gradient(135deg, #065f46 0%, #047857 100%)"
+                  : undefined,
+              color: activeTab === "MIS_HUB" ? "#ffffff" : undefined,
+              fontWeight: 700
+            }}
+          >
+            📊 Executive MIS Hub
           </button>
           <button
             role="tab"
@@ -5538,6 +5587,1368 @@ export default function HomePage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </section>
+        )}
+
+        {/* TAB: EXECUTIVE MIS ANALYTICS & STATUTORY REPORTING HUB (SECTION 15) */}
+        {activeTab === "MIS_HUB" && (
+          <section className="tab-panel" aria-label="Executive MIS Analytics Hub">
+            {/* Executive Perspective Banner */}
+            <div
+              style={{
+                background: "linear-gradient(135deg, #0d3822 0%, #064e3b 100%)",
+                borderRadius: "10px",
+                padding: "1.5rem",
+                color: "#ffffff",
+                marginBottom: "1.5rem",
+                boxShadow: "0 4px 12px rgba(13, 56, 34, 0.15)",
+                display: "flex",
+                flexWrap: "wrap",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "1rem"
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    marginBottom: "0.35rem"
+                  }}
+                >
+                  <span style={{ fontSize: "1.5rem" }}>📊</span>
+                  <h3 style={{ margin: 0, fontSize: "1.25rem", color: "#ffffff", fontWeight: 700 }}>
+                    Executive MIS Analytics &amp; Statutory Revenue Reporting Hub
+                  </h3>
+                  <span
+                    style={{
+                      background: "rgba(255, 255, 255, 0.2)",
+                      padding: "0.2rem 0.5rem",
+                      borderRadius: "4px",
+                      fontSize: "0.7rem",
+                      fontWeight: 700,
+                      letterSpacing: "0.05em"
+                    }}
+                  >
+                    SECTION 15 COMPLIANT
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: "0.85rem", color: "#d1fae5" }}>
+                  Real-time derived statutory intelligence from immutable demand ledgers &bull;
+                  Second Schedule (Categories 1–11) &bull; Circle-Vehari
+                </p>
+                <div
+                  style={{
+                    marginTop: "0.75rem",
+                    fontSize: "0.8rem",
+                    color: "#a7f3d0",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem"
+                  }}
+                >
+                  <span>
+                    🎯 <strong>Active Perspective:</strong>
+                  </span>
+                  {officer.role === "DIRECTOR" && (
+                    <span>
+                      🏛️ <strong>Divisional Directorate (Multan Division)</strong> — Macro budget
+                      target pacing, appellate resolution velocity &amp; cross-category yield.
+                    </span>
+                  )}
+                  {officer.role === "ETO" && (
+                    <span>
+                      ⚖️ <strong>Assessing Authority (Tehsil Vehari)</strong> — Circle demand
+                      realization, Section 3(4) penalty exposure &amp; Land Revenue referral roll.
+                    </span>
+                  )}
+                  {officer.role === "INSPECTOR" && (
+                    <span>
+                      👤 <strong>Circle Field Desk (Circle-Vehari)</strong> — Field survey coverage,
+                      Rule 6 notice service compliance &amp; on-site inspection backlog.
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExecutiveReportType("EXECUTIVE_MIS_SUMMARY");
+                    setShowExecutivePrintModal(true);
+                  }}
+                  className="btn-primary"
+                  style={{
+                    background: "#f59e0b",
+                    borderColor: "#d97706",
+                    color: "#78350f",
+                    fontWeight: 700,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.35rem"
+                  }}
+                >
+                  <span>🖨️</span>
+                  <span>Print Executive Brief</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    downloadCsvFile(
+                      "PFT-3_Assessment_Register_Vehari_2026.csv",
+                      exportPft3RegisterCsv(units)
+                    );
+                    showToast("success", "Form P.F.T-3 Register CSV downloaded.");
+                  }}
+                  className="btn-secondary"
+                  style={{
+                    background: "rgba(255, 255, 255, 0.15)",
+                    borderColor: "rgba(255, 255, 255, 0.4)",
+                    color: "#ffffff"
+                  }}
+                >
+                  ⬇️ Export PFT-3 CSV
+                </button>
+              </div>
+            </div>
+
+            {/* SECTION 1: 4 KEY EXECUTIVE KPI CARDS */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                gap: "1rem",
+                marginBottom: "1.5rem"
+              }}
+            >
+              {/* Card 1: Budget Target Realization */}
+              <div
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "1.25rem",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.03)"
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    marginBottom: "0.5rem"
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.8rem",
+                      color: "#64748b",
+                      fontWeight: 600,
+                      textTransform: "uppercase"
+                    }}
+                  >
+                    Budget Realization
+                  </span>
+                  <span
+                    style={{
+                      background:
+                        misMetrics.kpis.targetRealizationPct >= 100 ? "#dcfce7" : "#fef3c7",
+                      color: misMetrics.kpis.targetRealizationPct >= 100 ? "#166534" : "#92400e",
+                      padding: "0.15rem 0.45rem",
+                      borderRadius: "4px",
+                      fontSize: "0.7rem",
+                      fontWeight: 700
+                    }}
+                  >
+                    {misMetrics.kpis.targetRealizationPct}% of Target
+                  </span>
+                </div>
+                <div
+                  style={{
+                    fontSize: "1.5rem",
+                    fontWeight: 800,
+                    color: "#0f172a",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  PKR {misMetrics.kpis.totalRealizedRecovery.toLocaleString()}
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "#64748b", marginBottom: "0.75rem" }}>
+                  Baseline Circle Target: PKR{" "}
+                  {misMetrics.kpis.baselineBudgetTargetPkr.toLocaleString()}
+                </div>
+                {/* Progress bar */}
+                <div
+                  style={{
+                    width: "100%",
+                    height: "8px",
+                    background: "#e2e8f0",
+                    borderRadius: "9999px",
+                    overflow: "hidden"
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${Math.min(100, misMetrics.kpis.targetRealizationPct)}%`,
+                      height: "100%",
+                      background: "linear-gradient(90deg, #10b981 0%, #059669 100%)",
+                      borderRadius: "9999px"
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Card 2: Assessed Gross Demand vs Recovery */}
+              <div
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "1.25rem",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.03)"
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    marginBottom: "0.5rem"
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.8rem",
+                      color: "#64748b",
+                      fontWeight: 600,
+                      textTransform: "uppercase"
+                    }}
+                  >
+                    Assessed Gross Demand
+                  </span>
+                  <span
+                    style={{
+                      background: "#e0f2fe",
+                      color: "#0369a1",
+                      padding: "0.15rem 0.45rem",
+                      borderRadius: "4px",
+                      fontSize: "0.7rem",
+                      fontWeight: 700
+                    }}
+                  >
+                    {misMetrics.kpis.recoveryRatePct}% Recovered
+                  </span>
+                </div>
+                <div
+                  style={{
+                    fontSize: "1.5rem",
+                    fontWeight: 800,
+                    color: "#0f172a",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  PKR {misMetrics.kpis.totalAssessedGross.toLocaleString()}
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "#64748b", marginBottom: "0.75rem" }}>
+                  Base: PKR {misMetrics.kpis.assessedDemand.toLocaleString()} &bull; Penalties: PKR{" "}
+                  {misMetrics.kpis.penaltyDemand.toLocaleString()}
+                </div>
+                {/* Dual bar */}
+                <div
+                  style={{
+                    width: "100%",
+                    height: "8px",
+                    background: "#e2e8f0",
+                    borderRadius: "9999px",
+                    overflow: "hidden"
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${Math.min(100, misMetrics.kpis.recoveryRatePct)}%`,
+                      height: "100%",
+                      background: "linear-gradient(90deg, #0284c7 0%, #0369a1 100%)",
+                      borderRadius: "9999px"
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Card 3: Outstanding Arrears & Exposure */}
+              <div
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "1.25rem",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.03)"
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    marginBottom: "0.5rem"
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.8rem",
+                      color: "#64748b",
+                      fontWeight: 600,
+                      textTransform: "uppercase"
+                    }}
+                  >
+                    Outstanding Arrears
+                  </span>
+                  <span
+                    style={{
+                      background: "#fee2e2",
+                      color: "#991b1b",
+                      padding: "0.15rem 0.45rem",
+                      borderRadius: "4px",
+                      fontSize: "0.7rem",
+                      fontWeight: 700
+                    }}
+                  >
+                    {misMetrics.kpis.defaulterUnitsCount} Defaulters
+                  </span>
+                </div>
+                <div
+                  style={{
+                    fontSize: "1.5rem",
+                    fontWeight: 800,
+                    color: "#b91c1c",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  PKR {misMetrics.kpis.outstandingArrears.toLocaleString()}
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "#64748b", marginBottom: "0.75rem" }}>
+                  {misMetrics.kpis.paidUnitsCount} of {misMetrics.kpis.totalUnitsCount} units fully
+                  paid &bull; NIL arrears
+                </div>
+                <div style={{ fontSize: "0.72rem", color: "#991b1b", fontWeight: 600 }}>
+                  ⚠️ Exposure: PKR{" "}
+                  {misMetrics.defaulterFunnel.totalDefaulterExposure.toLocaleString()} in recovery
+                  stages
+                </div>
+              </div>
+
+              {/* Card 4: Operational Action Pendency */}
+              <div
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "1.25rem",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.03)"
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    marginBottom: "0.5rem"
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.8rem",
+                      color: "#64748b",
+                      fontWeight: 600,
+                      textTransform: "uppercase"
+                    }}
+                  >
+                    Operational Pendency
+                  </span>
+                  <span
+                    style={{
+                      background: "#fef3c7",
+                      color: "#92400e",
+                      padding: "0.15rem 0.45rem",
+                      borderRadius: "4px",
+                      fontSize: "0.7rem",
+                      fontWeight: 700
+                    }}
+                  >
+                    {misMetrics.pendency.totalPendencyActions} Actions Due
+                  </span>
+                </div>
+                <div
+                  style={{
+                    fontSize: "1.5rem",
+                    fontWeight: 800,
+                    color: "#0f172a",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  {misMetrics.pendency.totalPendencyActions} Queued
+                </div>
+                <div
+                  style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem", marginTop: "0.5rem" }}
+                >
+                  <span
+                    style={{
+                      background: "#f1f5f9",
+                      padding: "0.15rem 0.35rem",
+                      borderRadius: "3px",
+                      fontSize: "0.68rem",
+                      color: "#475569"
+                    }}
+                  >
+                    {misMetrics.pendency.pendingDraftAssessments} Drafts
+                  </span>
+                  <span
+                    style={{
+                      background: "#f1f5f9",
+                      padding: "0.15rem 0.35rem",
+                      borderRadius: "3px",
+                      fontSize: "0.68rem",
+                      color: "#475569"
+                    }}
+                  >
+                    {misMetrics.pendency.unservedNotices} Unserved
+                  </span>
+                  <span
+                    style={{
+                      background: "#f1f5f9",
+                      padding: "0.15rem 0.35rem",
+                      borderRadius: "3px",
+                      fontSize: "0.68rem",
+                      color: "#475569"
+                    }}
+                  >
+                    {misMetrics.pendency.pendingAppeals} Appeals
+                  </span>
+                  <span
+                    style={{
+                      background: "#f1f5f9",
+                      padding: "0.15rem 0.35rem",
+                      borderRadius: "3px",
+                      fontSize: "0.68rem",
+                      color: "#475569"
+                    }}
+                  >
+                    {misMetrics.pendency.pendingFieldInspections} Inspections
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 2: STATUTORY CATEGORY REVENUE YIELD TABLE */}
+            <div className="table-card" style={{ marginBottom: "1.5rem" }}>
+              <div
+                style={{
+                  padding: "1rem 1.25rem",
+                  borderBottom: "1px solid #e2e8f0",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "0.75rem"
+                }}
+              >
+                <div>
+                  <h4 style={{ margin: 0, fontSize: "1.05rem", color: "#0d3822", fontWeight: 700 }}>
+                    🏢 Statutory Category Yield Distribution (Second Schedule, Section 3)
+                  </h4>
+                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                    Official breakdown across all 11 schedule entries &bull; Assessed demand,
+                    realized recovery, and compliance yield
+                  </p>
+                </div>
+                <span
+                  style={{
+                    background: "#f0fdf4",
+                    color: "#166534",
+                    border: "1px solid #bbf7d0",
+                    padding: "0.25rem 0.6rem",
+                    borderRadius: "4px",
+                    fontSize: "0.75rem",
+                    fontWeight: 600
+                  }}
+                >
+                  ✓ 11 / 11 Categories Tracked
+                </span>
+              </div>
+
+              <div style={{ overflowX: "auto" }}>
+                <table className="data-table" style={{ width: "100%", fontSize: "0.85rem" }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: "5%" }}>Entry</th>
+                      <th style={{ width: "30%" }}>Second Schedule Category Description</th>
+                      <th style={{ width: "8%", textAlign: "center" }}>Units</th>
+                      <th style={{ width: "12%", textAlign: "right" }}>Assessed Tax (PKR)</th>
+                      <th style={{ width: "10%", textAlign: "right" }}>Penalties (PKR)</th>
+                      <th style={{ width: "12%", textAlign: "right" }}>Total Demand (PKR)</th>
+                      <th style={{ width: "12%", textAlign: "right" }}>Realized (PKR)</th>
+                      <th style={{ width: "11%", textAlign: "right" }}>Compliance %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {misMetrics.categoryYields.map((cat) => (
+                      <tr
+                        key={cat.categoryCode}
+                        style={{
+                          background: cat.unitCount > 0 ? "#f8fafc" : undefined,
+                          fontWeight: cat.unitCount > 0 ? 600 : 400
+                        }}
+                      >
+                        <td>
+                          <span
+                            style={{
+                              background: cat.unitCount > 0 ? "#0d3822" : "#e2e8f0",
+                              color: cat.unitCount > 0 ? "#ffffff" : "#64748b",
+                              padding: "0.15rem 0.45rem",
+                              borderRadius: "3px",
+                              fontSize: "0.75rem",
+                              fontWeight: 700
+                            }}
+                          >
+                            {cat.categoryCode}
+                          </span>
+                        </td>
+                        <td>
+                          <span style={{ color: "#0f172a" }}>{cat.categoryName}</span>
+                          <span
+                            style={{
+                              display: "block",
+                              fontSize: "0.72rem",
+                              color: "#64748b",
+                              fontWeight: 400
+                            }}
+                          >
+                            {cat.ruleCount} statutory rate rules
+                          </span>
+                        </td>
+                        <td style={{ textAlign: "center" }}>
+                          {cat.unitCount > 0 ? (
+                            <span className="badge badge-approved">{cat.unitCount}</span>
+                          ) : (
+                            <span style={{ color: "#94a3b8" }}>0</span>
+                          )}
+                        </td>
+                        <td style={{ textAlign: "right", fontFamily: "monospace" }}>
+                          {cat.assessedDemand > 0
+                            ? `PKR ${cat.assessedDemand.toLocaleString()}`
+                            : "—"}
+                        </td>
+                        <td
+                          style={{
+                            textAlign: "right",
+                            fontFamily: "monospace",
+                            color: cat.penaltyDemand > 0 ? "#b91c1c" : undefined
+                          }}
+                        >
+                          {cat.penaltyDemand > 0
+                            ? `PKR ${cat.penaltyDemand.toLocaleString()}`
+                            : "—"}
+                        </td>
+                        <td
+                          style={{ textAlign: "right", fontFamily: "monospace", fontWeight: 700 }}
+                        >
+                          {cat.totalDemand > 0 ? `PKR ${cat.totalDemand.toLocaleString()}` : "—"}
+                        </td>
+                        <td
+                          style={{
+                            textAlign: "right",
+                            fontFamily: "monospace",
+                            color: "#166534",
+                            fontWeight: 700
+                          }}
+                        >
+                          {cat.realizedRecovery > 0
+                            ? `PKR ${cat.realizedRecovery.toLocaleString()}`
+                            : "—"}
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "flex-end",
+                              gap: "0.5rem"
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: "45px",
+                                height: "6px",
+                                background: "#e2e8f0",
+                                borderRadius: "9999px",
+                                overflow: "hidden"
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: `${cat.compliancePct}%`,
+                                  height: "100%",
+                                  background:
+                                    cat.compliancePct >= 80
+                                      ? "#10b981"
+                                      : cat.compliancePct >= 40
+                                        ? "#f59e0b"
+                                        : "#ef4444",
+                                  borderRadius: "9999px"
+                                }}
+                              />
+                            </div>
+                            <span
+                              style={{
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                                color:
+                                  cat.compliancePct >= 80
+                                    ? "#166534"
+                                    : cat.compliancePct >= 40
+                                      ? "#92400e"
+                                      : "#b91c1c"
+                              }}
+                            >
+                              {cat.compliancePct}%
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr
+                      style={{
+                        background: "#f1f5f9",
+                        fontWeight: 800,
+                        borderTop: "2px solid #cbd5e1"
+                      }}
+                    >
+                      <td colSpan={2}>PROVINCIAL TOTALS (CIRCLE-VEHARI)</td>
+                      <td style={{ textAlign: "center" }}>{misMetrics.kpis.totalUnitsCount}</td>
+                      <td style={{ textAlign: "right", fontFamily: "monospace" }}>
+                        PKR {misMetrics.kpis.assessedDemand.toLocaleString()}
+                      </td>
+                      <td style={{ textAlign: "right", fontFamily: "monospace", color: "#b91c1c" }}>
+                        PKR {misMetrics.kpis.penaltyDemand.toLocaleString()}
+                      </td>
+                      <td style={{ textAlign: "right", fontFamily: "monospace" }}>
+                        PKR {misMetrics.kpis.totalAssessedGross.toLocaleString()}
+                      </td>
+                      <td style={{ textAlign: "right", fontFamily: "monospace", color: "#166534" }}>
+                        PKR {misMetrics.kpis.totalRealizedRecovery.toLocaleString()}
+                      </td>
+                      <td style={{ textAlign: "right", color: "#0d3822" }}>
+                        {misMetrics.kpis.recoveryRatePct}%
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+            {/* SECTION 3: DEFAULTER RECOVERY & AGING FUNNEL */}
+            <div className="table-card" style={{ marginBottom: "1.5rem" }}>
+              <div
+                style={{
+                  padding: "1rem 1.25rem",
+                  borderBottom: "1px solid #e2e8f0",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "0.75rem"
+                }}
+              >
+                <div>
+                  <h4 style={{ margin: 0, fontSize: "1.05rem", color: "#0d3822", fontWeight: 700 }}>
+                    ⚠️ Statutory Defaulter Recovery &amp; Aging Funnel (Section 3(4) &amp; Rule 12)
+                  </h4>
+                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                    Progressive statutory enforcement stages from notice service to Land Revenue
+                    arrears certification
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("DEFAULTERS")}
+                  className="btn-secondary btn-sm"
+                  style={{ fontWeight: 600 }}
+                >
+                  Open Defaulter Desk →
+                </button>
+              </div>
+
+              <div
+                style={{
+                  padding: "1.25rem",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                  gap: "0.75rem"
+                }}
+              >
+                {/* Stage 1: Current */}
+                <div
+                  style={{
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "6px",
+                    padding: "1rem",
+                    borderTop: "3px solid #0284c7"
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "#0369a1",
+                      fontWeight: 700,
+                      textTransform: "uppercase"
+                    }}
+                  >
+                    Stage 1: Current
+                  </span>
+                  <div
+                    style={{
+                      fontSize: "1.25rem",
+                      fontWeight: 800,
+                      color: "#0f172a",
+                      margin: "0.35rem 0 0.15rem"
+                    }}
+                  >
+                    {misMetrics.defaulterFunnel.current.count} Units
+                  </div>
+                  <div style={{ fontSize: "0.8rem", color: "#0284c7", fontWeight: 600 }}>
+                    PKR {misMetrics.defaulterFunnel.current.amount.toLocaleString()}
+                  </div>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "0.7rem",
+                      color: "#64748b",
+                      marginTop: "0.35rem"
+                    }}
+                  >
+                    Within due date (31/08/2026)
+                  </span>
+                </div>
+
+                {/* Stage 2: Overdue 30 Days */}
+                <div
+                  style={{
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "6px",
+                    padding: "1rem",
+                    borderTop: "3px solid #f59e0b"
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "#b45309",
+                      fontWeight: 700,
+                      textTransform: "uppercase"
+                    }}
+                  >
+                    Stage 2: Overdue (30d)
+                  </span>
+                  <div
+                    style={{
+                      fontSize: "1.25rem",
+                      fontWeight: 800,
+                      color: "#0f172a",
+                      margin: "0.35rem 0 0.15rem"
+                    }}
+                  >
+                    {misMetrics.defaulterFunnel.overdue30Days.count} Units
+                  </div>
+                  <div style={{ fontSize: "0.8rem", color: "#b45309", fontWeight: 600 }}>
+                    PKR {misMetrics.defaulterFunnel.overdue30Days.amount.toLocaleString()}
+                  </div>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "0.7rem",
+                      color: "#64748b",
+                      marginTop: "0.35rem"
+                    }}
+                  >
+                    Statutory grace period expired
+                  </span>
+                </div>
+
+                {/* Stage 3: Penalty Eligible */}
+                <div
+                  style={{
+                    background: "#fffbeb",
+                    border: "1px solid #fde68a",
+                    borderRadius: "6px",
+                    padding: "1rem",
+                    borderTop: "3px solid #ea580c"
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "#c2410c",
+                      fontWeight: 700,
+                      textTransform: "uppercase"
+                    }}
+                  >
+                    Stage 3: SCN Eligible
+                  </span>
+                  <div
+                    style={{
+                      fontSize: "1.25rem",
+                      fontWeight: 800,
+                      color: "#0f172a",
+                      margin: "0.35rem 0 0.15rem"
+                    }}
+                  >
+                    {misMetrics.defaulterFunnel.penaltyEligible.count} Units
+                  </div>
+                  <div style={{ fontSize: "0.8rem", color: "#c2410c", fontWeight: 600 }}>
+                    PKR {misMetrics.defaulterFunnel.penaltyEligible.amount.toLocaleString()}
+                  </div>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "0.7rem",
+                      color: "#92400e",
+                      marginTop: "0.35rem"
+                    }}
+                  >
+                    Rule 10 Show Cause due
+                  </span>
+                </div>
+
+                {/* Stage 4: Penalized */}
+                <div
+                  style={{
+                    background: "#fef2f2",
+                    border: "1px solid #fecaca",
+                    borderRadius: "6px",
+                    padding: "1rem",
+                    borderTop: "3px solid #dc2626"
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "#b91c1c",
+                      fontWeight: 700,
+                      textTransform: "uppercase"
+                    }}
+                  >
+                    Stage 4: Penalized
+                  </span>
+                  <div
+                    style={{
+                      fontSize: "1.25rem",
+                      fontWeight: 800,
+                      color: "#b91c1c",
+                      margin: "0.35rem 0 0.15rem"
+                    }}
+                  >
+                    {misMetrics.defaulterFunnel.penalized.count} Units
+                  </div>
+                  <div style={{ fontSize: "0.8rem", color: "#b91c1c", fontWeight: 600 }}>
+                    PKR {misMetrics.defaulterFunnel.penalized.amount.toLocaleString()}
+                  </div>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "0.7rem",
+                      color: "#991b1b",
+                      marginTop: "0.35rem"
+                    }}
+                  >
+                    Section 3(4) penalty imposed
+                  </span>
+                </div>
+
+                {/* Stage 5: Land Revenue Certified */}
+                <div
+                  style={{
+                    background: "#fdf2f8",
+                    border: "1px solid #fbcfe8",
+                    borderRadius: "6px",
+                    padding: "1rem",
+                    borderTop: "3px solid #9d174d"
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "#9d174d",
+                      fontWeight: 700,
+                      textTransform: "uppercase"
+                    }}
+                  >
+                    Stage 5: Certified (LRA)
+                  </span>
+                  <div
+                    style={{
+                      fontSize: "1.25rem",
+                      fontWeight: 800,
+                      color: "#9d174d",
+                      margin: "0.35rem 0 0.15rem"
+                    }}
+                  >
+                    {misMetrics.defaulterFunnel.recoveryCertified.count} Units
+                  </div>
+                  <div style={{ fontSize: "0.8rem", color: "#9d174d", fontWeight: 600 }}>
+                    PKR {misMetrics.defaulterFunnel.recoveryCertified.amount.toLocaleString()}
+                  </div>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "0.7rem",
+                      color: "#831843",
+                      marginTop: "0.35rem"
+                    }}
+                  >
+                    Rule 12 Collector referral
+                  </span>
+                </div>
+
+                {/* Discharged: Paid */}
+                <div
+                  style={{
+                    background: "#f0fdf4",
+                    border: "1px solid #bbf7d0",
+                    borderRadius: "6px",
+                    padding: "1rem",
+                    borderTop: "3px solid #16a34a"
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "#166534",
+                      fontWeight: 700,
+                      textTransform: "uppercase"
+                    }}
+                  >
+                    Discharged / Paid
+                  </span>
+                  <div
+                    style={{
+                      fontSize: "1.25rem",
+                      fontWeight: 800,
+                      color: "#166534",
+                      margin: "0.35rem 0 0.15rem"
+                    }}
+                  >
+                    {misMetrics.defaulterFunnel.paid.count} Units
+                  </div>
+                  <div style={{ fontSize: "0.8rem", color: "#166534", fontWeight: 600 }}>
+                    PKR {misMetrics.defaulterFunnel.paid.amount.toLocaleString()}
+                  </div>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "0.7rem",
+                      color: "#15803d",
+                      marginTop: "0.35rem"
+                    }}
+                  >
+                    NIL remaining arrears &bull; Cleared
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 4: STATUTORY REGISTER EXPORT STUDIO */}
+            <div className="table-card">
+              <div
+                style={{
+                  padding: "1rem 1.25rem",
+                  borderBottom: "1px solid #e2e8f0"
+                }}
+              >
+                <h4 style={{ margin: 0, fontSize: "1.05rem", color: "#0d3822", fontWeight: 700 }}>
+                  📂 Statutory Registers &amp; Compliance Export Studio
+                </h4>
+                <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                  Download official gazetted registers in RFC-4180 standard CSV format or open
+                  formatted print-ready gazette reports
+                </p>
+              </div>
+
+              <div
+                style={{
+                  padding: "1.25rem",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+                  gap: "1rem"
+                }}
+              >
+                {/* Register 1: Form PFT-3 */}
+                <div
+                  style={{
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    padding: "1.25rem",
+                    background: "#ffffff",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between"
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        marginBottom: "0.5rem"
+                      }}
+                    >
+                      <span className="badge badge-approved" style={{ fontSize: "0.68rem" }}>
+                        RULE 11 REGISTER
+                      </span>
+                      <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                        {units.length} Assessed Units
+                      </span>
+                    </div>
+                    <h5 style={{ margin: "0 0 0.35rem", fontSize: "1rem", color: "#0d3822" }}>
+                      Form P.F.T-3 Assessment &amp; Demand Register
+                    </h5>
+                    <p
+                      style={{
+                        fontSize: "0.8rem",
+                        color: "#475569",
+                        margin: "0 0 1rem",
+                        lineHeight: 1.4
+                      }}
+                    >
+                      The primary statutory register of demand units, annual rates, penalties, and
+                      double-entry ledger balances for Tehsil Vehari.
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        downloadCsvFile(
+                          "PFT-3_Assessment_Register_Vehari_2026.csv",
+                          exportPft3RegisterCsv(units)
+                        );
+                        showToast("success", "Form P.F.T-3 Register CSV downloaded.");
+                      }}
+                      className="btn-secondary btn-sm"
+                      style={{ flex: 1 }}
+                    >
+                      ⬇️ Download CSV
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExecutiveReportType("PFT3_REGISTER");
+                        setShowExecutivePrintModal(true);
+                      }}
+                      className="btn-primary btn-sm"
+                      style={{ flex: 1 }}
+                    >
+                      🖨️ Print Report
+                    </button>
+                  </div>
+                </div>
+
+                {/* Register 2: Defaulter Recovery Roll */}
+                <div
+                  style={{
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    padding: "1.25rem",
+                    background: "#ffffff",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between"
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        marginBottom: "0.5rem"
+                      }}
+                    >
+                      <span className="badge badge-returned" style={{ fontSize: "0.68rem" }}>
+                        SECTION 3(4) ENFORCEMENT
+                      </span>
+                      <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                        {misMetrics.kpis.defaulterUnitsCount} Overdue
+                      </span>
+                    </div>
+                    <h5 style={{ margin: "0 0 0.35rem", fontSize: "1rem", color: "#0d3822" }}>
+                      Defaulter &amp; Recovery Referral Roll
+                    </h5>
+                    <p
+                      style={{
+                        fontSize: "0.8rem",
+                        color: "#475569",
+                        margin: "0 0 1rem",
+                        lineHeight: 1.4
+                      }}
+                    >
+                      Statutory roll of defaulting assessees, days overdue, Section 3(4) penalties,
+                      and Rule 12 Land Revenue certificate referrals.
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        downloadCsvFile(
+                          "Defaulter_Recovery_Roll_Vehari_2026.csv",
+                          exportDefaulterRecoveryCsv(units)
+                        );
+                        showToast("success", "Defaulter Recovery Roll CSV downloaded.");
+                      }}
+                      className="btn-secondary btn-sm"
+                      style={{ flex: 1 }}
+                    >
+                      ⬇️ Download CSV
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExecutiveReportType("DEFAULTER_ROLL");
+                        setShowExecutivePrintModal(true);
+                      }}
+                      className="btn-primary btn-sm"
+                      style={{ flex: 1 }}
+                    >
+                      🖨️ Print Report
+                    </button>
+                  </div>
+                </div>
+
+                {/* Register 3: Notice Dispatch Register */}
+                <div
+                  style={{
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    padding: "1.25rem",
+                    background: "#ffffff",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between"
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        marginBottom: "0.5rem"
+                      }}
+                    >
+                      <span className="badge badge-approved" style={{ fontSize: "0.68rem" }}>
+                        RULE 6(2) PROCESS LOG
+                      </span>
+                      <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                        {circleDispatchRegisterData.totalServed}/
+                        {circleDispatchRegisterData.totalNotices} Served
+                      </span>
+                    </div>
+                    <h5 style={{ margin: "0 0 0.35rem", fontSize: "1rem", color: "#0d3822" }}>
+                      Circle Notice Dispatch &amp; Service Sheet
+                    </h5>
+                    <p
+                      style={{
+                        fontSize: "0.8rem",
+                        color: "#475569",
+                        margin: "0 0 1rem",
+                        lineHeight: 1.4
+                      }}
+                    >
+                      Field inspection service log tracking personal delivery of Form P.F.T-1
+                      notices, serving officers, dates, and recipient signatures.
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        downloadCsvFile(
+                          "Circle_Notice_Dispatch_Sheet_Vehari_2026.csv",
+                          exportNoticeDispatchCsv(units)
+                        );
+                        showToast("success", "Notice Dispatch Sheet CSV downloaded.");
+                      }}
+                      className="btn-secondary btn-sm"
+                      style={{ flex: 1 }}
+                    >
+                      ⬇️ Download CSV
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExecutiveReportType("NOTICE_DISPATCH");
+                        setShowExecutivePrintModal(true);
+                      }}
+                      className="btn-primary btn-sm"
+                      style={{ flex: 1 }}
+                    >
+                      🖨️ Print Report
+                    </button>
+                  </div>
+                </div>
+
+                {/* Register 4: Tax Clearance Certificate Log */}
+                <div
+                  style={{
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    padding: "1.25rem",
+                    background: "#ffffff",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between"
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        marginBottom: "0.5rem"
+                      }}
+                    >
+                      <span className="badge badge-approved" style={{ fontSize: "0.68rem" }}>
+                        FORM P.F.T-5
+                      </span>
+                      <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                        {clearanceCertificates.length} Certificates
+                      </span>
+                    </div>
+                    <h5 style={{ margin: "0 0 0.35rem", fontSize: "1rem", color: "#0d3822" }}>
+                      Form P.F.T-5 Tax Clearance Issuance Log
+                    </h5>
+                    <p
+                      style={{
+                        fontSize: "0.8rem",
+                        color: "#475569",
+                        margin: "0 0 1rem",
+                        lineHeight: 1.4
+                      }}
+                    >
+                      Official register of issued clearance certificates, certifying NIL arrears
+                      with cryptographic SHA-256 digests and QR codes.
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        downloadCsvFile(
+                          "Clearance_Certificates_Log_Vehari_2026.csv",
+                          exportClearanceCertificatesCsv(clearanceCertificates)
+                        );
+                        showToast("success", "Clearance Certificates Log CSV downloaded.");
+                      }}
+                      className="btn-secondary btn-sm"
+                      style={{ flex: 1 }}
+                    >
+                      ⬇️ Download CSV
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExecutiveReportType("CLEARANCE_LOG");
+                        setShowExecutivePrintModal(true);
+                      }}
+                      className="btn-primary btn-sm"
+                      style={{ flex: 1 }}
+                    >
+                      🖨️ Print Report
+                    </button>
+                  </div>
+                </div>
+
+                {/* Register 5: Statutory Relief & Adjustment Register */}
+                <div
+                  style={{
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    padding: "1.25rem",
+                    background: "#ffffff",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between"
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        marginBottom: "0.5rem"
+                      }}
+                    >
+                      <span className="badge badge-draft" style={{ fontSize: "0.68rem" }}>
+                        RULES 5 &amp; 10 RELIEF
+                      </span>
+                      <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                        {discontinuances.length + refundAdjustments.length} Records
+                      </span>
+                    </div>
+                    <h5 style={{ margin: "0 0 0.35rem", fontSize: "1rem", color: "#0d3822" }}>
+                      Statutory Relief &amp; Adjustment Register
+                    </h5>
+                    <p
+                      style={{
+                        fontSize: "0.8rem",
+                        color: "#475569",
+                        margin: "0 0 1rem",
+                        lineHeight: 1.4
+                      }}
+                    >
+                      Audit log of Rule 10 trade closure notices, on-site inspection reports, and
+                      Rule 5 statutory refund and ledger adjustment orders.
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        downloadCsvFile(
+                          "Statutory_Relief_Register_Vehari_2026.csv",
+                          exportReliefAdjustmentsCsv(discontinuances, refundAdjustments)
+                        );
+                        showToast("success", "Statutory Relief Register CSV downloaded.");
+                      }}
+                      className="btn-secondary btn-sm"
+                      style={{ flex: 1 }}
+                    >
+                      ⬇️ Download CSV
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExecutiveReportType("RELIEF_REGISTER");
+                        setShowExecutivePrintModal(true);
+                      }}
+                      className="btn-primary btn-sm"
+                      style={{ flex: 1 }}
+                    >
+                      🖨️ Print Report
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </section>
         )}
@@ -10426,8 +11837,7 @@ export default function HomePage() {
                     <strong>Relief Mode:</strong> {activeRefundOrder.type.replace(/_/g, " ")}
                   </p>
                   <p>
-                    <strong>Claimed Amount:</strong> PKR{" "}
-                    {activeRefundOrder.amount.toLocaleString()}
+                    <strong>Claimed Amount:</strong> PKR {activeRefundOrder.amount.toLocaleString()}
                   </p>
                   <p>
                     <strong>Grounds of Relief:</strong> <em>{activeRefundOrder.grounds}</em>
@@ -10449,9 +11859,9 @@ export default function HomePage() {
                   <p style={{ margin: "0 0 0.5rem", fontSize: "0.9rem", color: "#14532d" }}>
                     Having examined the bank deposit scrolls, the claim is verified. An immutable
                     double-entry credit of{" "}
-                    <strong>PKR {activeRefundOrder.amount.toLocaleString()}</strong> has been
-                    posted to the permanent demand ledger of {activeRefundOrder.assesseeLegalName}{" "}
-                    under transaction reference {activeRefundOrder.orderNumber}.
+                    <strong>PKR {activeRefundOrder.amount.toLocaleString()}</strong> has been posted
+                    to the permanent demand ledger of {activeRefundOrder.assesseeLegalName} under
+                    transaction reference {activeRefundOrder.orderNumber}.
                   </p>
                   <p style={{ margin: 0, fontSize: "0.75rem", color: "#166534" }}>
                     ✓ Recorded in Demand &amp; Payment Ledger &bull; Immutable entry idempotency
@@ -10500,6 +11910,853 @@ export default function HomePage() {
               </button>
               <button type="button" className="btn-primary" onClick={() => window.print()}>
                 🖨️ Print Statutory Order
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 24: EXECUTIVE PRINT REPORT STUDIO (PHASE 7) */}
+      {showExecutivePrintModal && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="exec-report-title"
+        >
+          <div className="modal-card modal-card-lg" style={{ maxWidth: "64rem" }}>
+            <div
+              className="modal-header"
+              style={{
+                background: "linear-gradient(135deg, #0d3822 0%, #064e3b 100%)",
+                color: "#ffffff"
+              }}
+            >
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <span style={{ fontSize: "1.25rem" }}>🏛️</span>
+                  <h3
+                    id="exec-report-title"
+                    style={{ margin: 0, color: "#ffffff", fontSize: "1.1rem" }}
+                  >
+                    Executive Gazetted Report Studio &bull; Punjab PTAS
+                  </h3>
+                </div>
+                <p style={{ margin: "0.2rem 0 0", fontSize: "0.75rem", color: "#d1fae5" }}>
+                  Official High-Fidelity Printable Document &bull; Section 15 of Digitization Plan
+                  &bull; Multan Division
+                </p>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setShowExecutivePrintModal(false)}
+                aria-label="Close report studio"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div
+              className="modal-body"
+              style={{
+                maxHeight: "75vh",
+                overflowY: "auto",
+                padding: "1.5rem",
+                background: "#f8fafc"
+              }}
+            >
+              {/* Official Printable Report Container */}
+              <div
+                style={{
+                  background: "#ffffff",
+                  border: "2px solid #0d3822",
+                  borderRadius: "6px",
+                  padding: "2rem",
+                  fontFamily: "Georgia, serif",
+                  boxShadow: "0 4px 10px rgba(0,0,0,0.05)"
+                }}
+              >
+                {/* Official Letterhead Header */}
+                <div
+                  style={{
+                    textAlign: "center",
+                    borderBottom: "2px solid #0d3822",
+                    paddingBottom: "1.25rem",
+                    marginBottom: "1.5rem"
+                  }}
+                >
+                  <div style={{ fontSize: "2rem", marginBottom: "0.25rem" }}>🏛️</div>
+                  <h4
+                    style={{
+                      margin: "0.15rem 0",
+                      color: "#0d3822",
+                      fontSize: "1.25rem",
+                      letterSpacing: "0.05em"
+                    }}
+                  >
+                    GOVERNMENT OF THE PUNJAB
+                  </h4>
+                  <p
+                    style={{
+                      margin: "0.15rem 0",
+                      fontSize: "0.9rem",
+                      color: "#334155",
+                      fontWeight: 600
+                    }}
+                  >
+                    DIRECTORATE GENERAL OF EXCISE, TAXATION &amp; NARCOTICS CONTROL
+                  </p>
+                  <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                    MULTAN DIVISION &bull; DISTRICT VEHARI &bull; CIRCLE-VEHARI
+                  </p>
+
+                  <div
+                    style={{
+                      background: "#0d3822",
+                      color: "#ffffff",
+                      display: "inline-block",
+                      padding: "0.35rem 1.25rem",
+                      borderRadius: "4px",
+                      marginTop: "0.85rem",
+                      fontSize: "0.95rem",
+                      fontWeight: 700,
+                      letterSpacing: "0.03em"
+                    }}
+                  >
+                    {executiveReportType === "EXECUTIVE_MIS_SUMMARY" &&
+                      "EXECUTIVE MIS COMPREHENSIVE REVENUE & COMPLIANCE BRIEF"}
+                    {executiveReportType === "PFT3_REGISTER" &&
+                      "FORM P.F.T-3: ASSESSMENT & DEMAND REGISTER (RULE 11)"}
+                    {executiveReportType === "DEFAULTER_ROLL" &&
+                      "DEFAULTER ARREARS RECOVERY & REFERRAL ROLL (SECTION 3(4) & RULE 12)"}
+                    {executiveReportType === "NOTICE_DISPATCH" &&
+                      "CIRCLE NOTICE DISPATCH & SERVICE REGISTER (RULE 6(2))"}
+                    {executiveReportType === "CLEARANCE_LOG" &&
+                      "FORM P.F.T-5 TAX CLEARANCE CERTIFICATE ISSUANCE REGISTER"}
+                    {executiveReportType === "RELIEF_REGISTER" &&
+                      "STATUTORY RELIEF & ADJUSTMENT REGISTER (RULES 5 & 10)"}
+                  </div>
+                </div>
+
+                {/* Meta Details Row */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr 1fr",
+                    fontSize: "0.8rem",
+                    borderBottom: "1px solid #cbd5e1",
+                    paddingBottom: "0.85rem",
+                    marginBottom: "1.25rem",
+                    color: "#334155"
+                  }}
+                >
+                  <div>
+                    <strong>Financial Year:</strong> 2026–2027
+                    <br />
+                    <strong>Jurisdiction:</strong> Circle-Vehari (Tehsil Vehari)
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <strong>Statutory Baseline:</strong> Section 3, Second Schedule
+                    <br />
+                    <strong>Accounting Head:</strong> B01601 - Tax on Professions
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <strong>Date of Run:</strong> {new Date().toLocaleDateString("en-GB")}
+                    <br />
+                    <strong>Generated By:</strong> {officer.name} ({officer.role})
+                  </div>
+                </div>
+
+                {/* Dynamic Content based on executiveReportType */}
+                {executiveReportType === "EXECUTIVE_MIS_SUMMARY" && (
+                  <div>
+                    {/* Executive Summary Metrics Box */}
+                    <div
+                      style={{
+                        background: "#f0fdf4",
+                        border: "1px solid #bbf7d0",
+                        padding: "1rem",
+                        borderRadius: "6px",
+                        marginBottom: "1.5rem"
+                      }}
+                    >
+                      <h5 style={{ margin: "0 0 0.5rem", color: "#166534", fontSize: "0.95rem" }}>
+                        1. EXECUTIVE REVENUE REALIZATION SYNOPSIS:
+                      </h5>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(3, 1fr)",
+                          gap: "0.75rem",
+                          fontSize: "0.85rem"
+                        }}
+                      >
+                        <div>
+                          <span style={{ color: "#64748b" }}>Registered Assessees:</span>
+                          <br />
+                          <strong>{misMetrics.kpis.totalUnitsCount} Commercial Units</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: "#64748b" }}>Gross Assessed Demand:</span>
+                          <br />
+                          <strong>PKR {misMetrics.kpis.totalAssessedGross.toLocaleString()}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: "#64748b" }}>Realized Collections:</span>
+                          <br />
+                          <strong style={{ color: "#166534" }}>
+                            PKR {misMetrics.kpis.totalRealizedRecovery.toLocaleString()}
+                          </strong>
+                        </div>
+                        <div>
+                          <span style={{ color: "#64748b" }}>Recovery Yield Rate:</span>
+                          <br />
+                          <strong>{misMetrics.kpis.recoveryRatePct}% Realized</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: "#64748b" }}>Budget Target (PKR 50,000):</span>
+                          <br />
+                          <strong>{misMetrics.kpis.targetRealizationPct}% Realized</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: "#64748b" }}>Remaining Arrears:</span>
+                          <br />
+                          <strong style={{ color: "#b91c1c" }}>
+                            PKR {misMetrics.kpis.outstandingArrears.toLocaleString()}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Category Yield Breakdown */}
+                    <h5 style={{ margin: "1rem 0 0.5rem", color: "#0d3822", fontSize: "0.95rem" }}>
+                      2. SECOND SCHEDULE STATUTORY CATEGORY REVENUE YIELD:
+                    </h5>
+                    <table
+                      style={{
+                        width: "100%",
+                        borderCollapse: "collapse",
+                        fontSize: "0.8rem",
+                        marginBottom: "1.5rem"
+                      }}
+                    >
+                      <thead>
+                        <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                          <th style={{ padding: "0.4rem", textAlign: "left" }}>Entry</th>
+                          <th style={{ padding: "0.4rem", textAlign: "left" }}>Category Name</th>
+                          <th style={{ padding: "0.4rem", textAlign: "center" }}>Units</th>
+                          <th style={{ padding: "0.4rem", textAlign: "right" }}>Demand (PKR)</th>
+                          <th style={{ padding: "0.4rem", textAlign: "right" }}>Realized (PKR)</th>
+                          <th style={{ padding: "0.4rem", textAlign: "right" }}>Compliance</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {misMetrics.categoryYields.map((cat) => (
+                          <tr key={cat.categoryCode} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                            <td style={{ padding: "0.35rem" }}>{cat.categoryCode}</td>
+                            <td style={{ padding: "0.35rem" }}>{cat.categoryName}</td>
+                            <td style={{ padding: "0.35rem", textAlign: "center" }}>
+                              {cat.unitCount}
+                            </td>
+                            <td
+                              style={{
+                                padding: "0.35rem",
+                                textAlign: "right",
+                                fontFamily: "monospace"
+                              }}
+                            >
+                              {cat.totalDemand.toLocaleString()}
+                            </td>
+                            <td
+                              style={{
+                                padding: "0.35rem",
+                                textAlign: "right",
+                                fontFamily: "monospace",
+                                color: "#166534"
+                              }}
+                            >
+                              {cat.realizedRecovery.toLocaleString()}
+                            </td>
+                            <td style={{ padding: "0.35rem", textAlign: "right", fontWeight: 700 }}>
+                              {cat.compliancePct}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+
+                    {/* Defaulter Funnel & Action Velocity */}
+                    <h5 style={{ margin: "1rem 0 0.5rem", color: "#0d3822", fontSize: "0.95rem" }}>
+                      3. STATUTORY ENFORCEMENT &amp; OPERATIONAL DESK VELOCITY:
+                    </h5>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "1rem",
+                        fontSize: "0.82rem",
+                        marginBottom: "1.5rem"
+                      }}
+                    >
+                      <div
+                        style={{
+                          border: "1px solid #e2e8f0",
+                          padding: "0.75rem",
+                          borderRadius: "4px"
+                        }}
+                      >
+                        <strong
+                          style={{ display: "block", color: "#b91c1c", marginBottom: "0.4rem" }}
+                        >
+                          Defaulter Arrears Exposure:
+                        </strong>
+                        <div>
+                          &bull; Current within grace: {misMetrics.defaulterFunnel.current.count}{" "}
+                          units (PKR {misMetrics.defaulterFunnel.current.amount.toLocaleString()})
+                        </div>
+                        <div>
+                          &bull; Overdue 30+ days: {misMetrics.defaulterFunnel.overdue30Days.count}{" "}
+                          units (PKR{" "}
+                          {misMetrics.defaulterFunnel.overdue30Days.amount.toLocaleString()})
+                        </div>
+                        <div>
+                          &bull; Show Cause Notice eligible:{" "}
+                          {misMetrics.defaulterFunnel.penaltyEligible.count} units (PKR{" "}
+                          {misMetrics.defaulterFunnel.penaltyEligible.amount.toLocaleString()})
+                        </div>
+                        <div>
+                          &bull; Penalized under Sec 3(4):{" "}
+                          {misMetrics.defaulterFunnel.penalized.count} units (PKR{" "}
+                          {misMetrics.defaulterFunnel.penalized.amount.toLocaleString()})
+                        </div>
+                        <div>
+                          &bull; Certified under Rule 12:{" "}
+                          {misMetrics.defaulterFunnel.recoveryCertified.count} units (PKR{" "}
+                          {misMetrics.defaulterFunnel.recoveryCertified.amount.toLocaleString()})
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          border: "1px solid #e2e8f0",
+                          padding: "0.75rem",
+                          borderRadius: "4px"
+                        }}
+                      >
+                        <strong
+                          style={{ display: "block", color: "#0d3822", marginBottom: "0.4rem" }}
+                        >
+                          Operational Action Desk Backlog:
+                        </strong>
+                        <div>
+                          &bull; Draft Assessments awaiting approval:{" "}
+                          {misMetrics.pendency.pendingDraftAssessments}
+                        </div>
+                        <div>
+                          &bull; Unserved Rule 6 Demand Notices:{" "}
+                          {misMetrics.pendency.unservedNotices}
+                        </div>
+                        <div>
+                          &bull; Rule 10 On-site Discontinuance Inspections:{" "}
+                          {misMetrics.pendency.pendingFieldInspections}
+                        </div>
+                        <div>
+                          &bull; Section 7 Appellate Hearings pending:{" "}
+                          {misMetrics.pendency.pendingAppeals}
+                        </div>
+                        <div>
+                          &bull; Rule 5 Statutory Refund Claims in review:{" "}
+                          {misMetrics.pendency.pendingRefunds}
+                        </div>
+                        <div>
+                          &bull; Form P.F.T-5 Clearance Certificates issued:{" "}
+                          {misMetrics.pendency.clearanceCertificatesIssued}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {executiveReportType === "PFT3_REGISTER" && (
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      fontSize: "0.75rem",
+                      marginBottom: "1.5rem"
+                    }}
+                  >
+                    <thead>
+                      <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>PDN</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>
+                          Assessee Legal Name
+                        </th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>CNIC / NTN</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Category / Entry</th>
+                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Demand (PKR)</th>
+                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Penalty (PKR)</th>
+                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Paid (PKR)</th>
+                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Balance (PKR)</th>
+                        <th style={{ padding: "0.35rem", textAlign: "center" }}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {units.map((u) => {
+                        const baseTax = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+                        let penalty = 0;
+                        let paid = 0;
+                        for (const e of u.ledgerEntries) {
+                          if (e.entryType === "PENALTY_DEMAND") penalty += e.amount;
+                          if (e.amount < 0) paid += Math.abs(e.amount);
+                        }
+                        const bal = computeLedgerBalance(u.ledgerEntries);
+                        return (
+                          <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                            <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                              {u.demandUnit.permanentDemandNo}
+                            </td>
+                            <td style={{ padding: "0.35rem" }}>
+                              <strong>{u.legalName}</strong>
+                            </td>
+                            <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                              {u.identifierValue}
+                            </td>
+                            <td style={{ padding: "0.35rem" }}>
+                              Entry {u.statutoryRule.subclassification_code}
+                            </td>
+                            <td
+                              style={{
+                                padding: "0.35rem",
+                                textAlign: "right",
+                                fontFamily: "monospace"
+                              }}
+                            >
+                              {baseTax.toLocaleString()}
+                            </td>
+                            <td
+                              style={{
+                                padding: "0.35rem",
+                                textAlign: "right",
+                                fontFamily: "monospace",
+                                color: penalty > 0 ? "#b91c1c" : undefined
+                              }}
+                            >
+                              {penalty > 0 ? penalty.toLocaleString() : "0"}
+                            </td>
+                            <td
+                              style={{
+                                padding: "0.35rem",
+                                textAlign: "right",
+                                fontFamily: "monospace",
+                                color: "#166534"
+                              }}
+                            >
+                              {paid.toLocaleString()}
+                            </td>
+                            <td
+                              style={{
+                                padding: "0.35rem",
+                                textAlign: "right",
+                                fontFamily: "monospace",
+                                fontWeight: 700,
+                                color: bal > 0 ? "#b91c1c" : "#166534"
+                              }}
+                            >
+                              {bal.toLocaleString()}
+                            </td>
+                            <td style={{ padding: "0.35rem", textAlign: "center" }}>
+                              {bal <= 0 ? "PAID" : "ARREARS"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+
+                {executiveReportType === "DEFAULTER_ROLL" && (
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      fontSize: "0.75rem",
+                      marginBottom: "1.5rem"
+                    }}
+                  >
+                    <thead>
+                      <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>PDN</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Assessee Name</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Address</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Schedule Entry</th>
+                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Days Overdue</th>
+                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Original Tax</th>
+                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Penalty</th>
+                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Total Arrears</th>
+                        <th style={{ padding: "0.35rem", textAlign: "center" }}>Recovery Stage</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {units
+                        .filter((u) => computeLedgerBalance(u.ledgerEntries) > 0)
+                        .map((u) => {
+                          const aging = computeDefaulterAging(
+                            u.ledgerEntries,
+                            "2026-08-31",
+                            undefined,
+                            Boolean(u.isRecoveryCertified)
+                          );
+                          return (
+                            <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                              <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                                {u.demandUnit.permanentDemandNo}
+                              </td>
+                              <td style={{ padding: "0.35rem" }}>
+                                <strong>{u.legalName}</strong>
+                              </td>
+                              <td style={{ padding: "0.35rem" }}>{u.address}</td>
+                              <td style={{ padding: "0.35rem" }}>
+                                Entry {u.statutoryRule.subclassification_code}
+                              </td>
+                              <td style={{ padding: "0.35rem", textAlign: "right" }}>
+                                {aging.daysOverdue} days
+                              </td>
+                              <td
+                                style={{
+                                  padding: "0.35rem",
+                                  textAlign: "right",
+                                  fontFamily: "monospace"
+                                }}
+                              >
+                                {aging.originalDemand.toLocaleString()}
+                              </td>
+                              <td
+                                style={{
+                                  padding: "0.35rem",
+                                  textAlign: "right",
+                                  fontFamily: "monospace",
+                                  color: "#b91c1c"
+                                }}
+                              >
+                                {aging.penaltyDemand.toLocaleString()}
+                              </td>
+                              <td
+                                style={{
+                                  padding: "0.35rem",
+                                  textAlign: "right",
+                                  fontFamily: "monospace",
+                                  fontWeight: 700,
+                                  color: "#b91c1c"
+                                }}
+                              >
+                                {aging.remainingBalance.toLocaleString()}
+                              </td>
+                              <td
+                                style={{ padding: "0.35rem", textAlign: "center", fontWeight: 700 }}
+                              >
+                                {aging.status}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                )}
+
+                {executiveReportType === "NOTICE_DISPATCH" && (
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      fontSize: "0.75rem",
+                      marginBottom: "1.5rem"
+                    }}
+                  >
+                    <thead>
+                      <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Notice No</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Demand No</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Assessee Name</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Address</th>
+                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Amount (PKR)</th>
+                        <th style={{ padding: "0.35rem", textAlign: "center" }}>Status</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Served Date</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Serving Officer</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {units.map((u) => (
+                        <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                          <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                            PFT-1/VEH/2026/{u.id.slice(-4)}
+                          </td>
+                          <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                            {u.demandUnit.permanentDemandNo}
+                          </td>
+                          <td style={{ padding: "0.35rem" }}>
+                            <strong>{u.legalName}</strong>
+                          </td>
+                          <td style={{ padding: "0.35rem" }}>{u.address}</td>
+                          <td
+                            style={{
+                              padding: "0.35rem",
+                              textAlign: "right",
+                              fontFamily: "monospace"
+                            }}
+                          >
+                            {(u.assessmentVersions[0]?.snapshot.taxAmount ?? 0).toLocaleString()}
+                          </td>
+                          <td style={{ padding: "0.35rem", textAlign: "center" }}>
+                            <span
+                              className={
+                                u.serviceStatus === "SERVED"
+                                  ? "badge badge-approved"
+                                  : "badge badge-draft"
+                              }
+                            >
+                              {u.serviceStatus ?? "PENDING"}
+                            </span>
+                          </td>
+                          <td style={{ padding: "0.35rem" }}>{u.servedAt ?? "—"}</td>
+                          <td style={{ padding: "0.35rem" }}>
+                            {u.servedBy ?? "Muhammad Aslam, Inspector"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+
+                {executiveReportType === "CLEARANCE_LOG" && (
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      fontSize: "0.75rem",
+                      marginBottom: "1.5rem"
+                    }}
+                  >
+                    <thead>
+                      <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Certificate No</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Issue Date</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Valid Until</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Assessee Name</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>CNIC / NTN</th>
+                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Cleared (PKR)</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>
+                          Official SHA-256 Digest
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clearanceCertificates.map((cert) => (
+                        <tr key={cert.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                          <td
+                            style={{ padding: "0.35rem", fontFamily: "monospace", fontWeight: 700 }}
+                          >
+                            {cert.certificateNumber}
+                          </td>
+                          <td style={{ padding: "0.35rem" }}>{cert.issueDate}</td>
+                          <td style={{ padding: "0.35rem" }}>{cert.validUntil}</td>
+                          <td style={{ padding: "0.35rem" }}>
+                            <strong>{cert.assesseeLegalName}</strong>
+                          </td>
+                          <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                            {cert.cnicOrNtn}
+                          </td>
+                          <td
+                            style={{
+                              padding: "0.35rem",
+                              textAlign: "right",
+                              fontFamily: "monospace",
+                              color: "#166534",
+                              fontWeight: 700
+                            }}
+                          >
+                            {cert.clearedAmountPkr.toLocaleString()}
+                          </td>
+                          <td
+                            style={{
+                              padding: "0.35rem",
+                              fontFamily: "monospace",
+                              fontSize: "0.7rem",
+                              color: "#64748b"
+                            }}
+                          >
+                            {cert.officialSha256.slice(0, 24)}...
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+
+                {executiveReportType === "RELIEF_REGISTER" && (
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      fontSize: "0.75rem",
+                      marginBottom: "1.5rem"
+                    }}
+                  >
+                    <thead>
+                      <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Reference No</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Relief Type</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Assessee Name</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Filing Date</th>
+                        <th style={{ padding: "0.35rem", textAlign: "center" }}>Status</th>
+                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Relief (PKR)</th>
+                        <th style={{ padding: "0.35rem", textAlign: "left" }}>
+                          Order Number &amp; Date
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {discontinuances.map((d) => (
+                        <tr key={d.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                          <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                            {d.noticeNumber}
+                          </td>
+                          <td style={{ padding: "0.35rem" }}>Rule 10 Discontinuance</td>
+                          <td style={{ padding: "0.35rem" }}>
+                            <strong>{d.assesseeLegalName}</strong>
+                          </td>
+                          <td style={{ padding: "0.35rem" }}>{d.discontinuanceDate}</td>
+                          <td style={{ padding: "0.35rem", textAlign: "center" }}>
+                            <span className="badge badge-approved">{d.status}</span>
+                          </td>
+                          <td style={{ padding: "0.35rem", textAlign: "right" }}>Closure</td>
+                          <td style={{ padding: "0.35rem" }}>
+                            {d.etoOrderNumber ?? "Pending"} ({d.etoOrderDate ?? "—"})
+                          </td>
+                        </tr>
+                      ))}
+                      {refundAdjustments.map((r) => (
+                        <tr key={r.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                          <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                            {r.applicationNumber}
+                          </td>
+                          <td style={{ padding: "0.35rem" }}>Rule 5 {r.type}</td>
+                          <td style={{ padding: "0.35rem" }}>
+                            <strong>{r.assesseeLegalName}</strong>
+                          </td>
+                          <td style={{ padding: "0.35rem" }}>{r.filedAt.split("T")[0]}</td>
+                          <td style={{ padding: "0.35rem", textAlign: "center" }}>
+                            <span className="badge badge-approved">{r.status}</span>
+                          </td>
+                          <td
+                            style={{
+                              padding: "0.35rem",
+                              textAlign: "right",
+                              fontFamily: "monospace",
+                              color: "#166534"
+                            }}
+                          >
+                            {r.amount.toLocaleString()}
+                          </td>
+                          <td style={{ padding: "0.35rem" }}>
+                            {r.orderNumber ?? "Pending"} ({r.orderDate ?? "—"})
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+
+                {/* Official Certification & Non-Repudiation Block */}
+                <div
+                  style={{
+                    background: "#f8fafc",
+                    border: "1px solid #cbd5e1",
+                    padding: "1rem",
+                    borderRadius: "4px",
+                    fontSize: "0.75rem",
+                    color: "#475569",
+                    marginBottom: "1.5rem"
+                  }}
+                >
+                  <p style={{ margin: "0 0 0.25rem", fontWeight: 700, color: "#0d3822" }}>
+                    STATUTORY CERTIFICATION UNDER PUNJAB PROFESSIONAL TAX RULES, 1977:
+                  </p>
+                  <p style={{ margin: 0 }}>
+                    This document is officially generated from the Punjab Professional Tax
+                    Administration System (PTAS) immutable financial demand ledger. All figures are
+                    non-repudiable and derived in compliance with Section 15 of the Punjab
+                    Professional Tax Digitization Plan. Cryptographically hashed for provincial
+                    audit integrity.
+                  </p>
+                </div>
+
+                {/* Dual Signature Block */}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    paddingTop: "2rem",
+                    borderTop: "1px solid #0d3822"
+                  }}
+                >
+                  <div style={{ textAlign: "center", width: "40%" }}>
+                    <div
+                      style={{
+                        borderBottom: "1px dashed #64748b",
+                        height: "2.5rem",
+                        marginBottom: "0.5rem"
+                      }}
+                    ></div>
+                    <strong style={{ display: "block", fontSize: "0.85rem", color: "#0d3822" }}>
+                      Tariq Mahmood
+                    </strong>
+                    <span style={{ fontSize: "0.75rem", color: "#475569" }}>
+                      Excise &amp; Taxation Officer / Assessing Authority
+                      <br />
+                      Tehsil Vehari &bull; Circle-Vehari
+                    </span>
+                  </div>
+
+                  <div style={{ textAlign: "center", width: "40%" }}>
+                    <div
+                      style={{
+                        borderBottom: "1px dashed #64748b",
+                        height: "2.5rem",
+                        marginBottom: "0.5rem"
+                      }}
+                    ></div>
+                    <strong style={{ display: "block", fontSize: "0.85rem", color: "#0d3822" }}>
+                      Shahid Nawaz
+                    </strong>
+                    <span style={{ fontSize: "0.75rem", color: "#475569" }}>
+                      Director, Excise, Taxation &amp; Narcotics Control
+                      <br />
+                      Multan Division &bull; Government of the Punjab
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className="modal-footer"
+              style={{ display: "flex", justifyContent: "space-between" }}
+            >
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowExecutivePrintModal(false)}
+              >
+                Close Report Studio
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => window.print()}
+                style={{ background: "#0d3822", borderColor: "#0d3822" }}
+              >
+                🖨️ Print Gazetted Report / PDF
               </button>
             </div>
           </div>
