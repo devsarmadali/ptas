@@ -4,3 +4,6 @@ export * from "./jurisdiction.js";
 export * from "./assignment.js";
 export * from "./authorization.js";
 export * from "./audit.js";
+export * from "./taxpayer.js";
+export * from "./duplicate-detector.js";
+export * from "./taxpayer-search.js";

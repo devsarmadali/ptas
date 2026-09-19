@@ -84,6 +84,27 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Taxpayer" }
         default: { $ref: "#/components/responses/Problem" }
+  /taxpayers/duplicates:
+    post:
+      operationId: checkDuplicateCandidates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CheckDuplicates" }
+      responses:
+        "200":
+          description: List of surfaced duplicate candidates
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/DuplicateCandidate" }
+        default: { $ref: "#/components/responses/Problem" }
   /assessments/{assessmentId}/submit:
     post:
       operationId: submitAssessment
@@ -186,13 +207,55 @@ components:
             properties:
               type: { type: string }
               value: { type: string }
+    TaxpayerIdentifier:
+      type: object
+      required: [identifierType, maskedValue, validFrom]
+      properties:
+        identifierType:
+          {
+            type: string,
+            enum: [CNIC, NTN, PASSPORT, PRA_PNTN, LEGACY_ASSESSEE_CODE, REGISTRATION_NO]
+          }
+        maskedValue: { type: string }
+        validFrom: { type: string, format: date }
+        validTo: { type: [string, "null"], format: date }
     Taxpayer:
       type: object
-      required: [id, displayName, status]
+      required: [id, displayName, status, currentCircleId]
       properties:
         id: { type: string, format: uuid }
+        permanentDemandNo: { type: [string, "null"] }
         displayName: { type: string }
-        status: { type: string }
+        status: { type: string, enum: [DRAFT, ACTIVE, CLOSED, DUPLICATE_MERGED, ARCHIVED] }
+        currentCircleId: { type: string, format: uuid }
+        identifiers:
+          type: array
+          items: { $ref: "#/components/schemas/TaxpayerIdentifier" }
+    CheckDuplicates:
+      type: object
+      required: [displayName, currentCircleId]
+      properties:
+        displayName: { type: string }
+        currentCircleId: { type: string, format: uuid }
+        identifiers:
+          type: array
+          items:
+            type: object
+            required: [identifierType, value]
+            properties:
+              identifierType: { type: string }
+              value: { type: string }
+    DuplicateCandidate:
+      type: object
+      required: [existingTaxpayerId, existingDisplayName, matchReason, confidence, matchedFields]
+      properties:
+        existingTaxpayerId: { type: string, format: uuid }
+        existingDisplayName: { type: string }
+        matchReason: { type: string }
+        confidence: { type: string, enum: [EXACT, HIGH, MEDIUM] }
+        matchedFields:
+          type: array
+          items: { type: string }
     TaxpayerPage:
       type: object
       required: [items]
