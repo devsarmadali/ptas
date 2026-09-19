@@ -32,6 +32,7 @@ import {
   savePilotState
 } from "../lib/pilot-store";
 import { computeFileSha256, uploadReceiptScan } from "../lib/storage";
+import { pushPilotStateToSupabase } from "../lib/supabase-sync";
 
 export default function HomePage() {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -78,6 +79,10 @@ export default function HomePage() {
   const [previewScanHash, setPreviewScanHash] = useState<string>("");
   const [previewScanTitle, setPreviewScanTitle] = useState<string>("");
   const [previewScanFileName, setPreviewScanFileName] = useState<string>("");
+
+  // Supabase Cloud Sync State
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
 
   // Document Studio Tamper State
   const [isTampered, setIsTampered] = useState(false);
@@ -138,6 +143,26 @@ export default function HomePage() {
         setPaymentUnitId(firstId);
       }
       showToast("info", "Vehari pilot dataset reset to statutory factory baseline.");
+    }
+  };
+
+  // Sync to Supabase Cloud
+  const handleSyncCloud = async () => {
+    try {
+      setIsSyncingCloud(true);
+      const result = await pushPilotStateToSupabase(units, auditLogs);
+      setIsSyncingCloud(false);
+      if (result.success) {
+        const time = new Date().toLocaleTimeString();
+        setLastSyncTime(time);
+        showToast("success", `☁️ ${result.message}`);
+      } else {
+        showToast("error", result.message);
+      }
+    } catch (err: unknown) {
+      setIsSyncingCloud(false);
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast("error", `Cloud synchronization failed: ${msg}`);
     }
   };
 
@@ -735,6 +760,36 @@ export default function HomePage() {
             >
               PILOT READY &bull; VERCEL
             </span>
+            <button
+              onClick={handleSyncCloud}
+              disabled={isSyncingCloud}
+              className="btn-reset"
+              style={{
+                background: "#047857",
+                borderColor: "#10b981",
+                color: "#ffffff",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem"
+              }}
+              title="Synchronize pilot units, assessments, and ledgers to live Supabase PostgreSQL"
+            >
+              <span>{isSyncingCloud ? "⏳" : "☁️"}</span>
+              <span>{isSyncingCloud ? "Syncing..." : "Sync Supabase"}</span>
+            </button>
+            {lastSyncTime && (
+              <span
+                style={{
+                  fontSize: "0.7rem",
+                  background: "rgba(16, 185, 129, 0.25)",
+                  color: "#d1fae5",
+                  padding: "0.25rem 0.5rem",
+                  borderRadius: "4px"
+                }}
+              >
+                ✓ Synced {lastSyncTime}
+              </span>
+            )}
             <button
               onClick={handleResetDemo}
               className="btn-reset"
