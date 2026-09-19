@@ -147,7 +147,7 @@ export function createAuditEvent(params: CreateAuditEventParams): AuditEvent {
   const sanitizedPayload = redactSensitiveData(params.payload) as Record<string, unknown>;
 
   return Object.freeze({
-    id: params.id ?? `audit-${params.correlationId}-${Date.parse(occurredAtIso)}`,
+    id: params.id ?? crypto.randomUUID(),
     eventType: params.eventType.trim(),
     aggregateType: params.aggregateType?.trim() || undefined,
     aggregateId: params.aggregateId?.trim() || undefined,

@@ -105,6 +105,32 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/DuplicateCandidate" }
         default: { $ref: "#/components/responses/Problem" }
+  /configurations:
+    get:
+      operationId: listConfigurations
+      parameters:
+        - name: type
+          in: query
+          schema: { type: string, enum: [SCHEDULE, CATEGORY, RATE, FORM, ACCOUNT_HEAD] }
+        - name: code
+          in: query
+          schema: { type: string }
+        - name: asOf
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Legal configuration versions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/LegalConfiguration" }
+        default: { $ref: "#/components/responses/Problem" }
   /assessments/{assessmentId}/submit:
     post:
       operationId: submitAssessment
@@ -280,3 +306,35 @@ components:
         status: { type: integer }
         detail: { type: string }
         correlationId: { type: string }
+    ApprovalEvidence:
+      type: object
+      required:
+        [
+          id,
+          approvalIdentifier,
+          approvingAuthority,
+          approvedOn,
+          sourceDocumentSha256,
+          effectiveFrom
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        approvalIdentifier: { type: string }
+        approvingAuthority: { type: string }
+        approvedOn: { type: string, format: date }
+        sourceDocumentSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        effectiveFrom: { type: string, format: date }
+        effectiveTo: { type: [string, "null"], format: date }
+    LegalConfiguration:
+      type: object
+      required: [id, configType, code, versionNo, effectiveFrom, payload, status]
+      properties:
+        id: { type: string, format: uuid }
+        configType: { type: string, enum: [SCHEDULE, CATEGORY, RATE, FORM, ACCOUNT_HEAD] }
+        code: { type: string }
+        versionNo: { type: integer, minimum: 1 }
+        effectiveFrom: { type: string, format: date }
+        effectiveTo: { type: [string, "null"], format: date }
+        payload: { type: object }
+        status: { type: string, enum: [DRAFT, APPROVED, ACTIVE, RETIRED] }
+        approvalEvidenceId: { type: [string, "null"], format: uuid }
