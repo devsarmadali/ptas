@@ -79,11 +79,43 @@ export interface RevenueKpis {
   readonly defaulterUnitsCount: number;
 }
 
+export interface InspectorSummaryStats {
+  readonly totalAssignedUnits: number;
+  readonly servedNoticesCount: number;
+  readonly unservedNoticesCount: number;
+  readonly serviceCoveragePct: number;
+  readonly pendingInspectionsCount: number;
+  readonly fieldComplianceRatePct: number;
+}
+
+export interface EtoSummaryStats {
+  readonly pendingAssessmentsCount: number;
+  readonly approvedAssessmentsCount: number;
+  readonly penaltyEligibleCount: number;
+  readonly recoveryCertificatesCount: number;
+  readonly totalAdjudicatedReliefPkr: number;
+}
+
+export interface DirectorSummaryStats {
+  readonly circleTargetRealizationPct: number;
+  readonly divisionalCollectionTotalPkr: number;
+  readonly totalDefaulterExposurePkr: number;
+  readonly pendingAppealsCount: number;
+  readonly circleIntegrityStatus: "OPTIMAL" | "ATTENTION_REQUIRED";
+}
+
+export interface RolePerspectiveMetrics {
+  readonly inspector: InspectorSummaryStats;
+  readonly eto: EtoSummaryStats;
+  readonly director: DirectorSummaryStats;
+}
+
 export interface ExecutiveMetrics {
   readonly kpis: RevenueKpis;
   readonly categoryYields: readonly CategoryYieldSummary[];
   readonly defaulterFunnel: DefaulterAgingFunnel;
   readonly pendency: OperationalPendency;
+  readonly roleMetrics: RolePerspectiveMetrics;
   readonly generatedAt: string;
 }
 
@@ -337,6 +369,35 @@ export function computeExecutiveMetrics(
       pendingRefunds,
       clearanceCertificatesIssued,
       totalPendencyActions
+    },
+    roleMetrics: {
+      inspector: {
+        totalAssignedUnits: units.length,
+        servedNoticesCount: units.length - unservedNotices,
+        unservedNoticesCount: unservedNotices,
+        serviceCoveragePct:
+          units.length > 0 ? round2(((units.length - unservedNotices) / units.length) * 100) : 0,
+        pendingInspectionsCount: pendingFieldInspections,
+        fieldComplianceRatePct: units.length > 0 ? round2((paidCount / units.length) * 100) : 0
+      },
+      eto: {
+        pendingAssessmentsCount: pendingDraftAssessments,
+        approvedAssessmentsCount: Math.max(0, units.length - pendingDraftAssessments),
+        penaltyEligibleCount,
+        recoveryCertificatesCount: certifiedCount,
+        totalAdjudicatedReliefPkr: round2(
+          refundAdjustments
+            .filter((r) => r.status === "APPROVED")
+            .reduce((sum, r) => sum + r.amount, 0)
+        )
+      },
+      director: {
+        circleTargetRealizationPct: targetRealizationPct,
+        divisionalCollectionTotalPkr: totalRealized,
+        totalDefaulterExposurePkr: totalDefaulterExposure,
+        pendingAppealsCount: pendingAppeals,
+        circleIntegrityStatus: targetRealizationPct >= 60 ? "OPTIMAL" : "ATTENTION_REQUIRED"
+      }
     },
     generatedAt: new Date().toISOString()
   };

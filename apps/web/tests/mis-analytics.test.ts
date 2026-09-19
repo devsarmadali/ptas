@@ -183,4 +183,40 @@ describe("Phase 7: Executive MIS Analytics & Statutory Revenue Reporting Hub", (
     expect(escapeCsvCell(null)).toBe("");
     expect(escapeCsvCell(undefined)).toBe("");
   });
+
+  it("computes tailored visual indicators and summary stats for Inspector, ETO, and Director roles", () => {
+    const metrics = computeExecutiveMetrics(
+      units,
+      appeals,
+      discontinuances,
+      refundAdjustments,
+      clearanceCertificates
+    );
+
+    // Inspector summary stats
+    expect(metrics.roleMetrics.inspector.totalAssignedUnits).toBe(units.length);
+    expect(metrics.roleMetrics.inspector.servedNoticesCount).toBeGreaterThanOrEqual(1);
+    expect(metrics.roleMetrics.inspector.serviceCoveragePct).toBeGreaterThan(0);
+    expect(metrics.roleMetrics.inspector.serviceCoveragePct).toBeLessThanOrEqual(100);
+    expect(metrics.roleMetrics.inspector.fieldComplianceRatePct).toBeGreaterThanOrEqual(0);
+
+    // ETO summary stats
+    expect(metrics.roleMetrics.eto.pendingAssessmentsCount).toBeGreaterThanOrEqual(0);
+    expect(metrics.roleMetrics.eto.approvedAssessmentsCount).toBeGreaterThanOrEqual(1);
+    expect(metrics.roleMetrics.eto.recoveryCertificatesCount).toBeGreaterThanOrEqual(0);
+
+    // Director summary stats
+    expect(metrics.roleMetrics.director.circleTargetRealizationPct).toBe(
+      metrics.kpis.targetRealizationPct
+    );
+    expect(metrics.roleMetrics.director.divisionalCollectionTotalPkr).toBe(
+      metrics.kpis.totalRealizedRecovery
+    );
+    expect(metrics.roleMetrics.director.totalDefaulterExposurePkr).toBe(
+      metrics.defaulterFunnel.totalDefaulterExposure
+    );
+    expect(["OPTIMAL", "ATTENTION_REQUIRED"]).toContain(
+      metrics.roleMetrics.director.circleIntegrityStatus
+    );
+  });
 });
