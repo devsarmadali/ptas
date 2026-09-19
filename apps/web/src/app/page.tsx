@@ -6,7 +6,6 @@ import {
   type DuplicateMatch,
   type Taxpayer,
   approveAssessmentVersion,
-  computeContentSha256,
   computeLedgerBalance,
   createAssessment,
   createInitialDemandEntry,
@@ -33,6 +32,7 @@ import {
 } from "../lib/pilot-store";
 import { computeFileSha256, uploadReceiptScan } from "../lib/storage";
 import { pushPilotStateToSupabase } from "../lib/supabase-sync";
+import { generateFormPFT1, generateFormPFT2, generateFormPFT3Rows } from "../lib/statutory-forms";
 
 export default function HomePage() {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -40,7 +40,14 @@ export default function HomePage() {
   const [units, setUnits] = useState<StoredUnit[]>([]);
   const [auditLogs, setAuditLogs] = useState<PilotAuditItem[]>([]);
   const [activeTab, setActiveTab] = useState<
-    "UNITS" | "ASSESSMENTS" | "LEDGER" | "FORM_PFT2" | "EPAY" | "AUDIT"
+    | "UNITS"
+    | "ASSESSMENTS"
+    | "FORM_PFT1"
+    | "FORM_PFT2"
+    | "REGISTER_PFT3"
+    | "LEDGER"
+    | "EPAY"
+    | "AUDIT"
   >("UNITS");
 
   // Selected Unit for Ledger & Form PFT-2 inspection
@@ -656,46 +663,22 @@ export default function HomePage() {
     return units.find((u) => u.id === selectedUnitId) ?? units[0];
   }, [units, selectedUnitId]);
 
-  // Form PFT-2 Preview Hash and Notice Content
+  // Statutory Form P.F.T-1 (Notice of Tax Demand under Rule 6)
+  const formPFT1Data = useMemo(() => {
+    if (!activeUnit) return null;
+    return generateFormPFT1(activeUnit, isTampered, tamperedAmount);
+  }, [activeUnit, isTampered, tamperedAmount]);
+
+  // Statutory Form P.F.T-2 (3-Copy Payment Challan under Rule 9)
   const formPFT2Data = useMemo(() => {
     if (!activeUnit) return null;
-    const latestAssessment = activeUnit.assessments[0];
-    const latestVersion = activeUnit.assessmentVersions[0];
-    const isApproved = latestAssessment?.status === "APPROVED";
-
-    const displayAmount = isTampered ? tamperedAmount : (latestVersion?.snapshot.taxAmount ?? 0);
-    const noticeNo = `PFT-2/VEH/2026/${activeUnit.id.slice(-4)}`;
-    const asmNo = `ASM-VEH-2026-${latestAssessment?.id.slice(-4) ?? "0000"}`;
-
-    const canonicalNoticeText = [
-      "GOVERNMENT OF THE PUNJAB - EXCISE, TAXATION & NARCOTICS CONTROL",
-      "FORM PFT-2: NOTICE OF ASSESSMENT AND DEMAND",
-      "(See Rule 5(1) of the Punjab Professions and Trades Tax Rules, 1977)",
-      `Notice Number: ${noticeNo}`,
-      `Permanent Demand Number: ${activeUnit.demandUnit.permanentDemandNo}`,
-      `Assessment Number: ${asmNo} (Version: ${latestVersion?.versionNo ?? 1})`,
-      `Financial Year: 2026-2027 | Issue Date: 2026-07-01 | Due Date: 2026-08-31`,
-      `Taxpayer Legal Name: ${activeUnit.legalName}`,
-      `Trade / Business Name: ${activeUnit.tradeName ?? activeUnit.legalName}`,
-      `Identifier: ${activeUnit.identifierType}: ${activeUnit.identifierValue}`,
-      `Registered Address: ${activeUnit.address}`,
-      `Assessing Authority: Tariq Mahmood, ETO / Assessing Authority, Tehsil Vehari`,
-      `Assessed Tax Amount: PKR ${displayAmount.toLocaleString()}`,
-      `Statutory Schedule Classification: Entry ${activeUnit.statutoryRule.subclassification_code} - ${activeUnit.statutoryRule.category}`,
-      `Legal Basis: ${activeUnit.statutoryRule.official_text}`,
-      `Payment Account Head: B-01601 - Professional Tax Punjab`,
-      `Treasury Payment Form: Challan Form 32-A (National Bank of Pakistan) or ePay Punjab`
-    ].join("\n");
-
-    const officialHash = computeContentSha256(canonicalNoticeText);
-
-    return {
-      isApproved,
-      displayAmount,
-      canonicalNoticeText,
-      officialHash
-    };
+    return generateFormPFT2(activeUnit, isTampered, tamperedAmount);
   }, [activeUnit, isTampered, tamperedAmount]);
+
+  // Statutory Form P.F.T-3 (Assessment & Demand Register under Rule 11)
+  const formPFT3Rows = useMemo(() => {
+    return generateFormPFT3Rows(units);
+  }, [units]);
 
   if (!isLoaded) {
     return (
@@ -892,16 +875,15 @@ export default function HomePage() {
             onClick={() => setActiveTab("ASSESSMENTS")}
             className={`tab-btn ${activeTab === "ASSESSMENTS" ? "active" : ""}`}
           >
-            ⚖️ Statutory Assessment Queue{" "}
-            {metrics.pendingApprovals > 0 && `(${metrics.pendingApprovals})`}
+            ⚖️ Assessment Queue {metrics.pendingApprovals > 0 && `(${metrics.pendingApprovals})`}
           </button>
           <button
             role="tab"
-            aria-selected={activeTab === "LEDGER"}
-            onClick={() => setActiveTab("LEDGER")}
-            className={`tab-btn ${activeTab === "LEDGER" ? "active" : ""}`}
+            aria-selected={activeTab === "FORM_PFT1"}
+            onClick={() => setActiveTab("FORM_PFT1")}
+            className={`tab-btn ${activeTab === "FORM_PFT1" ? "active" : ""}`}
           >
-            💳 Demand &amp; Payment Ledger
+            📜 Form PFT-1 (Notice of Demand)
           </button>
           <button
             role="tab"
@@ -909,7 +891,23 @@ export default function HomePage() {
             onClick={() => setActiveTab("FORM_PFT2")}
             className={`tab-btn ${activeTab === "FORM_PFT2" ? "active" : ""}`}
           >
-            📄 Form PFT-2 Studio &amp; Tamper Lab
+            💳 Form PFT-2 (3-Copy Challan)
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === "REGISTER_PFT3"}
+            onClick={() => setActiveTab("REGISTER_PFT3")}
+            className={`tab-btn ${activeTab === "REGISTER_PFT3" ? "active" : ""}`}
+          >
+            📋 Form PFT-3 (Assessment Register)
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === "LEDGER"}
+            onClick={() => setActiveTab("LEDGER")}
+            className={`tab-btn ${activeTab === "LEDGER" ? "active" : ""}`}
+          >
+            📒 Demand &amp; Payment Ledger
           </button>
           <button
             role="tab"
@@ -1410,15 +1408,15 @@ export default function HomePage() {
           </section>
         )}
 
-        {/* TAB 4: FORM PFT-2 STUDIO & TAMPER LAB */}
-        {activeTab === "FORM_PFT2" && formPFT2Data && activeUnit && (
+        {/* TAB 3: FORM P.F.T-1 (NOTICE OF TAX DEMAND UNDER RULE 6) */}
+        {activeTab === "FORM_PFT1" && formPFT1Data && activeUnit && (
           <section className="content-panel">
             <div className="panel-header">
               <div>
-                <h2>Form PFT-2 Notice Studio &amp; Tamper Lab</h2>
+                <h2>Form P.F.T-1: Notice of Tax Demand (نوٹس ڈیمانڈ)</h2>
                 <p>
-                  Official Notice of Assessment &amp; Demand under Rule 5(1), Punjab Professions and
-                  Trades Tax Rules. Includes 64-character SHA-256 tamper-proof verification hash.
+                  Statutory Notice of Demand issued under Section 03 of the Punjab Finance Act 1977
+                  read with Rule 6 of the Punjab Professions &amp; Trades Tax Rules, 1977.
                 </p>
               </div>
 
@@ -1452,11 +1450,11 @@ export default function HomePage() {
               >
                 <div>
                   <strong>
-                    🔬 Document Integrity &amp; SHA-256 Cryptographic Verification Lab
+                    🔬 Form P.F.T-1 Document Integrity &amp; SHA-256 Cryptographic Verification Lab
                   </strong>
                   <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
-                    Test cryptographic non-repudiation. Altering even 1 Rupee will invalidate the
-                    SHA-256 signature!
+                    Cryptographic non-repudiation standard. Any alteration in demand or assessee
+                    details invalidates this SHA-256 digest.
                   </p>
                 </div>
                 <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
@@ -1485,7 +1483,7 @@ export default function HomePage() {
                   Computed SHA-256 Document Verification Hash:
                 </span>
                 <div className="doc-hash-badge" style={{ marginTop: "0.25rem" }}>
-                  {formPFT2Data.officialHash}
+                  {formPFT1Data.officialSha256}
                 </div>
                 {isTampered && (
                   <div
@@ -1507,165 +1505,829 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Document Render Canvas */}
+            {/* Official Gazetted Notice Canvas */}
             <div className="doc-box" style={{ marginTop: "1.5rem" }}>
-              {!formPFT2Data.isApproved && (
+              {!formPFT1Data.isApproved && (
                 <div className="doc-watermark">
-                  ⚠️ NON-OPERATIVE PROVISIONAL DRAFT &bull; PENDING STATUTORY APPROVAL BY ETO
+                  ⚠️ PROVISIONAL NOTICE &bull; NOT A LEGALLY OPERATIVE ORDER &bull; PENDING
+                  STATUTORY APPROVAL BY ETO
                 </div>
               )}
 
               <div
                 style={{
-                  border: "1px solid #0d3822",
-                  padding: "1.5rem",
+                  border: "2px solid #0d3822",
+                  padding: "2rem",
                   borderRadius: "6px",
                   background: "#ffffff",
                   fontFamily: "Georgia, serif"
                 }}
               >
+                {/* Government Header */}
                 <div
                   style={{
                     textAlign: "center",
                     borderBottom: "2px solid #0d3822",
-                    paddingBottom: "1rem",
-                    marginBottom: "1.25rem"
+                    paddingBottom: "1.25rem",
+                    marginBottom: "1.5rem"
                   }}
                 >
+                  <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>Schedule</p>
                   <h3
-                    style={{ margin: "0 0 0.25rem", color: "#0d3822", textTransform: "uppercase" }}
+                    style={{
+                      margin: "0.25rem 0",
+                      color: "#0d3822",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.03em"
+                    }}
                   >
-                    Government of the Punjab
+                    Excise &amp; Taxation Officer
                   </h3>
-                  <p style={{ margin: "0 0 0.25rem", fontSize: "0.9rem", fontWeight: 700 }}>
-                    Excise, Taxation and Narcotics Control Department
-                  </p>
-                  <p style={{ margin: 0, fontSize: "0.85rem", color: "#64748b" }}>
-                    Office of the Assessing Authority / ETO, Tehsil Vehari
-                  </p>
-                  <h4 style={{ margin: "0.75rem 0 0", color: "#b45309", letterSpacing: "0.05em" }}>
-                    FORM PFT-2: NOTICE OF ASSESSMENT AND DEMAND
+                  <h4 style={{ margin: "0.2rem 0", color: "#1e293b", fontWeight: 700 }}>
+                    (PUNJAB PROFESSIONS &amp; TRADES TAX) &bull; DISTRICT VEHARI
                   </h4>
-                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.75rem", fontStyle: "italic" }}>
-                    [See Rule 5(1) of the Punjab Professions and Trades Tax Rules, 1977]
+                  <div
+                    style={{
+                      display: "inline-block",
+                      background: "#fef3c7",
+                      border: "1px solid #f59e0b",
+                      padding: "0.25rem 0.75rem",
+                      borderRadius: "4px",
+                      marginTop: "0.5rem",
+                      fontWeight: 800,
+                      color: "#92400e"
+                    }}
+                  >
+                    Form P.F.T-1
+                  </div>
+                  <h3
+                    style={{
+                      margin: "0.75rem 0 0.25rem",
+                      color: "#b45309",
+                      letterSpacing: "0.05em"
+                    }}
+                  >
+                    NOTICE OF TAX DEMAND
+                  </h3>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: "0.9rem" }}>
+                    (PUNJAB PROFESSIONS &amp; TRADE TAX)
+                  </p>
+                  <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", fontStyle: "italic" }}>
+                    (Section 03 of Punjab Finance Act 1977 read with rule 6 of the Punjab
+                    Professions &amp; Trades Tax Rules, 1977)
                   </p>
                 </div>
 
+                {/* Metadata Row */}
                 <div
                   style={{
                     display: "grid",
                     gridTemplateColumns: "1fr 1fr",
                     gap: "1rem",
-                    marginBottom: "1rem",
-                    fontSize: "0.85rem"
+                    marginBottom: "1.25rem",
+                    fontSize: "0.9rem"
                   }}
                 >
                   <div>
-                    <p style={{ margin: "0.2rem 0" }}>
-                      <strong>Permanent Demand No:</strong>{" "}
-                      {activeUnit.demandUnit.permanentDemandNo}
+                    <p style={{ margin: "0.25rem 0" }}>
+                      <strong>Demand No:</strong> {formPFT1Data.demandNumber}
                     </p>
-                    <p style={{ margin: "0.2rem 0" }}>
-                      <strong>Taxpayer Legal Name:</strong> {activeUnit.legalName}
-                    </p>
-                    <p style={{ margin: "0.2rem 0" }}>
-                      <strong>Trade Name:</strong> {activeUnit.tradeName ?? activeUnit.legalName}
-                    </p>
-                    <p style={{ margin: "0.2rem 0" }}>
-                      <strong>{activeUnit.identifierType}:</strong> {activeUnit.identifierValue}
+                    <p style={{ margin: "0.25rem 0" }}>
+                      <strong>Tax No:</strong> {formPFT1Data.taxNumber}
                     </p>
                   </div>
-                  <div>
-                    <p style={{ margin: "0.2rem 0" }}>
-                      <strong>Financial Year:</strong> 2026-2027
+                  <div style={{ textAlign: "right" }}>
+                    <p style={{ margin: "0.25rem 0" }}>
+                      <strong>Date:</strong> {formPFT1Data.issueDate}
                     </p>
-                    <p style={{ margin: "0.2rem 0" }}>
-                      <strong>Jurisdiction:</strong> Circle-Vehari, Tehsil Vehari
-                    </p>
-                    <p style={{ margin: "0.2rem 0" }}>
-                      <strong>Issue Date:</strong> 2026-07-01
-                    </p>
-                    <p style={{ margin: "0.2rem 0" }}>
-                      <strong>Due Date:</strong> 2026-08-31
+                    <p style={{ margin: "0.25rem 0" }}>
+                      <strong>Circle:</strong> {formPFT1Data.circleName}
                     </p>
                   </div>
                 </div>
 
-                <div
-                  style={{
-                    background: "#f8fafc",
-                    border: "1px solid #cbd5e1",
-                    borderRadius: "6px",
-                    padding: "1rem",
-                    marginBottom: "1.25rem"
-                  }}
-                >
-                  <p style={{ margin: "0 0 0.5rem", fontSize: "0.9rem" }}>
-                    <strong>Statutory Classification:</strong> Entry{" "}
-                    {activeUnit.statutoryRule.subclassification_code} &bull;{" "}
-                    {activeUnit.statutoryRule.category}
+                {/* Addressee */}
+                <div style={{ marginBottom: "1.25rem", fontSize: "0.95rem" }}>
+                  <p style={{ margin: 0 }}>To,</p>
+                  <p style={{ margin: "0.25rem 0 0.1rem", fontWeight: 700 }}>
+                    Name of assessee: {formPFT1Data.assesseeLegalName}
+                    {formPFT1Data.assesseeTradeName && ` (${formPFT1Data.assesseeTradeName})`}
                   </p>
-                  <p style={{ margin: "0 0 0.5rem", fontSize: "0.8rem", color: "#475569" }}>
-                    <strong>Statutory Basis:</strong> {activeUnit.statutoryRule.official_text}
+                  <p style={{ margin: 0 }}>Address: {formPFT1Data.address}</p>
+                </div>
+
+                {/* Gazetted Notice Body */}
+                <div style={{ fontSize: "0.95rem", lineHeight: 1.7, marginBottom: "1.75rem" }}>
+                  <p style={{ margin: "0 0 0.75rem" }}>Dear Sir (s),</p>
+                  <p style={{ margin: "0 0 0.75rem", textIndent: "1.5rem" }}>
+                    According to Section 03 of Punjab Finance Act, 1977 you are liable to pay Tax on
+                    Professions, Trades, Employment or Callings amounting to{" "}
+                    <strong>Rs. {formPFT1Data.taxAmount.toLocaleString()}</strong> (in words){" "}
+                    <strong>{formPFT1Data.taxAmountWords}</strong> as{" "}
+                    <strong>
+                      {formPFT1Data.scheduleEntry} ({formPFT1Data.statutoryCategoryText})
+                    </strong>{" "}
+                    for the year <strong>{formPFT1Data.financialYear}</strong>. You are directed to
+                    make the payment in the National Bank of Pakistan or State Bank of Pakistan
+                    within one month of the service of this Notice through Payment Challan Form
+                    P.F.T-2 attached herewith and furnish a copy of paid Challan to the undersigned.
                   </p>
-                  <div
+                  <p
                     style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      borderTop: "1px solid #cbd5e1",
-                      paddingTop: "0.75rem",
-                      marginTop: "0.75rem"
+                      margin: "0 0 0.75rem",
+                      textIndent: "1.5rem",
+                      color: "#991b1b",
+                      fontWeight: 600
                     }}
                   >
-                    <span style={{ fontSize: "1rem", fontWeight: 700 }}>
-                      Total Assessed Demand:
-                    </span>
-                    <span style={{ fontSize: "1.4rem", fontWeight: 800, color: "#0d3822" }}>
-                      PKR {formPFT2Data.displayAmount.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-
-                <div style={{ fontSize: "0.8rem", color: "#475569", lineHeight: 1.5 }}>
-                  <p style={{ margin: "0 0 0.4rem" }}>
-                    <strong>Directions for Payment:</strong> Take notice that the tax assessed above
-                    is payable under Account Head{" "}
-                    <em>&apos;B-01601 - Professional Tax Punjab&apos;</em> into the National Bank of
-                    Pakistan / Government Treasury on Challan Form 32-A or digitally via ePay Punjab
-                    on or before the due date.
+                    In case of default, a penalty, not exceeding the amount of tax, shall be imposed
+                    and unpaid dues shall be recovered as arrears of Land Revenue.
                   </p>
                 </div>
 
+                {/* Signature Block */}
                 <div
                   style={{
-                    marginTop: "1.5rem",
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "flex-end",
-                    borderTop: "1px dashed #cbd5e1",
-                    paddingTop: "1rem"
+                    marginBottom: "2rem"
                   }}
                 >
-                  <div>
-                    <span style={{ fontSize: "0.7rem", color: "#64748b", display: "block" }}>
-                      Cryptographic Verification Digest (SHA-256):
+                  <div
+                    style={{
+                      border: "2px dashed #0d3822",
+                      padding: "0.75rem 1.25rem",
+                      borderRadius: "6px",
+                      textAlign: "center"
+                    }}
+                  >
+                    <span style={{ fontSize: "0.75rem", color: "#64748b", display: "block" }}>
+                      Official Seal
                     </span>
-                    <span style={{ fontFamily: "monospace", fontSize: "0.7rem", color: "#0f172a" }}>
-                      {formPFT2Data.officialHash.slice(0, 32)}...
-                    </span>
+                    <strong style={{ fontSize: "0.85rem", color: "#0d3822" }}>
+                      ASSESSING AUTHORITY
+                      <br />
+                      TEHSIL VEHARI
+                    </strong>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <p style={{ margin: 0, fontWeight: 700, fontSize: "0.85rem" }}>Tariq Mahmood</p>
-                    <p style={{ margin: 0, fontSize: "0.75rem", color: "#64748b" }}>
-                      Excise &amp; Taxation Officer / Assessing Authority
+                    <p style={{ margin: 0, fontWeight: 700, fontSize: "1rem" }}>
+                      {formPFT1Data.assessingAuthorityName}
                     </p>
-                    <p style={{ margin: 0, fontSize: "0.75rem", color: "#64748b" }}>
-                      Tehsil Vehari
+                    <p style={{ margin: "0.15rem 0", fontWeight: 600, fontSize: "0.85rem" }}>
+                      EXCISE &amp; TAXATION OFFICER
+                    </p>
+                    <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                      PROFESSIONAL TAX &bull; TEHSIL VEHARI
+                    </p>
+                    <p style={{ margin: "0.15rem 0 0", fontSize: "0.75rem", color: "#64748b" }}>
+                      Club Road, Vehari &bull; Tel: 067-9201122
                     </p>
                   </div>
                 </div>
+
+                {/* Lower Section: Gazetted Service Counterfoil Receipt */}
+                <div className="counterfoil-box">
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: "1rem"
+                    }}
+                  >
+                    <h4 style={{ margin: 0, color: "#0d3822", letterSpacing: "0.05em" }}>
+                      RECEIPT (Counterfoil for service of notice / رسید وصولی نوٹس)
+                    </h4>
+                    <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                      Rule 6 Counterfoil
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(14rem, 1fr))",
+                      gap: "0.75rem",
+                      fontSize: "0.85rem",
+                      background: "#f8fafc",
+                      padding: "1rem",
+                      borderRadius: "6px",
+                      border: "1px solid #e2e8f0"
+                    }}
+                  >
+                    <p style={{ margin: 0 }}>
+                      <strong>Demand No.:</strong> {formPFT1Data.serviceReceipt.demandNumber}
+                    </p>
+                    <p style={{ margin: 0 }}>
+                      <strong>Tax Payable:</strong> Rs.{" "}
+                      {formPFT1Data.serviceReceipt.taxPayable.toLocaleString()}
+                    </p>
+                    <p style={{ margin: 0 }}>
+                      <strong>Due Date:</strong> {formPFT1Data.serviceReceipt.dueDate}
+                    </p>
+                    <p style={{ margin: 0 }}>
+                      <strong>Name of Assessee:</strong> {formPFT1Data.serviceReceipt.assesseeName}
+                    </p>
+                    <p style={{ margin: 0 }}>
+                      <strong>Class of Assessee:</strong>{" "}
+                      {formPFT1Data.serviceReceipt.assesseeClass}
+                    </p>
+                    <p style={{ margin: 0 }}>
+                      <strong>Tax No.:</strong> {formPFT1Data.serviceReceipt.taxNumber}
+                    </p>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "2rem",
+                      marginTop: "1.25rem",
+                      fontSize: "0.85rem"
+                    }}
+                  >
+                    <div style={{ borderTop: "1px solid #cbd5e1", paddingTop: "0.5rem" }}>
+                      <p style={{ margin: 0, fontWeight: 700 }}>
+                        Received by (Assessee Signature):
+                      </p>
+                      <p style={{ margin: "0.25rem 0 0", fontSize: "0.75rem", color: "#64748b" }}>
+                        Signature / Thumb Impression &amp; Date
+                      </p>
+                    </div>
+                    <div
+                      style={{
+                        borderTop: "1px solid #cbd5e1",
+                        paddingTop: "0.5rem",
+                        textAlign: "right"
+                      }}
+                    >
+                      <p style={{ margin: 0, fontWeight: 700 }}>
+                        Delivered by: {formPFT1Data.serviceReceipt.serverName}
+                      </p>
+                      <p style={{ margin: "0.25rem 0 0", fontSize: "0.75rem", color: "#64748b" }}>
+                        {formPFT1Data.serviceReceipt.serverRole}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
+            </div>
+          </section>
+        )}
+
+        {/* TAB 4: FORM P.F.T-2 (3-COPY PAYMENT CHALLAN UNDER RULE 9) */}
+        {activeTab === "FORM_PFT2" && formPFT2Data && activeUnit && (
+          <section className="content-panel">
+            <div className="panel-header">
+              <div>
+                <h2>Form P.F.T-2: Punjab Professions &amp; Trades Tax Payment Challan</h2>
+                <p>
+                  Official 3-Copy Payment Instrument under Section 3 read with Rule 9 (Punjab Weekly
+                  Gazette Jan 21, 2009). Comprises Taxpayer Copy, Bank Copy, and Department Copy.
+                </p>
+              </div>
+
+              <div className="panel-actions">
+                <select
+                  aria-label="Select Unit for Challan"
+                  className="form-control"
+                  style={{ maxWidth: "20rem" }}
+                  value={selectedUnitId}
+                  onChange={(e) => setSelectedUnitId(e.target.value)}
+                >
+                  {units.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.demandUnit.permanentDemandNo} &bull; {u.legalName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Tamper Simulation Lab Box */}
+            <div className="tamper-box">
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "1rem"
+                }}
+              >
+                <div>
+                  <strong>
+                    🔬 Form P.F.T-2 Challan Cryptographic Verification &amp; Non-Repudiation Lab
+                  </strong>
+                  <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                    SHA-256 seal binds all 3 copies. Modifying amounts or classifications triggers
+                    instant hash invalidation.
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <button
+                    onClick={() => {
+                      setIsTampered(!isTampered);
+                      if (!isTampered) {
+                        setTamperedAmount(100);
+                        showToast("error", "Simulated unauthorized tampering: Demand changed!");
+                      } else {
+                        showToast("success", "Restored official authentic document content.");
+                      }
+                    }}
+                    className={`btn-secondary btn-sm ${isTampered ? "btn-danger" : ""}`}
+                  >
+                    {isTampered ? "⚠️ Revert Tampering" : "⚡ Simulate Challan Tampering"}
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ marginTop: "0.75rem" }}>
+                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569" }}>
+                  Computed SHA-256 Challan Verification Hash:
+                </span>
+                <div className="doc-hash-badge" style={{ marginTop: "0.25rem" }}>
+                  {formPFT2Data.officialSha256}
+                </div>
+                {isTampered && (
+                  <div
+                    style={{
+                      background: "#fee2e2",
+                      border: "1px solid #ef4444",
+                      color: "#991b1b",
+                      padding: "0.5rem 0.75rem",
+                      borderRadius: "6px",
+                      marginTop: "0.5rem",
+                      fontWeight: 700,
+                      fontSize: "0.85rem"
+                    }}
+                  >
+                    ❌ CRITICAL WARNING: HASH MISMATCH! Challan details have been tampered in
+                    transit!
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 3-COPY SIDE-BY-SIDE CHALLAN RENDER CANVAS */}
+            <div style={{ marginTop: "1.5rem" }}>
+              {!formPFT2Data.isApproved && (
+                <div className="doc-watermark" style={{ marginBottom: "1rem" }}>
+                  ⚠️ PROVISIONAL PAYMENT INSTRUMENT &bull; REQUIRES ETO STATUTORY APPROVAL BEFORE
+                  BANK DEPOSIT
+                </div>
+              )}
+
+              <div className="challan-grid">
+                {formPFT2Data.copies.map((copy, cIdx) => (
+                  <div key={cIdx} className="challan-card">
+                    {/* Top Section */}
+                    <div
+                      style={{
+                        textAlign: "center",
+                        borderBottom: "2px solid #0d3822",
+                        paddingBottom: "0.5rem"
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          fontWeight: 800,
+                          color: "#166534",
+                          background: "#dcfce7",
+                          padding: "0.15rem 0.5rem",
+                          borderRadius: "4px",
+                          display: "inline-block",
+                          marginBottom: "0.35rem"
+                        }}
+                      >
+                        {copy.copyTitle}
+                      </span>
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "0.7rem",
+                          color: "#64748b",
+                          fontFamily: "sans-serif"
+                        }}
+                      >
+                        {copy.copyTitleUrdu}
+                      </span>
+                      <h4
+                        style={{ margin: "0.3rem 0 0.1rem", fontSize: "0.85rem", color: "#0d3822" }}
+                      >
+                        GOVERNMENT OF THE PUNJAB
+                      </h4>
+                      <p style={{ margin: 0, fontSize: "0.75rem", fontWeight: 700 }}>
+                        EXCISE &amp; TAXATION DEPARTMENT
+                      </p>
+                      <p style={{ margin: "0.15rem 0", fontSize: "0.7rem", fontWeight: 600 }}>
+                        PUNJAB PROFESSIONS &amp; TRADES TAX
+                      </p>
+                      <p style={{ margin: 0, fontSize: "0.65rem", color: "#64748b" }}>
+                        PAYMENT CHALLAN &bull; Rule 9
+                      </p>
+                      <div
+                        style={{
+                          fontSize: "0.7rem",
+                          fontWeight: 700,
+                          color: "#b45309",
+                          marginTop: "0.25rem"
+                        }}
+                      >
+                        Head: {copy.headOfAccount}
+                      </div>
+                    </div>
+
+                    {/* Metadata Header */}
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "0.4rem",
+                        fontSize: "0.75rem",
+                        background: "#f8fafc",
+                        padding: "0.4rem",
+                        borderRadius: "4px",
+                        border: "1px solid #e2e8f0"
+                      }}
+                    >
+                      <div>
+                        <strong>District:</strong> {copy.district}
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <strong>Tax Year:</strong> {copy.taxYear}
+                      </div>
+                      <div style={{ gridColumn: "span 2", color: "#b91c1c" }}>
+                        <strong>Due Date:</strong> {copy.dueDate}
+                      </div>
+                    </div>
+
+                    {/* Taxpayer Information */}
+                    <div style={{ fontSize: "0.75rem", lineHeight: 1.4 }}>
+                      <strong
+                        style={{ color: "#0d3822", display: "block", marginBottom: "0.2rem" }}
+                      >
+                        Taxpayer&apos;s Information:
+                      </strong>
+                      <p style={{ margin: "0.1rem 0" }}>
+                        <strong>Tax No:</strong> {copy.taxpayerInfo.taxNo}
+                      </p>
+                      <p style={{ margin: "0.1rem 0" }}>
+                        <strong>Class:</strong> {copy.taxpayerInfo.classification}
+                      </p>
+                      <p style={{ margin: "0.1rem 0" }}>
+                        <strong>Name:</strong> {copy.taxpayerInfo.legalName}
+                      </p>
+                      {copy.taxpayerInfo.tradeName && (
+                        <p style={{ margin: "0.1rem 0" }}>
+                          <strong>Trade:</strong> {copy.taxpayerInfo.tradeName}
+                        </p>
+                      )}
+                      <p style={{ margin: "0.1rem 0" }}>
+                        <strong>Address:</strong> {copy.taxpayerInfo.address}
+                      </p>
+                    </div>
+
+                    {/* Detail of Tax Payable Table */}
+                    <div>
+                      <strong
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#0d3822",
+                          display: "block",
+                          marginBottom: "0.2rem"
+                        }}
+                      >
+                        Detail of Tax Payable:
+                      </strong>
+                      <table
+                        style={{
+                          width: "100%",
+                          fontSize: "0.75rem",
+                          borderCollapse: "collapse",
+                          border: "1px solid #cbd5e1"
+                        }}
+                      >
+                        <tbody>
+                          <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
+                            <td style={{ padding: "0.25rem 0.4rem" }}>Current Tax</td>
+                            <td style={{ padding: "0.25rem 0.4rem", textAlign: "right" }}>
+                              Rs. {copy.taxPayable.currentTax.toLocaleString()}
+                            </td>
+                          </tr>
+                          <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
+                            <td style={{ padding: "0.25rem 0.4rem" }}>Arrears</td>
+                            <td style={{ padding: "0.25rem 0.4rem", textAlign: "right" }}>Rs. 0</td>
+                          </tr>
+                          <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
+                            <td style={{ padding: "0.25rem 0.4rem" }}>Penalty</td>
+                            <td style={{ padding: "0.25rem 0.4rem", textAlign: "right" }}>Rs. 0</td>
+                          </tr>
+                          <tr style={{ fontWeight: 800, background: "#f0fdf4" }}>
+                            <td style={{ padding: "0.3rem 0.4rem", color: "#166534" }}>Total</td>
+                            <td
+                              style={{
+                                padding: "0.3rem 0.4rem",
+                                textAlign: "right",
+                                color: "#166534"
+                              }}
+                            >
+                              Rs. {copy.taxPayable.totalPayable.toLocaleString()}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <p
+                        style={{
+                          margin: "0.3rem 0 0",
+                          fontSize: "0.7rem",
+                          color: "#475569",
+                          fontStyle: "italic"
+                        }}
+                      >
+                        (in words) {copy.taxPayable.totalPayableWords}
+                      </p>
+                    </div>
+
+                    {/* Tax Assessment Information */}
+                    <div
+                      style={{
+                        fontSize: "0.725rem",
+                        borderTop: "1px dashed #cbd5e1",
+                        paddingTop: "0.4rem"
+                      }}
+                    >
+                      <strong style={{ color: "#0d3822", display: "block" }}>
+                        Tax Assessment Information:
+                      </strong>
+                      <p style={{ margin: "0.1rem 0" }}>
+                        <strong>Demand No:</strong> {copy.assessmentInfo.demandNo}
+                      </p>
+                      <p style={{ margin: "0.1rem 0" }}>
+                        <strong>Circle:</strong> {copy.assessmentInfo.circleName}
+                      </p>
+                      <p style={{ margin: "0.1rem 0" }}>
+                        <strong>ETO:</strong> {copy.assessmentInfo.etoName} (
+                        {copy.assessmentInfo.etoTitle})
+                      </p>
+                    </div>
+
+                    {/* For Bank's Use Only */}
+                    <div
+                      style={{
+                        marginTop: "auto",
+                        borderTop: "2px solid #0d3822",
+                        paddingTop: "0.5rem",
+                        fontSize: "0.7rem",
+                        background: "#fafaf9",
+                        padding: "0.5rem",
+                        borderRadius: "4px"
+                      }}
+                    >
+                      <strong style={{ display: "block", color: "#78350f" }}>
+                        For Bank&apos;s Use Only:
+                      </strong>
+                      <p style={{ margin: "0.1rem 0" }}>Challan No: ______________________</p>
+                      <p style={{ margin: "0.1rem 0" }}>Date: _____________________________</p>
+                      <p style={{ margin: "0.1rem 0" }}>
+                        Amount (in figures): Rs. {copy.taxPayable.totalPayable.toLocaleString()}
+                      </p>
+                      <div
+                        style={{
+                          marginTop: "0.4rem",
+                          border: "1px dashed #a8a29e",
+                          height: "2.5rem",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "#78716c",
+                          fontSize: "0.65rem"
+                        }}
+                      >
+                        Bank Officer&apos;s Signature &amp; Bank Stamp
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* TAB 5: FORM P.F.T-3 (ASSESSMENT & DEMAND REGISTER UNDER RULE 11) */}
+        {activeTab === "REGISTER_PFT3" && (
+          <section className="content-panel">
+            <div className="panel-header">
+              <div>
+                <h2>Form P.F.T-3: Assessment &amp; Demand Register (رجسٹر تشخیص)</h2>
+                <p>
+                  Official statutory register of assessed persons maintained under Rule 11 of the
+                  Punjab Professions and Trades Tax Rules, 1977 for Circle-Vehari.
+                </p>
+              </div>
+
+              <div className="panel-actions">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => window.print()}
+                  title="Print official Rule 11 register"
+                >
+                  🖨️ Print Register
+                </button>
+              </div>
+            </div>
+
+            {/* Summary KPI banner */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
+                gap: "1rem",
+                marginBottom: "1.5rem"
+              }}
+            >
+              <div
+                style={{
+                  background: "#f0fdf4",
+                  border: "1px solid #bbf7d0",
+                  padding: "0.85rem",
+                  borderRadius: "6px"
+                }}
+              >
+                <span style={{ fontSize: "0.75rem", color: "#166534", fontWeight: 700 }}>
+                  TOTAL UNITS ASSESSED
+                </span>
+                <strong
+                  style={{
+                    fontSize: "1.4rem",
+                    display: "block",
+                    color: "#14532d",
+                    marginTop: "0.2rem"
+                  }}
+                >
+                  {formPFT3Rows.length} Units
+                </strong>
+              </div>
+
+              <div
+                style={{
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  padding: "0.85rem",
+                  borderRadius: "6px"
+                }}
+              >
+                <span style={{ fontSize: "0.75rem", color: "#1e40af", fontWeight: 700 }}>
+                  TOTAL ASSESSED DEMAND
+                </span>
+                <strong
+                  style={{
+                    fontSize: "1.4rem",
+                    display: "block",
+                    color: "#1e3a8a",
+                    marginTop: "0.2rem"
+                  }}
+                >
+                  PKR {metrics.totalDemand.toLocaleString()}
+                </strong>
+              </div>
+
+              <div
+                style={{
+                  background: "#ecfdf5",
+                  border: "1px solid #a7f3d0",
+                  padding: "0.85rem",
+                  borderRadius: "6px"
+                }}
+              >
+                <span style={{ fontSize: "0.75rem", color: "#065f46", fontWeight: 700 }}>
+                  TOTAL REALIZED / RECOVERED
+                </span>
+                <strong
+                  style={{
+                    fontSize: "1.4rem",
+                    display: "block",
+                    color: "#064e3b",
+                    marginTop: "0.2rem"
+                  }}
+                >
+                  PKR {metrics.totalPayments.toLocaleString()}
+                </strong>
+              </div>
+
+              <div
+                style={{
+                  background: "#fffbeb",
+                  border: "1px solid #fde68a",
+                  padding: "0.85rem",
+                  borderRadius: "6px"
+                }}
+              >
+                <span style={{ fontSize: "0.75rem", color: "#92400e", fontWeight: 700 }}>
+                  OUTSTANDING BALANCE
+                </span>
+                <strong
+                  style={{
+                    fontSize: "1.4rem",
+                    display: "block",
+                    color: "#78350f",
+                    marginTop: "0.2rem"
+                  }}
+                >
+                  PKR {metrics.outstandingBalance.toLocaleString()}
+                </strong>
+              </div>
+            </div>
+
+            {/* Statutory Register Table */}
+            <div className="table-container">
+              <table className="gov-table">
+                <thead>
+                  <tr>
+                    <th>S.No</th>
+                    <th>Permanent Demand No.</th>
+                    <th>Assessment No.</th>
+                    <th>Taxpayer Legal Name</th>
+                    <th>CNIC / NTN</th>
+                    <th>Statutory Entry</th>
+                    <th>Assessed Tax (PKR)</th>
+                    <th>Paid (PKR)</th>
+                    <th>Balance (PKR)</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {formPFT3Rows.map((row) => (
+                    <tr key={row.permanentDemandNo}>
+                      <td>{row.serialNumber}</td>
+                      <td>
+                        <strong>{row.permanentDemandNo}</strong>
+                      </td>
+                      <td style={{ fontFamily: "monospace", fontSize: "0.8rem", color: "#64748b" }}>
+                        {row.assessmentNo}
+                      </td>
+                      <td>
+                        <strong>{row.legalName}</strong>
+                        {row.tradeName && (
+                          <span style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}>
+                            Trade: {row.tradeName}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ fontSize: "0.85rem" }}>{row.identifier}</td>
+                      <td>
+                        <span className="badge badge-draft" style={{ fontSize: "0.7rem" }}>
+                          {row.scheduleEntry}
+                        </span>
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "0.725rem",
+                            color: "#64748b",
+                            marginTop: "0.15rem"
+                          }}
+                        >
+                          {row.categoryName}
+                        </span>
+                      </td>
+                      <td>
+                        <strong>PKR {row.assessedCurrentTax.toLocaleString()}</strong>
+                      </td>
+                      <td>
+                        <strong style={{ color: "#166534" }}>
+                          PKR {row.totalPaid.toLocaleString()}
+                        </strong>
+                      </td>
+                      <td>
+                        <strong
+                          style={{
+                            color: row.outstandingBalance > 0 ? "#b91c1c" : "#166534"
+                          }}
+                        >
+                          PKR {row.outstandingBalance.toLocaleString()}
+                        </strong>
+                      </td>
+                      <td>
+                        <span
+                          className={`badge ${
+                            row.assessmentStatus === "APPROVED"
+                              ? "badge-approved"
+                              : row.assessmentStatus === "SUBMITTED"
+                                ? "badge-pending"
+                                : "badge-draft"
+                          }`}
+                        >
+                          {row.assessmentStatus}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </section>
         )}
