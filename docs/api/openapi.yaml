@@ -309,6 +309,23 @@ paths:
                   verified: { type: boolean }
                   isProvisional: { type: boolean }
         default: { $ref: "#/components/responses/Problem" }
+  /payments/webhooks/mock-provider:
+    post:
+      operationId: receivePaymentWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentWebhookEvent"
+      responses:
+        "200":
+          description: Payment webhook processed or acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcessPaymentResult"
+        default: { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     sessionAuth:
@@ -624,3 +641,43 @@ components:
         generatedBy: { type: string, format: uuid }
         snapshot: { type: object }
         isProvisional: { type: boolean }
+    PaymentConfirmationPayload:
+      type: object
+      required: [psid, amount, transactionReference, settlementDate, status]
+      properties:
+        psid: { type: string }
+        amount: { type: number }
+        transactionReference: { type: string }
+        settlementDate: { type: string, format: date }
+        status: { type: string, enum: [PAID, FAILED, REVERSED] }
+        metadata: { type: object }
+    PaymentWebhookEvent:
+      type: object
+      required: [providerId, eventId, timestamp, signature, payload]
+      properties:
+        providerId: { type: string }
+        eventId: { type: string }
+        timestamp: { type: string, format: date-time }
+        signature: { type: string }
+        payload: { $ref: "#/components/schemas/PaymentConfirmationPayload" }
+    ProcessPaymentResult:
+      type: object
+      required: [outcome, eventId, processedAt]
+      properties:
+        outcome:
+          {
+            type: string,
+            enum: [PROCESSED, DUPLICATE_IGNORED, AMOUNT_MISMATCH, PSID_NOT_FOUND, DEAD_LETTER]
+          }
+        eventId: { type: string }
+        transactionReference: { type: string }
+        amount: { type: number }
+        expectedAmount: { type: number }
+        discrepancy:
+          type: object
+          properties:
+            expected: { type: number }
+            received: { type: number }
+            difference: { type: number }
+        deadLetterReason: { type: string }
+        processedAt: { type: string, format: date-time }

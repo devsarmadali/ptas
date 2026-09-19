@@ -11,6 +11,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@ptas/domain": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "5.9.3",
     "vitest": "4.1.10"
