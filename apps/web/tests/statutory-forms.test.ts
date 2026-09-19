@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  generateAppellateOrderDocument,
   generateCircleDispatchRegister,
   generateFormPFT1,
   generateFormPFT2,
@@ -103,5 +104,34 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     expect(firstRow.demandNumber).toBe("PDN-VEH-2026-0001");
     expect(firstRow.serverName).toContain("Muhammad Aslam");
     expect(firstRow.serviceStatus).toBe("SERVED");
+  });
+
+  it("generates official judicial Appellate Order document (Section 7 & Rule 13)", () => {
+    const order = generateAppellateOrderDocument({
+      appealNumber: "ETD/MLN/APP/2026/001",
+      orderNumber: "ETD/MLN/ORD/2026/001",
+      filingDate: "2026-07-20",
+      hearingDate: "2026-08-05",
+      orderDate: "2026-08-05",
+      unit: alMadinaUnit,
+      groundOfAppeal:
+        "Establishment employs fewer than 10 workers and is liable under Entry 3(ii) at PKR 2,000",
+      undisputedTaxDeposited: 2000,
+      decisionType: "REDUCE",
+      reliefAmount: 2000,
+      revisedTaxAmount: 2000,
+      findingsAndReasoning:
+        "Field inspection by ETO confirms 6 staff members. Assessment reduced to Entry 3(ii)."
+    });
+
+    expect(order.appealNumber).toBe("ETD/MLN/APP/2026/001");
+    expect(order.orderNumber).toBe("ETD/MLN/ORD/2026/001");
+    expect(order.courtTitle).toContain("DIRECTOR EXCISE & TAXATION, MULTAN DIVISION");
+    expect(order.decisionType).toBe("REDUCE");
+    expect(order.reliefAmount).toBe(2000);
+    expect(order.revisedTaxAmount).toBe(2000);
+    expect(order.appellateAuthorityName).toBe("Shahid Nawaz");
+    expect(order.officialSha256).toHaveLength(64);
+    expect(order.operativeOrderUrdu).toContain("اپیل جزوی منظور کی جاتی ہے");
   });
 });

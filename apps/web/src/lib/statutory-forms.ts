@@ -180,6 +180,53 @@ export interface CircleDispatchRegisterModel {
   readonly officialSha256: string;
 }
 
+export interface AppellateOrderModel {
+  readonly orderNumber: string;
+  readonly appealNumber: string;
+  readonly courtTitle: string;
+  readonly courtTitleUrdu: string;
+  readonly filingDate: string;
+  readonly hearingDate: string;
+  readonly orderDate: string;
+  readonly appellantName: string;
+  readonly appellantTradeName?: string | undefined;
+  readonly appellantIdentifier: string;
+  readonly appellantAddress: string;
+  readonly respondentTitle: string;
+  readonly impugnedNoticeNumber: string;
+  readonly demandNumber: string;
+  readonly scheduleEntry: string;
+  readonly originalTaxAmount: number;
+  readonly groundOfAppeal: string;
+  readonly undisputedTaxDeposited: number;
+  readonly decisionType:
+    "CONFIRM" | "REDUCE" | "ENHANCE" | "ANNUL" | "REMAND" | "PENALTY_REMISSION";
+  readonly reliefAmount: number;
+  readonly revisedTaxAmount: number;
+  readonly findingsAndReasoning: string;
+  readonly operativeOrderUrdu: string;
+  readonly appellateAuthorityName: string;
+  readonly appellateAuthorityDesignation: string;
+  readonly canonicalOrderText: string;
+  readonly officialSha256: string;
+}
+
+export interface GenerateAppellateOrderInput {
+  readonly appealNumber: string;
+  readonly orderNumber?: string | undefined;
+  readonly filingDate: string;
+  readonly hearingDate?: string | undefined;
+  readonly orderDate?: string | undefined;
+  readonly unit: StoredUnit;
+  readonly groundOfAppeal: string;
+  readonly undisputedTaxDeposited: number;
+  readonly decisionType:
+    "CONFIRM" | "REDUCE" | "ENHANCE" | "ANNUL" | "REMAND" | "PENALTY_REMISSION";
+  readonly reliefAmount: number;
+  readonly revisedTaxAmount: number;
+  readonly findingsAndReasoning: string;
+}
+
 /**
  * Converts integer currency amount to official English words (Pakistani Rupees).
  */
@@ -683,6 +730,99 @@ export function generateCircleDispatchRegister(
     totalServed,
     totalPending,
     rows,
+    officialSha256
+  };
+}
+
+/**
+ * Generates an official judicial Appellate Order document under Section 7 of
+ * Punjab Finance Act, 1977 read with Rule 13 of the Punjab Professions and Trades Tax Rules, 1977.
+ */
+export function generateAppellateOrderDocument(
+  input: GenerateAppellateOrderInput
+): AppellateOrderModel {
+  const { unit } = input;
+  const orderNumber = input.orderNumber ?? `ETD/MLN/APP-ORD/2026/${unit.id.slice(-4)}`;
+  const hearingDate = input.hearingDate ?? "2026-08-05";
+  const orderDate = input.orderDate ?? (new Date().toISOString().split("T")[0] ?? "2026-08-05");
+  const courtTitle =
+    "IN THE COURT OF THE APPELLATE AUTHORITY / DIRECTOR EXCISE & TAXATION, MULTAN DIVISION";
+  const courtTitleUrdu = "عدالت اپیلٹ اتھارٹی / ڈائریکٹر ایکسائز اینڈ ٹیکسیشن، ملتان ڈویژن";
+
+  let operativeUrdu = "";
+  switch (input.decisionType) {
+    case "CONFIRM":
+      operativeUrdu = "اپیل خارج کی جاتی ہے اور ابتدائی تشخیصی نوٹس بحال رکھا جاتا ہے۔";
+      break;
+    case "REDUCE":
+      operativeUrdu = `اپیل جزوی منظور کی جاتی ہے اور تشخیص مبلغ ${unit.assessmentVersions[0]?.snapshot.taxAmount ?? 0} روپے سے کم کر کے مبلغ ${input.revisedTaxAmount} روپے مقرر کی جاتی ہے۔`;
+      break;
+    case "ANNUL":
+      operativeUrdu = "اپیل منظور کی جاتی ہے اور متنازعہ تشخیص مکمل طور پر کالعدم قرار دی جاتی ہے۔";
+      break;
+    case "REMAND":
+      operativeUrdu =
+        "مقدمہ ریمانڈ کر کے ایکسائز اینڈ ٹیکسیشن آفیسر وہاڑی کو ازسرنو موقع معائنہ اور انکوائری کی ہدایت کی جاتی ہے۔";
+      break;
+    case "PENALTY_REMISSION":
+      operativeUrdu = "سیکشن 3(4) کے تحت عائد کردہ جرمانہ معاف / معطل کیا جاتا ہے۔";
+      break;
+    case "ENHANCE":
+      operativeUrdu = `اپیل کی سماعت کے دوران مزید حقائق کی روشنی میں تشخیص بڑھا کر مبلغ ${input.revisedTaxAmount} روپے کی جاتی ہے۔`;
+      break;
+  }
+
+  const noticeNumber = `PFT-1/VEH/2026/${unit.id.slice(-4)}`;
+  const demandNumber = unit.demandUnit.permanentDemandNo;
+  const originalTax = unit.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+
+  const canonicalOrderText = [
+    "GOVERNMENT OF THE PUNJAB - EXCISE & TAXATION DEPARTMENT",
+    courtTitle,
+    "ORDER PASSED UNDER SECTION 7 OF PUNJAB FINANCE ACT, 1977 READ WITH RULE 13 OF PUNJAB PROFESSIONS & TRADES TAX RULES, 1977",
+    `Appeal No: ${input.appealNumber} | Order No: ${orderNumber} | Date of Order: ${orderDate}`,
+    `Appellant: ${unit.legalName} (${unit.tradeName ?? unit.legalName}) | CNIC/Identifier: ${unit.identifierType}: ${unit.identifierValue}`,
+    `Address: ${unit.address}`,
+    "Respondent: Assessing Authority / Excise & Taxation Officer, Vehari",
+    `Impugned Demand Notice: ${noticeNumber} | Permanent Demand No: ${demandNumber}`,
+    `Original Assessed Amount: PKR ${originalTax} | Schedule Entry: Entry ${unit.statutoryRule.subclassification_code}`,
+    `Ground of Appeal: ${input.groundOfAppeal}`,
+    `Undisputed Tax Deposited: PKR ${input.undisputedTaxDeposited}`,
+    `Decision: ${input.decisionType} | Relief Granted: PKR ${input.reliefAmount} | Revised Demand: PKR ${input.revisedTaxAmount}`,
+    `Judicial Reasoning & Findings: ${input.findingsAndReasoning}`,
+    "Appellate Authority: Shahid Nawaz, Director Excise & Taxation, Multan Division"
+  ].join("\n");
+
+  const officialSha256 = computeContentSha256(canonicalOrderText);
+
+  return {
+    orderNumber,
+    appealNumber: input.appealNumber,
+    courtTitle,
+    courtTitleUrdu,
+    filingDate: input.filingDate,
+    hearingDate,
+    orderDate,
+    appellantName: unit.legalName,
+    appellantTradeName: unit.tradeName,
+    appellantIdentifier: `${unit.identifierType}: ${unit.identifierValue}`,
+    appellantAddress: unit.address,
+    respondentTitle: "Assessing Authority / Excise & Taxation Officer, Vehari",
+    impugnedNoticeNumber: noticeNumber,
+    demandNumber,
+    scheduleEntry: `Entry ${unit.statutoryRule.subclassification_code} (${unit.statutoryRule.category})`,
+    originalTaxAmount: originalTax,
+    groundOfAppeal: input.groundOfAppeal,
+    undisputedTaxDeposited: input.undisputedTaxDeposited,
+    decisionType: input.decisionType,
+    reliefAmount: input.reliefAmount,
+    revisedTaxAmount: input.revisedTaxAmount,
+    findingsAndReasoning: input.findingsAndReasoning,
+    operativeOrderUrdu: operativeUrdu,
+    appellateAuthorityName: "Shahid Nawaz",
+    appellateAuthorityDesignation:
+      "Director Excise & Taxation / Appellate Authority, Multan Division",
+    canonicalOrderText,
     officialSha256
   };
 }

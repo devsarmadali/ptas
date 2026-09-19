@@ -132,11 +132,48 @@ export const MOCK_OFFICERS: readonly [MockOfficer, MockOfficer, MockOfficer] = [
   }
 ];
 
+export interface AppealRecord {
+  readonly id: string;
+  readonly appealNumber: string;
+  readonly unitId: string;
+  readonly appellantName: string;
+  readonly appellantTradeName?: string | undefined;
+  readonly appellantCnic: string;
+  readonly businessName: string;
+  readonly businessAddress: string;
+  readonly filingDate: string; // YYYY-MM-DD
+  readonly limitationDays: number;
+  readonly isWithinLimitation: boolean;
+  readonly condonationRequested: boolean;
+  readonly condonationReason?: string | undefined;
+  readonly groundOfAppeal: string;
+  readonly undisputedPaid: number;
+  readonly status:
+    | "FILED"
+    | "HEARING_SCHEDULED"
+    | "DECIDED_CONFIRMED"
+    | "DECIDED_REDUCED"
+    | "DECIDED_ANNULLED"
+    | "DECIDED_REMANDED"
+    | "DECIDED_PENALTY_REMITTED";
+  readonly hearingDate?: string | undefined;
+  readonly hearingNotes?: string | undefined;
+  readonly decisionType?:
+    "CONFIRM" | "REDUCE" | "ENHANCE" | "ANNUL" | "REMAND" | "PENALTY_REMISSION" | undefined;
+  readonly orderNumber?: string | undefined;
+  readonly orderDate?: string | undefined;
+  readonly orderSummary?: string | undefined;
+  readonly reliefAmount?: number | undefined;
+  readonly revisedDemandAmount?: number | undefined;
+  readonly sha256Hash?: string | undefined;
+}
+
 export interface PilotState {
   currentOfficer: MockOfficer;
   units: StoredUnit[];
   auditLogs: PilotAuditItem[];
   reconciliations: EpayReconciliationRecord[];
+  appeals: AppealRecord[];
 }
 
 const STORAGE_KEY = "ptas_pilot_vehari_v2";
@@ -474,13 +511,40 @@ export function createInitialReconciliations(): EpayReconciliationRecord[] {
   ];
 }
 
+export function createInitialAppeals(): AppealRecord[] {
+  return [
+    {
+      id: "appeal-01",
+      appealNumber: "ETD/MLN/APP/2026/001",
+      unitId: "unit-kisan-pesticides-02",
+      appellantName: "Muhammad Akram",
+      appellantTradeName: "Kisan Pesticides & Fertilizer Agency",
+      appellantCnic: "36601-2948192-3",
+      businessName: "Kisan Pesticides & Fertilizer Agency",
+      businessAddress: "Grain Market, Club Road, Vehari",
+      filingDate: "2026-07-20",
+      limitationDays: 16,
+      isWithinLimitation: true,
+      condonationRequested: false,
+      groundOfAppeal:
+        "The appellant disputes classification under Entry 6(x) (Pesticide Dealers) at PKR 2,000, claiming the business strictly retails seeds and urea without pesticide distribution.",
+      undisputedPaid: 1000,
+      status: "HEARING_SCHEDULED",
+      hearingDate: "2026-08-05",
+      hearingNotes:
+        "Preliminary court scrutiny completed by Director Multan. Notice of hearing issued to appellant and assessing authority (ETO Vehari)."
+    }
+  ];
+}
+
 export function loadPilotState(): PilotState {
   if (typeof window === "undefined") {
     return {
       currentOfficer: MOCK_OFFICERS[0],
       units: createInitialPilotUnits(),
       auditLogs: createInitialAuditLogs(),
-      reconciliations: createInitialReconciliations()
+      reconciliations: createInitialReconciliations(),
+      appeals: createInitialAppeals()
     };
   }
 
@@ -491,7 +555,8 @@ export function loadPilotState(): PilotState {
         currentOfficer: MOCK_OFFICERS[0],
         units: createInitialPilotUnits(),
         auditLogs: createInitialAuditLogs(),
-        reconciliations: createInitialReconciliations()
+        reconciliations: createInitialReconciliations(),
+        appeals: createInitialAppeals()
       };
       savePilotState(initial);
       return initial;
@@ -501,6 +566,7 @@ export function loadPilotState(): PilotState {
       MOCK_OFFICERS.find((o) => o.id === parsed.currentOfficer?.id) ?? MOCK_OFFICERS[0];
     return {
       ...parsed,
+      appeals: parsed.appeals ?? createInitialAppeals(),
       currentOfficer: matchingOfficer
     };
   } catch {
@@ -508,7 +574,8 @@ export function loadPilotState(): PilotState {
       currentOfficer: MOCK_OFFICERS[0],
       units: createInitialPilotUnits(),
       auditLogs: createInitialAuditLogs(),
-      reconciliations: createInitialReconciliations()
+      reconciliations: createInitialReconciliations(),
+      appeals: createInitialAppeals()
     };
   }
 }
@@ -528,7 +595,8 @@ export function resetPilotState(): PilotState {
     currentOfficer: MOCK_OFFICERS[0],
     units: createInitialPilotUnits(),
     auditLogs: createInitialAuditLogs(),
-    reconciliations: createInitialReconciliations()
+    reconciliations: createInitialReconciliations(),
+    appeals: createInitialAppeals()
   };
   savePilotState(cleanState);
   return cleanState;

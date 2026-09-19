@@ -3,6 +3,7 @@ import {
   assertLedgerEntryImmutable,
   computeDefaulterAging,
   computeLedgerBalance,
+  createAppellateAdjustmentEntry,
   createDemandLedgerEntry,
   createInitialDemandEntry,
   createPaymentReceiptEntry,
@@ -401,6 +402,177 @@ describe("ledger domain operations", () => {
       const paid = computeDefaulterAging([demand, penalty, payment], "2026-08-31", "2026-10-20");
       expect(paid.status).toBe("PAID");
       expect(paid.remainingBalance).toBe(0);
+    });
+
+    it("handles appellate penalty remission in defaulter aging correctly", () => {
+      const demand = createInitialDemandEntry({
+        demandUnitId,
+        financialYearId: fyId1,
+        assessmentVersionId: version1Id,
+        amount: 4000,
+        actorId,
+        correlationId: "k-dem",
+        idempotencyKey: "k-dem"
+      });
+
+      const penalty = createPenaltyDemandEntry({
+        demandUnitId,
+        financialYearId: fyId1,
+        originalDemandAmount: 4000,
+        penaltyAmount: 2000,
+        orderNumber: "PEN-001",
+        reason: "Overdue",
+        actorId,
+        correlationId: "k-pen",
+        idempotencyKey: "k-pen"
+      });
+
+      const remission = createAppellateAdjustmentEntry({
+        demandUnitId,
+        financialYearId: fyId1,
+        appealOrderNumber: "ETD/MLN/APP/2026/001",
+        appealId: "app-001",
+        decisionType: "PENALTY_REMISSION",
+        adjustmentAmount: -2000,
+        reason: "Penalty waived due to bona fide hardship",
+        actorId,
+        correlationId: "k-rem",
+        idempotencyKey: "k-rem"
+      });
+
+      const aging = computeDefaulterAging([demand, penalty, remission], "2026-08-31", "2026-10-15");
+      expect(aging.penaltyDemand).toBe(0);
+      expect(aging.remainingBalance).toBe(4000);
+      expect(aging.status).toBe("PENALTY_ELIGIBLE");
+    });
+  });
+
+  describe("appellate order adjustment operations (Section 7 & Rule 13)", () => {
+    it("creates an authorized credit adjustment entry for tax reduction", () => {
+      const entry = createAppellateAdjustmentEntry({
+        demandUnitId,
+        financialYearId: fyId1,
+        appealOrderNumber: "ETD/MLN/APP/2026/012",
+        appealId: "appeal-012",
+        decisionType: "REDUCE",
+        adjustmentAmount: -2000,
+        reason: "Reclassified from Category 3(i)(b) to Category 3(ii) after verification",
+        actorId,
+        correlationId: "corr-app-1",
+        idempotencyKey: "idem-app-1"
+      });
+
+      expect(entry.entryType).toBe("REVISION_ADJUSTMENT");
+      expect(entry.amount).toBe(-2000);
+      expect(entry.sourceType).toBe("APPELLATE_ORDER");
+      expect(entry.sourceId).toBe("ETD/MLN/APP/2026/012");
+      expect(entry.metadata).toMatchObject({
+        appealId: "appeal-012",
+        decisionType: "REDUCE",
+        adjustmentAmount: -2000
+      });
+    });
+
+    it("creates an authorized credit adjustment entry for full annulment", () => {
+      const entry = createAppellateAdjustmentEntry({
+        demandUnitId,
+        financialYearId: fyId1,
+        appealOrderNumber: "ETD/MLN/APP/2026/015",
+        appealId: "appeal-015",
+        decisionType: "ANNUL",
+        adjustmentAmount: -4000,
+        reason: "Assessee is fully exempt under Section 3 proviso",
+        actorId,
+        correlationId: "corr-app-2",
+        idempotencyKey: "idem-app-2"
+      });
+
+      expect(entry.amount).toBe(-4000);
+      expect(entry.entryType).toBe("REVISION_ADJUSTMENT");
+    });
+
+    it("creates an authorized debit adjustment entry for assessment enhancement", () => {
+      const entry = createAppellateAdjustmentEntry({
+        demandUnitId,
+        financialYearId: fyId1,
+        appealOrderNumber: "ETD/MLN/APP/2026/020",
+        appealId: "appeal-020",
+        decisionType: "ENHANCE",
+        adjustmentAmount: 2000,
+        reason: "Discovered branch office within jurisdiction",
+        actorId,
+        correlationId: "corr-app-3",
+        idempotencyKey: "idem-app-3"
+      });
+
+      expect(entry.amount).toBe(2000);
+      expect(entry.entryType).toBe("REVISION_ADJUSTMENT");
+    });
+
+    it("rejects invalid appellate adjustment inputs", () => {
+      // Missing appeal order number
+      expect(() =>
+        createAppellateAdjustmentEntry({
+          demandUnitId,
+          financialYearId: fyId1,
+          appealOrderNumber: "",
+          appealId: "app-1",
+          decisionType: "REDUCE",
+          adjustmentAmount: -1000,
+          reason: "Valid reason",
+          actorId,
+          correlationId: "c",
+          idempotencyKey: "k"
+        })
+      ).toThrow(/appealOrderNumber is required/);
+
+      // Attempting adjustment on CONFIRM or REMAND
+      expect(() =>
+        createAppellateAdjustmentEntry({
+          demandUnitId,
+          financialYearId: fyId1,
+          appealOrderNumber: "ORDER-CONFIRM",
+          appealId: "app-1",
+          decisionType: "CONFIRM",
+          adjustmentAmount: -1000,
+          reason: "Confirmed",
+          actorId,
+          correlationId: "c",
+          idempotencyKey: "k"
+        })
+      ).toThrow(/No ledger adjustment entry is required for CONFIRM/);
+
+      // Positive amount on REDUCE
+      expect(() =>
+        createAppellateAdjustmentEntry({
+          demandUnitId,
+          financialYearId: fyId1,
+          appealOrderNumber: "ORDER-REDUCE-ERR",
+          appealId: "app-1",
+          decisionType: "REDUCE",
+          adjustmentAmount: 1000,
+          reason: "Positive amount error",
+          actorId,
+          correlationId: "c",
+          idempotencyKey: "k"
+        })
+      ).toThrow(/must be negative/);
+
+      // Zero amount
+      expect(() =>
+        createAppellateAdjustmentEntry({
+          demandUnitId,
+          financialYearId: fyId1,
+          appealOrderNumber: "ORDER-ZERO",
+          appealId: "app-1",
+          decisionType: "REDUCE",
+          adjustmentAmount: 0,
+          reason: "Zero amount error",
+          actorId,
+          correlationId: "c",
+          idempotencyKey: "k"
+        })
+      ).toThrow(/cannot be zero/);
     });
   });
 });

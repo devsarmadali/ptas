@@ -87,6 +87,25 @@ export interface CreatePenaltyDemandInput {
   readonly metadata?: Record<string, unknown> | undefined;
 }
 
+export type AppellateDecisionType =
+  "CONFIRM" | "REDUCE" | "ENHANCE" | "ANNUL" | "REMAND" | "PENALTY_REMISSION";
+
+export interface CreateAppellateAdjustmentInput {
+  readonly id?: string | undefined;
+  readonly demandUnitId: string;
+  readonly financialYearId: string;
+  readonly appealOrderNumber: string;
+  readonly appealId: string;
+  readonly decisionType: AppellateDecisionType;
+  readonly adjustmentAmount: number; // Negative for reduction/annulment/remission, positive for enhancement
+  readonly reason: string;
+  readonly actorId: string;
+  readonly correlationId: string;
+  readonly idempotencyKey: string;
+  readonly postedAt?: Date | string | undefined;
+  readonly metadata?: Record<string, unknown> | undefined;
+}
+
 export type DefaulterAgingStatus =
   "PAID" | "CURRENT" | "OVERDUE_30_DAYS" | "PENALTY_ELIGIBLE" | "PENALIZED" | "RECOVERY_CERTIFIED";
 
@@ -312,6 +331,82 @@ export function createPenaltyDemandEntry(input: CreatePenaltyDemandInput): Deman
 }
 
 /**
+ * Creates an append-only REVISION_ADJUSTMENT entry resulting from an Appellate Order
+ * under Section 7 of Punjab Finance Act, 1977 and Rule 13 of 1977 Rules.
+ *
+ * In accordance with AGENTS.md non-negotiable domain rules:
+ * - Reductions, annulments, and penalty remissions post authorized negative credit adjustments.
+ * - Enhancements post authorized positive debit adjustments.
+ * - Previous ledger entries are never modified or deleted.
+ */
+export function createAppellateAdjustmentEntry(
+  input: CreateAppellateAdjustmentInput
+): DemandLedgerEntry {
+  const orderNumber = input.appealOrderNumber.trim();
+  if (!orderNumber) {
+    throw new Error("appealOrderNumber is required");
+  }
+
+  const appealId = input.appealId.trim();
+  if (!appealId) {
+    throw new Error("appealId is required");
+  }
+
+  const reason = input.reason.trim();
+  if (!reason) {
+    throw new Error("Appellate adjustment reason is required");
+  }
+
+  if (input.decisionType === "CONFIRM" || input.decisionType === "REMAND") {
+    throw new Error(
+      `No ledger adjustment entry is required for ${input.decisionType} appellate orders`
+    );
+  }
+
+  const roundedAmount = roundToTwoDecimals(input.adjustmentAmount);
+  if (roundedAmount === 0) {
+    throw new Error("Appellate adjustment amount cannot be zero");
+  }
+
+  if (
+    (input.decisionType === "REDUCE" ||
+      input.decisionType === "ANNUL" ||
+      input.decisionType === "PENALTY_REMISSION") &&
+    roundedAmount > 0
+  ) {
+    throw new Error(
+      `Adjustment amount for ${input.decisionType} must be negative (credit adjustment)`
+    );
+  }
+
+  if (input.decisionType === "ENHANCE" && roundedAmount < 0) {
+    throw new Error("Adjustment amount for ENHANCE must be positive (debit adjustment)");
+  }
+
+  return createDemandLedgerEntry({
+    id: input.id,
+    demandUnitId: input.demandUnitId,
+    financialYearId: input.financialYearId,
+    entryType: "REVISION_ADJUSTMENT",
+    amount: roundedAmount,
+    sourceType: "APPELLATE_ORDER",
+    sourceId: orderNumber,
+    idempotencyKey: input.idempotencyKey,
+    correlationId: input.correlationId,
+    postedBy: input.actorId,
+    postedAt: input.postedAt,
+    metadata: {
+      orderNumber,
+      appealId,
+      decisionType: input.decisionType,
+      reason,
+      adjustmentAmount: roundedAmount,
+      ...input.metadata
+    }
+  });
+}
+
+/**
  * Computes statutory defaulter aging and arrears classification for a demand unit
  * under Section 3(4) of Punjab Finance Act, 1977 and Rule 10 & 12 of 1977 Rules.
  */
@@ -326,9 +421,18 @@ export function computeDefaulterAging(
   let totalPaid = 0;
 
   for (const entry of entries) {
-    if (entry.entryType === "ASSESSMENT_DEMAND" || entry.entryType === "REVISION_ADJUSTMENT") {
+    if (
+      entry.entryType === "ASSESSMENT_DEMAND" ||
+      (entry.entryType === "REVISION_ADJUSTMENT" &&
+        entry.metadata?.decisionType !== "PENALTY_REMISSION")
+    ) {
       originalDemand += entry.amount;
     } else if (entry.entryType === "PENALTY_DEMAND") {
+      penaltyDemand += entry.amount;
+    } else if (
+      entry.entryType === "REVISION_ADJUSTMENT" &&
+      entry.metadata?.decisionType === "PENALTY_REMISSION"
+    ) {
       penaltyDemand += entry.amount;
     } else if (entry.entryType === "PAYMENT_CREDIT") {
       totalPaid += Math.abs(entry.amount);

@@ -3,7 +3,8 @@ import {
   MOCK_OFFICERS,
   createInitialPilotUnits,
   createInitialAuditLogs,
-  createInitialReconciliations
+  createInitialReconciliations,
+  createInitialAppeals
 } from "../src/lib/pilot-store.js";
 import { computeLedgerBalance } from "@ptas/domain";
 
@@ -59,12 +60,17 @@ describe("Vehari Pilot Store & Statutory Seed Verification", () => {
     expect(chenabUnit.statutoryRule.annual_rate_pkr).toBe(5000);
   });
 
-  it("initializes audit log and reconciliation seed streams", () => {
+  it("initializes audit log, reconciliation, and appeal seed streams", () => {
     const audits = createInitialAuditLogs();
     expect(audits.length).toBeGreaterThan(0);
 
     const reconciliations = createInitialReconciliations();
     expect(reconciliations.length).toBeGreaterThan(0);
     expect(reconciliations[0]?.status).toBe("MATCHED");
+
+    const appeals = createInitialAppeals();
+    expect(appeals.length).toBeGreaterThan(0);
+    expect(appeals[0]?.appealNumber).toBe("ETD/MLN/APP/2026/001");
+    expect(appeals[0]?.status).toBe("HEARING_SCHEDULED");
   });
 });

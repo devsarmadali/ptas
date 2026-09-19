@@ -8,6 +8,7 @@ import {
   approveAssessmentVersion,
   computeDefaulterAging,
   computeLedgerBalance,
+  createAppellateAdjustmentEntry,
   createAssessment,
   createInitialDemandEntry,
   createPaymentReceiptEntry,
@@ -24,6 +25,7 @@ import {
   CIRCLE_VEHARI_ID,
   FINANCIAL_YEAR_2026_27,
   MOCK_OFFICERS,
+  type AppealRecord,
   type MockOfficer,
   type PilotAuditItem,
   type StoredUnit,
@@ -35,6 +37,8 @@ import {
 import { computeFileSha256, uploadReceiptScan } from "../lib/storage";
 import { pushPilotStateToSupabase } from "../lib/supabase-sync";
 import {
+  type AppellateOrderModel,
+  generateAppellateOrderDocument,
   generateCircleDispatchRegister,
   generateFormPFT1,
   generateFormPFT2,
@@ -55,6 +59,7 @@ export default function HomePage() {
     | "FORM_PFT2"
     | "REGISTER_PFT3"
     | "DEFAULTERS"
+    | "APPEALS"
     | "LEDGER"
     | "EPAY"
     | "AUDIT"
@@ -62,6 +67,43 @@ export default function HomePage() {
 
   // Selected Unit for Ledger & Form PFT-2 inspection
   const [selectedUnitId, setSelectedUnitId] = useState<string>("");
+
+  // Appeals & Revisions (Section 7) State
+  const [appeals, setAppeals] = useState<AppealRecord[]>([]);
+  const [showFileAppealModal, setShowFileAppealModal] = useState(false);
+  const [showScheduleHearingModal, setShowScheduleHearingModal] = useState(false);
+  const [showAdjudicateAppealModal, setShowAdjudicateAppealModal] = useState(false);
+  const [showAppellateOrderModal, setShowAppellateOrderModal] = useState(false);
+  const [activeAppellateOrder, setActiveAppellateOrder] = useState<AppellateOrderModel | null>(
+    null
+  );
+
+  // File Appeal Form State
+  const [appealUnitId, setAppealUnitId] = useState("");
+  const [appealGroundCategory, setAppealGroundCategory] = useState(
+    "Dispute on employee threshold (fewer than 10 workers)"
+  );
+  const [appealGroundDetails, setAppealGroundDetails] = useState("");
+  const [appealUndisputedPaid, setAppealUndisputedPaid] = useState<number>(2000);
+  const [appealCondonation, setAppealCondonation] = useState(false);
+  const [appealCondonationReason, setAppealCondonationReason] = useState("");
+
+  // Hearing Schedule State
+  const [hearingTargetAppealId, setHearingTargetAppealId] = useState("");
+  const [hearingDateInput, setHearingDateInput] = useState("2026-08-10");
+  const [hearingNotesInput, setHearingNotesInput] = useState(
+    "Hearing fixed before Director Multan Division. Notice issued to appellant and ETO Vehari."
+  );
+
+  // Adjudication Form State
+  const [adjudicateTargetAppealId, setAdjudicateTargetAppealId] = useState("");
+  const [decisionType, setDecisionType] = useState<
+    "CONFIRM" | "REDUCE" | "ENHANCE" | "ANNUL" | "REMAND" | "PENALTY_REMISSION"
+  >("REDUCE");
+  const [revisedAmountInput, setRevisedAmountInput] = useState<number>(2000);
+  const [judicialFindingsInput, setJudicialFindingsInput] = useState(
+    "On examination of the survey record and field verification report, the establishment is confirmed to employ fewer than 10 workers. The assessment is appropriately revised from Entry 3(i)(b) to Entry 3(ii) at PKR 2,000. Authorized adjustment credited to demand ledger."
+  );
 
   // Modal States
   const [showAddUnitModal, setShowAddUnitModal] = useState(false);
@@ -153,10 +195,12 @@ export default function HomePage() {
     setOfficer(state.currentOfficer);
     setUnits(state.units);
     setAuditLogs(state.auditLogs);
+    setAppeals(state.appeals ?? []);
     if (state.units.length > 0) {
       const firstId = state.units[0]?.id ?? "";
       setSelectedUnitId(firstId);
       setPaymentUnitId(firstId);
+      setAppealUnitId(firstId);
     }
     setIsLoaded(true);
   }, []);
@@ -165,16 +209,20 @@ export default function HomePage() {
   const syncState = (
     updatedUnits: StoredUnit[],
     updatedAudits: PilotAuditItem[],
-    updatedOfficer?: MockOfficer
+    updatedOfficer?: MockOfficer,
+    updatedAppeals?: AppealRecord[]
   ) => {
     setUnits(updatedUnits);
     setAuditLogs(updatedAudits);
     if (updatedOfficer) setOfficer(updatedOfficer);
+    const nextAppeals = updatedAppeals ?? appeals;
+    if (updatedAppeals) setAppeals(updatedAppeals);
     savePilotState({
       currentOfficer: updatedOfficer ?? officer,
       units: updatedUnits,
       auditLogs: updatedAudits,
-      reconciliations: []
+      reconciliations: [],
+      appeals: nextAppeals
     });
   };
 
@@ -185,10 +233,12 @@ export default function HomePage() {
       setOfficer(clean.currentOfficer);
       setUnits(clean.units);
       setAuditLogs(clean.auditLogs);
+      setAppeals(clean.appeals ?? []);
       if (clean.units.length > 0) {
         const firstId = clean.units[0]?.id ?? "";
         setSelectedUnitId(firstId);
         setPaymentUnitId(firstId);
+        setAppealUnitId(firstId);
       }
       showToast("info", "Vehari pilot dataset reset to statutory factory baseline.");
     }
@@ -830,6 +880,297 @@ export default function HomePage() {
     );
   };
 
+  // Handler: File New Appeal under Section 7 & Rule 13
+  const handleFileAppeal = (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetUnit = units.find((u) => u.id === appealUnitId);
+    if (!targetUnit) {
+      showToast("error", "Please select an assessed tax unit.");
+      return;
+    }
+
+    const todayStr = new Date().toISOString().split("T")[0] ?? "2026-07-20";
+    const newAppealNo = `ETD/MLN/APP/2026/${String(appeals.length + 1).padStart(3, "0")}`;
+    const newAppealId = `appeal-${Date.now()}`;
+
+    const groundFull = appealGroundDetails.trim()
+      ? `${appealGroundCategory}: ${appealGroundDetails.trim()}`
+      : appealGroundCategory;
+
+    const newAppeal: AppealRecord = {
+      id: newAppealId,
+      appealNumber: newAppealNo,
+      unitId: targetUnit.id,
+      appellantName: targetUnit.legalName,
+      appellantTradeName: targetUnit.tradeName,
+      appellantCnic: targetUnit.identifierValue,
+      businessName: targetUnit.tradeName ?? targetUnit.legalName,
+      businessAddress: targetUnit.address,
+      filingDate: todayStr,
+      limitationDays: 14,
+      isWithinLimitation: !appealCondonation,
+      condonationRequested: appealCondonation,
+      condonationReason: appealCondonationReason.trim() || undefined,
+      groundOfAppeal: groundFull,
+      undisputedPaid: appealUndisputedPaid,
+      status: "FILED"
+    };
+
+    const newAudit: PilotAuditItem = {
+      id: `audit-${Date.now()}`,
+      eventType: "APPEAL_FILED",
+      actorName: officer.name,
+      actorRole: officer.role,
+      target: `${targetUnit.legalName} (${newAppealNo})`,
+      timestamp: new Date().toISOString(),
+      correlationId: `corr-app-${Date.now()}`,
+      details: `Statutory appeal filed under Section 7 of Punjab Finance Act 1977 against notice PFT-1/VEH/2026/${targetUnit.id.slice(-4)}. Ground: ${groundFull}. Undisputed tax deposited: PKR ${appealUndisputedPaid}.`
+    };
+
+    const updatedAppeals = [newAppeal, ...appeals];
+    syncState(units, [newAudit, ...auditLogs], undefined, updatedAppeals);
+    setShowFileAppealModal(false);
+    setAppealGroundDetails("");
+    setAppealCondonation(false);
+    setAppealCondonationReason("");
+    showToast("success", `Appeal ${newAppealNo} successfully filed and lodged in court register.`);
+  };
+
+  // Handler: Schedule Appellate Court Hearing (Director Shahid Nawaz)
+  const handleScheduleHearing = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (officer.role !== "DIRECTOR") {
+      showToast(
+        "error",
+        "Only the Appellate Authority (Director Shahid Nawaz) can fix court hearings."
+      );
+      return;
+    }
+
+    const targetAppeal = appeals.find((a) => a.id === hearingTargetAppealId);
+    if (!targetAppeal) return;
+
+    const updatedAppeals = appeals.map((a) => {
+      if (a.id === hearingTargetAppealId) {
+        return {
+          ...a,
+          status: "HEARING_SCHEDULED" as const,
+          hearingDate: hearingDateInput,
+          hearingNotes: hearingNotesInput.trim() || undefined
+        };
+      }
+      return a;
+    });
+
+    const newAudit: PilotAuditItem = {
+      id: `audit-${Date.now()}`,
+      eventType: "APPEAL_HEARING_SCHEDULED",
+      actorName: officer.name,
+      actorRole: officer.role,
+      target: `${targetAppeal.appellantName} (${targetAppeal.appealNumber})`,
+      timestamp: new Date().toISOString(),
+      correlationId: `corr-app-hrg-${Date.now()}`,
+      details: `Appellate hearing scheduled for ${hearingDateInput} before Director Excise & Taxation, Multan Division. Summons issued to appellant and ETO Vehari.`
+    };
+
+    syncState(units, [newAudit, ...auditLogs], undefined, updatedAppeals);
+    setShowScheduleHearingModal(false);
+    showToast(
+      "success",
+      `Hearing for ${targetAppeal.appealNumber} scheduled on ${hearingDateInput}.`
+    );
+  };
+
+  // Handler: Adjudicate Appeal & Issue Order (Director Shahid Nawaz)
+  const handleAdjudicateAppeal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (officer.role !== "DIRECTOR") {
+      showToast(
+        "error",
+        "Only the Appellate Authority (Director Shahid Nawaz) can adjudicate appeals."
+      );
+      return;
+    }
+
+    const targetAppeal = appeals.find((a) => a.id === adjudicateTargetAppealId);
+    if (!targetAppeal) return;
+    const targetUnit = units.find((u) => u.id === targetAppeal.unitId);
+    if (!targetUnit) return;
+
+    const originalTax = targetUnit.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+    let relief = 0;
+    let revisedDemand = originalTax;
+
+    let penaltyInLedger = 0;
+    for (const entry of targetUnit.ledgerEntries) {
+      if (entry.entryType === "PENALTY_DEMAND") penaltyInLedger += entry.amount;
+    }
+
+    if (decisionType === "REDUCE") {
+      revisedDemand = revisedAmountInput;
+      relief = Math.max(0, originalTax - revisedAmountInput);
+    } else if (decisionType === "ANNUL") {
+      revisedDemand = 0;
+      relief = originalTax;
+    } else if (decisionType === "PENALTY_REMISSION") {
+      relief = penaltyInLedger;
+      revisedDemand = originalTax;
+    } else if (decisionType === "ENHANCE") {
+      revisedDemand = revisedAmountInput;
+      relief = -(revisedAmountInput - originalTax);
+    }
+
+    const orderNo = `ETD/MLN/APP-ORD/2026/${targetAppeal.id.slice(-4)}`;
+    const todayStr = new Date().toISOString().split("T")[0] ?? "2026-07-20";
+
+    // Generate judicial document
+    const orderDoc = generateAppellateOrderDocument({
+      appealNumber: targetAppeal.appealNumber,
+      orderNumber: orderNo,
+      filingDate: targetAppeal.filingDate,
+      hearingDate: targetAppeal.hearingDate ?? todayStr,
+      orderDate: todayStr,
+      unit: targetUnit,
+      groundOfAppeal: targetAppeal.groundOfAppeal,
+      undisputedTaxDeposited: targetAppeal.undisputedPaid,
+      decisionType,
+      reliefAmount: relief,
+      revisedTaxAmount: revisedDemand,
+      findingsAndReasoning: judicialFindingsInput.trim()
+    });
+
+    // Update Unit Ledger if decision alters financial balance
+    let updatedUnits = units;
+    if (
+      decisionType === "REDUCE" ||
+      decisionType === "ANNUL" ||
+      decisionType === "PENALTY_REMISSION" ||
+      decisionType === "ENHANCE"
+    ) {
+      const adjustmentAmount =
+        decisionType === "PENALTY_REMISSION"
+          ? -penaltyInLedger
+          : decisionType === "ENHANCE"
+            ? revisedAmountInput - originalTax
+            : -relief;
+
+      if (adjustmentAmount !== 0) {
+        const adjustmentEntry = createAppellateAdjustmentEntry({
+          demandUnitId: targetUnit.demandUnit.id,
+          financialYearId: FINANCIAL_YEAR_2026_27,
+          appealOrderNumber: orderNo,
+          appealId: targetAppeal.id,
+          decisionType,
+          adjustmentAmount,
+          reason: judicialFindingsInput.trim(),
+          actorId: officer.id,
+          correlationId: `corr-app-adj-${Date.now()}`,
+          idempotencyKey: `idem-app-adj-${targetAppeal.id}-${Date.now()}`
+        });
+
+        // If assessment amount changed, also update latest version snapshot
+        let updatedVersions = targetUnit.assessmentVersions;
+        if (decisionType === "REDUCE" || decisionType === "ANNUL" || decisionType === "ENHANCE") {
+          const currentVer = targetUnit.assessmentVersions[0];
+          if (currentVer) {
+            const revisedSnapshot: StoredUnitSnapshot = {
+              ...currentVer.snapshot,
+              taxAmount: revisedDemand,
+              legalBasis: `${currentVer.snapshot.legalBasis} (Judicially revised under Section 7 order ${orderNo})`
+            };
+            updatedVersions = [
+              { ...currentVer, snapshot: revisedSnapshot },
+              ...targetUnit.assessmentVersions.slice(1)
+            ];
+          }
+        }
+
+        updatedUnits = units.map((u) => {
+          if (u.id === targetUnit.id) {
+            return {
+              ...u,
+              assessmentVersions: updatedVersions,
+              ledgerEntries: [...u.ledgerEntries, adjustmentEntry]
+            };
+          }
+          return u;
+        });
+      }
+    }
+
+    const nextStatus =
+      decisionType === "CONFIRM"
+        ? "DECIDED_CONFIRMED"
+        : decisionType === "REDUCE"
+          ? "DECIDED_REDUCED"
+          : decisionType === "ANNUL"
+            ? "DECIDED_ANNULLED"
+            : decisionType === "REMAND"
+              ? "DECIDED_REMANDED"
+              : decisionType === "PENALTY_REMISSION"
+                ? "DECIDED_PENALTY_REMITTED"
+                : "DECIDED_CONFIRMED";
+
+    const updatedAppeals = appeals.map((a) => {
+      if (a.id === targetAppeal.id) {
+        return {
+          ...a,
+          status: nextStatus as AppealRecord["status"],
+          decisionType,
+          orderNumber: orderNo,
+          orderDate: todayStr,
+          orderSummary: judicialFindingsInput.trim(),
+          reliefAmount: relief,
+          revisedDemandAmount: revisedDemand,
+          sha256Hash: orderDoc.officialSha256
+        };
+      }
+      return a;
+    });
+
+    const newAudit: PilotAuditItem = {
+      id: `audit-${Date.now()}`,
+      eventType: "APPEAL_ADJUDICATED",
+      actorName: officer.name,
+      actorRole: officer.role,
+      target: `${targetAppeal.appellantName} (${targetAppeal.appealNumber})`,
+      timestamp: new Date().toISOString(),
+      correlationId: `corr-app-adj-${Date.now()}`,
+      details: `Appellate order ${orderNo} pronounced by Director Shahid Nawaz: Decision=${decisionType}, Relief=PKR ${relief}, Revised Demand=PKR ${revisedDemand}. SHA-256=${orderDoc.officialSha256.slice(0, 16)}...`
+    };
+
+    syncState(updatedUnits, [newAudit, ...auditLogs], undefined, updatedAppeals);
+    setShowAdjudicateAppealModal(false);
+    setActiveAppellateOrder(orderDoc);
+    setShowAppellateOrderModal(true);
+    showToast("success", `Appellate Order ${orderNo} signed and issued (${decisionType}).`);
+  };
+
+  // Handler: View Appellate Order Document
+  const handleViewAppellateOrder = (appeal: AppealRecord) => {
+    const unit = units.find((u) => u.id === appeal.unitId);
+    if (!unit) return;
+
+    const orderDoc = generateAppellateOrderDocument({
+      appealNumber: appeal.appealNumber,
+      orderNumber: appeal.orderNumber ?? `ETD/MLN/APP-ORD/2026/${appeal.id.slice(-4)}`,
+      filingDate: appeal.filingDate,
+      hearingDate: appeal.hearingDate ?? appeal.filingDate,
+      orderDate: appeal.orderDate ?? (new Date().toISOString().split("T")[0] ?? "2026-07-20"),
+      unit,
+      groundOfAppeal: appeal.groundOfAppeal,
+      undisputedTaxDeposited: appeal.undisputedPaid,
+      decisionType: (appeal.decisionType as AppellateOrderModel["decisionType"]) ?? "REDUCE",
+      reliefAmount: appeal.reliefAmount ?? 0,
+      revisedTaxAmount:
+        appeal.revisedDemandAmount ?? unit.assessmentVersions[0]?.snapshot.taxAmount ?? 0,
+      findingsAndReasoning: appeal.orderSummary ?? "Judicial Order on file."
+    });
+
+    setActiveAppellateOrder(orderDoc);
+    setShowAppellateOrderModal(true);
+  };
+
   // Handler: Open Show Cause Notice Modal
   const handleOpenNoticeModal = (unitId: string) => {
     setNoticeTargetUnitId(unitId);
@@ -1203,6 +1544,17 @@ export default function HomePage() {
             ⚠️ Defaulters &amp; Recovery (Sec 3(4))
             {metrics.defaultersPenaltyEligible + metrics.defaultersOverdue > 0 &&
               ` (${metrics.defaultersPenaltyEligible + metrics.defaultersOverdue})`}
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === "APPEALS"}
+            onClick={() => setActiveTab("APPEALS")}
+            className={`tab-btn ${activeTab === "APPEALS" ? "active" : ""}`}
+          >
+            ⚖️ Appeals &amp; Revisions (Sec 7)
+            {appeals.filter((a) => a.status === "FILED" || a.status === "HEARING_SCHEDULED")
+              .length > 0 &&
+              ` (${appeals.filter((a) => a.status === "FILED" || a.status === "HEARING_SCHEDULED").length})`}
           </button>
           <button
             role="tab"
@@ -3080,6 +3432,373 @@ export default function HomePage() {
                               >
                                 💳 Challan PFT-2
                               </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {/* TAB: APPEALS & REVISIONS (SECTION 7 & RULE 13) */}
+        {activeTab === "APPEALS" && (
+          <section className="content-panel">
+            <div className="panel-header">
+              <div>
+                <h2>⚖️ Statutory Appeals &amp; Revisions (اپیل و نگرانی زیر سیکشن 7 و رول 13)</h2>
+                <p>
+                  Appellate proceedings under Section 7 of Punjab Finance Act, 1977 read with Rule
+                  13 of Punjab Professions &amp; Trades Tax Rules, 1977. Appellate Authority:{" "}
+                  <strong>Shahid Nawaz, Director Excise &amp; Taxation, Multan Division</strong>.
+                </p>
+              </div>
+
+              <div className="panel-actions">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => setShowFileAppealModal(true)}
+                  title="Lodge New Statutory Appeal under Section 7"
+                >
+                  ⚖️ File New Appeal (Sec 7)
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => window.print()}
+                  title="Print Appeals Cause List"
+                >
+                  🖨️ Print Cause List
+                </button>
+              </div>
+            </div>
+
+            {/* Statutory Authority Callout Banner */}
+            <div
+              style={{
+                background: "#faf5ff",
+                border: "1px solid #e9d5ff",
+                borderRadius: "8px",
+                padding: "0.85rem 1.25rem",
+                marginBottom: "1.5rem",
+                fontSize: "0.85rem",
+                color: "#581c87",
+                display: "flex",
+                alignItems: "center",
+                gap: "1rem"
+              }}
+            >
+              <span style={{ fontSize: "1.5rem" }}>🏛️</span>
+              <div>
+                <strong>Section 7 &amp; Rule 13 Appellate Mandate:</strong> Any person aggrieved by
+                an order of the Assessing Authority (ETO Tariq Mahmood) may within 30 days prefer an
+                appeal to the Appellate Authority (Director Shahid Nawaz). Under Rule 13(2), no
+                appeal shall be entertained unless the undisputed amount of tax has been deposited.
+                Appellate decisions immediately adjust the demand ledger without altering historical
+                audit trails.
+              </div>
+            </div>
+
+            {/* KPI Summary Cards */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
+                gap: "1rem",
+                marginBottom: "1.5rem"
+              }}
+            >
+              <div
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  padding: "1rem",
+                  borderRadius: "8px"
+                }}
+              >
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                  Total Appeals Filed
+                </p>
+                <p
+                  style={{
+                    margin: "0.25rem 0 0",
+                    fontSize: "1.4rem",
+                    fontWeight: "bold",
+                    color: "#1e293b"
+                  }}
+                >
+                  {appeals.length}
+                </p>
+                <p style={{ margin: 0, fontSize: "0.75rem", color: "#64748b" }}>
+                  Cause-List Vehicles &amp; Trades
+                </p>
+              </div>
+
+              <div
+                style={{
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  padding: "1rem",
+                  borderRadius: "8px"
+                }}
+              >
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "#1e40af" }}>
+                  Pending Adjudication
+                </p>
+                <p
+                  style={{
+                    margin: "0.25rem 0 0",
+                    fontSize: "1.4rem",
+                    fontWeight: "bold",
+                    color: "#1d4ed8"
+                  }}
+                >
+                  {
+                    appeals.filter((a) => a.status === "FILED" || a.status === "HEARING_SCHEDULED")
+                      .length
+                  }
+                </p>
+                <p style={{ margin: 0, fontSize: "0.75rem", color: "#1e40af" }}>
+                  Active In Judicial Court
+                </p>
+              </div>
+
+              <div
+                style={{
+                  background: "#f0fdf4",
+                  border: "1px solid #bbf7d0",
+                  padding: "1rem",
+                  borderRadius: "8px"
+                }}
+              >
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "#166534" }}>
+                  Decided &amp; Settled
+                </p>
+                <p
+                  style={{
+                    margin: "0.25rem 0 0",
+                    fontSize: "1.4rem",
+                    fontWeight: "bold",
+                    color: "#15803d"
+                  }}
+                >
+                  {appeals.filter((a) => a.status.startsWith("DECIDED")).length}
+                </p>
+                <p style={{ margin: 0, fontSize: "0.75rem", color: "#166534" }}>
+                  Judicial Decrees Issued
+                </p>
+              </div>
+
+              <div
+                style={{
+                  background: "#faf5ff",
+                  border: "1px solid #e9d5ff",
+                  padding: "1rem",
+                  borderRadius: "8px"
+                }}
+              >
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "#6b21a8" }}>
+                  Total Relief Granted
+                </p>
+                <p
+                  style={{
+                    margin: "0.25rem 0 0",
+                    fontSize: "1.4rem",
+                    fontWeight: "bold",
+                    color: "#7e22ce"
+                  }}
+                >
+                  PKR {appeals.reduce((sum, a) => sum + (a.reliefAmount ?? 0), 0).toLocaleString()}
+                </p>
+                <p style={{ margin: 0, fontSize: "0.75rem", color: "#6b21a8" }}>
+                  Credited via Adjustments
+                </p>
+              </div>
+            </div>
+
+            {/* Appeals Register & Cause-List Table */}
+            <div className="table-responsive">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Appeal No &amp; Filing Date</th>
+                    <th>Appellant &amp; Trade Name</th>
+                    <th>Impugned Demand &amp; Notice</th>
+                    <th>Ground of Appeal</th>
+                    <th>Undisputed Paid</th>
+                    <th>Hearing Date</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {appeals.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} style={{ textAlign: "center", padding: "2rem" }}>
+                        No appeals currently registered on the court cause-list.
+                      </td>
+                    </tr>
+                  ) : (
+                    appeals.map((appeal) => {
+                      const matchingUnit = units.find((u) => u.id === appeal.unitId);
+                      const originalTax =
+                        matchingUnit?.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+
+                      let statusBadgeBg = "#e2e8f0";
+                      let statusBadgeColor = "#334155";
+                      let statusText: string = appeal.status;
+
+                      if (appeal.status === "FILED") {
+                        statusBadgeBg = "#fef3c7";
+                        statusBadgeColor = "#92400e";
+                        statusText = "FILED (دائر شدہ)";
+                      } else if (appeal.status === "HEARING_SCHEDULED") {
+                        statusBadgeBg = "#dbeafe";
+                        statusBadgeColor = "#1e40af";
+                        statusText = "HEARING FIXED (تاریخ سماعت مقرر)";
+                      } else if (appeal.status === "DECIDED_REDUCED") {
+                        statusBadgeBg = "#dcfce7";
+                        statusBadgeColor = "#166534";
+                        statusText = `REDUCED (-PKR ${appeal.reliefAmount})`;
+                      } else if (appeal.status === "DECIDED_ANNULLED") {
+                        statusBadgeBg = "#fae8ff";
+                        statusBadgeColor = "#86198f";
+                        statusText = "ANNULLED (کالعدم)";
+                      } else if (appeal.status === "DECIDED_CONFIRMED") {
+                        statusBadgeBg = "#f1f5f9";
+                        statusBadgeColor = "#475569";
+                        statusText = "CONFIRMED (برقرار)";
+                      } else if (appeal.status === "DECIDED_REMANDED") {
+                        statusBadgeBg = "#ffedd5";
+                        statusBadgeColor = "#9a3412";
+                        statusText = "REMANDED (ریمانڈ شدہ)";
+                      } else if (appeal.status === "DECIDED_PENALTY_REMITTED") {
+                        statusBadgeBg = "#ccfbf1";
+                        statusBadgeColor = "#115e59";
+                        statusText = "PENALTY REMITTED (معاف)";
+                      }
+
+                      return (
+                        <tr key={appeal.id}>
+                          <td>
+                            <strong>{appeal.appealNumber}</strong>
+                            <span
+                              style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                            >
+                              Filed: {appeal.filingDate}
+                            </span>
+                          </td>
+                          <td>
+                            <strong>{appeal.appellantName}</strong>
+                            {appeal.appellantTradeName && (
+                              <span
+                                style={{ display: "block", fontSize: "0.8rem", color: "#64748b" }}
+                              >
+                                {appeal.appellantTradeName}
+                              </span>
+                            )}
+                            <span
+                              style={{ display: "block", fontSize: "0.7rem", color: "#94a3b8" }}
+                            >
+                              {appeal.appellantCnic}
+                            </span>
+                          </td>
+                          <td>
+                            <span>PFT-1/VEH/2026/{appeal.unitId.slice(-4)}</span>
+                            <span
+                              style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                            >
+                              Demand: PKR {originalTax.toLocaleString()}
+                            </span>
+                          </td>
+                          <td style={{ maxWidth: "240px", fontSize: "0.82rem" }}>
+                            {appeal.groundOfAppeal}
+                          </td>
+                          <td>
+                            <span style={{ fontWeight: "bold", color: "#166534" }}>
+                              PKR {appeal.undisputedPaid.toLocaleString()}
+                            </span>
+                            <span
+                              style={{ display: "block", fontSize: "0.7rem", color: "#64748b" }}
+                            >
+                              Rule 13(2) Compliant
+                            </span>
+                          </td>
+                          <td>
+                            {appeal.hearingDate ? (
+                              <span style={{ fontWeight: "500", color: "#1e40af" }}>
+                                {appeal.hearingDate}
+                              </span>
+                            ) : (
+                              <span style={{ color: "#94a3b8", fontStyle: "italic" }}>
+                                Not scheduled
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            <span
+                              style={{
+                                display: "inline-block",
+                                padding: "0.2rem 0.5rem",
+                                borderRadius: "4px",
+                                fontSize: "0.75rem",
+                                fontWeight: "600",
+                                background: statusBadgeBg,
+                                color: statusBadgeColor
+                              }}
+                            >
+                              {statusText}
+                            </span>
+                          </td>
+                          <td>
+                            <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                              {appeal.status === "FILED" && officer.role === "DIRECTOR" && (
+                                <button
+                                  type="button"
+                                  className="btn-secondary"
+                                  style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                  onClick={() => {
+                                    setHearingTargetAppealId(appeal.id);
+                                    setShowScheduleHearingModal(true);
+                                  }}
+                                >
+                                  📅 Fix Hearing
+                                </button>
+                              )}
+
+                              {(appeal.status === "FILED" ||
+                                appeal.status === "HEARING_SCHEDULED") &&
+                                officer.role === "DIRECTOR" && (
+                                  <button
+                                    type="button"
+                                    className="btn-primary"
+                                    style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                    onClick={() => {
+                                      setAdjudicateTargetAppealId(appeal.id);
+                                      setRevisedAmountInput(
+                                        Math.max(1000, Math.floor(originalTax / 2))
+                                      );
+                                      setShowAdjudicateAppealModal(true);
+                                    }}
+                                  >
+                                    👨‍⚖️ Adjudicate
+                                  </button>
+                                )}
+
+                              {appeal.status.startsWith("DECIDED") && (
+                                <button
+                                  type="button"
+                                  className="btn-secondary"
+                                  style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                  onClick={() => handleViewAppellateOrder(appeal)}
+                                >
+                                  📄 View Order
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -5393,6 +6112,648 @@ export default function HomePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 12: File New Appeal (Section 7 & Rule 13) */}
+      {showFileAppealModal && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: "650px", width: "95%" }}>
+            <div className="modal-header">
+              <h3>⚖️ File Statutory Appeal (اپیل زیر سیکشن 7 و رول 13)</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowFileAppealModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleFileAppeal}>
+              <div className="modal-body">
+                <div
+                  style={{
+                    background: "#faf5ff",
+                    border: "1px solid #e9d5ff",
+                    padding: "0.75rem",
+                    borderRadius: "6px",
+                    marginBottom: "1rem",
+                    fontSize: "0.85rem",
+                    color: "#581c87"
+                  }}
+                >
+                  Filing appeal before the{" "}
+                  <strong>
+                    Appellate Authority / Director Excise &amp; Taxation, Multan Division
+                  </strong>{" "}
+                  against an assessment order/notice of the Assessing Authority (ETO Vehari).
+                </div>
+
+                <div className="form-group">
+                  <label>Select Impugned Tax Unit / Assessment:</label>
+                  <select
+                    value={appealUnitId}
+                    onChange={(e) => {
+                      setAppealUnitId(e.target.value);
+                      const u = units.find((x) => x.id === e.target.value);
+                      const tax = u?.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+                      setAppealUndisputedPaid(Math.floor(tax / 2));
+                    }}
+                    className="form-control"
+                    style={{ width: "100%" }}
+                    required
+                  >
+                    {units.map((u) => {
+                      const tax = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+                      return (
+                        <option key={u.id} value={u.id}>
+                          {u.legalName} ({u.tradeName ?? u.legalName}) - PFT-1/VEH/2026/
+                          {u.id.slice(-4)} [PKR {tax.toLocaleString()}]
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Primary Ground of Appeal (بنیاد اپیل):</label>
+                  <select
+                    value={appealGroundCategory}
+                    onChange={(e) => setAppealGroundCategory(e.target.value)}
+                    className="form-control"
+                    style={{ width: "100%" }}
+                  >
+                    <option value="Dispute on employee threshold (fewer than 10 workers in commercial establishment)">
+                      Employee Count Dispute: Fewer than 10 workers (claims Entry 3(ii) at PKR 2,000
+                      instead of 3(i)(b) at PKR 4,000)
+                    </option>
+                    <option value="Wrong statutory sub-classification code applied by assessing authority">
+                      Misclassification: Erroneous category applied by assessing authority
+                    </option>
+                    <option value="Exemption claimed under Section 3 proviso (Not engaged in taxable trade)">
+                      Statutory Exemption: Assessee claims full exemption under Section 3 proviso
+                    </option>
+                    <option value="Double assessment under multiple heads for same financial year">
+                      Duplicate Assessment: Unit assessed under multiple classifications
+                    </option>
+                    <option value="Default penalty remission requested due to bona fide hardship">
+                      Penalty Remission: Default penalty challenged due to lack of prior notice
+                      service
+                    </option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Ground Details &amp; Averments (تفصیلات و بیان مؤقف):</label>
+                  <textarea
+                    rows={3}
+                    placeholder="State specific facts, employee payroll details, or reasons why the assessment is erroneous..."
+                    value={appealGroundDetails}
+                    onChange={(e) => setAppealGroundDetails(e.target.value)}
+                    className="form-control"
+                    style={{ width: "100%" }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>
+                    Undisputed Tax Deposited into Treasury (PKR) (رقم غیر متنازعہ ٹیکس):
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    required
+                    value={appealUndisputedPaid}
+                    onChange={(e) => setAppealUndisputedPaid(Number(e.target.value))}
+                    className="form-control"
+                    style={{ width: "100%" }}
+                  />
+                  <small style={{ color: "#64748b", display: "block", marginTop: "0.25rem" }}>
+                    Mandatory under Rule 13(2): No appeal shall be entertained without payment of
+                    undisputed tax.
+                  </small>
+                </div>
+
+                <div
+                  style={{
+                    background: "#fffbeb",
+                    border: "1px solid #fde68a",
+                    padding: "0.75rem",
+                    borderRadius: "6px",
+                    marginTop: "1rem"
+                  }}
+                >
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      cursor: "pointer",
+                      fontWeight: "600",
+                      fontSize: "0.85rem"
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={appealCondonation}
+                      onChange={(e) => setAppealCondonation(e.target.checked)}
+                    />
+                    Appeal filed after statutory 30-day limitation period (Request Condonation of
+                    Delay)
+                  </label>
+
+                  {appealCondonation && (
+                    <div style={{ marginTop: "0.5rem" }}>
+                      <input
+                        type="text"
+                        placeholder="State sufficient cause for delay (e.g. medical emergency, delayed notice delivery)..."
+                        value={appealCondonationReason}
+                        onChange={(e) => setAppealCondonationReason(e.target.value)}
+                        className="form-control"
+                        style={{ width: "100%", fontSize: "0.85rem" }}
+                        required={appealCondonation}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowFileAppealModal(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  ⚖️ Submit &amp; Lodge Appeal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 13: Fix Appellate Hearing Date (Schedule Court Session) */}
+      {showScheduleHearingModal && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: "550px", width: "95%" }}>
+            <div className="modal-header">
+              <h3>📅 Schedule Appellate Court Hearing (مقرر تاریخ سماعت)</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowScheduleHearingModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleScheduleHearing}>
+              <div className="modal-body">
+                <div
+                  style={{
+                    background: "#eff6ff",
+                    border: "1px solid #bfdbfe",
+                    padding: "0.75rem",
+                    borderRadius: "6px",
+                    marginBottom: "1rem",
+                    fontSize: "0.85rem",
+                    color: "#1e40af"
+                  }}
+                >
+                  Fixing judicial court appearance before <strong>Director Shahid Nawaz</strong>{" "}
+                  (Court Room, Regional Excise Directorate, Multan).
+                </div>
+
+                <div className="form-group">
+                  <label>Date of Appellate Hearing (تاریخ سماعت):</label>
+                  <input
+                    type="date"
+                    required
+                    value={hearingDateInput}
+                    onChange={(e) => setHearingDateInput(e.target.value)}
+                    className="form-control"
+                    style={{ width: "100%" }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Hearing Directions / Summons Note:</label>
+                  <textarea
+                    rows={3}
+                    value={hearingNotesInput}
+                    onChange={(e) => setHearingNotesInput(e.target.value)}
+                    className="form-control"
+                    style={{ width: "100%" }}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowScheduleHearingModal(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  📅 Fix Date &amp; Issue Notice
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 14: Appellate Adjudication & Order Pronouncement */}
+      {showAdjudicateAppealModal && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: "700px", width: "95%" }}>
+            <div className="modal-header">
+              <h3>👨‍⚖️ Appellate Court Adjudication (فیصلہ اپیل و عدالتی حکم)</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowAdjudicateAppealModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleAdjudicateAppeal}>
+              <div className="modal-body">
+                <div
+                  style={{
+                    background: "#faf5ff",
+                    border: "1px solid #e9d5ff",
+                    padding: "0.75rem",
+                    borderRadius: "6px",
+                    marginBottom: "1rem",
+                    fontSize: "0.85rem",
+                    color: "#581c87"
+                  }}
+                >
+                  Adjudicating case as{" "}
+                  <strong>
+                    Shahid Nawaz, Director Excise &amp; Taxation / Appellate Authority
+                  </strong>
+                  . Any tax reduction or annulment will automatically append an immutable authorized
+                  adjustment entry to the demand ledger.
+                </div>
+
+                {(() => {
+                  const targetApp = appeals.find((a) => a.id === adjudicateTargetAppealId);
+                  const targetUnit = units.find((u) => u.id === targetApp?.unitId);
+                  const originalTax = targetUnit?.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+                  let penalty = 0;
+                  for (const entry of targetUnit?.ledgerEntries ?? []) {
+                    if (entry.entryType === "PENALTY_DEMAND") penalty += entry.amount;
+                  }
+
+                  let relief = 0;
+                  if (decisionType === "REDUCE")
+                    relief = Math.max(0, originalTax - revisedAmountInput);
+                  else if (decisionType === "ANNUL") relief = originalTax;
+                  else if (decisionType === "PENALTY_REMISSION") relief = penalty;
+
+                  return (
+                    <>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: "0.75rem",
+                          background: "#f8fafc",
+                          padding: "0.75rem",
+                          borderRadius: "6px",
+                          marginBottom: "1rem",
+                          fontSize: "0.85rem"
+                        }}
+                      >
+                        <div>
+                          <strong>Appellant:</strong> {targetApp?.appellantName}
+                          <br />
+                          <strong>Appeal No:</strong> {targetApp?.appealNumber}
+                          <br />
+                          <strong>Notice:</strong> PFT-1/VEH/2026/{targetUnit?.id.slice(-4)}
+                        </div>
+                        <div>
+                          <strong>Assessed Tax:</strong> PKR {originalTax.toLocaleString()}
+                          <br />
+                          <strong>Penalties:</strong> PKR {penalty.toLocaleString()}
+                          <br />
+                          <strong>Undisputed Paid:</strong> PKR{" "}
+                          {targetApp?.undisputedPaid.toLocaleString()}
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Appellate Decision (نوعیت فیصلہ):</label>
+                        <select
+                          value={decisionType}
+                          onChange={(e) =>
+                            setDecisionType(
+                              e.target.value as
+                                | "CONFIRM"
+                                | "REDUCE"
+                                | "ENHANCE"
+                                | "ANNUL"
+                                | "REMAND"
+                                | "PENALTY_REMISSION"
+                            )
+                          }
+                          className="form-control"
+                          style={{ width: "100%", fontWeight: "600" }}
+                        >
+                          <option value="REDUCE">
+                            REDUCE (جزوی منظوری - Reduce assessment to lower statutory rate)
+                          </option>
+                          <option value="CONFIRM">
+                            CONFIRM (خارج - Dismiss appeal and uphold assessment in full)
+                          </option>
+                          <option value="ANNUL">
+                            ANNUL (مکمل کالعدم - Set aside &amp; annul assessment in toto)
+                          </option>
+                          <option value="REMAND">
+                            REMAND (ریمانڈ - Remand to ETO Vehari for re-survey &amp; inquiry)
+                          </option>
+                          <option value="PENALTY_REMISSION">
+                            PENALTY REMISSION (معافی جرمانہ - Waive Section 3(4) default penalty)
+                          </option>
+                          <option value="ENHANCE">
+                            ENHANCE (اضافہ - Increase assessment based on detected turnover)
+                          </option>
+                        </select>
+                      </div>
+
+                      {(decisionType === "REDUCE" || decisionType === "ENHANCE") && (
+                        <div className="form-group">
+                          <label>Revised Assessed Tax Amount (PKR) (نئی شرح ٹیکس):</label>
+                          <input
+                            type="number"
+                            min={0}
+                            required
+                            value={revisedAmountInput}
+                            onChange={(e) => setRevisedAmountInput(Number(e.target.value))}
+                            className="form-control"
+                            style={{ width: "100%", fontWeight: "bold" }}
+                          />
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          background: "#f0fdf4",
+                          border: "1px solid #bbf7d0",
+                          padding: "0.75rem",
+                          borderRadius: "6px",
+                          marginBottom: "1rem",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center"
+                        }}
+                      >
+                        <span style={{ fontSize: "0.85rem", color: "#166534" }}>
+                          Calculated Taxpayer Relief:
+                        </span>
+                        <strong style={{ fontSize: "1.2rem", color: "#15803d" }}>
+                          PKR {relief.toLocaleString()}
+                        </strong>
+                      </div>
+
+                      <div className="form-group">
+                        <label>
+                          Judicial Findings &amp; Operative Reasoning (فیصلہ کی وجوہات):
+                        </label>
+                        <textarea
+                          rows={4}
+                          required
+                          value={judicialFindingsInput}
+                          onChange={(e) => setJudicialFindingsInput(e.target.value)}
+                          className="form-control"
+                          style={{ width: "100%" }}
+                        />
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowAdjudicateAppealModal(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  ✍️ Sign &amp; Issue Appellate Order
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 15: Statutory Appellate Order Document Viewer */}
+      {showAppellateOrderModal && activeAppellateOrder && (
+        <div className="modal-overlay">
+          <div
+            className="modal-card"
+            style={{ maxWidth: "800px", width: "95%", maxHeight: "90vh", overflowY: "auto" }}
+          >
+            <div className="modal-header no-print">
+              <h3>📜 Statutory Appellate Order (عدالتی حکم نامہ اپیل)</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowAppellateOrderModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ background: "#ffffff", padding: "1.5rem" }}>
+              <div
+                style={{
+                  border: "2px solid #334155",
+                  padding: "1.5rem",
+                  fontFamily: "'Courier New', Courier, monospace",
+                  background: "#fafafa"
+                }}
+              >
+                <div
+                  style={{
+                    textAlign: "center",
+                    borderBottom: "2px solid #334155",
+                    paddingBottom: "1rem",
+                    marginBottom: "1rem"
+                  }}
+                >
+                  <h4 style={{ margin: 0, textTransform: "uppercase", letterSpacing: "1px" }}>
+                    GOVERNMENT OF THE PUNJAB
+                  </h4>
+                  <p style={{ margin: "0.25rem 0", fontWeight: "bold" }}>
+                    {activeAppellateOrder.courtTitle}
+                  </p>
+                  <p style={{ margin: "0.25rem 0", fontSize: "1rem", fontFamily: "serif" }}>
+                    {activeAppellateOrder.courtTitleUrdu}
+                  </p>
+                  <p style={{ margin: "0.25rem 0", fontSize: "0.85rem" }}>
+                    ORDER PASSED UNDER SECTION 7 OF PUNJAB FINANCE ACT, 1977 READ WITH RULE 13 OF
+                    PUNJAB PROFESSIONS &amp; TRADES TAX RULES, 1977
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: "0.85rem",
+                    marginBottom: "1rem"
+                  }}
+                >
+                  <div>
+                    <strong>Appeal No:</strong> {activeAppellateOrder.appealNumber}
+                    <br />
+                    <strong>Order No:</strong> {activeAppellateOrder.orderNumber}
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <strong>Filing Date:</strong> {activeAppellateOrder.filingDate}
+                    <br />
+                    <strong>Date of Order:</strong> {activeAppellateOrder.orderDate}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    background: "#f1f5f9",
+                    padding: "0.75rem",
+                    borderRadius: "4px",
+                    fontSize: "0.85rem",
+                    marginBottom: "1rem"
+                  }}
+                >
+                  <strong>{activeAppellateOrder.appellantName}</strong> (
+                  {activeAppellateOrder.appellantTradeName ?? activeAppellateOrder.appellantName})
+                  <br />
+                  Address: {activeAppellateOrder.appellantAddress} | CNIC/Identifier:{" "}
+                  {activeAppellateOrder.appellantIdentifier}
+                  <div style={{ textAlign: "center", fontWeight: "bold", margin: "0.4rem 0" }}>
+                    ... VERSUS ...
+                  </div>
+                  <strong>{activeAppellateOrder.respondentTitle}</strong>
+                </div>
+
+                <div style={{ fontSize: "0.85rem", lineHeight: "1.5", marginBottom: "1rem" }}>
+                  <p>
+                    <strong>1. Impugned Order:</strong> Demand Notice No.{" "}
+                    {activeAppellateOrder.impugnedNoticeNumber} (Demand No:{" "}
+                    {activeAppellateOrder.demandNumber}) assessing tax of PKR{" "}
+                    {activeAppellateOrder.originalTaxAmount.toLocaleString()} under{" "}
+                    {activeAppellateOrder.scheduleEntry}.
+                  </p>
+                  <p>
+                    <strong>2. Ground of Appeal:</strong> {activeAppellateOrder.groundOfAppeal}
+                  </p>
+                  <p>
+                    <strong>3. Undisputed Tax Deposited:</strong> PKR{" "}
+                    {activeAppellateOrder.undisputedTaxDeposited.toLocaleString()} (Compliance of
+                    Rule 13(2)).
+                  </p>
+                  <p>
+                    <strong>4. Findings &amp; Reasoning:</strong>{" "}
+                    {activeAppellateOrder.findingsAndReasoning}
+                  </p>
+                  <p
+                    style={{
+                      background: "#f8fafc",
+                      padding: "0.75rem",
+                      borderLeft: "4px solid #3b82f6"
+                    }}
+                  >
+                    <strong>5. OPERATIVE ORDER (حکم):</strong>
+                    <br />
+                    <span
+                      style={{
+                        fontSize: "0.95rem",
+                        fontFamily: "serif",
+                        display: "block",
+                        marginTop: "0.25rem"
+                      }}
+                    >
+                      {activeAppellateOrder.operativeOrderUrdu}
+                    </span>
+                    <span style={{ display: "block", marginTop: "0.25rem", color: "#334155" }}>
+                      Decision: <strong>{activeAppellateOrder.decisionType}</strong> | Relief
+                      Granted:{" "}
+                      <strong>PKR {activeAppellateOrder.reliefAmount.toLocaleString()}</strong> |
+                      Revised Demand:{" "}
+                      <strong>PKR {activeAppellateOrder.revisedTaxAmount.toLocaleString()}</strong>.
+                    </span>
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-end",
+                    marginTop: "2rem",
+                    paddingTop: "1rem",
+                    borderTop: "1px dashed #cbd5e1"
+                  }}
+                >
+                  <div style={{ fontSize: "0.7rem", color: "#64748b", maxWidth: "300px" }}>
+                    <strong>Cryptographic Non-Repudiation Digest:</strong>
+                    <br />
+                    <code style={{ fontSize: "0.65rem", wordBreak: "break-all" }}>
+                      {activeAppellateOrder.officialSha256}
+                    </code>
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div
+                      style={{
+                        width: "120px",
+                        height: "60px",
+                        border: "1px dashed #94a3b8",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "0.7rem",
+                        color: "#64748b",
+                        margin: "0 auto 0.25rem"
+                      }}
+                    >
+                      [Official Seal]
+                    </div>
+                    <strong>{activeAppellateOrder.appellateAuthorityName}</strong>
+                    <div style={{ fontSize: "0.75rem", color: "#475569" }}>
+                      {activeAppellateOrder.appellateAuthorityDesignation}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer no-print">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowAppellateOrderModal(false)}
+              >
+                Close
+              </button>
+              <button type="button" className="btn-primary" onClick={() => window.print()}>
+                🖨️ Print Appellate Order
+              </button>
+            </div>
           </div>
         </div>
       )}
