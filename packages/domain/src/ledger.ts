@@ -72,6 +72,34 @@ export interface CreateRevisionAdjustmentInput {
   readonly metadata?: Record<string, unknown> | undefined;
 }
 
+export interface CreatePenaltyDemandInput {
+  readonly id?: string | undefined;
+  readonly demandUnitId: string;
+  readonly financialYearId: string;
+  readonly originalDemandAmount: number;
+  readonly penaltyAmount: number;
+  readonly reason: string;
+  readonly orderNumber: string;
+  readonly actorId: string;
+  readonly correlationId: string;
+  readonly idempotencyKey: string;
+  readonly postedAt?: Date | string | undefined;
+  readonly metadata?: Record<string, unknown> | undefined;
+}
+
+export type DefaulterAgingStatus =
+  "PAID" | "CURRENT" | "OVERDUE_30_DAYS" | "PENALTY_ELIGIBLE" | "PENALIZED" | "RECOVERY_CERTIFIED";
+
+export interface DefaulterAgingInfo {
+  readonly status: DefaulterAgingStatus;
+  readonly daysOverdue: number;
+  readonly originalDemand: number;
+  readonly penaltyDemand: number;
+  readonly totalPaid: number;
+  readonly remainingBalance: number;
+  readonly dueDate: string; // YYYY-MM-DD
+}
+
 export type PaymentChannel = "CHALLAN_32A" | "EPAY_PUNJAB" | "BANK_TRANSFER" | "OTC";
 
 export interface CreatePaymentReceiptInput {
@@ -225,6 +253,123 @@ export function createRevisionAdjustmentEntry(
       ...input.metadata
     }
   });
+}
+
+/**
+ * Creates an append-only PENALTY_DEMAND entry under Section 3(4) of the Punjab Finance Act, 1977
+ * and Rule 10 of the Punjab Professions and Trades Tax Rules, 1977.
+ * Statutory constraint: The penalty shall not exceed the amount of tax (penalty <= originalDemandAmount).
+ */
+export function createPenaltyDemandEntry(input: CreatePenaltyDemandInput): DemandLedgerEntry {
+  if (input.originalDemandAmount <= 0) {
+    throw new Error("Original demand amount must be greater than zero to impose a penalty");
+  }
+
+  if (input.penaltyAmount <= 0) {
+    throw new Error("Penalty amount must be greater than zero");
+  }
+
+  const roundedPenalty = roundToTwoDecimals(input.penaltyAmount);
+  const roundedOriginal = roundToTwoDecimals(input.originalDemandAmount);
+
+  // Non-negotiable statutory rule per Section 3(4): penalty cannot exceed the amount of tax
+  if (roundedPenalty > roundedOriginal) {
+    throw new Error(
+      `Statutory penalty cap violated: penalty (${roundedPenalty}) cannot exceed the amount of assessed tax (${roundedOriginal}) under Section 3(4) of Punjab Finance Act, 1977`
+    );
+  }
+
+  const orderNumber = input.orderNumber.trim();
+  if (!orderNumber) {
+    throw new Error("Penalty order number is required");
+  }
+
+  const reason = input.reason.trim();
+  if (!reason) {
+    throw new Error("Statutory reason for penalty imposition is required");
+  }
+
+  return createDemandLedgerEntry({
+    id: input.id,
+    demandUnitId: input.demandUnitId,
+    financialYearId: input.financialYearId,
+    entryType: "PENALTY_DEMAND",
+    amount: roundedPenalty,
+    sourceType: "PENALTY_ORDER",
+    sourceId: orderNumber,
+    idempotencyKey: input.idempotencyKey,
+    correlationId: input.correlationId,
+    postedBy: input.actorId,
+    postedAt: input.postedAt,
+    metadata: {
+      orderNumber,
+      reason,
+      originalDemandAmount: roundedOriginal,
+      penaltyPercentage: Math.round((roundedPenalty / roundedOriginal) * 100),
+      ...input.metadata
+    }
+  });
+}
+
+/**
+ * Computes statutory defaulter aging and arrears classification for a demand unit
+ * under Section 3(4) of Punjab Finance Act, 1977 and Rule 10 & 12 of 1977 Rules.
+ */
+export function computeDefaulterAging(
+  entries: readonly DemandLedgerEntry[],
+  dueDateIso: string = "2026-08-31",
+  referenceDateIso?: string,
+  isRecoveryCertified: boolean = false
+): DefaulterAgingInfo {
+  let originalDemand = 0;
+  let penaltyDemand = 0;
+  let totalPaid = 0;
+
+  for (const entry of entries) {
+    if (entry.entryType === "ASSESSMENT_DEMAND" || entry.entryType === "REVISION_ADJUSTMENT") {
+      originalDemand += entry.amount;
+    } else if (entry.entryType === "PENALTY_DEMAND") {
+      penaltyDemand += entry.amount;
+    } else if (entry.entryType === "PAYMENT_CREDIT") {
+      totalPaid += Math.abs(entry.amount);
+    }
+  }
+
+  originalDemand = roundToTwoDecimals(originalDemand);
+  penaltyDemand = roundToTwoDecimals(penaltyDemand);
+  totalPaid = roundToTwoDecimals(totalPaid);
+
+  const remainingBalance = roundToTwoDecimals(originalDemand + penaltyDemand - totalPaid);
+
+  const refDate = referenceDateIso ? new Date(referenceDateIso) : new Date();
+  const dueDate = new Date(dueDateIso);
+  const diffTime = refDate.getTime() - dueDate.getTime();
+  const daysOverdue = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+
+  let status: DefaulterAgingStatus;
+  if (remainingBalance <= 0) {
+    status = "PAID";
+  } else if (isRecoveryCertified) {
+    status = "RECOVERY_CERTIFIED";
+  } else if (penaltyDemand > 0) {
+    status = "PENALIZED";
+  } else if (daysOverdue > 30) {
+    status = "PENALTY_ELIGIBLE";
+  } else if (daysOverdue > 0) {
+    status = "OVERDUE_30_DAYS";
+  } else {
+    status = "CURRENT";
+  }
+
+  return {
+    status,
+    daysOverdue,
+    originalDemand,
+    penaltyDemand,
+    totalPaid,
+    remainingBalance,
+    dueDate: dueDateIso
+  };
 }
 
 /**

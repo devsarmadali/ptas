@@ -3,6 +3,8 @@ import {
   generateFormPFT1,
   generateFormPFT2,
   generateFormPFT3Rows,
+  generateLandRevenueRecoveryCertificate,
+  generateShowCausePenaltyNotice,
   numberToWordsPkr
 } from "../src/lib/statutory-forms.js";
 import { createInitialPilotUnits } from "../src/lib/pilot-store.js";
@@ -61,5 +63,26 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     const alMadinaRow = rows.find((r) => r.legalName.includes("Al-Madina"))!;
     expect(alMadinaRow.assessedCurrentTax).toBe(4000);
     expect(alMadinaRow.scheduleEntry).toBe("Entry 3(i)(b)");
+  });
+
+  it("generates Show Cause Notice for Imposition of Penalty (Rule 10 & Sec 3(4))", () => {
+    const scn = generateShowCausePenaltyNotice(alMadinaUnit, 45);
+    expect(scn.noticeNumber).toContain("SCN-PEN-VEH/2026");
+    expect(scn.demandNumber).toBe("PDN-VEH-2026-0003");
+    expect(scn.originalTaxAmount).toBe(4000);
+    expect(scn.maximumPenaltyExposable).toBe(4000); // 100% cap
+    expect(scn.daysOverdue).toBe(45);
+    expect(scn.officialSha256).toHaveLength(64);
+    expect(scn.assessingAuthorityName).toBe("Tariq Mahmood");
+  });
+
+  it("generates Certificate of Recovery as Arrears of Land Revenue (Rule 12)", () => {
+    const cert = generateLandRevenueRecoveryCertificate(alMadinaUnit);
+    expect(cert.certificateNumber).toContain("CERT-LRA-VEH/2026");
+    expect(cert.collectorDesignation).toContain("The Collector / Tehsildar (Recovery)");
+    expect(cert.originalTaxAmount).toBe(4000);
+    expect(cert.totalArrearsRecoverable).toBe(4000);
+    expect(cert.officialSha256).toHaveLength(64);
+    expect(cert.recoverySection).toContain("Punjab Land Revenue Act 1967");
   });
 });

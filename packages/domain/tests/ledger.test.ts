@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   assertLedgerEntryImmutable,
+  computeDefaulterAging,
   computeLedgerBalance,
   createDemandLedgerEntry,
   createInitialDemandEntry,
   createPaymentReceiptEntry,
+  createPenaltyDemandEntry,
   createReversalEntry,
   createRevisionAdjustmentEntry
 } from "../src/ledger.js";
@@ -279,5 +281,126 @@ describe("ledger domain operations", () => {
 
   it("enforces immutable ledger guard", () => {
     expect(() => assertLedgerEntryImmutable()).toThrow(/append-only/);
+  });
+
+  describe("statutory penalty demand under Section 3(4) of Punjab Finance Act 1977", () => {
+    it("creates an append-only PENALTY_DEMAND entry within statutory cap", () => {
+      const penaltyEntry = createPenaltyDemandEntry({
+        demandUnitId,
+        financialYearId: fyId1,
+        originalDemandAmount: 4000,
+        penaltyAmount: 2000,
+        orderNumber: "ETO/VHR/PFT/PEN/2026/001",
+        reason: "Failure to pay tax within 30 days of Form PFT-1 demand notice service",
+        actorId,
+        correlationId: "corr-pen-1",
+        idempotencyKey: "idem-pen-1"
+      });
+
+      expect(penaltyEntry.entryType).toBe("PENALTY_DEMAND");
+      expect(penaltyEntry.amount).toBe(2000);
+      expect(penaltyEntry.sourceType).toBe("PENALTY_ORDER");
+      expect(penaltyEntry.sourceId).toBe("ETO/VHR/PFT/PEN/2026/001");
+      expect(penaltyEntry.metadata.penaltyPercentage).toBe(50);
+      expect(penaltyEntry.metadata.originalDemandAmount).toBe(4000);
+    });
+
+    it("rejects penalty exceeding 100% of assessed tax under Section 3(4)", () => {
+      expect(() =>
+        createPenaltyDemandEntry({
+          demandUnitId,
+          financialYearId: fyId1,
+          originalDemandAmount: 4000,
+          penaltyAmount: 4500, // Exceeds 4000
+          orderNumber: "ETO/VHR/PFT/PEN/2026/002",
+          reason: "Excessive penalty test",
+          actorId,
+          correlationId: "corr-pen-2",
+          idempotencyKey: "idem-pen-2"
+        })
+      ).toThrow(/Statutory penalty cap violated/);
+    });
+
+    it("rejects non-positive penalty amounts", () => {
+      expect(() =>
+        createPenaltyDemandEntry({
+          demandUnitId,
+          financialYearId: fyId1,
+          originalDemandAmount: 4000,
+          penaltyAmount: 0,
+          orderNumber: "ETO/VHR/PFT/PEN/2026/003",
+          reason: "Zero penalty test",
+          actorId,
+          correlationId: "corr-pen-3",
+          idempotencyKey: "idem-pen-3"
+        })
+      ).toThrow(/greater than zero/);
+    });
+  });
+
+  describe("statutory defaulter aging and arrears classification", () => {
+    it("computes accurate aging and status for a unit", () => {
+      const demand = createInitialDemandEntry({
+        demandUnitId,
+        financialYearId: fyId1,
+        assessmentVersionId: version1Id,
+        amount: 4000,
+        actorId,
+        correlationId: "c1",
+        idempotencyKey: "k1"
+      });
+
+      // 1. Current (before due date)
+      const currentAging = computeDefaulterAging([demand], "2026-08-31", "2026-08-15");
+      expect(currentAging.status).toBe("CURRENT");
+      expect(currentAging.daysOverdue).toBe(0);
+      expect(currentAging.remainingBalance).toBe(4000);
+
+      // 2. Overdue within 30 days
+      const overdue30 = computeDefaulterAging([demand], "2026-08-31", "2026-09-15");
+      expect(overdue30.status).toBe("OVERDUE_30_DAYS");
+      expect(overdue30.daysOverdue).toBe(15);
+
+      // 3. Penalty eligible (>30 days overdue)
+      const penaltyEligible = computeDefaulterAging([demand], "2026-08-31", "2026-10-15");
+      expect(penaltyEligible.status).toBe("PENALTY_ELIGIBLE");
+      expect(penaltyEligible.daysOverdue).toBe(45);
+
+      // 4. Penalized after penalty imposed
+      const penalty = createPenaltyDemandEntry({
+        demandUnitId,
+        financialYearId: fyId1,
+        originalDemandAmount: 4000,
+        penaltyAmount: 2000,
+        orderNumber: "ORDER-1",
+        reason: "Default",
+        actorId,
+        correlationId: "c2",
+        idempotencyKey: "k2"
+      });
+      const penalized = computeDefaulterAging([demand, penalty], "2026-08-31", "2026-10-15");
+      expect(penalized.status).toBe("PENALIZED");
+      expect(penalized.penaltyDemand).toBe(2000);
+      expect(penalized.remainingBalance).toBe(6000);
+
+      // 5. Land revenue recovery certified
+      const certified = computeDefaulterAging([demand, penalty], "2026-08-31", "2026-10-15", true);
+      expect(certified.status).toBe("RECOVERY_CERTIFIED");
+
+      // 6. Paid in full
+      const payment = createPaymentReceiptEntry({
+        demandUnitId,
+        financialYearId: fyId1,
+        amount: 6000,
+        receiptNumber: "RECEIPT-FULL",
+        paymentChannel: "CHALLAN_32A",
+        actorId,
+        correlationId: "c3",
+        idempotencyKey: "k3"
+      });
+      const paid = computeDefaulterAging([demand, penalty, payment], "2026-08-31", "2026-10-20");
+      expect(paid.status).toBe("PAID");
+      expect(paid.remainingBalance).toBe(0);
+    });
   });
 });

@@ -6,10 +6,12 @@ import {
   type DuplicateMatch,
   type Taxpayer,
   approveAssessmentVersion,
+  computeDefaulterAging,
   computeLedgerBalance,
   createAssessment,
   createInitialDemandEntry,
   createPaymentReceiptEntry,
+  createPenaltyDemandEntry,
   createTaxpayer,
   findDuplicateCandidates,
   getRulesByCategory,
@@ -32,7 +34,13 @@ import {
 } from "../lib/pilot-store";
 import { computeFileSha256, uploadReceiptScan } from "../lib/storage";
 import { pushPilotStateToSupabase } from "../lib/supabase-sync";
-import { generateFormPFT1, generateFormPFT2, generateFormPFT3Rows } from "../lib/statutory-forms";
+import {
+  generateFormPFT1,
+  generateFormPFT2,
+  generateFormPFT3Rows,
+  generateLandRevenueRecoveryCertificate,
+  generateShowCausePenaltyNotice
+} from "../lib/statutory-forms";
 
 export default function HomePage() {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -45,6 +53,7 @@ export default function HomePage() {
     | "FORM_PFT1"
     | "FORM_PFT2"
     | "REGISTER_PFT3"
+    | "DEFAULTERS"
     | "LEDGER"
     | "EPAY"
     | "AUDIT"
@@ -59,6 +68,24 @@ export default function HomePage() {
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [returnTargetUnitId, setReturnTargetUnitId] = useState("");
   const [returnReason, setReturnReason] = useState("");
+
+  // Defaulter & Statutory Recovery Modal States
+  const [defaulterFilter, setDefaulterFilter] = useState<
+    "ALL" | "OVERDUE_30_DAYS" | "PENALTY_ELIGIBLE" | "PENALIZED" | "RECOVERY_CERTIFIED"
+  >("ALL");
+  const [showPenaltyModal, setShowPenaltyModal] = useState(false);
+  const [penaltyTargetUnitId, setPenaltyTargetUnitId] = useState("");
+  const [penaltyPercentage, setPenaltyPercentage] = useState<number>(50); // Default 50%
+  const [penaltyReason, setPenaltyReason] = useState(
+    "Failure to deposit assessed professional tax within thirty days of Form PFT-1 service"
+  );
+  const [showNoticeModal, setShowNoticeModal] = useState(false);
+  const [noticeTargetUnitId, setNoticeTargetUnitId] = useState("");
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
+  const [recoveryTargetUnitId, setRecoveryTargetUnitId] = useState("");
+  const [collectorDesignation, setCollectorDesignation] = useState(
+    "The Collector / Tehsildar (Recovery), District Vehari"
+  );
 
   // New Unit Form State
   const [newLegalName, setNewLegalName] = useState("");
@@ -268,13 +295,38 @@ export default function HomePage() {
       if (pending) pendingApprovals++;
     }
 
+    let defaultersOverdue = 0;
+    let defaultersPenaltyEligible = 0;
+    let defaultersPenalized = 0;
+    let defaultersRecoveryCertified = 0;
+    let totalPenaltiesImposed = 0;
+
+    for (const u of units) {
+      const aging = computeDefaulterAging(
+        u.ledgerEntries,
+        "2026-08-31",
+        undefined,
+        u.isRecoveryCertified
+      );
+      if (aging.status === "OVERDUE_30_DAYS") defaultersOverdue++;
+      if (aging.status === "PENALTY_ELIGIBLE") defaultersPenaltyEligible++;
+      if (aging.status === "PENALIZED") defaultersPenalized++;
+      if (aging.status === "RECOVERY_CERTIFIED") defaultersRecoveryCertified++;
+      totalPenaltiesImposed += aging.penaltyDemand;
+    }
+
     const outstandingBalance = totalDemand - totalPayments;
     return {
       totalUnits,
       totalDemand,
       totalPayments,
       outstandingBalance,
-      pendingApprovals
+      pendingApprovals,
+      defaultersOverdue,
+      defaultersPenaltyEligible,
+      defaultersPenalized,
+      defaultersRecoveryCertified,
+      totalPenaltiesImposed
     };
   }, [units]);
 
@@ -680,6 +732,181 @@ export default function HomePage() {
     return generateFormPFT3Rows(units);
   }, [units]);
 
+  // Defaulter Units Filter
+  const defaulterUnits = useMemo(() => {
+    return units.filter((u) => {
+      const aging = computeDefaulterAging(
+        u.ledgerEntries,
+        "2026-08-31",
+        undefined,
+        u.isRecoveryCertified
+      );
+      if (defaulterFilter === "ALL") return aging.remainingBalance > 0;
+      return aging.status === defaulterFilter;
+    });
+  }, [units, defaulterFilter]);
+
+  const noticeTargetUnit = useMemo(() => {
+    return units.find((u) => u.id === noticeTargetUnitId) ?? null;
+  }, [units, noticeTargetUnitId]);
+
+  const showCauseNoticeData = useMemo(() => {
+    if (!noticeTargetUnit) return null;
+    return generateShowCausePenaltyNotice(noticeTargetUnit);
+  }, [noticeTargetUnit]);
+
+  const recoveryTargetUnit = useMemo(() => {
+    return units.find((u) => u.id === recoveryTargetUnitId) ?? null;
+  }, [units, recoveryTargetUnitId]);
+
+  const recoveryCertData = useMemo(() => {
+    if (!recoveryTargetUnit) return null;
+    return generateLandRevenueRecoveryCertificate(recoveryTargetUnit, collectorDesignation);
+  }, [recoveryTargetUnit, collectorDesignation]);
+
+  // Handler: Open Show Cause Notice Modal
+  const handleOpenNoticeModal = (unitId: string) => {
+    setNoticeTargetUnitId(unitId);
+    setShowNoticeModal(true);
+  };
+
+  // Handler: Open Impose Penalty Modal
+  const handleOpenPenaltyModal = (unitId: string) => {
+    const target = units.find((u) => u.id === unitId);
+    if (!target) return;
+    setPenaltyTargetUnitId(unitId);
+    setPenaltyPercentage(50);
+    setPenaltyReason(
+      "Failure to pay assessed professional tax within 30 days of Form P.F.T-1 notice service"
+    );
+    setShowPenaltyModal(true);
+  };
+
+  // Handler: Open Land Revenue Recovery Modal
+  const handleOpenRecoveryModal = (unitId: string) => {
+    setRecoveryTargetUnitId(unitId);
+    setCollectorDesignation("The Collector / Tehsildar (Recovery), District Vehari");
+    setShowRecoveryModal(true);
+  };
+
+  // Handler: Submit Statutory Penalty
+  const handleImposePenalty = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (officer.role !== "ETO") {
+      showToast(
+        "error",
+        "Statutory violation: Only Assessing Authority (ETO) can impose penalties under Section 3(4)."
+      );
+      return;
+    }
+    const targetUnit = units.find((u) => u.id === penaltyTargetUnitId);
+    if (!targetUnit) return;
+
+    const aging = computeDefaulterAging(targetUnit.ledgerEntries);
+    const calculatedPenalty = Math.round((aging.originalDemand * penaltyPercentage) / 100);
+
+    if (calculatedPenalty <= 0) {
+      showToast("error", "Penalty amount must be greater than zero.");
+      return;
+    }
+    if (calculatedPenalty > aging.originalDemand) {
+      showToast(
+        "error",
+        `Statutory cap violation: Penalty (PKR ${calculatedPenalty}) cannot exceed assessed tax (PKR ${aging.originalDemand}) under Section 3(4).`
+      );
+      return;
+    }
+
+    const orderNumber = `ETO/VHR/PFT/PEN/2026/${targetUnit.id.slice(-4)}`;
+    try {
+      const penaltyEntry = createPenaltyDemandEntry({
+        demandUnitId: targetUnit.demandUnit.id,
+        financialYearId: FINANCIAL_YEAR_2026_27,
+        originalDemandAmount: aging.originalDemand,
+        penaltyAmount: calculatedPenalty,
+        reason: penaltyReason,
+        orderNumber,
+        actorId: officer.id,
+        correlationId: `corr-pen-${Date.now()}`,
+        idempotencyKey: `idem-pen-${targetUnit.id}-${Date.now()}`
+      });
+
+      const updatedUnits = units.map((u) => {
+        if (u.id === targetUnit.id) {
+          return {
+            ...u,
+            ledgerEntries: [...u.ledgerEntries, penaltyEntry]
+          };
+        }
+        return u;
+      });
+
+      const newAudit: PilotAuditItem = {
+        id: `audit-${Date.now()}`,
+        eventType: "PENALTY_IMPOSED",
+        actorName: officer.name,
+        actorRole: officer.role,
+        target: targetUnit.legalName,
+        timestamp: new Date().toISOString(),
+        correlationId: penaltyEntry.correlationId,
+        details: `Statutory Penalty of PKR ${calculatedPenalty.toLocaleString()} (${penaltyPercentage}%) imposed under Sec 3(4) of Punjab Finance Act 1977 & Rule 10 (Order: ${orderNumber}). Reason: ${penaltyReason}`
+      };
+
+      syncState(updatedUnits, [newAudit, ...auditLogs]);
+      setShowPenaltyModal(false);
+      showToast(
+        "success",
+        `Statutory penalty of PKR ${calculatedPenalty.toLocaleString()} posted to demand ledger (Order: ${orderNumber}).`
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast("error", `Penalty imposition failed: ${msg}`);
+    }
+  };
+
+  // Handler: Confirm Land Revenue Certification
+  const handleConfirmRecoveryCertification = () => {
+    if (officer.role !== "ETO") {
+      showToast(
+        "error",
+        "Statutory violation: Only Assessing Authority (ETO) can certify recovery under Rule 12."
+      );
+      return;
+    }
+    const targetUnit = units.find((u) => u.id === recoveryTargetUnitId);
+    if (!targetUnit) return;
+
+    const certNo = `CERT-LRA-VEH/2026/${targetUnit.id.slice(-4)}`;
+    const updatedUnits = units.map((u) => {
+      if (u.id === targetUnit.id) {
+        return {
+          ...u,
+          isRecoveryCertified: true,
+          recoveryCertifiedAt: new Date().toISOString()
+        };
+      }
+      return u;
+    });
+
+    const newAudit: PilotAuditItem = {
+      id: `audit-${Date.now()}`,
+      eventType: "LAND_REVENUE_RECOVERY_CERTIFIED",
+      actorName: officer.name,
+      actorRole: officer.role,
+      target: targetUnit.legalName,
+      timestamp: new Date().toISOString(),
+      correlationId: `corr-lra-${Date.now()}`,
+      details: `Arrears certified for recovery as Arrears of Land Revenue under Rule 12 & Punjab Land Revenue Act 1967 (Certificate: ${certNo}). Forwarded to ${collectorDesignation}.`
+    };
+
+    syncState(updatedUnits, [newAudit, ...auditLogs]);
+    setShowRecoveryModal(false);
+    showToast(
+      "success",
+      `Recovery Certificate ${certNo} issued under Rule 12 & forwarded to ${collectorDesignation}.`
+    );
+  };
+
   if (!isLoaded) {
     return (
       <div style={{ padding: "3rem", textAlign: "center" }}>
@@ -900,6 +1127,16 @@ export default function HomePage() {
             className={`tab-btn ${activeTab === "REGISTER_PFT3" ? "active" : ""}`}
           >
             📋 Form PFT-3 (Assessment Register)
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === "DEFAULTERS"}
+            onClick={() => setActiveTab("DEFAULTERS")}
+            className={`tab-btn ${activeTab === "DEFAULTERS" ? "active" : ""}`}
+          >
+            ⚠️ Defaulters &amp; Recovery (Sec 3(4))
+            {metrics.defaultersPenaltyEligible + metrics.defaultersOverdue > 0 &&
+              ` (${metrics.defaultersPenaltyEligible + metrics.defaultersOverdue})`}
           </button>
           <button
             role="tab"
@@ -2332,6 +2569,417 @@ export default function HomePage() {
           </section>
         )}
 
+        {/* TAB: DEFAULTERS & STATUTORY RECOVERY UNDER SEC 3(4) / RULES 10 & 12 */}
+        {activeTab === "DEFAULTERS" && (
+          <section className="content-panel">
+            <div className="panel-header">
+              <div>
+                <h2>
+                  ⚠️ Defaulter Tracking, Statutory Penalties &amp; Recovery (بقایا جات و ریکوری زیر
+                  دفعہ 3(4))
+                </h2>
+                <p>
+                  Statutory arrears enforcement under Section 3(4) of Punjab Finance Act, 1977 and
+                  Rules 10 &amp; 12 of Punjab Professions &amp; Trades Tax Rules, 1977. Tracks
+                  30-day notice expiry, adjudicates penalties (up to 100%), and certifies recovery
+                  under the Punjab Land Revenue Act, 1967.
+                </p>
+              </div>
+
+              <div className="panel-actions">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => window.print()}
+                  title="Print Defaulters Roster"
+                >
+                  🖨️ Print Defaulter Roster
+                </button>
+              </div>
+            </div>
+
+            {/* Statutory Legal Authority Banner */}
+            <div
+              style={{
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                borderRadius: "8px",
+                padding: "0.85rem 1.25rem",
+                marginBottom: "1.5rem",
+                fontSize: "0.85rem",
+                color: "#991b1b",
+                display: "flex",
+                alignItems: "center",
+                gap: "1rem"
+              }}
+            >
+              <span style={{ fontSize: "1.5rem" }}>⚖️</span>
+              <div>
+                <strong>Section 3(4) Punjab Finance Act 1977 Statutory Mandate:</strong> Any person
+                who fails to pay tax by August 31st or within 30 days of Form P.F.T-1 service is
+                liable to a penalty <em>not exceeding the amount of assessed tax</em> as determined
+                by the Assessing Authority (ETO Tariq Mahmood), recoverable as Arrears of Land
+                Revenue under Rule 12.
+              </div>
+            </div>
+
+            {/* KPI Summary Cards */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
+                gap: "1rem",
+                marginBottom: "1.5rem"
+              }}
+            >
+              <div
+                style={{
+                  background: "#fffbeb",
+                  border: "1px solid #fde68a",
+                  padding: "0.85rem",
+                  borderRadius: "6px"
+                }}
+              >
+                <div style={{ fontSize: "0.75rem", color: "#92400e", textTransform: "uppercase" }}>
+                  Overdue (1-30 Days)
+                </div>
+                <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#b45309" }}>
+                  {metrics.defaultersOverdue}
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "#78350f" }}>Notice Grace Period</div>
+              </div>
+
+              <div
+                style={{
+                  background: "#fef2f2",
+                  border: "1px solid #fecaca",
+                  padding: "0.85rem",
+                  borderRadius: "6px"
+                }}
+              >
+                <div style={{ fontSize: "0.75rem", color: "#991b1b", textTransform: "uppercase" }}>
+                  Penalty Eligible (&gt;30 Days)
+                </div>
+                <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#dc2626" }}>
+                  {metrics.defaultersPenaltyEligible}
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "#7f1d1d" }}>Rule 10 SCN Required</div>
+              </div>
+
+              <div
+                style={{
+                  background: "#fdf4ff",
+                  border: "1px solid #f5d0fe",
+                  padding: "0.85rem",
+                  borderRadius: "6px"
+                }}
+              >
+                <div style={{ fontSize: "0.75rem", color: "#86198f", textTransform: "uppercase" }}>
+                  Penalties Imposed
+                </div>
+                <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#a21caf" }}>
+                  {metrics.defaultersPenalized}
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "#701a75" }}>
+                  Total: PKR {metrics.totalPenaltiesImposed.toLocaleString()}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  padding: "0.85rem",
+                  borderRadius: "6px"
+                }}
+              >
+                <div style={{ fontSize: "0.75rem", color: "#1e40af", textTransform: "uppercase" }}>
+                  Land Revenue Certified
+                </div>
+                <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#2563eb" }}>
+                  {metrics.defaultersRecoveryCertified}
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "#1e3a8a" }}>
+                  Warrant / Tehsildar Execution
+                </div>
+              </div>
+            </div>
+
+            {/* Filter Buttons */}
+            <div
+              style={{
+                display: "flex",
+                gap: "0.5rem",
+                flexWrap: "wrap",
+                marginBottom: "1rem"
+              }}
+            >
+              {(
+                [
+                  { id: "ALL", label: `All Defaulters (${defaulterUnits.length})` },
+                  {
+                    id: "OVERDUE_30_DAYS",
+                    label: `Overdue (1-30d) (${metrics.defaultersOverdue})`
+                  },
+                  {
+                    id: "PENALTY_ELIGIBLE",
+                    label: `Penalty Eligible (>30d) (${metrics.defaultersPenaltyEligible})`
+                  },
+                  { id: "PENALIZED", label: `Penalized (${metrics.defaultersPenalized})` },
+                  {
+                    id: "RECOVERY_CERTIFIED",
+                    label: `Land Revenue Certified (${metrics.defaultersRecoveryCertified})`
+                  }
+                ] as const
+              ).map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setDefaulterFilter(f.id)}
+                  className={`btn-secondary ${defaulterFilter === f.id ? "active" : ""}`}
+                  style={{
+                    fontSize: "0.8rem",
+                    padding: "0.4rem 0.75rem",
+                    background: defaulterFilter === f.id ? "#1e293b" : "#f8fafc",
+                    color: defaulterFilter === f.id ? "#ffffff" : "#334155",
+                    borderColor: defaulterFilter === f.id ? "#1e293b" : "#cbd5e1"
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Defaulters Table */}
+            <div className="table-responsive">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Demand No &amp; Assessee</th>
+                    <th>Category &amp; Rule</th>
+                    <th>Assessed Tax</th>
+                    <th>Penalty</th>
+                    <th>Total Outstanding</th>
+                    <th>Days Overdue</th>
+                    <th>Statutory Status</th>
+                    <th style={{ textAlign: "right" }}>Statutory Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {defaulterUnits.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        style={{ textAlign: "center", padding: "2rem", color: "#64748b" }}
+                      >
+                        ✓ No defaulting units found for the selected filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    defaulterUnits.map((u) => {
+                      const aging = computeDefaulterAging(
+                        u.ledgerEntries,
+                        "2026-08-31",
+                        undefined,
+                        u.isRecoveryCertified
+                      );
+                      const latestVersion = u.assessmentVersions[0];
+                      const assessedTax = latestVersion?.snapshot.taxAmount ?? 0;
+
+                      return (
+                        <tr key={u.id}>
+                          <td>
+                            <strong>{u.legalName}</strong>
+                            {u.tradeName && (
+                              <span
+                                style={{ display: "block", fontSize: "0.8rem", color: "#64748b" }}
+                              >
+                                {u.tradeName}
+                              </span>
+                            )}
+                            <span
+                              style={{
+                                display: "block",
+                                fontFamily: "monospace",
+                                fontSize: "0.75rem",
+                                color: "#0369a1"
+                              }}
+                            >
+                              {u.demandUnit.permanentDemandNo} | {u.identifierType}:{" "}
+                              {u.identifierValue}
+                            </span>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>
+                              Entry {u.statutoryRule.subclassification_code}
+                            </span>
+                            <span
+                              style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                            >
+                              {u.statutoryRule.category}
+                            </span>
+                          </td>
+                          <td>
+                            <strong>PKR {assessedTax.toLocaleString()}</strong>
+                          </td>
+                          <td>
+                            {aging.penaltyDemand > 0 ? (
+                              <strong style={{ color: "#dc2626" }}>
+                                PKR {aging.penaltyDemand.toLocaleString()}
+                              </strong>
+                            ) : (
+                              <span style={{ color: "#94a3b8" }}>—</span>
+                            )}
+                          </td>
+                          <td>
+                            <strong
+                              style={{
+                                color: "#b91c1c",
+                                fontSize: "1rem"
+                              }}
+                            >
+                              PKR {aging.remainingBalance.toLocaleString()}
+                            </strong>
+                          </td>
+                          <td>
+                            <span
+                              style={{
+                                fontWeight: 700,
+                                color:
+                                  aging.daysOverdue > 30
+                                    ? "#dc2626"
+                                    : aging.daysOverdue > 0
+                                      ? "#d97706"
+                                      : "#16a34a"
+                              }}
+                            >
+                              {aging.daysOverdue} days
+                            </span>
+                            <span
+                              style={{ display: "block", fontSize: "0.7rem", color: "#64748b" }}
+                            >
+                              Due: 31/08/2026
+                            </span>
+                          </td>
+                          <td>
+                            <span
+                              className={`badge ${
+                                aging.status === "RECOVERY_CERTIFIED"
+                                  ? "badge-rejected"
+                                  : aging.status === "PENALIZED"
+                                    ? "badge-pending"
+                                    : aging.status === "PENALTY_ELIGIBLE"
+                                      ? "badge-draft"
+                                      : "badge-approved"
+                              }`}
+                              style={{
+                                background:
+                                  aging.status === "RECOVERY_CERTIFIED"
+                                    ? "#fee2e2"
+                                    : aging.status === "PENALIZED"
+                                      ? "#fdf4ff"
+                                      : aging.status === "PENALTY_ELIGIBLE"
+                                        ? "#fef2f2"
+                                        : "#fffbeb",
+                                color:
+                                  aging.status === "RECOVERY_CERTIFIED"
+                                    ? "#991b1b"
+                                    : aging.status === "PENALIZED"
+                                      ? "#86198f"
+                                      : aging.status === "PENALTY_ELIGIBLE"
+                                        ? "#dc2626"
+                                        : "#b45309",
+                                borderColor: "transparent"
+                              }}
+                            >
+                              {aging.status.replace(/_/g, " ")}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: "right" }}>
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                gap: "0.35rem",
+                                flexWrap: "wrap",
+                                justifyContent: "flex-end"
+                              }}
+                            >
+                              <button
+                                type="button"
+                                className="btn-secondary"
+                                style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
+                                onClick={() => handleOpenNoticeModal(u.id)}
+                                title="Generate Rule 10 Notice to Show Cause"
+                              >
+                                📜 Show Cause
+                              </button>
+
+                              <button
+                                type="button"
+                                className="btn-secondary"
+                                style={{
+                                  fontSize: "0.75rem",
+                                  padding: "0.25rem 0.5rem",
+                                  borderColor: "#dc2626",
+                                  color: "#dc2626",
+                                  opacity: officer.role === "ETO" ? 1 : 0.5
+                                }}
+                                disabled={officer.role !== "ETO"}
+                                onClick={() => handleOpenPenaltyModal(u.id)}
+                                title={
+                                  officer.role === "ETO"
+                                    ? "Impose Statutory Penalty (Section 3(4))"
+                                    : "ETO Role Required to Impose Penalty"
+                                }
+                              >
+                                ⚠️ Impose Penalty
+                              </button>
+
+                              <button
+                                type="button"
+                                className="btn-secondary"
+                                style={{
+                                  fontSize: "0.75rem",
+                                  padding: "0.25rem 0.5rem",
+                                  borderColor: "#2563eb",
+                                  color: "#2563eb",
+                                  opacity: officer.role === "ETO" ? 1 : 0.5
+                                }}
+                                disabled={officer.role !== "ETO"}
+                                onClick={() => handleOpenRecoveryModal(u.id)}
+                                title={
+                                  officer.role === "ETO"
+                                    ? "Certify Arrears under Punjab Land Revenue Act (Rule 12)"
+                                    : "ETO Role Required to Certify Recovery"
+                                }
+                              >
+                                🏛️ Land Revenue
+                              </button>
+
+                              <button
+                                type="button"
+                                className="btn-secondary"
+                                style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
+                                onClick={() => {
+                                  setSelectedUnitId(u.id);
+                                  setActiveTab("FORM_PFT2");
+                                }}
+                                title="View updated 3-copy payment challan with penalty"
+                              >
+                                💳 Challan PFT-2
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
         {/* TAB 5: EPAY PUNJAB RECONCILIATION */}
         {activeTab === "EPAY" && (
           <section className="content-panel">
@@ -3139,6 +3787,646 @@ export default function HomePage() {
                 style={{ background: "#065f46", borderColor: "#065f46" }}
               >
                 Close Receipt Viewer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: NOTICE TO SHOW CAUSE FOR IMPOSITION OF PENALTY (RULE 10) */}
+      {showNoticeModal && showCauseNoticeData && noticeTargetUnit && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: "48rem" }}>
+            <div className="modal-header">
+              <h3>📜 Notice to Show Cause for Imposition of Penalty (زیر رول 10)</h3>
+              <button type="button" className="close-btn" onClick={() => setShowNoticeModal(false)}>
+                &times;
+              </button>
+            </div>
+
+            <div
+              className="modal-body"
+              style={{
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: "6px",
+                padding: "1.5rem",
+                fontFamily: "serif"
+              }}
+            >
+              <div
+                style={{
+                  textAlign: "center",
+                  borderBottom: "2px solid #0f172a",
+                  paddingBottom: "0.75rem",
+                  marginBottom: "1rem"
+                }}
+              >
+                <h4
+                  style={{
+                    margin: 0,
+                    textTransform: "uppercase",
+                    fontSize: "1.1rem",
+                    color: "#0f172a"
+                  }}
+                >
+                  Office of the Excise &amp; Taxation Officer / Assessing Authority, Vehari
+                </h4>
+                <div
+                  style={{
+                    fontWeight: 700,
+                    fontSize: "1rem",
+                    color: "#b91c1c",
+                    marginTop: "0.25rem"
+                  }}
+                >
+                  NOTICE TO SHOW CAUSE FOR IMPOSITION OF PENALTY
+                </div>
+                <div style={{ fontSize: "0.8rem", color: "#475569" }}>
+                  (Under Section 3(4) of the Punjab Finance Act, 1977 read with Rule 10 of the
+                  Punjab Professions &amp; Trades Tax Rules, 1977)
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "0.75rem",
+                  fontSize: "0.85rem",
+                  marginBottom: "1rem"
+                }}
+              >
+                <div>
+                  <strong>Notice No:</strong> {showCauseNoticeData.noticeNumber}
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <strong>Date of Issue:</strong> {showCauseNoticeData.noticeDate}
+                </div>
+                <div>
+                  <strong>Permanent Demand No:</strong> {showCauseNoticeData.demandNumber}
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <strong>Assessed Financial Year:</strong> 2026-2027
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: "#ffffff",
+                  padding: "1rem",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "6px",
+                  marginBottom: "1rem",
+                  fontSize: "0.85rem"
+                }}
+              >
+                <div>
+                  <strong>To (Assessee):</strong> {showCauseNoticeData.assesseeLegalName}
+                </div>
+                {showCauseNoticeData.assesseeTradeName && (
+                  <div>
+                    <strong>Trade Name:</strong> {showCauseNoticeData.assesseeTradeName}
+                  </div>
+                )}
+                <div>
+                  <strong>Identifier:</strong> {showCauseNoticeData.identifier}
+                </div>
+                <div>
+                  <strong>Business Address:</strong> {showCauseNoticeData.address}
+                </div>
+                <div>
+                  <strong>Statutory Entry:</strong> {showCauseNoticeData.scheduleEntry}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  fontSize: "0.85rem",
+                  lineHeight: 1.6,
+                  color: "#1e293b",
+                  marginBottom: "1rem"
+                }}
+              >
+                <p>
+                  WHEREAS you were assessed to Punjab Professional Tax amounting to{" "}
+                  <strong>PKR {showCauseNoticeData.originalTaxAmount.toLocaleString()}</strong> for
+                  the financial year 2026-2027, and Form P.F.T-1 (Notice of Demand) was duly served
+                  upon you;
+                </p>
+                <p>
+                  AND WHEREAS you have failed to pay the said assessed tax within thirty days of the
+                  service of notice or by the statutory due date of 31st August 2026, and a period
+                  of{" "}
+                  <strong style={{ color: "#b91c1c" }}>
+                    {showCauseNoticeData.daysOverdue} days
+                  </strong>{" "}
+                  has elapsed in default thereof;
+                </p>
+                <p>
+                  NOW, THEREFORE, under the provisions of{" "}
+                  <strong>Section 3(4) of the Punjab Finance Act, 1977</strong> read with{" "}
+                  <strong>Rule 10 of the Punjab Professions and Trades Tax Rules, 1977</strong>, you
+                  are hereby directed to SHOW CAUSE on or before:
+                </p>
+                <div
+                  style={{
+                    textAlign: "center",
+                    background: "#fef2f2",
+                    border: "1px solid #fecaca",
+                    padding: "0.5rem",
+                    borderRadius: "4px",
+                    fontWeight: 700,
+                    color: "#991b1b",
+                    margin: "0.75rem 0"
+                  }}
+                >
+                  HEARING DATE: {showCauseNoticeData.hearingDate} AT 10:00 AM
+                </div>
+                <p>
+                  as to why a penalty not exceeding the amount of tax (up to{" "}
+                  <strong>
+                    PKR {showCauseNoticeData.maximumPenaltyExposable.toLocaleString()}
+                  </strong>
+                  ) should not be imposed upon you, and why recovery proceedings under the Punjab
+                  Land Revenue Act, 1967 should not be initiated against you.
+                </p>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-end",
+                  borderTop: "1px dashed #94a3b8",
+                  paddingTop: "1rem"
+                }}
+              >
+                <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                  <div>
+                    <strong>SHA-256 Non-Repudiation Digest:</strong>
+                  </div>
+                  <div style={{ fontFamily: "monospace", fontSize: "0.7rem", color: "#047857" }}>
+                    {showCauseNoticeData.officialSha256}
+                  </div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>
+                    {showCauseNoticeData.assessingAuthorityName}
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "#475569" }}>
+                    {showCauseNoticeData.assessingAuthorityTitle}
+                  </div>
+                  <div style={{ fontSize: "0.7rem", color: "#64748b" }}>
+                    [Official Seal &amp; Signature]
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ justifyContent: "space-between" }}>
+              <button type="button" className="btn-secondary" onClick={() => window.print()}>
+                🖨️ Print Notice
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  const newAudit: PilotAuditItem = {
+                    id: `audit-${Date.now()}`,
+                    eventType: "SHOW_CAUSE_NOTICE_SERVED",
+                    actorName: officer.name,
+                    actorRole: officer.role,
+                    target: noticeTargetUnit.legalName,
+                    timestamp: new Date().toISOString(),
+                    correlationId: `corr-scn-${Date.now()}`,
+                    details: `Rule 10 Show Cause Notice issued (Notice No: ${showCauseNoticeData.noticeNumber}). Hearing scheduled for ${showCauseNoticeData.hearingDate}.`
+                  };
+                  syncState(units, [newAudit, ...auditLogs]);
+                  setShowNoticeModal(false);
+                  showToast(
+                    "success",
+                    `Rule 10 Show Cause Notice issued for ${noticeTargetUnit.legalName}.`
+                  );
+                }}
+              >
+                ✓ Record Service &amp; Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 6: IMPOSE STATUTORY PENALTY (SECTION 3(4) / RULE 10) */}
+      {showPenaltyModal && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: "34rem" }}>
+            <div className="modal-header">
+              <h3>⚠️ Adjudicate Statutory Penalty (Section 3(4))</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowPenaltyModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleImposePenalty}>
+              <div className="modal-body">
+                {(() => {
+                  const target = units.find((u) => u.id === penaltyTargetUnitId);
+                  if (!target) return null;
+                  const aging = computeDefaulterAging(target.ledgerEntries);
+                  const calculatedPenalty = Math.round(
+                    (aging.originalDemand * penaltyPercentage) / 100
+                  );
+                  const newTotalBalance = aging.remainingBalance + calculatedPenalty;
+
+                  return (
+                    <>
+                      <div
+                        style={{
+                          background: "#fef2f2",
+                          border: "1px solid #fecaca",
+                          padding: "0.85rem",
+                          borderRadius: "6px",
+                          marginBottom: "1rem"
+                        }}
+                      >
+                        <div style={{ fontWeight: 700, color: "#991b1b" }}>{target.legalName}</div>
+                        <div style={{ fontSize: "0.8rem", color: "#7f1d1d" }}>
+                          {target.demandUnit.permanentDemandNo} &bull; Entry{" "}
+                          {target.statutoryRule.subclassification_code}
+                        </div>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: "0.5rem",
+                            marginTop: "0.5rem",
+                            fontSize: "0.85rem"
+                          }}
+                        >
+                          <div>
+                            Original Assessed Tax:{" "}
+                            <strong>PKR {aging.originalDemand.toLocaleString()}</strong>
+                          </div>
+                          <div>
+                            Days Overdue:{" "}
+                            <strong style={{ color: "#dc2626" }}>{aging.daysOverdue} days</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Statutory Penalty Percentage (Max 100% per Section 3(4)):</label>
+                        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}>
+                          {[25, 50, 75, 100].map((pct) => (
+                            <button
+                              key={pct}
+                              type="button"
+                              onClick={() => setPenaltyPercentage(pct)}
+                              className={`btn-secondary ${penaltyPercentage === pct ? "active" : ""}`}
+                              style={{
+                                flex: 1,
+                                fontSize: "0.85rem",
+                                padding: "0.4rem",
+                                background: penaltyPercentage === pct ? "#dc2626" : "#f8fafc",
+                                color: penaltyPercentage === pct ? "#ffffff" : "#334155",
+                                borderColor: penaltyPercentage === pct ? "#dc2626" : "#cbd5e1"
+                              }}
+                            >
+                              {pct}%
+                            </button>
+                          ))}
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="100"
+                          value={penaltyPercentage}
+                          onChange={(e) => setPenaltyPercentage(Number(e.target.value))}
+                          style={{ width: "100%", accentColor: "#dc2626" }}
+                        />
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: "0.75rem",
+                            color: "#64748b"
+                          }}
+                        >
+                          <span>Min: 1%</span>
+                          <span>Selected: {penaltyPercentage}%</span>
+                          <span>
+                            Legal Ceiling: 100% (PKR {aging.originalDemand.toLocaleString()})
+                          </span>
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          background: "#fffbeb",
+                          border: "1px solid #fde68a",
+                          padding: "0.85rem",
+                          borderRadius: "6px",
+                          marginBottom: "1rem"
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: "0.9rem"
+                          }}
+                        >
+                          <span>Penalty Amount to Post:</span>
+                          <strong style={{ color: "#dc2626", fontSize: "1.1rem" }}>
+                            PKR {calculatedPenalty.toLocaleString()}
+                          </strong>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: "0.85rem",
+                            marginTop: "0.25rem",
+                            color: "#78350f"
+                          }}
+                        >
+                          <span>New Total Outstanding Balance:</span>
+                          <strong>PKR {newTotalBalance.toLocaleString()}</strong>
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Statutory Adjudication Rationale &amp; Legal Grounds:</label>
+                        <textarea
+                          rows={3}
+                          value={penaltyReason}
+                          onChange={(e) => setPenaltyReason(e.target.value)}
+                          required
+                          className="form-control"
+                          style={{ width: "100%", padding: "0.5rem" }}
+                        />
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  onClick={() => setShowPenaltyModal(false)}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  style={{ background: "#dc2626", borderColor: "#dc2626" }}
+                >
+                  Confirm Penalty Order (Sec 3(4))
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 7: LAND REVENUE RECOVERY CERTIFICATE (RULE 12) */}
+      {showRecoveryModal && recoveryCertData && recoveryTargetUnit && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: "48rem" }}>
+            <div className="modal-header">
+              <h3>🏛️ Certificate of Recovery as Arrears of Land Revenue (Rule 12)</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowRecoveryModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div
+              className="modal-body"
+              style={{
+                background: "#f8fafc",
+                border: "1px solid #cbd5e1",
+                borderRadius: "6px",
+                padding: "1.5rem",
+                fontFamily: "serif"
+              }}
+            >
+              <div
+                style={{
+                  textAlign: "center",
+                  borderBottom: "2px solid #0f172a",
+                  paddingBottom: "0.75rem",
+                  marginBottom: "1rem"
+                }}
+              >
+                <h4
+                  style={{
+                    margin: 0,
+                    textTransform: "uppercase",
+                    fontSize: "1.1rem",
+                    color: "#0f172a"
+                  }}
+                >
+                  Office of the Excise &amp; Taxation Officer / Assessing Authority, Vehari
+                </h4>
+                <div
+                  style={{
+                    fontWeight: 700,
+                    fontSize: "1rem",
+                    color: "#1e40af",
+                    marginTop: "0.25rem"
+                  }}
+                >
+                  CERTIFICATE OF RECOVERY AS ARREARS OF LAND REVENUE
+                </div>
+                <div style={{ fontSize: "0.8rem", color: "#475569" }}>
+                  (Under Rule 12 of Punjab Professions &amp; Trades Tax Rules, 1977 read with
+                  Sections 80 &amp; 81 of the Punjab Land Revenue Act, 1967)
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "0.75rem",
+                  fontSize: "0.85rem",
+                  marginBottom: "1rem"
+                }}
+              >
+                <div>
+                  <strong>Certificate No:</strong> {recoveryCertData.certificateNumber}
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <strong>Date of Certification:</strong> {recoveryCertData.issueDate}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: "#ffffff",
+                  padding: "1rem",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "6px",
+                  marginBottom: "1rem",
+                  fontSize: "0.85rem"
+                }}
+              >
+                <div>
+                  <strong>To:</strong> {recoveryCertData.collectorDesignation}
+                </div>
+                <div>
+                  <strong>District:</strong> {recoveryCertData.collectorDistrict}
+                </div>
+                <div style={{ marginTop: "0.5rem" }}>
+                  <strong>Defaulter Assessee:</strong> {recoveryCertData.assesseeLegalName}
+                </div>
+                {recoveryCertData.assesseeTradeName && (
+                  <div>
+                    <strong>Trade Name:</strong> {recoveryCertData.assesseeTradeName}
+                  </div>
+                )}
+                <div>
+                  <strong>CNIC / NTN:</strong> {recoveryCertData.identifier}
+                </div>
+                <div>
+                  <strong>Location:</strong> {recoveryCertData.address}
+                </div>
+                <div>
+                  <strong>Permanent Demand No:</strong> {recoveryCertData.demandNumber}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  padding: "1rem",
+                  borderRadius: "6px",
+                  marginBottom: "1rem"
+                }}
+              >
+                <div style={{ fontWeight: 700, color: "#1e3a8a", marginBottom: "0.5rem" }}>
+                  CERTIFIED BREAKDOWN OF OUTSTANDING GOVERNMENT ARREARS:
+                </div>
+                <table style={{ width: "100%", fontSize: "0.85rem", borderCollapse: "collapse" }}>
+                  <tbody>
+                    <tr style={{ borderBottom: "1px solid #bfdbfe" }}>
+                      <td style={{ padding: "0.35rem 0" }}>
+                        1. Principal Professional Tax Demand:
+                      </td>
+                      <td style={{ textAlign: "right", fontWeight: 700 }}>
+                        PKR {recoveryCertData.originalTaxAmount.toLocaleString()}
+                      </td>
+                    </tr>
+                    <tr style={{ borderBottom: "1px solid #bfdbfe" }}>
+                      <td style={{ padding: "0.35rem 0" }}>
+                        2. Statutory Default Penalty (Section 3(4)):
+                      </td>
+                      <td style={{ textAlign: "right", fontWeight: 700, color: "#dc2626" }}>
+                        PKR {recoveryCertData.penaltyAmount.toLocaleString()}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: "0.5rem 0", fontWeight: 700, color: "#1e40af" }}>
+                        TOTAL SUM RECOVERABLE AS ARREARS OF LAND REVENUE:
+                      </td>
+                      <td
+                        style={{
+                          textAlign: "right",
+                          fontWeight: 700,
+                          fontSize: "1.05rem",
+                          color: "#1e40af"
+                        }}
+                      >
+                        PKR {recoveryCertData.totalArrearsRecoverable.toLocaleString()}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "#1e3a8a" }}>
+                  <strong>Amount in Words:</strong> {recoveryCertData.totalArrearsWords}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  fontSize: "0.85rem",
+                  lineHeight: 1.6,
+                  color: "#1e293b",
+                  marginBottom: "1rem"
+                }}
+              >
+                <p>
+                  I, <strong>{recoveryCertData.assessingAuthorityName}</strong>, Excise &amp;
+                  Taxation Officer / Assessing Authority, Tehsil Vehari, do hereby certify that the
+                  sum of{" "}
+                  <strong>PKR {recoveryCertData.totalArrearsRecoverable.toLocaleString()}</strong>{" "}
+                  specified above is legally due from the defaulter on account of Punjab
+                  Professional Tax and statutory penalty.
+                </p>
+                <p>
+                  You are hereby requested and authorized under{" "}
+                  <strong>Sections 80 and 81 of the Punjab Land Revenue Act, 1967</strong> to
+                  recover the said certified sum as Arrears of Land Revenue by distraint, attachment
+                  and sale of movable or immovable property, or warrant of arrest, and deposit the
+                  proceeds into Provincial Account Head <strong>B01601</strong>.
+                </p>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-end",
+                  borderTop: "1px dashed #94a3b8",
+                  paddingTop: "1rem"
+                }}
+              >
+                <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                  <div>
+                    <strong>SHA-256 Non-Repudiation Digest:</strong>
+                  </div>
+                  <div style={{ fontFamily: "monospace", fontSize: "0.7rem", color: "#047857" }}>
+                    {recoveryCertData.officialSha256}
+                  </div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>
+                    {recoveryCertData.assessingAuthorityName}
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "#475569" }}>
+                    {recoveryCertData.assessingAuthorityTitle}
+                  </div>
+                  <div style={{ fontSize: "0.7rem", color: "#64748b" }}>
+                    [Official Seal of Assessing Authority]
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ justifyContent: "space-between" }}>
+              <button type="button" className="btn-secondary" onClick={() => window.print()}>
+                🖨️ Print Recovery Certificate
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ background: "#1e40af", borderColor: "#1e40af" }}
+                onClick={handleConfirmRecoveryCertification}
+              >
+                ✓ Issue &amp; Forward Certificate (Rule 12)
               </button>
             </div>
           </div>

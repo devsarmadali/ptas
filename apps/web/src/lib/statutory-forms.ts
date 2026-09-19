@@ -106,6 +106,46 @@ export interface FormPFT3RowModel {
   readonly lastPaymentDate?: string | undefined;
 }
 
+export interface ShowCausePenaltyNoticeModel {
+  readonly noticeNumber: string;
+  readonly noticeDate: string;
+  readonly demandNumber: string;
+  readonly hearingDate: string;
+  readonly assesseeLegalName: string;
+  readonly assesseeTradeName?: string | undefined;
+  readonly address: string;
+  readonly identifier: string;
+  readonly scheduleEntry: string;
+  readonly originalTaxAmount: number;
+  readonly daysOverdue: number;
+  readonly maximumPenaltyExposable: number;
+  readonly assessingAuthorityName: string;
+  readonly assessingAuthorityTitle: string;
+  readonly canonicalNoticeText: string;
+  readonly officialSha256: string;
+}
+
+export interface LandRevenueRecoveryCertificateModel {
+  readonly certificateNumber: string;
+  readonly issueDate: string;
+  readonly collectorDesignation: string;
+  readonly collectorDistrict: string;
+  readonly demandNumber: string;
+  readonly assesseeLegalName: string;
+  readonly assesseeTradeName?: string | undefined;
+  readonly address: string;
+  readonly identifier: string;
+  readonly originalTaxAmount: number;
+  readonly penaltyAmount: number;
+  readonly totalArrearsRecoverable: number;
+  readonly totalArrearsWords: string;
+  readonly recoverySection: string;
+  readonly assessingAuthorityName: string;
+  readonly assessingAuthorityTitle: string;
+  readonly canonicalCertificateText: string;
+  readonly officialSha256: string;
+}
+
 /**
  * Converts integer currency amount to official English words (Pakistani Rupees).
  */
@@ -278,7 +318,14 @@ export function generateFormPFT2(
   const isApproved = latestAssessment?.status === "APPROVED";
 
   const taxAmount = isTampered ? tamperedAmount : (latestVersion?.snapshot.taxAmount ?? 0);
-  const totalPayableWords = numberToWordsPkr(taxAmount);
+  let penalty = 0;
+  for (const entry of unit.ledgerEntries) {
+    if (entry.entryType === "PENALTY_DEMAND") {
+      penalty += entry.amount;
+    }
+  }
+  const totalPayable = taxAmount + penalty;
+  const totalPayableWords = numberToWordsPkr(totalPayable);
   const challanNumber = `PFT-2/VEH/2026/${unit.id.slice(-4)}`;
   const demandNo = unit.demandUnit.permanentDemandNo;
   const dueDate = "31/08/2026";
@@ -296,7 +343,7 @@ export function generateFormPFT2(
     `Identifier: ${unit.identifierType}: ${unit.identifierValue}`,
     `Address: ${unit.address}`,
     `Classification: Entry ${unit.statutoryRule.subclassification_code} - ${unit.statutoryRule.category}`,
-    `Detail of Tax: Current Tax: Rs. ${taxAmount} | Arrears: Rs. 0 | Penalty: Rs. 0 | Total Payable: Rs. ${taxAmount}`,
+    `Detail of Tax: Current Tax: Rs. ${taxAmount} | Arrears: Rs. 0 | Penalty: Rs. ${penalty} | Total Payable: Rs. ${totalPayable}`,
     `Amount in Words: ${totalPayableWords}`,
     `Assessment Information: Demand No: ${demandNo} | Circle: Circle-Vehari`,
     "Assessing Authority: Tariq Mahmood, ETO Tehsil Vehari",
@@ -322,8 +369,8 @@ export function generateFormPFT2(
     taxPayable: {
       currentTax: taxAmount,
       arrears: 0,
-      penalty: 0,
-      totalPayable: taxAmount,
+      penalty,
+      totalPayable,
       totalPayableWords
     },
     assessmentInfo: {
@@ -360,11 +407,136 @@ export function generateFormPFT2(
 
   return {
     isApproved,
-    displayAmount: taxAmount,
+    displayAmount: totalPayable,
     challanNumber,
     canonicalChallanText,
     officialSha256,
     copies: [copy1, copy2, copy3]
+  };
+}
+
+/**
+ * Generates the official Notice to Show Cause for Imposition of Penalty
+ * under Section 3(4) of the Punjab Finance Act, 1977 read with Rule 10 of
+ * the Punjab Professions and Trades Tax Rules, 1977.
+ */
+export function generateShowCausePenaltyNotice(
+  unit: StoredUnit,
+  customDaysOverdue?: number
+): ShowCausePenaltyNoticeModel {
+  const latestVersion = unit.assessmentVersions[0];
+  const taxAmount = latestVersion?.snapshot.taxAmount ?? 0;
+  const demandNo = unit.demandUnit.permanentDemandNo;
+  const noticeNumber = `SCN-PEN-VEH/2026/${unit.id.slice(-4)}`;
+  const noticeDate = new Date().toISOString().split("T")[0]!;
+
+  const hearingDateObj = new Date();
+  hearingDateObj.setDate(hearingDateObj.getDate() + 7);
+  const hearingDate = hearingDateObj.toISOString().split("T")[0]!;
+
+  const daysOverdue = customDaysOverdue ?? 35;
+  const maximumPenaltyExposable = taxAmount; // Section 3(4) statutory ceiling: not exceeding amount of tax
+
+  const canonicalNoticeText = [
+    "OFFICE OF THE EXCISE & TAXATION OFFICER / ASSESSING AUTHORITY, VEHARI",
+    "NOTICE TO SHOW CAUSE FOR IMPOSITION OF PENALTY",
+    "(Under Section 3(4) of the Punjab Finance Act, 1977 read with Rule 10 of the Punjab Professions & Trades Tax Rules, 1977)",
+    `Notice No: ${noticeNumber} | Date of Issue: ${noticeDate} | Demand Notice No: ${demandNo}`,
+    `Assessee Legal Name: ${unit.legalName} | Trade Name: ${unit.tradeName ?? unit.legalName}`,
+    `Identifier: ${unit.identifierType}: ${unit.identifierValue}`,
+    `Business Address: ${unit.address}`,
+    `Classification: Entry ${unit.statutoryRule.subclassification_code} - ${unit.statutoryRule.category}`,
+    `Assessed Tax Demand: PKR ${taxAmount} | Days Overdue: ${daysOverdue} days`,
+    `Maximum Statutory Penalty Imposable: PKR ${maximumPenaltyExposable} (100% of assessed tax)`,
+    `Hearing / Explanation Due Date: ${hearingDate} at 10:00 AM`,
+    "Authority: Tariq Mahmood, Excise & Taxation Officer / Assessing Authority, Tehsil Vehari"
+  ].join("\n");
+
+  const officialSha256 = computeContentSha256(canonicalNoticeText);
+
+  return {
+    noticeNumber,
+    noticeDate,
+    demandNumber: demandNo,
+    hearingDate,
+    assesseeLegalName: unit.legalName,
+    assesseeTradeName: unit.tradeName,
+    address: unit.address,
+    identifier: `${unit.identifierType}: ${unit.identifierValue}`,
+    scheduleEntry: `Entry ${unit.statutoryRule.subclassification_code} - ${unit.statutoryRule.category}`,
+    originalTaxAmount: taxAmount,
+    daysOverdue,
+    maximumPenaltyExposable,
+    assessingAuthorityName: "Tariq Mahmood",
+    assessingAuthorityTitle: "Excise & Taxation Officer / Assessing Authority, Tehsil Vehari",
+    canonicalNoticeText,
+    officialSha256
+  };
+}
+
+/**
+ * Generates the official Certificate of Recovery as Arrears of Land Revenue
+ * under Section 3(4) of the Punjab Finance Act 1977 read with Rule 12 of
+ * the Punjab Professions and Trades Tax Rules, 1977 and Sections 80/81 of
+ * the Punjab Land Revenue Act, 1967.
+ */
+export function generateLandRevenueRecoveryCertificate(
+  unit: StoredUnit,
+  customCollectorDesignation?: string
+): LandRevenueRecoveryCertificateModel {
+  const latestVersion = unit.assessmentVersions[0];
+  const taxAmount = latestVersion?.snapshot.taxAmount ?? 0;
+  let penalty = 0;
+  for (const entry of unit.ledgerEntries) {
+    if (entry.entryType === "PENALTY_DEMAND") {
+      penalty += entry.amount;
+    }
+  }
+  const totalArrearsRecoverable = taxAmount + penalty;
+  const totalArrearsWords = numberToWordsPkr(totalArrearsRecoverable);
+  const demandNo = unit.demandUnit.permanentDemandNo;
+  const certificateNumber = `CERT-LRA-VEH/2026/${unit.id.slice(-4)}`;
+  const issueDate = new Date().toISOString().split("T")[0]!;
+  const collectorDesignation =
+    customCollectorDesignation ?? "The Collector / Tehsildar (Recovery), District Vehari";
+
+  const canonicalCertificateText = [
+    "OFFICE OF THE EXCISE & TAXATION OFFICER / ASSESSING AUTHORITY, VEHARI",
+    "CERTIFICATE OF RECOVERY AS ARREARS OF LAND REVENUE",
+    "(Under Rule 12 of Punjab Professions & Trades Tax Rules, 1977 read with Sections 80 & 81 of the Punjab Land Revenue Act, 1967)",
+    `Certificate No: ${certificateNumber} | Issue Date: ${issueDate}`,
+    `To: ${collectorDesignation}`,
+    `Defaulter Assessee: ${unit.legalName} | Trade Name: ${unit.tradeName ?? unit.legalName}`,
+    `Identifier: ${unit.identifierType}: ${unit.identifierValue}`,
+    `Business Address: ${unit.address}`,
+    `Permanent Demand No: ${demandNo}`,
+    `Breakdown of Arrears: Principal Tax: PKR ${taxAmount} | Statutory Penalty: PKR ${penalty} | Total: PKR ${totalArrearsRecoverable}`,
+    `Total in Words: ${totalArrearsWords}`,
+    "Statutory Mandate: Recover the certified sum as Arrears of Land Revenue by distress, attachment and sale of property or warrant.",
+    "Certified By: Tariq Mahmood, Excise & Taxation Officer / Assessing Authority, Tehsil Vehari"
+  ].join("\n");
+
+  const officialSha256 = computeContentSha256(canonicalCertificateText);
+
+  return {
+    certificateNumber,
+    issueDate,
+    collectorDesignation,
+    collectorDistrict: "District Vehari",
+    demandNumber: demandNo,
+    assesseeLegalName: unit.legalName,
+    assesseeTradeName: unit.tradeName,
+    address: unit.address,
+    identifier: `${unit.identifierType}: ${unit.identifierValue}`,
+    originalTaxAmount: taxAmount,
+    penaltyAmount: penalty,
+    totalArrearsRecoverable,
+    totalArrearsWords,
+    recoverySection: "Rule 12 (1977 Rules) & Sec 80/81 (Punjab Land Revenue Act 1967)",
+    assessingAuthorityName: "Tariq Mahmood",
+    assessingAuthorityTitle: "Excise & Taxation Officer / Assessing Authority, Tehsil Vehari",
+    canonicalCertificateText,
+    officialSha256
   };
 }
 

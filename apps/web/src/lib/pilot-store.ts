@@ -57,6 +57,8 @@ export interface StoredUnit {
   readonly assessments: Assessment[];
   readonly assessmentVersions: AssessmentVersion<StoredUnitSnapshot>[];
   readonly ledgerEntries: DemandLedgerEntry[];
+  readonly isRecoveryCertified?: boolean | undefined;
+  readonly recoveryCertifiedAt?: string | undefined;
   readonly createdAt: string;
 }
 
