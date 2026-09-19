@@ -3,6 +3,25 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/supabase-client.d.ts",
+      "import": "./dist/supabase-client.js",
+      "default": "./dist/supabase-client.js"
+    },
+    "./types": {
+      "types": "./dist/supabase-types.d.ts",
+      "import": "./dist/supabase-types.js",
+      "default": "./dist/supabase-types.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "eslint src tests --max-warnings=0",

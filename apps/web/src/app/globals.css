@@ -477,6 +477,10 @@ textarea {
   border: 1px solid #e2e8f0;
 }
 
+.modal-card-lg {
+  max-width: 52rem;
+}
+
 .modal-header {
   padding: 1.25rem 1.5rem;
   background: #0d3822;
