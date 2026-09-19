@@ -21,6 +21,7 @@
 - Explicit production promotion and rollback
 - Region chosen after data-residency, latency, integration and contract review
 - Durable database, queue and storage are separate managed services
+- Domain policy transition: Staging and preview environments on Vercel permit dynamic tester identity domains to prevent lockout during stakeholder verification; production deployments enforce strict government domain (`@punjab.gov.pk`) bindings.
 
 ## Release flow
 

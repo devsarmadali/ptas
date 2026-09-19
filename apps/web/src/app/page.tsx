@@ -52,6 +52,14 @@ import {
   generateSurveyCsvTemplate,
   parseBulkSurveyCsv
 } from "../lib/bulk-survey";
+import {
+  OFFICIAL_OFFICERS_REGISTRY,
+  getOfficerProfileByEmail,
+  signInOfficer,
+  signOutOfficer,
+  subscribeToAuthChanges,
+  verifyOfficerAuthority
+} from "../lib/supabase-auth";
 
 export default function HomePage() {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -160,6 +168,16 @@ export default function HomePage() {
   const [bulkInputMode, setBulkInputMode] = useState<"FILE" | "PASTE">("FILE");
   const [isImportingSurvey, setIsImportingSurvey] = useState(false);
 
+  // Supabase Real Auth & Session State (Phase 5)
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authEmailInput, setAuthEmailInput] = useState("inspector.vehari@punjab.gov.pk");
+  const [authPasswordInput, setAuthPasswordInput] = useState("VehariInspector2026!");
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [authModeTab, setAuthModeTab] = useState<"QUICK" | "CREDENTIALS">("QUICK");
+  const [authenticatedSessionType, setAuthenticatedSessionType] = useState<"CLOUD" | "OFFLINE">(
+    "CLOUD"
+  );
+
   // New Unit Form State
   const [newLegalName, setNewLegalName] = useState("");
   const [newTradeName, setNewTradeName] = useState("");
@@ -220,6 +238,19 @@ export default function HomePage() {
       setAppealUnitId(firstId);
     }
     setIsLoaded(true);
+
+    // Subscribe to real Supabase Auth session updates
+    const sub = subscribeToAuthChanges((event, session) => {
+      if (session?.user?.email) {
+        const matching = getOfficerProfileByEmail(session.user.email);
+        setOfficer(matching);
+        setAuthenticatedSessionType("CLOUD");
+      }
+    });
+
+    return () => {
+      sub?.unsubscribe();
+    };
   }, []);
 
   // Synchronize state changes to localStorage
@@ -281,11 +312,57 @@ export default function HomePage() {
     }
   };
 
+  // Handler: Authenticate Officer via Supabase Auth (Phase 5)
+  const handleAuthenticateOfficer = async (email: string, password?: string) => {
+    setIsAuthenticating(true);
+    try {
+      const result = await signInOfficer(email, password);
+      if (result.success) {
+        setOfficer(result.officer);
+        setAuthenticatedSessionType(result.isCloudAuth ? "CLOUD" : "OFFLINE");
+        const auditItem: PilotAuditItem = {
+          id: `audit-auth-${Date.now()}`,
+          eventType: "OFFICER_SESSION_AUTHENTICATED",
+          actorName: result.officer.name,
+          actorRole: result.officer.role,
+          target: `${result.officer.name} (${result.officer.email})`,
+          timestamp: new Date().toISOString(),
+          correlationId: `corr-auth-${Date.now()}`,
+          details: `Authenticated session via ${result.isCloudAuth ? "Supabase Real Auth (JWT)" : "Offline Officer Keystore"} for ${result.officer.title} (${result.officer.jurisdictionName}). Enforced tier: ${result.officer.jurisdictionTier}.`
+        };
+        syncState(units, [auditItem, ...auditLogs], result.officer);
+        showToast("success", `🔑 ${result.message}`);
+        setShowAuthModal(false);
+      } else {
+        showToast("error", result.message);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast("error", `Authentication failed: ${msg}`);
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  const handleOfficerSignOut = async () => {
+    await signOutOfficer();
+    const auditItem: PilotAuditItem = {
+      id: `audit-auth-${Date.now()}`,
+      eventType: "OFFICER_SESSION_TERMINATED",
+      actorName: officer.name,
+      actorRole: officer.role,
+      target: `${officer.name} (${officer.email})`,
+      timestamp: new Date().toISOString(),
+      correlationId: `corr-auth-${Date.now()}`,
+      details: `Official session terminated for ${officer.name} (${officer.title}).`
+    };
+    syncState(units, [auditItem, ...auditLogs]);
+    showToast("info", `Signed out of ${officer.name}'s session.`);
+  };
+
   // Switch Active Officer
   const handleSwitchOfficer = (targetOfficer: MockOfficer) => {
-    setOfficer(targetOfficer);
-    syncState(units, auditLogs, targetOfficer);
-    showToast("info", `Switched session to ${targetOfficer.name} (${targetOfficer.badgeText})`);
+    handleAuthenticateOfficer(targetOfficer.email);
   };
 
   // All categories and rules
@@ -549,11 +626,9 @@ export default function HomePage() {
 
   // Handler: ETO Grants Statutory Approval
   const handleApproveAssessment = (unitId: string) => {
-    if (officer.role !== "ETO" && officer.role !== "DIRECTOR") {
-      showToast(
-        "error",
-        "Authority violation: Statutory approval strictly requires an ETO or Director."
-      );
+    const authCheck = verifyOfficerAuthority(officer, "APPROVE_ASSESSMENT");
+    if (!authCheck.authorized) {
+      showToast("error", authCheck.reason!);
       return;
     }
 
@@ -620,8 +695,9 @@ export default function HomePage() {
 
   // Handler: ETO Returns Assessment
   const handleOpenReturnModal = (unitId: string) => {
-    if (officer.role !== "ETO" && officer.role !== "DIRECTOR") {
-      showToast("error", "Authority violation: Returning assessments requires an ETO or Director.");
+    const authCheck = verifyOfficerAuthority(officer, "RETURN_ASSESSMENT");
+    if (!authCheck.authorized) {
+      showToast("error", authCheck.reason!);
       return;
     }
     setReturnTargetUnitId(unitId);
@@ -956,11 +1032,9 @@ export default function HomePage() {
   // Handler: Schedule Appellate Court Hearing (Director Shahid Nawaz)
   const handleScheduleHearing = (e: React.FormEvent) => {
     e.preventDefault();
-    if (officer.role !== "DIRECTOR") {
-      showToast(
-        "error",
-        "Only the Appellate Authority (Director Shahid Nawaz) can fix court hearings."
-      );
+    const authCheck = verifyOfficerAuthority(officer, "SCHEDULE_APPEAL_HEARING");
+    if (!authCheck.authorized) {
+      showToast("error", authCheck.reason!);
       return;
     }
 
@@ -1001,11 +1075,9 @@ export default function HomePage() {
   // Handler: Adjudicate Appeal & Issue Order (Director Shahid Nawaz)
   const handleAdjudicateAppeal = (e: React.FormEvent) => {
     e.preventDefault();
-    if (officer.role !== "DIRECTOR") {
-      showToast(
-        "error",
-        "Only the Appellate Authority (Director Shahid Nawaz) can adjudicate appeals."
-      );
+    const authCheck = verifyOfficerAuthority(officer, "ADJUDICATE_APPEAL");
+    if (!authCheck.authorized) {
+      showToast("error", authCheck.reason!);
       return;
     }
 
@@ -1528,46 +1600,106 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* Officer Session Switcher Bar */}
-      <nav className="officer-bar" aria-label="Officer Session Switcher">
+      {/* Official Government Session Bar (Phase 5) */}
+      <nav className="officer-bar" aria-label="Official Officer Session Switcher">
         <div className="officer-bar-inner">
-          <div className="officer-current">
-            <div className="officer-avatar">{officer.name.charAt(0)}</div>
+          <div
+            className="officer-current"
+            style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}
+          >
+            <div className="officer-avatar" style={{ fontSize: "1.2rem", fontWeight: 700 }}>
+              {officer.role === "INSPECTOR" ? "👤" : officer.role === "ETO" ? "⚖️" : "📊"}
+            </div>
             <div className="officer-details">
-              <strong>
-                {officer.name} ({officer.role})
-              </strong>
-              <span>
-                {officer.title} &bull; Jurisdiction: {officer.jurisdictionName}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <strong>{officer.name}</strong>
+                <span
+                  style={{
+                    background:
+                      officer.role === "INSPECTOR"
+                        ? "#e0f2fe"
+                        : officer.role === "ETO"
+                          ? "#fef3c7"
+                          : "#f3e8ff",
+                    color:
+                      officer.role === "INSPECTOR"
+                        ? "#0369a1"
+                        : officer.role === "ETO"
+                          ? "#92400e"
+                          : "#6b21a8",
+                    padding: "0.15rem 0.45rem",
+                    borderRadius: "4px",
+                    fontSize: "0.7rem",
+                    fontWeight: 700
+                  }}
+                >
+                  {officer.role}
+                </span>
+                <span
+                  style={{
+                    background: "#ecfdf5",
+                    color: "#065f46",
+                    border: "1px solid #a7f3d0",
+                    padding: "0.15rem 0.45rem",
+                    borderRadius: "4px",
+                    fontSize: "0.68rem",
+                    fontWeight: 600
+                  }}
+                >
+                  🟢{" "}
+                  {authenticatedSessionType === "CLOUD" ? "Supabase Auth" : "Authenticated Session"}
+                </span>
+              </div>
+              <span style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                {officer.title} &bull; Jurisdiction: <strong>{officer.jurisdictionName}</strong> (
+                {officer.jurisdictionTier}) &bull; {officer.email}
               </span>
             </div>
           </div>
 
-          <div className="role-switcher-group">
-            <span
+          <div
+            className="role-switcher-group"
+            style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+          >
+            <button
+              type="button"
+              onClick={() => setShowAuthModal(true)}
+              className="btn-secondary btn-sm"
               style={{
-                fontSize: "0.8rem",
-                fontWeight: 700,
-                color: "#64748b",
-                marginRight: "0.25rem"
+                backgroundColor: "#0d3822",
+                color: "#ffffff",
+                borderColor: "#0d3822",
+                fontWeight: 600
               }}
+              title="Open Official Officer Authentication Studio"
             >
-              Switch Mock Officer:
-            </span>
-            {MOCK_OFFICERS.map((o) => (
-              <button
-                key={o.id}
-                onClick={() => handleSwitchOfficer(o)}
-                className={`role-switch-btn ${officer.id === o.id ? "active" : ""}`}
-                title={`Log in as ${o.name} (${o.role})`}
-              >
-                {o.role === "INSPECTOR"
-                  ? "👤 Inspector Aslam"
-                  : o.role === "ETO"
-                    ? "⚖️ ETO Tariq"
-                    : "📊 Director Nawaz"}
-              </button>
-            ))}
+              🔑 Auth Studio / Switch Officer
+            </button>
+            <div style={{ display: "flex", gap: "0.25rem" }}>
+              {OFFICIAL_OFFICERS_REGISTRY.map((o) => (
+                <button
+                  key={o.id}
+                  onClick={() => handleSwitchOfficer(o)}
+                  className={`role-switch-btn ${officer.email === o.email ? "active" : ""}`}
+                  title={`Quick switch to ${o.name} (${o.role})`}
+                >
+                  {o.role === "INSPECTOR"
+                    ? "👤 Inspector"
+                    : o.role === "ETO"
+                      ? "⚖️ ETO"
+                      : "📊 Director"}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={handleOfficerSignOut}
+              className="btn-secondary btn-sm"
+              style={{ color: "#991b1b", borderColor: "#fecaca" }}
+              title="Sign out of current officer session"
+            >
+              🚪 Sign Out
+            </button>
           </div>
         </div>
       </nav>
@@ -7425,6 +7557,426 @@ export default function HomePage() {
                     : `📥 Ingest Valid Units (${bulkSurveyParseResult ? bulkSurveyParseResult.validRowsCount : 0})`}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 17: OFFICIAL OFFICER LOGIN & AUTHORIZATION STUDIO (PHASE 5) */}
+      {showAuthModal && (
+        <div className="modal-overlay">
+          <div
+            className="modal-card modal-card-xl"
+            style={{ display: "flex", flexDirection: "column", maxHeight: "92vh" }}
+          >
+            <div
+              className="modal-header"
+              style={{
+                background: "linear-gradient(135deg, #0d3822 0%, #1e3a8a 100%)",
+                borderBottom: "3px solid #b45309"
+              }}
+            >
+              <div>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: "1.15rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem"
+                  }}
+                >
+                  <span>🏛️</span>
+                  <span>سرکاری پورٹل لاگ اِن و سیشن کنٹرول</span>
+                </h3>
+                <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#d1fae5" }}>
+                  Official Officer Authentication &amp; Multi-Role Jurisdiction Studio (Supabase
+                  Auth)
+                </p>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setShowAuthModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ overflowY: "auto", padding: "1.25rem" }}>
+              {/* Tab Selector */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.5rem",
+                  borderBottom: "1px solid #e2e8f0",
+                  paddingBottom: "0.5rem",
+                  marginBottom: "0.75rem"
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setAuthModeTab("QUICK")}
+                  className="btn-secondary btn-sm"
+                  style={{
+                    backgroundColor: authModeTab === "QUICK" ? "#0d3822" : "#ffffff",
+                    color: authModeTab === "QUICK" ? "#ffffff" : "#334155",
+                    borderColor: authModeTab === "QUICK" ? "#0d3822" : "#cbd5e1",
+                    fontWeight: 600
+                  }}
+                >
+                  ⚡ Quick Switch Official Officer (سریع سرکاری سیشن)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuthModeTab("CREDENTIALS")}
+                  className="btn-secondary btn-sm"
+                  style={{
+                    backgroundColor: authModeTab === "CREDENTIALS" ? "#0d3822" : "#ffffff",
+                    color: authModeTab === "CREDENTIALS" ? "#ffffff" : "#334155",
+                    borderColor: authModeTab === "CREDENTIALS" ? "#0d3822" : "#cbd5e1",
+                    fontWeight: 600
+                  }}
+                >
+                  🔐 Email &amp; Password Sign In (پاس ورڈ لاگ اِن)
+                </button>
+              </div>
+
+              {/* View 1: Quick Switch Cards */}
+              {authModeTab === "QUICK" && (
+                <div>
+                  <p style={{ fontSize: "0.825rem", color: "#64748b", margin: "0 0 1rem 0" }}>
+                    Select an official Government officer profile below to authenticate an active
+                    session. Each officer role enforces distinct statutory legal powers and
+                    jurisdiction boundaries under the Punjab Finance Act 1977.
+                  </p>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(18rem, 1fr))",
+                      gap: "1rem"
+                    }}
+                  >
+                    {OFFICIAL_OFFICERS_REGISTRY.map((info) => {
+                      const isCurrent = officer.email === info.email;
+                      return (
+                        <div
+                          key={info.id}
+                          style={{
+                            border: isCurrent ? "2px solid #059669" : "1px solid #cbd5e1",
+                            background: isCurrent ? "#f0fdf4" : "#ffffff",
+                            borderRadius: "8px",
+                            padding: "1rem",
+                            display: "flex",
+                            flexDirection: "column",
+                            justifyContent: "space-between",
+                            boxShadow: isCurrent ? "0 4px 6px -1px rgba(5, 150, 105, 0.1)" : "none"
+                          }}
+                        >
+                          <div>
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "flex-start",
+                                marginBottom: "0.5rem"
+                              }}
+                            >
+                              <div>
+                                <span
+                                  style={{
+                                    fontSize: "0.7rem",
+                                    fontWeight: 700,
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.04em",
+                                    padding: "0.15rem 0.45rem",
+                                    borderRadius: "4px",
+                                    background:
+                                      info.role === "INSPECTOR"
+                                        ? "#e0f2fe"
+                                        : info.role === "ETO"
+                                          ? "#fef3c7"
+                                          : "#f3e8ff",
+                                    color:
+                                      info.role === "INSPECTOR"
+                                        ? "#0369a1"
+                                        : info.role === "ETO"
+                                          ? "#92400e"
+                                          : "#6b21a8"
+                                  }}
+                                >
+                                  {info.role} &bull; {info.jurisdictionTier}
+                                </span>
+                                <h4
+                                  style={{
+                                    margin: "0.4rem 0 0.15rem 0",
+                                    fontSize: "1rem",
+                                    color: "#0f172a"
+                                  }}
+                                >
+                                  {info.name}
+                                </h4>
+                                <div
+                                  style={{ fontSize: "0.8rem", color: "#475569", fontWeight: 500 }}
+                                >
+                                  {info.title}
+                                </div>
+                              </div>
+                              <span style={{ fontSize: "1.75rem" }}>
+                                {info.role === "INSPECTOR"
+                                  ? "👤"
+                                  : info.role === "ETO"
+                                    ? "⚖️"
+                                    : "📊"}
+                              </span>
+                            </div>
+
+                            <div
+                              style={{
+                                fontSize: "0.75rem",
+                                color: "#64748b",
+                                margin: "0.35rem 0 0.75rem 0"
+                              }}
+                            >
+                              <div>
+                                <strong>Jurisdiction:</strong> {info.jurisdictionName}
+                              </div>
+                              <div>
+                                <strong>Email:</strong> {info.email}
+                              </div>
+                            </div>
+
+                            <div style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "0.5rem" }}>
+                              <span
+                                style={{
+                                  fontSize: "0.7rem",
+                                  fontWeight: 700,
+                                  color: "#334155",
+                                  display: "block",
+                                  marginBottom: "0.25rem"
+                                }}
+                              >
+                                Enforced Legal Powers:
+                              </span>
+                              <ul
+                                style={{
+                                  margin: 0,
+                                  paddingLeft: "1.1rem",
+                                  fontSize: "0.72rem",
+                                  color: "#475569",
+                                  lineHeight: 1.4
+                                }}
+                              >
+                                {info.statutoryPowers.map((p, i) => (
+                                  <li key={i}>{p}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+
+                          <div style={{ marginTop: "1rem" }}>
+                            {isCurrent ? (
+                              <div
+                                style={{
+                                  textAlign: "center",
+                                  padding: "0.45rem",
+                                  background: "#dcfce7",
+                                  color: "#166534",
+                                  borderRadius: "6px",
+                                  fontSize: "0.8rem",
+                                  fontWeight: 700
+                                }}
+                              >
+                                ✓ Active Session
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={isAuthenticating}
+                                onClick={() =>
+                                  handleAuthenticateOfficer(info.email, info.defaultPassword)
+                                }
+                                className="btn-primary btn-sm"
+                                style={{
+                                  width: "100%",
+                                  justifyContent: "center",
+                                  backgroundColor: "#0d3822",
+                                  borderColor: "#0d3822"
+                                }}
+                              >
+                                {isAuthenticating
+                                  ? "Authenticating..."
+                                  : `🔐 Authenticate as ${info.name.split(" ")[0]}`}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* View 2: Email & Password Sign In */}
+              {authModeTab === "CREDENTIALS" && (
+                <div style={{ maxWidth: "28rem", margin: "0 auto", padding: "1rem 0" }}>
+                  <div
+                    style={{
+                      background: "#f0fdf4",
+                      border: "1px solid #bbf7d0",
+                      padding: "0.75rem 1rem",
+                      borderRadius: "6px",
+                      marginBottom: "1rem",
+                      fontSize: "0.8rem",
+                      color: "#166534"
+                    }}
+                  >
+                    <strong>Deployment Note:</strong> Sign in using any official Punjab Excise
+                    account or custom testing email on Vercel.
+                  </div>
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleAuthenticateOfficer(authEmailInput, authPasswordInput);
+                    }}
+                    style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+                  >
+                    <div className="form-group">
+                      <label htmlFor="authEmail">Email Address (ای میل):</label>
+                      <input
+                        type="email"
+                        id="authEmail"
+                        required
+                        className="form-control"
+                        placeholder="e.g. officer.vehari@punjab.gov.pk or yourname@gmail.com"
+                        value={authEmailInput}
+                        onChange={(e) => setAuthEmailInput(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="authPassword">Password (پاس ورڈ):</label>
+                      <input
+                        type="password"
+                        id="authPassword"
+                        required
+                        className="form-control"
+                        value={authPasswordInput}
+                        onChange={(e) => setAuthPasswordInput(e.target.value)}
+                      />
+                      <span style={{ fontSize: "0.725rem", color: "#64748b", marginTop: "0.2rem" }}>
+                        Default passwords: <code>VehariInspector2026!</code> &bull;{" "}
+                        <code>VehariETO2026!</code> &bull; <code>MultanDirector2026!</code>
+                      </span>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isAuthenticating}
+                      className="btn-primary"
+                      style={{
+                        width: "100%",
+                        justifyContent: "center",
+                        padding: "0.7rem",
+                        backgroundColor: "#0d3822"
+                      }}
+                    >
+                      {isAuthenticating
+                        ? "Verifying with Supabase Auth..."
+                        : "🔐 Sign In with Supabase Auth"}
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* Statutory Legal Powers Matrix */}
+              <div
+                style={{
+                  marginTop: "1.25rem",
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  padding: "1rem"
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "0.5rem"
+                  }}
+                >
+                  <strong style={{ fontSize: "0.85rem", color: "#0f172a" }}>
+                    📜 قانونی اختیارات کا چارٹ (Server-Enforced Statutory Authority Matrix —
+                    AGENTS.md)
+                  </strong>
+                  <span style={{ fontSize: "0.7rem", color: "#64748b" }}>
+                    Enforced at Domain Layer
+                  </span>
+                </div>
+
+                <div className="table-container" style={{ border: "1px solid #cbd5e1" }}>
+                  <table className="gov-table" style={{ fontSize: "0.78rem" }}>
+                    <thead>
+                      <tr>
+                        <th>Statutory Action / Feature</th>
+                        <th>Tax Inspector (Aslam)</th>
+                        <th>Assessing Authority / ETO (Tariq)</th>
+                        <th>Appellate Authority / Director (Shahid)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>Market Survey &amp; Registration (Rule 4 &amp; 5)</td>
+                        <td style={{ color: "#166534", fontWeight: 700 }}>✓ Maker Authority</td>
+                        <td style={{ color: "#166534" }}>✓ Authorized</td>
+                        <td style={{ color: "#166534" }}>✓ Oversight</td>
+                      </tr>
+                      <tr>
+                        <td>Statutory Assessment Approval (Rule 5(1))</td>
+                        <td style={{ color: "#b91c1c", fontWeight: 600 }}>✕ Blocked (Violation)</td>
+                        <td style={{ color: "#166534", fontWeight: 700 }}>✓ Statutory Approver</td>
+                        <td style={{ color: "#166534" }}>✓ Authorized</td>
+                      </tr>
+                      <tr>
+                        <td>Section 3(4) Penalty Imposition (Up to 100%)</td>
+                        <td style={{ color: "#b91c1c", fontWeight: 600 }}>✕ Blocked (Violation)</td>
+                        <td style={{ color: "#166534", fontWeight: 700 }}>✓ Exclusive ETO Power</td>
+                        <td style={{ color: "#b91c1c" }}>✕ Blocked (Appellate Only)</td>
+                      </tr>
+                      <tr>
+                        <td>Rule 12 Arrears of Land Revenue Certificate</td>
+                        <td style={{ color: "#b91c1c", fontWeight: 600 }}>✕ Blocked (Violation)</td>
+                        <td style={{ color: "#166534", fontWeight: 700 }}>✓ Exclusive ETO Power</td>
+                        <td style={{ color: "#b91c1c" }}>✕ Blocked (Appellate Only)</td>
+                      </tr>
+                      <tr>
+                        <td>Section 7 Judicial Appeals &amp; Decrees</td>
+                        <td style={{ color: "#b91c1c", fontWeight: 600 }}>✕ Blocked (Violation)</td>
+                        <td style={{ color: "#b91c1c", fontWeight: 600 }}>
+                          ✕ Conflict of Interest
+                        </td>
+                        <td style={{ color: "#166534", fontWeight: 700 }}>
+                          ✓ Sole Judicial Authority
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowAuthModal(false)}
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

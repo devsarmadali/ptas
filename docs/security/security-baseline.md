@@ -29,3 +29,16 @@
 - Centralized security/application/audit logs with correlation IDs
 - Alerting for authentication abuse, privilege changes, unusual exports, ledger exceptions and integration failures
 - Incident classification, containment, evidence preservation, notification and post-incident review
+
+## Authentication & Deployment Domain Policy
+
+### Pilot & Staging Phase (Vercel Deployments)
+
+- During the active pilot and staging evaluations hosted on Vercel preview/production URLs (`*.vercel.app`), officer email domain restrictions are intentionally relaxed.
+- Authenticated sessions allow authorized testers, department stakeholders, and evaluators using custom deployment domains, preview domains, or staging credentials to sign in and test statutory workflows across Inspector, ETO, and Director tiers without domain lockouts.
+- Role and jurisdiction authority guards (AGENTS.md Rule 2) remain fully enforced in code regardless of domain.
+
+### Full Production Rollout
+
+- Mandatory restriction to official departmental domains (`@punjab.gov.pk` or designated provincial government SSO / SAML 2.0 IdP).
+- Strict email domain whitelisting combined with organizational MFA and hardware token / OTP enforcement.
