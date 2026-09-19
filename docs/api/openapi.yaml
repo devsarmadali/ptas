@@ -167,6 +167,46 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Assessment" }
         default: { $ref: "#/components/responses/Problem" }
+  /assessments/{assessmentId}/revisions:
+    post:
+      operationId: createAssessmentRevision
+      parameters:
+        - $ref: "#/components/parameters/AssessmentId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revisionReason, snapshot]
+              properties:
+                revisionReason: { type: string, minLength: 5 }
+                snapshot: { type: object }
+      responses:
+        "201":
+          description: Revision version created in REVISION_DRAFT
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Assessment" }
+        default: { $ref: "#/components/responses/Problem" }
+    get:
+      operationId: listAssessmentVersions
+      parameters:
+        - $ref: "#/components/parameters/AssessmentId"
+      responses:
+        "200":
+          description: List of immutable versions for this assessment
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/AssessmentVersion" }
+        default: { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     sessionAuth:
@@ -292,11 +332,59 @@ components:
         nextCursor: { type: [string, "null"] }
     Assessment:
       type: object
-      required: [id, status, versionNo]
+      required: [id, taxpayerId, financialYearId, status, currentVersionNo]
       properties:
         id: { type: string, format: uuid }
-        status: { type: string }
+        taxpayerId: { type: string, format: uuid }
+        financialYearId: { type: string, format: uuid }
+        status:
+          {
+            type: string,
+            enum:
+              [
+                DRAFT,
+                SUBMITTED,
+                RETURNED,
+                HEARING_RECORDED,
+                APPROVED,
+                REVISION_DRAFT,
+                RESUBMITTED,
+                DECISION_REQUESTED,
+                WITHDRAWN,
+                ADJUSTED
+              ]
+          }
+        currentVersionNo: { type: integer, minimum: 1 }
+    AssessmentVersion:
+      type: object
+      required: [id, assessmentId, versionNo, status, snapshot, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        assessmentId: { type: string, format: uuid }
         versionNo: { type: integer, minimum: 1 }
+        status:
+          {
+            type: string,
+            enum:
+              [
+                DRAFT,
+                SUBMITTED,
+                RETURNED,
+                HEARING_RECORDED,
+                APPROVED,
+                REVISION_DRAFT,
+                RESUBMITTED,
+                DECISION_REQUESTED,
+                WITHDRAWN,
+                ADJUSTED
+              ]
+          }
+        snapshot: { type: object }
+        reason: { type: [string, "null"] }
+        approvedBy: { type: [string, "null"], format: uuid }
+        approvedAt: { type: [string, "null"], format: date-time }
+        approvalEvidenceId: { type: [string, "null"], format: uuid }
+        createdAt: { type: string, format: date-time }
     Problem:
       type: object
       required: [type, title, status, correlationId]

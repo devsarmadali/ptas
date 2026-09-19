@@ -8,3 +8,4 @@ export * from "./taxpayer.js";
 export * from "./duplicate-detector.js";
 export * from "./taxpayer-search.js";
 export * from "./legal-configuration.js";
+export * from "./assessment.js";

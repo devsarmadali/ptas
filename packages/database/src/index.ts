@@ -3,6 +3,7 @@ import postgres from "postgres";
 export * from "./audit-repository.js";
 export * from "./taxpayer-repository.js";
 export * from "./legal-configuration-repository.js";
+export * from "./assessment-repository.js";
 
 export function createDatabaseClient(databaseUrl: string) {
   if (!databaseUrl.startsWith("postgresql://")) {
