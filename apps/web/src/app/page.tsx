@@ -83,6 +83,19 @@ import {
   exportPft3RegisterCsv,
   exportReliefAdjustmentsCsv
 } from "../lib/mis-analytics";
+import { StatutoryQrCode } from "../components/StatutoryQrCode";
+import {
+  type CitizenPaymentSimulationResult,
+  type DocumentVerificationResult,
+  type SelfAssessmentCriteriaInput,
+  type SelfAssessmentResult,
+  type TaxpayerLiabilityLookupResult,
+  calculateRule4SelfAssessment,
+  generate17DigitEPayPsid,
+  lookupTaxpayerLiability,
+  simulateCitizenPayment,
+  verifyStatutoryDocument
+} from "../lib/public-portal";
 
 export default function HomePage() {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -92,6 +105,7 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<
     | "UNITS"
     | "MIS_HUB"
+    | "PUBLIC_PORTAL"
     | "ASSESSMENTS"
     | "FORM_PFT1"
     | "FORM_PFT2"
@@ -302,6 +316,36 @@ export default function HomePage() {
   // Document Studio Tamper State
   const [isTampered, setIsTampered] = useState(false);
   const [tamperedAmount, setTamperedAmount] = useState(100);
+
+  // Phase 8 State: Public Assessee Portal & Real-Time QR Verification Desk
+  const [portalVerificationInput, setPortalVerificationInput] = useState("");
+  const [portalVerificationResult, setPortalVerificationResult] =
+    useState<DocumentVerificationResult | null>(null);
+  const [portalSearchQuery, setPortalSearchQuery] = useState("");
+  const [portalSearchResult, setPortalSearchResult] =
+    useState<TaxpayerLiabilityLookupResult | null>(null);
+  const [portalCalcCriteria, setPortalCalcCriteria] = useState<SelfAssessmentCriteriaInput>({
+    categoryCode: "3",
+    employeeCount: 12,
+    isMetropolitan: false
+  });
+  const [portalCalcResult, setPortalCalcResult] = useState<SelfAssessmentResult>(() =>
+    calculateRule4SelfAssessment({
+      categoryCode: "3",
+      employeeCount: 12,
+      isMetropolitan: false
+    })
+  );
+
+  // Citizen Digital Payment Simulation Modal
+  const [showCitizenPaymentModal, setShowCitizenPaymentModal] = useState(false);
+  const [citizenPayUnitId, setCitizenPayUnitId] = useState("");
+  const [citizenPayAmount, setCitizenPayAmount] = useState<number>(4000);
+  const [citizenPayChannel, setCitizenPayChannel] = useState<"EPAY_PUNJAB" | "CHALLAN_32A">(
+    "EPAY_PUNJAB"
+  );
+  const [citizenPaymentSuccess, setCitizenPaymentSuccess] =
+    useState<CitizenPaymentSimulationResult | null>(null);
 
   // Notification Toast
   const [notification, setNotification] = useState<{
@@ -1997,6 +2041,108 @@ export default function HomePage() {
     showToast("success", `Rule 5 order ${orderNumber} recorded (${decision}).`);
   };
 
+  // Phase 8: Public Assessee Portal & Real-Time QR Verification Handlers
+  const handleVerifyDocument = (overrideInput?: string) => {
+    const input = overrideInput ?? portalVerificationInput;
+    if (!input.trim()) {
+      showToast("error", "Please enter a document reference or scan a QR payload.");
+      return;
+    }
+    const result = verifyStatutoryDocument(input, units, clearanceCertificates);
+    setPortalVerificationResult(result);
+    if (result.isValid) {
+      showToast("success", `✓ Authentic: ${result.title}`);
+    } else {
+      showToast("error", `Notice: ${result.title}`);
+    }
+  };
+
+  const handleSearchCitizenTaxpayer = (overrideQuery?: string) => {
+    const query = overrideQuery ?? portalSearchQuery;
+    if (!query.trim()) {
+      showToast("error", "Please enter a CNIC, NTN, or Permanent Demand Number.");
+      return;
+    }
+    const res = lookupTaxpayerLiability(query, units);
+    setPortalSearchResult(res);
+    if (res) {
+      showToast("success", `Found taxpayer record for ${res.legalName}`);
+    } else {
+      showToast("error", `No taxpayer found matching "${query}" in Circle-Vehari.`);
+    }
+  };
+
+  const handleUpdateSelfAssessment = (criteria: Partial<SelfAssessmentCriteriaInput>) => {
+    const updated: SelfAssessmentCriteriaInput = {
+      ...portalCalcCriteria,
+      ...criteria
+    };
+    setPortalCalcCriteria(updated);
+    const computed = calculateRule4SelfAssessment(updated);
+    setPortalCalcResult(computed);
+  };
+
+  const handleOpenCitizenPaymentModal = (targetUnitId?: string, defaultAmount?: number) => {
+    const unit = units.find((u) => u.id === targetUnitId) ?? units[0];
+    if (!unit) return;
+    const balance = computeLedgerBalance(unit.ledgerEntries);
+    setCitizenPayUnitId(unit.id);
+    setCitizenPayAmount(
+      defaultAmount ?? (balance > 0 ? balance : unit.statutoryRule.annual_rate_pkr)
+    );
+    setCitizenPaymentSuccess(null);
+    setShowCitizenPaymentModal(true);
+  };
+
+  const handleExecuteCitizenPayment = () => {
+    if (!citizenPayUnitId) return;
+    if (citizenPayAmount <= 0) {
+      showToast("error", "Deposit amount must be greater than zero.");
+      return;
+    }
+
+    try {
+      const currentState = loadPilotState();
+      currentState.currentOfficer = officer;
+      currentState.units = units;
+      currentState.auditLogs = auditLogs;
+      currentState.clearanceCertificates = clearanceCertificates;
+      currentState.discontinuances = discontinuances;
+      currentState.refundAdjustments = refundAdjustments;
+
+      const { result, updatedUnits, updatedAudits, updatedClearanceCerts } = simulateCitizenPayment(
+        citizenPayUnitId,
+        citizenPayAmount,
+        citizenPayChannel,
+        currentState
+      );
+
+      syncState(
+        updatedUnits,
+        updatedAudits,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        updatedClearanceCerts
+      );
+      setCitizenPaymentSuccess(result);
+
+      if (portalSearchResult && portalSearchResult.unit.id === citizenPayUnitId) {
+        const refreshed = lookupTaxpayerLiability(portalSearchResult.identifierValue, updatedUnits);
+        setPortalSearchResult(refreshed);
+      }
+
+      showToast(
+        "success",
+        `Payment of PKR ${citizenPayAmount.toLocaleString()} settled under PSID ${result.psid}!`
+      );
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      showToast("error", `Payment simulation failed: ${errMsg}`);
+    }
+  };
+
   if (!isLoaded) {
     return (
       <div style={{ padding: "3rem", textAlign: "center" }}>
@@ -2261,6 +2407,22 @@ export default function HomePage() {
             }}
           >
             📊 Executive MIS Hub
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === "PUBLIC_PORTAL"}
+            onClick={() => setActiveTab("PUBLIC_PORTAL")}
+            className={`tab-btn ${activeTab === "PUBLIC_PORTAL" ? "active" : ""}`}
+            style={{
+              background:
+                activeTab === "PUBLIC_PORTAL"
+                  ? "linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)"
+                  : undefined,
+              color: activeTab === "PUBLIC_PORTAL" ? "#ffffff" : undefined,
+              fontWeight: 700
+            }}
+          >
+            🌐 Public Assessee Portal &amp; QR Desk
           </button>
           <button
             role="tab"
@@ -3056,12 +3218,13 @@ export default function HomePage() {
                   </p>
                 </div>
 
-                {/* Metadata Row */}
+                {/* Metadata Row with Statutory QR Code */}
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
+                    gridTemplateColumns: "1fr auto 1fr",
                     gap: "1rem",
+                    alignItems: "center",
                     marginBottom: "1.25rem",
                     fontSize: "0.9rem"
                   }}
@@ -3073,6 +3236,19 @@ export default function HomePage() {
                     <p style={{ margin: "0.25rem 0" }}>
                       <strong>Tax No:</strong> {formPFT1Data.taxNumber}
                     </p>
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <StatutoryQrCode
+                      payload={formPFT1Data.qrPayload}
+                      size={90}
+                      label="Scan to Verify PFT-1"
+                      subtitle={formPFT1Data.demandNumber}
+                      onScanOrClick={(payload) => {
+                        setPortalVerificationInput(payload);
+                        handleVerifyDocument(payload);
+                        setActiveTab("PUBLIC_PORTAL");
+                      }}
+                    />
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <p style={{ margin: "0.25rem 0" }}>
@@ -3570,6 +3746,21 @@ export default function HomePage() {
                         <strong>ETO:</strong> {copy.assessmentInfo.etoName} (
                         {copy.assessmentInfo.etoTitle})
                       </p>
+                    </div>
+
+                    {/* Official Statutory QR Code for Challan Copy */}
+                    <div style={{ textAlign: "center", margin: "0.5rem 0" }}>
+                      <StatutoryQrCode
+                        payload={copy.qrPayload}
+                        size={80}
+                        label="Scan to Verify Challan"
+                        subtitle={copy.bankUse.challanSerial}
+                        onScanOrClick={(payload) => {
+                          setPortalVerificationInput(payload);
+                          handleVerifyDocument(payload);
+                          setActiveTab("PUBLIC_PORTAL");
+                        }}
+                      />
                     </div>
 
                     {/* For Bank's Use Only */}
@@ -6945,6 +7136,848 @@ export default function HomePage() {
                       style={{ flex: 1 }}
                     >
                       🖨️ Print Report
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* TAB: PUBLIC ASSESSEE PORTAL & REAL-TIME QR VERIFICATION DESK */}
+        {activeTab === "PUBLIC_PORTAL" && (
+          <section className="tab-panel" aria-label="Public Assessee Portal">
+            {/* Citizen Welcome Banner */}
+            <div
+              style={{
+                background: "linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%)",
+                borderRadius: "10px",
+                padding: "1.5rem",
+                color: "#ffffff",
+                marginBottom: "1.5rem",
+                boxShadow: "0 4px 12px rgba(30, 58, 138, 0.15)",
+                display: "flex",
+                flexWrap: "wrap",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "1rem"
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    marginBottom: "0.35rem"
+                  }}
+                >
+                  <span style={{ fontSize: "1.5rem" }}>🌐</span>
+                  <h3 style={{ margin: 0, fontSize: "1.25rem", color: "#ffffff", fontWeight: 700 }}>
+                    Punjab Professional Tax — Public Assessee Portal &amp; Verification Desk
+                  </h3>
+                  <span
+                    style={{
+                      background: "rgba(255, 255, 255, 0.2)",
+                      padding: "0.2rem 0.5rem",
+                      borderRadius: "4px",
+                      fontSize: "0.75rem",
+                      fontWeight: 600
+                    }}
+                  >
+                    Circle-Vehari &bull; Citizen Self-Service
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: "0.85rem", opacity: 0.9, maxWidth: "52rem" }}>
+                  Official public access facility governed by Section 15 of the Punjab Professional
+                  Tax Digitization Plan and Rule 4 of the 1977 Rules. Verify statutory instruments,
+                  lookup real-time liabilities by CNIC/NTN, calculate statutory taxes across all 11
+                  categories, and simulate instant digital settlements via ePay Punjab / 1Link.
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => handleOpenCitizenPaymentModal()}
+                  className="btn-primary"
+                  style={{
+                    backgroundColor: "#10b981",
+                    borderColor: "#059669",
+                    fontWeight: 700
+                  }}
+                >
+                  💳 Quick ePay Deposit
+                </button>
+              </div>
+            </div>
+
+            {/* Desk 1: Universal QR & Statutory Document Authenticator */}
+            <div className="content-panel" style={{ marginBottom: "1.5rem" }}>
+              <div className="panel-header">
+                <div>
+                  <h4 style={{ margin: 0, color: "#0d3822", fontSize: "1.1rem" }}>
+                    🔍 Desk 1: Universal QR Code &amp; Statutory Document Authenticator
+                  </h4>
+                  <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#64748b" }}>
+                    Instant multi-document authentication for Form P.F.T-1 (Demand Notice), Form
+                    P.F.T-2 (3-Copy Challan), and Form P.F.T-5 (Tax Clearance Certificate) against
+                    live demand ledgers.
+                  </p>
+                </div>
+              </div>
+
+              <div
+                style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" }}
+              >
+                <input
+                  type="text"
+                  placeholder="Scan QR code payload, or enter Certificate / Notice / Challan Number (e.g. PFT-1, PFT-2, PFT-CC)..."
+                  className="form-control"
+                  style={{ flex: 1, minWidth: "20rem" }}
+                  value={portalVerificationInput}
+                  onChange={(e) => setPortalVerificationInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleVerifyDocument();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleVerifyDocument()}
+                  className="btn-primary"
+                  style={{ backgroundColor: "#1e3a8a", borderColor: "#1e40af" }}
+                >
+                  Verify Document
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPortalVerificationInput("");
+                    setPortalVerificationResult(null);
+                  }}
+                  className="btn-secondary"
+                >
+                  Clear
+                </button>
+              </div>
+
+              {/* Sample QR Scan Demo Buttons */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.5rem",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  padding: "0.75rem",
+                  background: "#f8fafc",
+                  borderRadius: "6px",
+                  border: "1px solid #e2e8f0",
+                  marginBottom: "1rem"
+                }}
+              >
+                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569" }}>
+                  Quick Demonstration Scans:
+                </span>
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  onClick={() => {
+                    const unit = units.find((u) => u.id === "unit-vehari-cotton-01");
+                    if (unit) {
+                      const p1 = generateFormPFT1(unit);
+                      setPortalVerificationInput(p1.qrPayload);
+                      handleVerifyDocument(p1.qrPayload);
+                    }
+                  }}
+                >
+                  📱 Scan Form PFT-1 (Vehari Cotton)
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  onClick={() => {
+                    const unit = units.find((u) => u.id === "unit-kisan-pesticides-02");
+                    if (unit) {
+                      const p2 = generateFormPFT2(unit);
+                      setPortalVerificationInput(p2.qrPayload);
+                      handleVerifyDocument(p2.qrPayload);
+                    }
+                  }}
+                >
+                  📱 Scan Form PFT-2 Challan (Kisan Pesticides)
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  onClick={() => {
+                    if (clearanceCertificates.length > 0) {
+                      const cert = clearanceCertificates[0]!;
+                      setPortalVerificationInput(cert.qrPayload);
+                      handleVerifyDocument(cert.qrPayload);
+                    } else {
+                      showToast("info", "No clearance certificates issued yet.");
+                    }
+                  }}
+                >
+                  📱 Scan Form PFT-5 Clearance Certificate
+                </button>
+              </div>
+
+              {/* Verification Output Card */}
+              {portalVerificationResult && (
+                <div
+                  style={{
+                    border: `2px solid ${
+                      portalVerificationResult.verificationStatus === "AUTHENTIC_VALID"
+                        ? "#10b981"
+                        : portalVerificationResult.verificationStatus === "REVOKED_ARREARS_PENDING"
+                          ? "#ef4444"
+                          : portalVerificationResult.verificationStatus === "UNAPPROVED_DRAFT"
+                            ? "#f59e0b"
+                            : "#64748b"
+                    }`,
+                    borderRadius: "8px",
+                    padding: "1.25rem",
+                    background:
+                      portalVerificationResult.verificationStatus === "AUTHENTIC_VALID"
+                        ? "#f0fdf4"
+                        : portalVerificationResult.verificationStatus === "REVOKED_ARREARS_PENDING"
+                          ? "#fef2f2"
+                          : portalVerificationResult.verificationStatus === "UNAPPROVED_DRAFT"
+                            ? "#fffbeb"
+                            : "#f8fafc"
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      flexWrap: "wrap",
+                      gap: "1rem",
+                      marginBottom: "0.75rem"
+                    }}
+                  >
+                    <div>
+                      <span
+                        className={`badge ${
+                          portalVerificationResult.verificationStatus === "AUTHENTIC_VALID"
+                            ? "badge-approved"
+                            : portalVerificationResult.verificationStatus ===
+                                "REVOKED_ARREARS_PENDING"
+                              ? "badge-returned"
+                              : portalVerificationResult.verificationStatus === "UNAPPROVED_DRAFT"
+                                ? "badge-draft"
+                                : "badge-inactive"
+                        }`}
+                        style={{ fontSize: "0.75rem", fontWeight: 700 }}
+                      >
+                        {portalVerificationResult.verificationStatus === "AUTHENTIC_VALID"
+                          ? "✓ OFFICIAL AUTHENTIC INSTRUMENT"
+                          : portalVerificationResult.verificationStatus ===
+                              "REVOKED_ARREARS_PENDING"
+                            ? "❌ INVALID / ARREARS PENDING"
+                            : portalVerificationResult.verificationStatus === "UNAPPROVED_DRAFT"
+                              ? "⚠️ UNAPPROVED DRAFT"
+                              : "DOCUMENT NOT FOUND"}
+                      </span>
+                      <h4
+                        style={{
+                          margin: "0.5rem 0 0.25rem",
+                          color: "#0f172a",
+                          fontSize: "1.15rem"
+                        }}
+                      >
+                        {portalVerificationResult.title}
+                      </h4>
+                      <p style={{ margin: 0, fontSize: "0.85rem", color: "#334155" }}>
+                        {portalVerificationResult.message}
+                      </p>
+                    </div>
+
+                    {portalVerificationResult.qrPayload && (
+                      <StatutoryQrCode
+                        payload={portalVerificationResult.qrPayload}
+                        size={85}
+                        label="Verified Seal"
+                        subtitle={portalVerificationResult.documentReference}
+                      />
+                    )}
+                  </div>
+
+                  {portalVerificationResult.documentType !== "UNKNOWN" && (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
+                        gap: "0.75rem",
+                        marginTop: "1rem",
+                        paddingTop: "1rem",
+                        borderTop: "1px solid rgba(0,0,0,0.08)",
+                        fontSize: "0.8rem"
+                      }}
+                    >
+                      <div>
+                        <span style={{ color: "#64748b", display: "block" }}>Document Ref:</span>
+                        <strong>{portalVerificationResult.documentReference}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: "#64748b", display: "block" }}>Assessee Name:</span>
+                        <strong>{portalVerificationResult.unitName}</strong>
+                        {portalVerificationResult.tradeName && (
+                          <span style={{ display: "block", color: "#475569" }}>
+                            ({portalVerificationResult.tradeName})
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <span style={{ color: "#64748b", display: "block" }}>Identifier:</span>
+                        <strong>{portalVerificationResult.identifier}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: "#64748b", display: "block" }}>Classification:</span>
+                        <strong>{portalVerificationResult.scheduleEntry}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: "#64748b", display: "block" }}>Assessed Tax:</span>
+                        <strong>
+                          PKR {portalVerificationResult.assessedAmount.toLocaleString()}
+                        </strong>
+                      </div>
+                      <div>
+                        <span style={{ color: "#64748b", display: "block" }}>
+                          Live Ledger Arrears:
+                        </span>
+                        <strong
+                          style={{
+                            color:
+                              portalVerificationResult.outstandingBalance > 0
+                                ? "#b91c1c"
+                                : "#166534"
+                          }}
+                        >
+                          PKR {portalVerificationResult.outstandingBalance.toLocaleString()}
+                        </strong>
+                      </div>
+                      <div style={{ gridColumn: "span 2" }}>
+                        <span style={{ color: "#64748b", display: "block" }}>
+                          Official SHA-256 Digest:
+                        </span>
+                        <code
+                          style={{
+                            fontSize: "0.7rem",
+                            background: "#e2e8f0",
+                            padding: "0.15rem 0.35rem",
+                            borderRadius: "3px"
+                          }}
+                        >
+                          {portalVerificationResult.officialSha256}
+                        </code>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Desk 2: Citizen Taxpayer Liability & Challan Search */}
+            <div className="content-panel" style={{ marginBottom: "1.5rem" }}>
+              <div className="panel-header">
+                <div>
+                  <h4 style={{ margin: 0, color: "#0d3822", fontSize: "1.1rem" }}>
+                    💳 Desk 2: Citizen Tax Liability &amp; Challan Search
+                  </h4>
+                  <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#64748b" }}>
+                    Search and inspect outstanding professional tax assessments, payment receipts,
+                    and ePay challans by CNIC, NTN, or Permanent Demand Number.
+                  </p>
+                </div>
+              </div>
+
+              <div
+                style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" }}
+              >
+                <input
+                  type="text"
+                  placeholder="Enter CNIC (e.g. 36601-2948192-3), NTN (e.g. 7412983-1), or PDN (e.g. PDN-VEH-2026-0001)..."
+                  className="form-control"
+                  style={{ flex: 1, minWidth: "20rem" }}
+                  value={portalSearchQuery}
+                  onChange={(e) => setPortalSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleSearchCitizenTaxpayer();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleSearchCitizenTaxpayer()}
+                  className="btn-primary"
+                  style={{ backgroundColor: "#065f46", borderColor: "#047857" }}
+                >
+                  Search Records
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPortalSearchQuery("");
+                    setPortalSearchResult(null);
+                  }}
+                  className="btn-secondary"
+                >
+                  Clear
+                </button>
+              </div>
+
+              {/* Sample Taxpayer Chips */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.5rem",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  fontSize: "0.75rem",
+                  marginBottom: "1rem"
+                }}
+              >
+                <span style={{ color: "#64748b" }}>Try searching:</span>
+                {units.slice(0, 4).map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.7rem" }}
+                    onClick={() => {
+                      setPortalSearchQuery(u.identifierValue);
+                      handleSearchCitizenTaxpayer(u.identifierValue);
+                    }}
+                  >
+                    {u.identifierValue} ({u.legalName.slice(0, 18)}...)
+                  </button>
+                ))}
+              </div>
+
+              {/* Search Result Card */}
+              {portalSearchResult && (
+                <div
+                  style={{
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    padding: "1.25rem",
+                    background: "#ffffff"
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      flexWrap: "wrap",
+                      gap: "1rem",
+                      marginBottom: "1rem"
+                    }}
+                  >
+                    <div>
+                      <h4 style={{ margin: "0 0 0.25rem", color: "#0d3822" }}>
+                        {portalSearchResult.legalName}
+                      </h4>
+                      {portalSearchResult.tradeName && (
+                        <p style={{ margin: "0 0 0.25rem", color: "#475569", fontSize: "0.85rem" }}>
+                          Trading as: <em>{portalSearchResult.tradeName}</em>
+                        </p>
+                      )}
+                      <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                        {portalSearchResult.address} &bull; Circle-Vehari
+                      </p>
+                    </div>
+
+                    <div style={{ textAlign: "right" }}>
+                      <span
+                        className={`badge ${
+                          portalSearchResult.outstandingBalance <= 0
+                            ? "badge-approved"
+                            : portalSearchResult.daysOverdue > 30
+                              ? "badge-returned"
+                              : "badge-draft"
+                        }`}
+                        style={{ fontSize: "0.75rem" }}
+                      >
+                        {portalSearchResult.outstandingBalance <= 0
+                          ? "✓ NIL ARREARS (PAID)"
+                          : portalSearchResult.defaulterStatus}
+                      </span>
+                      <div style={{ marginTop: "0.4rem" }}>
+                        <span style={{ fontSize: "0.75rem", color: "#64748b" }}>Demand ID: </span>
+                        <strong>{portalSearchResult.permanentDemandNo}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Financial Overview Grid */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(10rem, 1fr))",
+                      gap: "0.75rem",
+                      background: "#f8fafc",
+                      padding: "1rem",
+                      borderRadius: "6px",
+                      border: "1px solid #e2e8f0",
+                      marginBottom: "1.25rem"
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontSize: "0.7rem", color: "#64748b", display: "block" }}>
+                        Schedule Entry
+                      </span>
+                      <strong style={{ fontSize: "0.85rem" }}>
+                        {portalSearchResult.scheduleEntry}
+                      </strong>
+                      <span style={{ display: "block", fontSize: "0.7rem", color: "#475569" }}>
+                        {portalSearchResult.categoryName}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: "0.7rem", color: "#64748b", display: "block" }}>
+                        Assessed Tax
+                      </span>
+                      <strong style={{ fontSize: "0.95rem" }}>
+                        PKR {portalSearchResult.assessedTax.toLocaleString()}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: "0.7rem", color: "#64748b", display: "block" }}>
+                        Penalties
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: "0.95rem",
+                          color: portalSearchResult.penalties > 0 ? "#b91c1c" : "#334155"
+                        }}
+                      >
+                        PKR {portalSearchResult.penalties.toLocaleString()}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: "0.7rem", color: "#64748b", display: "block" }}>
+                        Total Paid
+                      </span>
+                      <strong style={{ fontSize: "0.95rem", color: "#166534" }}>
+                        PKR {portalSearchResult.totalPaid.toLocaleString()}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: "0.7rem", color: "#64748b", display: "block" }}>
+                        Outstanding Arrears
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: "1.1rem",
+                          color: portalSearchResult.outstandingBalance > 0 ? "#b91c1c" : "#166534"
+                        }}
+                      >
+                        PKR {portalSearchResult.outstandingBalance.toLocaleString()}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {/* Actions Row */}
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.5rem",
+                      flexWrap: "wrap",
+                      alignItems: "center"
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{
+                        backgroundColor: "#10b981",
+                        borderColor: "#059669",
+                        fontWeight: 700
+                      }}
+                      onClick={() =>
+                        handleOpenCitizenPaymentModal(
+                          portalSearchResult.unit.id,
+                          portalSearchResult.outstandingBalance > 0
+                            ? portalSearchResult.outstandingBalance
+                            : portalSearchResult.annualTaxRate
+                        )
+                      }
+                    >
+                      💳 Pay Now via ePay Punjab / 1Link
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => {
+                        setSelectedUnitId(portalSearchResult.unit.id);
+                        setActiveTab("FORM_PFT1");
+                      }}
+                    >
+                      📜 View Demand Notice ({portalSearchResult.noticeNumber})
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => {
+                        setSelectedUnitId(portalSearchResult.unit.id);
+                        setActiveTab("FORM_PFT2");
+                      }}
+                    >
+                      💳 View Bank Challan ({portalSearchResult.challanNumber})
+                    </button>
+                    {portalSearchResult.isClearanceEligible && (
+                      <span
+                        className="badge badge-approved"
+                        style={{ padding: "0.4rem 0.75rem", fontSize: "0.75rem" }}
+                      >
+                        ✓ Eligible for Form P.F.T-5 Clearance Certificate
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Desk 3: Rule 4 Statutory Self-Assessment Calculator */}
+            <div className="content-panel" style={{ marginBottom: "1.5rem" }}>
+              <div className="panel-header">
+                <div>
+                  <h4 style={{ margin: 0, color: "#0d3822", fontSize: "1.1rem" }}>
+                    🧮 Desk 3: Rule 4 Statutory Self-Assessment Calculator &amp; Declaration
+                  </h4>
+                  <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#64748b" }}>
+                    Determine legal professional tax liability under the Second Schedule to the
+                    Punjab Finance Act, 1977 across all 11 statutory categories.
+                  </p>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(18rem, 1fr))",
+                  gap: "1.25rem",
+                  marginBottom: "1.25rem"
+                }}
+              >
+                {/* Form Controls */}
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      marginBottom: "0.3rem"
+                    }}
+                  >
+                    Second Schedule Category:
+                  </label>
+                  <select
+                    className="form-control"
+                    value={portalCalcCriteria.categoryCode}
+                    onChange={(e) => handleUpdateSelfAssessment({ categoryCode: e.target.value })}
+                  >
+                    <option value="1">Category 1: Companies (Paid-up Capital)</option>
+                    <option value="2">Category 2: Factories (Persons other than companies)</option>
+                    <option value="3">
+                      Category 3: Commercial Establishments (Other than companies)
+                    </option>
+                    <option value="4">Category 4: Importers and Exporters</option>
+                    <option value="5">
+                      Category 5: Contractors, Builders &amp; Property Developers
+                    </option>
+                    <option value="6">Category 6: Professions &amp; Service Providers</option>
+                    <option value="7">Category 7: Petroleum, Diesel &amp; CNG Stations</option>
+                    <option value="8">Category 8: Transport Goods &amp; Bus Terminals</option>
+                    <option value="9">Category 9: Advertising &amp; Commercial Signage</option>
+                    <option value="10">
+                      Category 10: Air-Conditioned Restaurants / Bakeries / Sweet Shops
+                    </option>
+                    <option value="11">
+                      Category 11: Persons Assessed to Pay Income Tax in Preceding FY
+                    </option>
+                  </select>
+
+                  {/* Sub-inputs based on category */}
+                  {portalCalcCriteria.categoryCode === "1" && (
+                    <div style={{ marginTop: "0.75rem" }}>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600 }}>
+                        Paid-up Capital (PKR):
+                      </label>
+                      <select
+                        className="form-control"
+                        onChange={(e) =>
+                          handleUpdateSelfAssessment({ paidUpCapitalPkr: Number(e.target.value) })
+                        }
+                      >
+                        <option value="4000000">Up to Rs 5 Million (PKR 10,000)</option>
+                        <option value="20000000">Exceeding Rs 5M up to Rs 50M (PKR 30,000)</option>
+                        <option value="75000000">
+                          Exceeding Rs 50M up to Rs 100M (PKR 50,000)
+                        </option>
+                        <option value="150000000">
+                          Exceeding Rs 100M up to Rs 200M (PKR 75,000)
+                        </option>
+                        <option value="300000000">Exceeding Rs 200 Million (PKR 100,000)</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {portalCalcCriteria.categoryCode === "2" && (
+                    <div style={{ marginTop: "0.75rem" }}>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600 }}>
+                        Number of Employees:
+                      </label>
+                      <select
+                        className="form-control"
+                        onChange={(e) =>
+                          handleUpdateSelfAssessment({ employeeCount: Number(e.target.value) })
+                        }
+                      >
+                        <option value="5">Not exceeding 10 employees (PKR 2,000)</option>
+                        <option value="18">Exceeding 10 but not exceeding 25 (PKR 5,000)</option>
+                        <option value="35">Exceeding 25 employees (PKR 7,500)</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {portalCalcCriteria.categoryCode === "3" && (
+                    <div style={{ marginTop: "0.75rem", display: "grid", gap: "0.5rem" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600 }}>
+                          Number of Employees:
+                        </label>
+                        <select
+                          className="form-control"
+                          value={portalCalcCriteria.employeeCount ?? 12}
+                          onChange={(e) =>
+                            handleUpdateSelfAssessment({ employeeCount: Number(e.target.value) })
+                          }
+                        >
+                          <option value="15">10 or more employees</option>
+                          <option value="4">Fewer than 10 employees (Small shop)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600 }}>
+                          Territorial Jurisdiction:
+                        </label>
+                        <select
+                          className="form-control"
+                          value={portalCalcCriteria.isMetropolitan ? "METRO" : "OTHER"}
+                          onChange={(e) =>
+                            handleUpdateSelfAssessment({
+                              isMetropolitan: e.target.value === "METRO"
+                            })
+                          }
+                        >
+                          <option value="OTHER">
+                            Tehsil Vehari / Other Areas (Strictly PKR 4,000)
+                          </option>
+                          <option value="METRO">
+                            Metropolitan / Municipal Corp Limits (PKR 6,000)
+                          </option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {portalCalcCriteria.categoryCode === "6" && (
+                    <div style={{ marginTop: "0.75rem" }}>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600 }}>
+                        Profession / Calling:
+                      </label>
+                      <select
+                        className="form-control"
+                        onChange={(e) =>
+                          handleUpdateSelfAssessment({ professionType: e.target.value })
+                        }
+                      >
+                        <option value="SPECIALIST">
+                          Medical Consultant / Specialist / Dental Surgeon (PKR 5,000)
+                        </option>
+                        <option value="RMP">
+                          Registered Medical Practitioner (RMP) (PKR 4,000)
+                        </option>
+                        <option value="PESTICIDE_DEALER">
+                          Pesticide / Fertilizer / Electronic Dealer (PKR 2,000)
+                        </option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Calculation Output Card */}
+                <div
+                  style={{
+                    background: "#f0fdf4",
+                    border: "2px solid #10b981",
+                    borderRadius: "8px",
+                    padding: "1.25rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between"
+                  }}
+                >
+                  <div>
+                    <span className="badge badge-approved" style={{ fontSize: "0.7rem" }}>
+                      STATUTORY SECOND SCHEDULE COMPUTATION
+                    </span>
+                    <h3 style={{ margin: "0.5rem 0 0.25rem", color: "#065f46" }}>
+                      PKR {portalCalcResult.annualRatePkr.toLocaleString()}
+                    </h3>
+                    <p style={{ margin: "0 0 0.5rem", fontSize: "0.75rem", color: "#166534" }}>
+                      Basis: {portalCalcResult.rateBasis}
+                    </p>
+
+                    <div style={{ fontSize: "0.8rem", color: "#334155", lineHeight: 1.5 }}>
+                      <p style={{ margin: "0.25rem 0" }}>
+                        <strong>Statutory Entry:</strong> {portalCalcResult.subclassificationCode}{" "}
+                        &bull; {portalCalcResult.categoryName}
+                      </p>
+                      <p style={{ margin: "0.25rem 0" }}>
+                        <strong>Subcategory:</strong> {portalCalcResult.subcategory}
+                      </p>
+                      <p
+                        style={{
+                          margin: "0.5rem 0 0",
+                          fontStyle: "italic",
+                          fontSize: "0.75rem",
+                          color: "#475569",
+                          background: "#ffffff",
+                          padding: "0.5rem",
+                          borderRadius: "4px",
+                          border: "1px solid #cbd5e1"
+                        }}
+                      >
+                        &ldquo;{portalCalcResult.officialLegalText}&rdquo;
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: "1rem" }}>
+                    <button
+                      type="button"
+                      className="btn-primary btn-block"
+                      style={{ backgroundColor: "#065f46", borderColor: "#047857" }}
+                      onClick={() =>
+                        handleOpenCitizenPaymentModal(undefined, portalCalcResult.annualRatePkr)
+                      }
+                    >
+                      💳 Declare &amp; Pay PKR {portalCalcResult.annualRatePkr.toLocaleString()}{" "}
+                      Online
                     </button>
                   </div>
                 </div>
@@ -10936,22 +11969,19 @@ export default function HomePage() {
                   }}
                 >
                   {/* Digital QR Box */}
-                  <div
-                    style={{
-                      textAlign: "center",
-                      border: "1px dashed #cbd5e1",
-                      padding: "0.5rem",
-                      borderRadius: "6px",
-                      background: "#f8fafc"
-                    }}
-                  >
-                    <div style={{ fontSize: "2rem" }}>📱</div>
-                    <strong style={{ fontSize: "0.75rem", display: "block", color: "#0d3822" }}>
-                      Scan to Verify Status
-                    </strong>
-                    <span style={{ fontSize: "0.65rem", color: "#64748b", wordBreak: "break-all" }}>
-                      PTAS-PFT5-VERIFY
-                    </span>
+                  <div style={{ textAlign: "center" }}>
+                    <StatutoryQrCode
+                      payload={activeClearanceCert.qrPayload}
+                      size={90}
+                      label="Scan to Verify Status"
+                      subtitle={activeClearanceCert.certificateNumber}
+                      onScanOrClick={(payload) => {
+                        setPortalVerificationInput(payload);
+                        handleVerifyDocument(payload);
+                        setShowClearanceModal(false);
+                        setActiveTab("PUBLIC_PORTAL");
+                      }}
+                    />
                   </div>
 
                   {/* Official Government Seal Emblem */}
@@ -12758,6 +13788,245 @@ export default function HomePage() {
               >
                 🖨️ Print Gazetted Report / PDF
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CITIZEN DIGITAL PAYMENT SIMULATOR (17-DIGIT EPAY PSID) */}
+      {showCitizenPaymentModal && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="citpay-modal-title"
+        >
+          <div className="modal-card" style={{ maxWidth: "34rem" }}>
+            <div className="modal-header">
+              <h3 id="citpay-modal-title">💳 Instant Citizen Digital Payment Simulator</h3>
+              <button
+                type="button"
+                onClick={() => setShowCitizenPaymentModal(false)}
+                className="modal-close-btn"
+                aria-label="Close modal"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="modal-body">
+              {citizenPaymentSuccess ? (
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "1rem",
+                    background: "#f0fdf4",
+                    borderRadius: "8px",
+                    border: "1px solid #10b981"
+                  }}
+                >
+                  <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🎉</div>
+                  <h4 style={{ margin: "0 0 0.5rem", color: "#065f46" }}>
+                    Payment Successfully Settled!
+                  </h4>
+                  <p style={{ fontSize: "0.85rem", color: "#334155", margin: "0 0 1rem" }}>
+                    Your deposit of{" "}
+                    <strong>PKR {citizenPaymentSuccess.paidAmount.toLocaleString()}</strong> has
+                    been credited to the Punjab Professional Tax Demand Ledger.
+                  </p>
+
+                  <div
+                    style={{
+                      background: "#ffffff",
+                      padding: "1rem",
+                      borderRadius: "6px",
+                      border: "1px dashed #cbd5e1",
+                      textAlign: "left",
+                      fontSize: "0.8rem",
+                      marginBottom: "1rem"
+                    }}
+                  >
+                    <p style={{ margin: "0.25rem 0" }}>
+                      <strong>17-Digit ePay PSID:</strong>{" "}
+                      <code style={{ fontSize: "0.9rem", color: "#1e3a8a", fontWeight: 700 }}>
+                        {citizenPaymentSuccess.psid}
+                      </code>
+                    </p>
+                    <p style={{ margin: "0.25rem 0" }}>
+                      <strong>Transaction ID:</strong> {citizenPaymentSuccess.transactionId}
+                    </p>
+                    <p style={{ margin: "0.25rem 0" }}>
+                      <strong>Payment Channel:</strong>{" "}
+                      {citizenPaymentSuccess.paymentChannel === "EPAY_PUNJAB"
+                        ? "ePay Punjab / 1Link (Mobile / ATM)"
+                        : "National Bank of Pakistan (Challan 32-A)"}
+                    </p>
+                    <p style={{ margin: "0.25rem 0" }}>
+                      <strong>Assessee:</strong> {citizenPaymentSuccess.unitName}
+                    </p>
+                    <p style={{ margin: "0.25rem 0" }}>
+                      <strong>Remaining Derived Balance:</strong>{" "}
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          color: citizenPaymentSuccess.newBalance <= 0 ? "#166534" : "#b91c1c"
+                        }}
+                      >
+                        PKR {citizenPaymentSuccess.newBalance.toLocaleString()}
+                      </span>
+                    </p>
+                    {citizenPaymentSuccess.clearanceIssued && (
+                      <div
+                        style={{
+                          marginTop: "0.75rem",
+                          padding: "0.5rem",
+                          background: "#dcfce7",
+                          borderRadius: "4px",
+                          color: "#166534",
+                          fontWeight: 600
+                        }}
+                      >
+                        📜 Outstanding arrears fully cleared! Official Form P.F.T-5 Tax Clearance
+                        Certificate issued:{" "}
+                        <strong>{citizenPaymentSuccess.clearanceCertNumber}</strong>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center" }}>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => {
+                        setShowCitizenPaymentModal(false);
+                        setActiveTab("CLEARANCE");
+                      }}
+                    >
+                      📜 View Clearance Certificates
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setShowCitizenPaymentModal(false)}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleExecuteCitizenPayment();
+                  }}
+                >
+                  <div className="form-group" style={{ marginBottom: "1rem" }}>
+                    <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                      Select Assessee / Business Unit:
+                    </label>
+                    <select
+                      className="form-control"
+                      value={citizenPayUnitId}
+                      onChange={(e) => {
+                        const uid = e.target.value;
+                        setCitizenPayUnitId(uid);
+                        const u = units.find((item) => item.id === uid);
+                        if (u) {
+                          const bal = computeLedgerBalance(u.ledgerEntries);
+                          setCitizenPayAmount(bal > 0 ? bal : u.statutoryRule.annual_rate_pkr);
+                        }
+                      }}
+                    >
+                      {units.map((u) => {
+                        const bal = computeLedgerBalance(u.ledgerEntries);
+                        return (
+                          <option key={u.id} value={u.id}>
+                            {u.legalName} ({u.identifierType}: {u.identifierValue}) &bull; Balance:
+                            PKR {bal.toLocaleString()}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "1rem" }}>
+                    <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                      Payment Gateway Channel:
+                    </label>
+                    <select
+                      className="form-control"
+                      value={citizenPayChannel}
+                      onChange={(e) =>
+                        setCitizenPayChannel(e.target.value as "EPAY_PUNJAB" | "CHALLAN_32A")
+                      }
+                    >
+                      <option value="EPAY_PUNJAB">
+                        ePay Punjab (1Link Mobile Banking / ATM / OTC)
+                      </option>
+                      <option value="CHALLAN_32A">
+                        Challan 32-A (National Bank of Pakistan Branch)
+                      </option>
+                    </select>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "1rem" }}>
+                    <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                      Generated 17-Digit ePay PSID:
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      className="form-control"
+                      value={generate17DigitEPayPsid(citizenPayUnitId || units[0]?.id || "0001")}
+                      style={{
+                        backgroundColor: "#f1f5f9",
+                        fontWeight: 700,
+                        letterSpacing: "0.05em",
+                        color: "#1e3a8a"
+                      }}
+                    />
+                    <small style={{ color: "#64748b", display: "block", marginTop: "0.25rem" }}>
+                      Compliant with Government of Punjab Dept Code &lsquo;1001&rsquo; &amp; Vehari
+                      District &lsquo;366&rsquo;.
+                    </small>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "1.25rem" }}>
+                    <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                      Deposit Amount (PKR):
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      className="form-control"
+                      value={citizenPayAmount}
+                      onChange={(e) => setCitizenPayAmount(Number(e.target.value))}
+                      required
+                    />
+                  </div>
+
+                  <div className="modal-footer" style={{ padding: 0 }}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setShowCitizenPaymentModal(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="btn-primary"
+                      style={{
+                        backgroundColor: "#10b981",
+                        borderColor: "#059669",
+                        fontWeight: 700
+                      }}
+                    >
+                      ✓ Confirm Online Deposit
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         </div>

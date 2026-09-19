@@ -30,6 +30,7 @@ export interface FormPFT1Model {
   readonly assessingAuthorityTitle: string;
   readonly canonicalNoticeText: string;
   readonly officialSha256: string;
+  readonly qrPayload: string;
   readonly serviceReceipt: {
     readonly demandNumber: string;
     readonly taxPayable: number;
@@ -49,6 +50,7 @@ export interface FormPFT2CopyModel {
   readonly district: string;
   readonly taxYear: string;
   readonly dueDate: string;
+  readonly qrPayload: string;
   readonly taxpayerInfo: {
     readonly taxNo: string;
     readonly classification: string;
@@ -85,6 +87,7 @@ export interface FormPFT2Model {
   readonly challanNumber: string;
   readonly canonicalChallanText: string;
   readonly officialSha256: string;
+  readonly qrPayload: string;
   readonly copies: readonly [FormPFT2CopyModel, FormPFT2CopyModel, FormPFT2CopyModel];
 }
 
@@ -327,7 +330,10 @@ export function generateFormPFT1(
 
   const taxAmount = isTampered ? tamperedAmount : (latestVersion?.snapshot.taxAmount ?? 0);
   const taxAmountWords = numberToWordsPkr(taxAmount);
-  const noticeNumber = `PFT-1/VEH/2026/${unit.id.slice(-4)}`;
+  const serial = unit.demandUnit?.permanentDemandNo
+    ? unit.demandUnit.permanentDemandNo.replace(/[^0-9]/g, "").slice(-4)
+    : unit.id.slice(-4);
+  const noticeNumber = `PFT-1/VEH/2026/${serial}`;
   const demandNumber = unit.demandUnit.permanentDemandNo;
   const taxNumber = `${unit.identifierType}: ${unit.identifierValue}`;
   const issueDate = "01/07/2026";
@@ -351,6 +357,7 @@ export function generateFormPFT1(
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalNoticeText);
+  const qrPayload = `PTAS-PUNJAB:PFT-1:${demandNumber}:TAX=${taxAmount}:YEAR=2026-2027:DUE=${dueDate}:SHA=${officialSha256.slice(0, 16)}`;
 
   return {
     isApproved,
@@ -373,6 +380,7 @@ export function generateFormPFT1(
     assessingAuthorityTitle: "Excise & Taxation Officer / Assessing Authority, Tehsil Vehari",
     canonicalNoticeText,
     officialSha256,
+    qrPayload,
     serviceReceipt: {
       demandNumber,
       taxPayable: taxAmount,
@@ -407,7 +415,10 @@ export function generateFormPFT2(
   }
   const totalPayable = taxAmount + penalty;
   const totalPayableWords = numberToWordsPkr(totalPayable);
-  const challanNumber = `PFT-2/VEH/2026/${unit.id.slice(-4)}`;
+  const challanSerial = unit.demandUnit?.permanentDemandNo
+    ? unit.demandUnit.permanentDemandNo.replace(/[^0-9]/g, "").slice(-4)
+    : unit.id.slice(-4);
+  const challanNumber = `PFT-2/VEH/2026/${challanSerial}`;
   const demandNo = unit.demandUnit.permanentDemandNo;
   const dueDate = "31/08/2026";
   const taxYear = "2026-2027";
@@ -432,12 +443,14 @@ export function generateFormPFT2(
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalChallanText);
+  const qrPayload = `PTAS-PUNJAB:PFT-2:${challanNumber}:DEMAND=${demandNo}:AMOUNT=${totalPayable}:DUE=${dueDate}:SHA=${officialSha256.slice(0, 16)}`;
 
   const sharedData = {
     headOfAccount,
     district,
     taxYear,
     dueDate,
+    qrPayload,
     taxpayerInfo: {
       taxNo: `${unit.identifierType}: ${unit.identifierValue}`,
       classification: `Entry ${unit.statutoryRule.subclassification_code} - ${unit.statutoryRule.category}`,
@@ -492,6 +505,7 @@ export function generateFormPFT2(
     challanNumber,
     canonicalChallanText,
     officialSha256,
+    qrPayload,
     copies: [copy1, copy2, copy3]
   };
 }
