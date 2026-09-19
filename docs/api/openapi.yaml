@@ -268,6 +268,47 @@ paths:
                   financialYearId: { type: [string, "null"], format: uuid }
                   balance: { type: number }
         default: { $ref: "#/components/responses/Problem" }
+  /documents/{documentId}:
+    get:
+      operationId: getDocumentRecord
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: Document record with verification hash
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentRecord"
+        default: { $ref: "#/components/responses/Problem" }
+  /documents/{documentId}/verify:
+    post:
+      operationId: verifyDocument
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string }
+      responses:
+        "200":
+          description: Verification outcome against stored SHA-256 hash
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [documentId, sha256, verified, isProvisional]
+                properties:
+                  documentId: { type: string, format: uuid }
+                  sha256: { type: string }
+                  verified: { type: boolean }
+                  isProvisional: { type: boolean }
+        default: { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     sessionAuth:
@@ -282,6 +323,11 @@ components:
       schema: { type: string, format: uuid }
     DemandUnitId:
       name: demandUnitId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DocumentId:
+      name: documentId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -552,3 +598,29 @@ components:
         sourceId: { type: string, format: uuid }
         reversesEntryId: { type: string, format: uuid }
         metadata: { type: object }
+    DocumentRecord:
+      type: object
+      required:
+        [
+          id,
+          aggregateType,
+          aggregateId,
+          templateConfigId,
+          objectKey,
+          sha256,
+          generatedAt,
+          generatedBy,
+          snapshot,
+          isProvisional
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        aggregateType: { type: string }
+        aggregateId: { type: string, format: uuid }
+        templateConfigId: { type: string, format: uuid }
+        objectKey: { type: string }
+        sha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        generatedAt: { type: string, format: date-time }
+        generatedBy: { type: string, format: uuid }
+        snapshot: { type: object }
+        isProvisional: { type: boolean }

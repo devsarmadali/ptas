@@ -5,6 +5,7 @@ export * from "./taxpayer-repository.js";
 export * from "./legal-configuration-repository.js";
 export * from "./assessment-repository.js";
 export * from "./ledger-repository.js";
+export * from "./document-repository.js";
 
 export function createDatabaseClient(databaseUrl: string) {
   if (!databaseUrl.startsWith("postgresql://")) {
