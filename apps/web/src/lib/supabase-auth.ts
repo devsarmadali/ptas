@@ -290,7 +290,11 @@ export type StatutoryAction =
   | "IMPOSE_PENALTY"
   | "ISSUE_RECOVERY_CERTIFICATE"
   | "SCHEDULE_APPEAL_HEARING"
-  | "ADJUDICATE_APPEAL";
+  | "ADJUDICATE_APPEAL"
+  | "ISSUE_CLEARANCE_CERTIFICATE"
+  | "SUBMIT_DISCONTINUANCE_INSPECTION"
+  | "ADJUDICATE_DISCONTINUANCE"
+  | "ADJUDICATE_REFUND";
 
 /**
  * Server/Client Enforced Statutory Authority Guard (AGENTS.md Rule 2).
@@ -331,6 +335,34 @@ export function verifyOfficerAuthority(
         return {
           authorized: false,
           reason: `Statutory Authority Violation: Under Section 7 & Rule 13, only the Appellate Authority (Director Shahid Nawaz) has judicial jurisdiction to hear and decide appeals. Current role: ${officer.role}.`
+        };
+      }
+      return { authorized: true };
+
+    case "ISSUE_CLEARANCE_CERTIFICATE":
+      if (officer.role !== "ETO" && officer.role !== "DIRECTOR") {
+        return {
+          authorized: false,
+          reason: `Statutory Authority Violation: Form P.F.T-5 Tax Clearance Certificates must be issued under official seal by an Assessing Authority (ETO Tariq Mahmood). Inspectors cannot issue clearance certificates.`
+        };
+      }
+      return { authorized: true };
+
+    case "SUBMIT_DISCONTINUANCE_INSPECTION":
+      if (officer.role !== "INSPECTOR" && officer.role !== "ETO") {
+        return {
+          authorized: false,
+          reason: `Statutory Authority Violation: Field inspections under Rule 10 are conducted by Circle Tax Inspectors.`
+        };
+      }
+      return { authorized: true };
+
+    case "ADJUDICATE_DISCONTINUANCE":
+    case "ADJUDICATE_REFUND":
+      if (officer.role !== "ETO" && officer.role !== "DIRECTOR") {
+        return {
+          authorized: false,
+          reason: `Statutory Authority Violation: Statutory closure orders under Rule 10 and refund/adjustment orders under Rule 5 strictly require Assessing Authority (ETO) or Director approval.`
         };
       }
       return { authorized: true };

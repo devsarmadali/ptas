@@ -10,6 +10,7 @@ import {
   computeLedgerBalance,
   createAppellateAdjustmentEntry,
   createAssessment,
+  createDemandLedgerEntry,
   createInitialDemandEntry,
   createPaymentReceiptEntry,
   createPenaltyDemandEntry,
@@ -26,10 +27,16 @@ import {
   FINANCIAL_YEAR_2026_27,
   MOCK_OFFICERS,
   type AppealRecord,
+  type ClearanceCertificateRecord,
+  type DiscontinuanceRecord,
   type MockOfficer,
   type PilotAuditItem,
+  type RefundAdjustmentRecord,
   type StoredUnit,
   type StoredUnitSnapshot,
+  createInitialClearanceCertificates,
+  createInitialDiscontinuances,
+  createInitialRefundAdjustments,
   loadPilotState,
   resetPilotState,
   savePilotState
@@ -38,13 +45,19 @@ import { computeFileSha256, uploadReceiptScan } from "../lib/storage";
 import { pushPilotStateToSupabase } from "../lib/supabase-sync";
 import {
   type AppellateOrderModel,
+  type DiscontinuanceOrderModel,
+  type RefundAdjustmentOrderModel,
+  type TaxClearanceCertificateModel,
   generateAppellateOrderDocument,
   generateCircleDispatchRegister,
+  generateDiscontinuanceOrder,
   generateFormPFT1,
   generateFormPFT2,
   generateFormPFT3Rows,
   generateLandRevenueRecoveryCertificate,
-  generateShowCausePenaltyNotice
+  generateRefundAdjustmentOrder,
+  generateShowCausePenaltyNotice,
+  generateTaxClearanceCertificate
 } from "../lib/statutory-forms";
 import {
   type BulkSurveyParseResult,
@@ -74,6 +87,8 @@ export default function HomePage() {
     | "REGISTER_PFT3"
     | "DEFAULTERS"
     | "APPEALS"
+    | "CLEARANCE"
+    | "RELIEF_DESK"
     | "LEDGER"
     | "EPAY"
     | "AUDIT"
@@ -81,6 +96,59 @@ export default function HomePage() {
 
   // Selected Unit for Ledger & Form PFT-2 inspection
   const [selectedUnitId, setSelectedUnitId] = useState<string>("");
+
+  // Phase 6 State: Clearance Certificates, Discontinuance (Rule 10), and Statutory Refunds (Rule 5)
+  const [discontinuances, setDiscontinuances] = useState<DiscontinuanceRecord[]>([]);
+  const [refundAdjustments, setRefundAdjustments] = useState<RefundAdjustmentRecord[]>([]);
+  const [clearanceCertificates, setClearanceCertificates] = useState<ClearanceCertificateRecord[]>(
+    []
+  );
+
+  // Clearance Certificate Modal State
+  const [showClearanceModal, setShowClearanceModal] = useState(false);
+  const [activeClearanceCert, setActiveClearanceCert] =
+    useState<TaxClearanceCertificateModel | null>(null);
+
+  // Discontinuance Modal States (Rule 10)
+  const [showFileDiscontinuanceModal, setShowFileDiscontinuanceModal] = useState(false);
+  const [discUnitId, setDiscUnitId] = useState("");
+  const [discDate, setDiscDate] = useState("2026-08-01");
+  const [discReason, setDiscReason] = useState(
+    "Surrendered commercial shop lease deed / closed operations"
+  );
+  const [discEvidence, setDiscEvidence] = useState(
+    "Notarized lease termination deed & municipal trade license surrender certificate"
+  );
+
+  const [showDiscontinuanceInspectionModal, setShowDiscontinuanceInspectionModal] = useState(false);
+  const [targetDiscId, setTargetDiscId] = useState("");
+  const [discInspectorFindings, setDiscInspectorFindings] = useState(
+    "Physical on-site inspection conducted in Circle-Vehari. Shop premises confirmed vacated, shutter locked, and business activity completely discontinued."
+  );
+
+  const [showDiscontinuanceOrderModal, setShowDiscontinuanceOrderModal] = useState(false);
+  const [discEtoDecision, setDiscEtoDecision] = useState<"APPROVED" | "REJECTED">("APPROVED");
+  const [discEtoReason, setDiscEtoReason] = useState(
+    "Verified on-site closure under Rule 10 of 1977 Rules. Assessment frozen; historical demand preserved."
+  );
+  const [activeDiscontinuanceOrder, setActiveDiscontinuanceOrder] =
+    useState<DiscontinuanceOrderModel | null>(null);
+
+  // Refund / Adjustment Modal States (Rule 5)
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refUnitId, setRefUnitId] = useState("");
+  const [refType, setRefType] = useState<"CREDIT_ADJUSTMENT" | "REFUND">("CREDIT_ADJUSTMENT");
+  const [refAmount, setRefAmount] = useState<number>(2000);
+  const [refGrounds, setRefGrounds] = useState(
+    "Taxpayer deposited excess amount under Challan 32-A"
+  );
+  const [refEvidence, setRefEvidence] = useState(
+    "National Bank of Pakistan Challan 32-A Deposit Scroll Reference verified"
+  );
+  const [showRefundOrderModal, setShowRefundOrderModal] = useState(false);
+  const [activeRefundOrder, setActiveRefundOrder] = useState<RefundAdjustmentOrderModel | null>(
+    null
+  );
 
   // Appeals & Revisions (Section 7) State
   const [appeals, setAppeals] = useState<AppealRecord[]>([]);
@@ -231,11 +299,16 @@ export default function HomePage() {
     setUnits(state.units);
     setAuditLogs(state.auditLogs);
     setAppeals(state.appeals ?? []);
+    setDiscontinuances(state.discontinuances ?? createInitialDiscontinuances());
+    setRefundAdjustments(state.refundAdjustments ?? createInitialRefundAdjustments());
+    setClearanceCertificates(state.clearanceCertificates ?? createInitialClearanceCertificates());
     if (state.units.length > 0) {
       const firstId = state.units[0]?.id ?? "";
       setSelectedUnitId(firstId);
       setPaymentUnitId(firstId);
       setAppealUnitId(firstId);
+      setDiscUnitId(firstId);
+      setRefUnitId(firstId);
     }
     setIsLoaded(true);
 
@@ -258,19 +331,32 @@ export default function HomePage() {
     updatedUnits: StoredUnit[],
     updatedAudits: PilotAuditItem[],
     updatedOfficer?: MockOfficer,
-    updatedAppeals?: AppealRecord[]
+    updatedAppeals?: AppealRecord[],
+    updatedDiscontinuances?: DiscontinuanceRecord[],
+    updatedRefunds?: RefundAdjustmentRecord[],
+    updatedClearanceCerts?: ClearanceCertificateRecord[]
   ) => {
     setUnits(updatedUnits);
     setAuditLogs(updatedAudits);
     if (updatedOfficer) setOfficer(updatedOfficer);
     const nextAppeals = updatedAppeals ?? appeals;
     if (updatedAppeals) setAppeals(updatedAppeals);
+    const nextDiscontinuances = updatedDiscontinuances ?? discontinuances;
+    if (updatedDiscontinuances) setDiscontinuances(nextDiscontinuances);
+    const nextRefunds = updatedRefunds ?? refundAdjustments;
+    if (updatedRefunds) setRefundAdjustments(nextRefunds);
+    const nextClearanceCerts = updatedClearanceCerts ?? clearanceCertificates;
+    if (updatedClearanceCerts) setClearanceCertificates(nextClearanceCerts);
+
     savePilotState({
       currentOfficer: updatedOfficer ?? officer,
       units: updatedUnits,
       auditLogs: updatedAudits,
       reconciliations: [],
-      appeals: nextAppeals
+      appeals: nextAppeals,
+      discontinuances: nextDiscontinuances,
+      refundAdjustments: nextRefunds,
+      clearanceCertificates: nextClearanceCerts
     });
   };
 
@@ -282,11 +368,16 @@ export default function HomePage() {
       setUnits(clean.units);
       setAuditLogs(clean.auditLogs);
       setAppeals(clean.appeals ?? []);
+      setDiscontinuances(clean.discontinuances ?? createInitialDiscontinuances());
+      setRefundAdjustments(clean.refundAdjustments ?? createInitialRefundAdjustments());
+      setClearanceCertificates(clean.clearanceCertificates ?? createInitialClearanceCertificates());
       if (clean.units.length > 0) {
         const firstId = clean.units[0]?.id ?? "";
         setSelectedUnitId(firstId);
         setPaymentUnitId(firstId);
         setAppealUnitId(firstId);
+        setDiscUnitId(firstId);
+        setRefUnitId(firstId);
       }
       showToast("info", "Vehari pilot dataset reset to statutory factory baseline.");
     }
@@ -1496,6 +1587,383 @@ export default function HomePage() {
     }
   };
 
+  // --- Phase 6: Clearance Certificates (Form P.F.T-5) Handlers ---
+  const handleOpenClearanceCertificate = (targetUnit: StoredUnit) => {
+    const cert = generateTaxClearanceCertificate(targetUnit, officer, FINANCIAL_YEAR_2026_27);
+    if (!cert.isEligible) {
+      showToast("error", cert.ineligibilityReason || "Tax clearance is not eligible.");
+      return;
+    }
+
+    const authCheck = verifyOfficerAuthority(officer, "ISSUE_CLEARANCE_CERTIFICATE");
+    if (!authCheck.authorized) {
+      showToast("error", authCheck.reason || "Unauthorized to issue clearance certificate");
+      return;
+    }
+
+    setActiveClearanceCert(cert);
+    setShowClearanceModal(true);
+
+    // Record certificate in store if not present
+    if (!clearanceCertificates.some((c) => c.unitId === targetUnit.id)) {
+      const newCertRecord: ClearanceCertificateRecord = {
+        id: `cert-${Date.now()}`,
+        certificateNumber: cert.certificateNumber,
+        unitId: targetUnit.id,
+        assesseeLegalName: cert.assesseeLegalName,
+        assesseeTradeName: cert.assesseeTradeName,
+        cnicOrNtn: cert.identifierValue,
+        categoryName: cert.categoryName,
+        scheduleEntry: cert.scheduleEntry,
+        financialYear: cert.financialYear,
+        issueDate: cert.issueDate,
+        validUntil: cert.expiryDate,
+        issuedByOfficerId: officer.id,
+        issuedByOfficerName: officer.name,
+        issuedByOfficerTitle: officer.title,
+        officialSha256: cert.officialSha256,
+        qrPayload: cert.qrPayload,
+        clearedAmountPkr: cert.totalTaxPaid
+      };
+      const auditItem: PilotAuditItem = {
+        id: `audit-${Date.now()}`,
+        eventType: "CLEARANCE_CERTIFICATE_ISSUED",
+        actorName: officer.name,
+        actorRole: officer.role,
+        target: targetUnit.legalName,
+        timestamp: new Date().toISOString(),
+        correlationId: `corr-cert-${Date.now()}`,
+        details: `Issued Form P.F.T-5 Professional Tax Clearance Certificate (${cert.certificateNumber}) under seal of ${officer.name}. Verified zero arrears. SHA-256: ${cert.officialSha256.slice(0, 16)}...`
+      };
+      syncState(units, [auditItem, ...auditLogs], undefined, undefined, undefined, undefined, [
+        newCertRecord,
+        ...clearanceCertificates
+      ]);
+    }
+  };
+
+  // --- Phase 6: Rule 10 Discontinuance Handlers ---
+  const handleFileDiscontinuance = () => {
+    const targetUnit = units.find((u) => u.id === discUnitId);
+    if (!targetUnit) {
+      showToast("error", "Please select a tax unit.");
+      return;
+    }
+    if (!discReason.trim()) {
+      showToast("error", "Please provide reasons for discontinuance.");
+      return;
+    }
+
+    const newDiscRecord: DiscontinuanceRecord = {
+      id: `disc-${Date.now()}`,
+      noticeNumber: `DISC-VEH-2026-${Math.floor(Math.random() * 900 + 100)}`,
+      unitId: targetUnit.id,
+      assesseeLegalName: targetUnit.legalName,
+      assesseeTradeName: targetUnit.tradeName,
+      cnicOrNtn: targetUnit.identifierValue,
+      discontinuanceDate: discDate,
+      reason: discReason.trim(),
+      evidenceDetails: discEvidence.trim(),
+      status: "PENDING_INSPECTION",
+      filedAt: new Date().toISOString(),
+      filedBy: officer.id
+    };
+
+    const updatedUnit: StoredUnit = {
+      ...targetUnit,
+      discontinuanceStatus: "PENDING_INSPECTION",
+      discontinuanceDate: discDate,
+      discontinuanceReason: discReason.trim()
+    };
+
+    const auditItem: PilotAuditItem = {
+      id: `audit-${Date.now()}`,
+      eventType: "DISCONTINUANCE_NOTICE_FILED",
+      actorName: officer.name,
+      actorRole: officer.role,
+      target: targetUnit.legalName,
+      timestamp: new Date().toISOString(),
+      correlationId: `corr-disc-${Date.now()}`,
+      details: `Filed Rule 10 Notice of Discontinuance (${newDiscRecord.noticeNumber}) for ${targetUnit.legalName}. Assigned to Circle Inspector for on-site inspection.`
+    };
+
+    const updatedUnits = units.map((u) => (u.id === targetUnit.id ? updatedUnit : u));
+    syncState(updatedUnits, [auditItem, ...auditLogs], undefined, undefined, [
+      newDiscRecord,
+      ...discontinuances
+    ]);
+    setShowFileDiscontinuanceModal(false);
+    showToast("success", `Rule 10 Discontinuance Notice filed: ${newDiscRecord.noticeNumber}`);
+  };
+
+  const handleOpenDiscontinuanceInspection = (disc: DiscontinuanceRecord) => {
+    const authCheck = verifyOfficerAuthority(officer, "SUBMIT_DISCONTINUANCE_INSPECTION");
+    if (!authCheck.authorized) {
+      showToast("error", authCheck.reason || "Unauthorized");
+      return;
+    }
+    setTargetDiscId(disc.id);
+    setShowDiscontinuanceInspectionModal(true);
+  };
+
+  const handleSaveDiscontinuanceInspection = () => {
+    const disc = discontinuances.find((d) => d.id === targetDiscId);
+    if (!disc) return;
+
+    const updatedDisc: DiscontinuanceRecord = {
+      ...disc,
+      status: "INSPECTED",
+      inspectorReport: discInspectorFindings.trim(),
+      inspectedAt: new Date().toISOString(),
+      inspectedBy: officer.id
+    };
+
+    const targetUnit = units.find((u) => u.id === disc.unitId);
+    const updatedUnits = targetUnit
+      ? units.map((u) =>
+          u.id === targetUnit.id ? { ...u, discontinuanceStatus: "INSPECTED" as const } : u
+        )
+      : units;
+
+    const auditItem: PilotAuditItem = {
+      id: `audit-${Date.now()}`,
+      eventType: "DISCONTINUANCE_INSPECTION_RECORDED",
+      actorName: officer.name,
+      actorRole: officer.role,
+      target: disc.assesseeLegalName,
+      timestamp: new Date().toISOString(),
+      correlationId: `corr-insp-${Date.now()}`,
+      details: `Recorded Rule 10 field inspection findings for ${disc.noticeNumber}. Premises verified by Inspector Muhammad Aslam. Forwarded to ETO for final closure order.`
+    };
+
+    const updatedDiscs = discontinuances.map((d) => (d.id === targetDiscId ? updatedDisc : d));
+    syncState(updatedUnits, [auditItem, ...auditLogs], undefined, undefined, updatedDiscs);
+    setShowDiscontinuanceInspectionModal(false);
+    showToast("success", "Field inspection findings submitted to Assessing Authority (ETO).");
+  };
+
+  const handleOpenDiscontinuanceOrder = (disc: DiscontinuanceRecord) => {
+    const authCheck = verifyOfficerAuthority(officer, "ADJUDICATE_DISCONTINUANCE");
+    if (!authCheck.authorized) {
+      showToast("error", authCheck.reason || "Unauthorized");
+      return;
+    }
+    setTargetDiscId(disc.id);
+    setShowDiscontinuanceOrderModal(true);
+  };
+
+  const handleSaveDiscontinuanceOrder = (decision: "APPROVED" | "REJECTED") => {
+    const disc = discontinuances.find((d) => d.id === targetDiscId);
+    if (!disc) return;
+    const targetUnit = units.find((u) => u.id === disc.unitId);
+    if (!targetUnit) return;
+
+    const orderNumber = `ETO/VEH/DISC/2026/${disc.id.slice(-4)}`;
+    const orderDate = new Date().toISOString().split("T")[0]!;
+
+    const orderDoc = generateDiscontinuanceOrder(targetUnit, {
+      orderNumber,
+      orderDate,
+      noticeNumber: disc.noticeNumber,
+      discontinuanceDate: disc.discontinuanceDate,
+      reason: disc.reason,
+      inspectorFindings: disc.inspectorReport || "Premises verified closed.",
+      etoDecision: decision,
+      etoReason: discEtoReason.trim()
+    });
+
+    const updatedDisc: DiscontinuanceRecord = {
+      ...disc,
+      status: decision,
+      etoOrderNumber: orderNumber,
+      etoOrderDate: orderDate,
+      etoDecision: decision,
+      etoReason: discEtoReason.trim(),
+      adjudicatedBy: officer.id
+    };
+
+    const updatedUnits = units.map((u) =>
+      u.id === targetUnit.id
+        ? {
+            ...u,
+            isDiscontinued: decision === "APPROVED",
+            discontinuanceStatus: (decision === "APPROVED"
+              ? "DISCONTINUED"
+              : "ACTIVE") as StoredUnit["discontinuanceStatus"]
+          }
+        : u
+    );
+
+    const auditItem: PilotAuditItem = {
+      id: `audit-${Date.now()}`,
+      eventType: "DISCONTINUANCE_ADJUDICATED",
+      actorName: officer.name,
+      actorRole: officer.role,
+      target: targetUnit.legalName,
+      timestamp: new Date().toISOString(),
+      correlationId: `corr-order-${Date.now()}`,
+      details: `Issued Statutory Order under Rule 10 (${orderNumber}). Decision: ${decision}. Assessment status updated. SHA-256: ${orderDoc.officialSha256.slice(0, 16)}...`
+    };
+
+    const updatedDiscs = discontinuances.map((d) => (d.id === targetDiscId ? updatedDisc : d));
+    syncState(updatedUnits, [auditItem, ...auditLogs], undefined, undefined, updatedDiscs);
+    setActiveDiscontinuanceOrder(orderDoc);
+    showToast("success", `Rule 10 Order ${orderNumber} passed (${decision}).`);
+  };
+
+  // --- Phase 6: Rule 5 Refund & Adjustment Handlers ---
+  const handleFileRefundApplication = () => {
+    const targetUnit = units.find((u) => u.id === refUnitId);
+    if (!targetUnit) {
+      showToast("error", "Please select a tax unit.");
+      return;
+    }
+    if (refAmount <= 0) {
+      showToast("error", "Adjustment/refund amount must be greater than zero.");
+      return;
+    }
+    if (!refGrounds.trim()) {
+      showToast("error", "Please state the legal grounds for refund/adjustment.");
+      return;
+    }
+
+    const appNumber = `REF-VEH-2026-${Math.floor(Math.random() * 900 + 100)}`;
+    const newRefundRecord: RefundAdjustmentRecord = {
+      id: `ref-${Date.now()}`,
+      applicationNumber: appNumber,
+      unitId: targetUnit.id,
+      assesseeLegalName: targetUnit.legalName,
+      assesseeTradeName: targetUnit.tradeName,
+      cnicOrNtn: targetUnit.identifierValue,
+      type: refType,
+      amount: refAmount,
+      grounds: refGrounds.trim(),
+      evidenceReference: refEvidence.trim(),
+      status: "PENDING_REVIEW",
+      filedAt: new Date().toISOString(),
+      filedBy: officer.id
+    };
+
+    const auditItem: PilotAuditItem = {
+      id: `audit-${Date.now()}`,
+      eventType: "REFUND_APPLICATION_FILED",
+      actorName: officer.name,
+      actorRole: officer.role,
+      target: targetUnit.legalName,
+      timestamp: new Date().toISOString(),
+      correlationId: `corr-refapp-${Date.now()}`,
+      details: `Filed Rule 5 application (${appNumber}) for ${refType} of PKR ${refAmount.toLocaleString()} for ${targetUnit.legalName}.`
+    };
+
+    syncState(units, [auditItem, ...auditLogs], undefined, undefined, undefined, [
+      newRefundRecord,
+      ...refundAdjustments
+    ]);
+    setShowRefundModal(false);
+    showToast("success", `Rule 5 application ${appNumber} submitted for ETO scrutiny.`);
+  };
+
+  const handleAdjudicateRefund = (
+    record: RefundAdjustmentRecord,
+    decision: "APPROVED" | "REJECTED"
+  ) => {
+    const authCheck = verifyOfficerAuthority(officer, "ADJUDICATE_REFUND");
+    if (!authCheck.authorized) {
+      showToast("error", authCheck.reason || "Unauthorized");
+      return;
+    }
+
+    const targetUnit = units.find((u) => u.id === record.unitId);
+    if (!targetUnit) {
+      showToast("error", "Unit not found.");
+      return;
+    }
+
+    const orderNumber = `ETO/VEH/ADJ/2026/${record.id.slice(-4)}`;
+    const orderDate = new Date().toISOString().split("T")[0]!;
+
+    const updatedLedgerEntries = [...targetUnit.ledgerEntries];
+    let adjEntryId: string | undefined;
+
+    if (decision === "APPROVED") {
+      // Append-only MANUAL_ADJUSTMENT entry (-amount credit)
+      const adjEntry = createDemandLedgerEntry({
+        demandUnitId: targetUnit.demandUnit.id,
+        financialYearId: FINANCIAL_YEAR_2026_27,
+        entryType: "MANUAL_ADJUSTMENT",
+        amount: -record.amount,
+        sourceType: "RULE_5_REFUND_ADJUSTMENT",
+        sourceId: record.id,
+        idempotencyKey: `idem-ref-${record.id}`,
+        correlationId: `corr-ref-${Date.now()}`,
+        postedBy: officer.id,
+        metadata: {
+          applicationNumber: record.applicationNumber,
+          grounds: record.grounds,
+          adjudicatedBy: officer.name
+        }
+      });
+      updatedLedgerEntries.push(adjEntry);
+      adjEntryId = adjEntry.id;
+    }
+
+    const orderDoc = generateRefundAdjustmentOrder(targetUnit, {
+      orderNumber,
+      orderDate,
+      applicationNumber: record.applicationNumber,
+      type: record.type,
+      amount: record.amount,
+      grounds: record.grounds,
+      evidenceRef: record.evidenceReference
+    });
+
+    const updatedRecord: RefundAdjustmentRecord = {
+      ...record,
+      status: decision,
+      orderNumber,
+      orderDate,
+      adjudicatedBy: officer.id,
+      ledgerEntryId: adjEntryId
+    };
+
+    const updatedUnits = units.map((u) =>
+      u.id === targetUnit.id
+        ? {
+            ...u,
+            ledgerEntries: updatedLedgerEntries
+          }
+        : u
+    );
+
+    const auditItem: PilotAuditItem = {
+      id: `audit-${Date.now()}`,
+      eventType: "REFUND_ADJUSTMENT_POSTED",
+      actorName: officer.name,
+      actorRole: officer.role,
+      target: targetUnit.legalName,
+      timestamp: new Date().toISOString(),
+      correlationId: `corr-refadj-${Date.now()}`,
+      details: `Rule 5 order ${orderNumber} adjudicated as ${decision}. ${
+        decision === "APPROVED"
+          ? `Balanced credit adjustment of PKR ${record.amount.toLocaleString()} posted to demand ledger.`
+          : "Application rejected."
+      } SHA-256: ${orderDoc.officialSha256.slice(0, 16)}...`
+    };
+
+    const updatedRefunds = refundAdjustments.map((r) => (r.id === record.id ? updatedRecord : r));
+    syncState(
+      updatedUnits,
+      [auditItem, ...auditLogs],
+      undefined,
+      undefined,
+      undefined,
+      updatedRefunds
+    );
+    setActiveRefundOrder(orderDoc);
+    setShowRefundOrderModal(true);
+    showToast("success", `Rule 5 order ${orderNumber} recorded (${decision}).`);
+  };
+
   if (!isLoaded) {
     return (
       <div style={{ padding: "3rem", textAlign: "center" }}>
@@ -1797,6 +2265,30 @@ export default function HomePage() {
             {appeals.filter((a) => a.status === "FILED" || a.status === "HEARING_SCHEDULED")
               .length > 0 &&
               ` (${appeals.filter((a) => a.status === "FILED" || a.status === "HEARING_SCHEDULED").length})`}
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === "CLEARANCE"}
+            onClick={() => setActiveTab("CLEARANCE")}
+            className={`tab-btn ${activeTab === "CLEARANCE" ? "active" : ""}`}
+          >
+            📜 Clearance Certificates (PFT-5)
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === "RELIEF_DESK"}
+            onClick={() => setActiveTab("RELIEF_DESK")}
+            className={`tab-btn ${activeTab === "RELIEF_DESK" ? "active" : ""}`}
+          >
+            🛑 Discontinuance &amp; Refunds (Rules 5 &amp; 10)
+            {discontinuances.filter(
+              (d) => d.status === "PENDING_INSPECTION" || d.status === "INSPECTED"
+            ).length > 0 &&
+              ` (${
+                discontinuances.filter(
+                  (d) => d.status === "PENDING_INSPECTION" || d.status === "INSPECTED"
+                ).length
+              })`}
           </button>
           <button
             role="tab"
@@ -4079,7 +4571,741 @@ export default function HomePage() {
           </section>
         )}
 
-        {/* TAB 5: EPAY PUNJAB RECONCILIATION */}
+        {/* TAB 8: TAX CLEARANCE CERTIFICATES (FORM P.F.T-5) */}
+        {activeTab === "CLEARANCE" && (
+          <section className="content-panel">
+            <div className="panel-header">
+              <div>
+                <h2>Form P.F.T-5: Certificate of Clearance (عدم بقایاجات سرٹیفکیٹ)</h2>
+                <p>
+                  Official statutory certificate issued under Rule 11 of the Punjab Professions and
+                  Trades Tax Rules, 1977. Strictly conditioned upon zero outstanding balance across
+                  all demand ledgers, penalties, and arrears.
+                </p>
+              </div>
+            </div>
+
+            {/* Clearance KPI Cards */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(14rem, 1fr))",
+                gap: "1rem",
+                marginBottom: "1.5rem"
+              }}
+            >
+              <div
+                style={{
+                  background: "#f0fdf4",
+                  border: "1px solid #bbf7d0",
+                  padding: "1rem",
+                  borderRadius: "8px"
+                }}
+              >
+                <span style={{ fontSize: "0.75rem", color: "#166534", fontWeight: 700 }}>
+                  ELIGIBLE UNITS (NIL ARREARS)
+                </span>
+                <strong
+                  style={{
+                    fontSize: "1.5rem",
+                    display: "block",
+                    color: "#14532d",
+                    marginTop: "0.25rem"
+                  }}
+                >
+                  {units.filter((u) => computeLedgerBalance(u.ledgerEntries) === 0).length} Units
+                </strong>
+                <span style={{ fontSize: "0.75rem", color: "#166534" }}>
+                  Zero balance verified in demand ledger
+                </span>
+              </div>
+
+              <div
+                style={{
+                  background: "#fff1f2",
+                  border: "1px solid #fecdd3",
+                  padding: "1rem",
+                  borderRadius: "8px"
+                }}
+              >
+                <span style={{ fontSize: "0.75rem", color: "#9f1239", fontWeight: 700 }}>
+                  INELIGIBLE UNITS (ARREARS PENDING)
+                </span>
+                <strong
+                  style={{
+                    fontSize: "1.5rem",
+                    display: "block",
+                    color: "#881337",
+                    marginTop: "0.25rem"
+                  }}
+                >
+                  {units.filter((u) => computeLedgerBalance(u.ledgerEntries) > 0).length} Units
+                </strong>
+                <span style={{ fontSize: "0.75rem", color: "#9f1239" }}>
+                  Clearance certificate generation blocked
+                </span>
+              </div>
+
+              <div
+                style={{
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  padding: "1rem",
+                  borderRadius: "8px"
+                }}
+              >
+                <span style={{ fontSize: "0.75rem", color: "#1e40af", fontWeight: 700 }}>
+                  FORM P.F.T-5 CERTIFICATES ISSUED
+                </span>
+                <strong
+                  style={{
+                    fontSize: "1.5rem",
+                    display: "block",
+                    color: "#1e3a8a",
+                    marginTop: "0.25rem"
+                  }}
+                >
+                  {clearanceCertificates.length} Issued
+                </strong>
+                <span style={{ fontSize: "0.75rem", color: "#1e40af" }}>
+                  Sealed with SHA-256 non-repudiation digest
+                </span>
+              </div>
+            </div>
+
+            {/* Clearance Eligibility Table */}
+            <div className="table-container">
+              <table className="gov-table">
+                <thead>
+                  <tr>
+                    <th>Demand No.</th>
+                    <th>Assessee Legal &amp; Trade Name</th>
+                    <th>Category &amp; Rule</th>
+                    <th>Ledger Outstanding Balance</th>
+                    <th>Statutory Clearance Status</th>
+                    <th>Certificate Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {units.map((u) => {
+                    const balance = computeLedgerBalance(u.ledgerEntries);
+                    const isZeroBalance = balance === 0;
+                    const certRecord = clearanceCertificates.find((c) => c.unitId === u.id);
+
+                    return (
+                      <tr key={u.id}>
+                        <td>
+                          <strong>{u.demandUnit.permanentDemandNo}</strong>
+                          <span style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}>
+                            Circle-Vehari
+                          </span>
+                        </td>
+                        <td>
+                          <strong>{u.legalName}</strong>
+                          {u.tradeName && u.tradeName !== u.legalName && (
+                            <span
+                              style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                            >
+                              Trading as: {u.tradeName}
+                            </span>
+                          )}
+                          <span style={{ display: "block", fontSize: "0.75rem", color: "#94a3b8" }}>
+                            {u.identifierType}: {u.identifierValue}
+                          </span>
+                        </td>
+                        <td>
+                          <strong>{u.statutoryRule.category}</strong>
+                          <span style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}>
+                            Entry {u.statutoryRule.subclassification_code} (PKR{" "}
+                            {u.statutoryRule.annual_rate_pkr.toLocaleString()})
+                          </span>
+                        </td>
+                        <td>
+                          <strong
+                            style={{
+                              fontSize: "0.95rem",
+                              color: isZeroBalance ? "#166534" : "#dc2626"
+                            }}
+                          >
+                            PKR {balance.toLocaleString()}
+                          </strong>
+                          {balance > 0 ? (
+                            <span
+                              style={{ display: "block", fontSize: "0.7rem", color: "#dc2626" }}
+                            >
+                              Arrears outstanding
+                            </span>
+                          ) : (
+                            <span
+                              style={{ display: "block", fontSize: "0.7rem", color: "#166534" }}
+                            >
+                              Nil balance
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          {isZeroBalance ? (
+                            <span
+                              className="badge badge-approved"
+                              style={{
+                                background: "#ecfdf5",
+                                color: "#065f46",
+                                border: "1px solid #a7f3d0"
+                              }}
+                            >
+                              ✓ ELIGIBLE (NIL ARREARS)
+                            </span>
+                          ) : (
+                            <span
+                              className="badge badge-returned"
+                              style={{
+                                background: "#fff1f2",
+                                color: "#9f1239",
+                                border: "1px solid #fecdd3"
+                              }}
+                            >
+                              ✕ INELIGIBLE (ARREARS PENDING)
+                            </span>
+                          )}
+                          {certRecord && (
+                            <span
+                              style={{
+                                display: "block",
+                                fontSize: "0.7rem",
+                                color: "#065f46",
+                                marginTop: "0.25rem",
+                                fontFamily: "monospace"
+                              }}
+                            >
+                              Cert: {certRecord.certificateNumber}
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          {isZeroBalance ? (
+                            <button
+                              type="button"
+                              className="btn-primary"
+                              style={{
+                                fontSize: "0.75rem",
+                                padding: "0.3rem 0.6rem",
+                                backgroundColor: "#065f46",
+                                borderColor: "#047857"
+                              }}
+                              onClick={() => handleOpenClearanceCertificate(u)}
+                            >
+                              📜 {certRecord ? "View Certificate" : "Issue Form P.F.T-5"}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn-secondary"
+                              disabled
+                              style={{
+                                fontSize: "0.75rem",
+                                padding: "0.3rem 0.6rem",
+                                opacity: 0.5,
+                                cursor: "not-allowed"
+                              }}
+                              title="Cannot issue clearance certificate: Outstanding arrears must be fully cleared first."
+                            >
+                              🔒 Clearance Locked
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {/* TAB 9: STATUTORY RELIEF DESK (RULES 5 & 10) */}
+        {activeTab === "RELIEF_DESK" && (
+          <section className="content-panel">
+            <div className="panel-header">
+              <div>
+                <h2>Statutory Relief &amp; Adjustment Desk (Rules 5 &amp; 10)</h2>
+                <p>
+                  Legal administration for trade cessation / business discontinuance under Rule 10,
+                  and excess tax refunds or double-entry credit adjustments under Rule 5 of the
+                  Punjab Professions and Trades Tax Rules, 1977.
+                </p>
+              </div>
+              <div className="panel-actions" style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowFileDiscontinuanceModal(true)}
+                  title="File an application for trade closure or cessation under Rule 10"
+                >
+                  🛑 File Rule 10 Discontinuance Notice
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => setShowRefundModal(true)}
+                  title="Apply for statutory refund or double-entry credit adjustment under Rule 5"
+                >
+                  💰 File Rule 5 Refund / Adjustment
+                </button>
+              </div>
+            </div>
+
+            {/* SECTION A: RULE 10 DISCONTINUANCE WORKFLOW */}
+            <div style={{ marginBottom: "2.5rem" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  borderBottom: "2px solid #0d3822",
+                  paddingBottom: "0.5rem",
+                  marginBottom: "1rem"
+                }}
+              >
+                <h3 style={{ margin: 0, color: "#0d3822", fontSize: "1.15rem" }}>
+                  🛑 Rule 10: Trade Cessation &amp; Discontinuance (کاروبار کی بندش کا نوٹس)
+                </h3>
+                <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                  Statutory 30-Day Notice &bull; On-Site Physical Inspection &bull; ETO Closure
+                  Order
+                </span>
+              </div>
+
+              <div
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "6px",
+                  padding: "0.85rem 1rem",
+                  marginBottom: "1rem",
+                  fontSize: "0.85rem",
+                  color: "#334155"
+                }}
+              >
+                <p style={{ margin: "0 0 0.4rem" }}>
+                  <strong>Statutory Mandate (Rule 10):</strong> Any person liable to pay tax who
+                  discontinues their profession or trade must give thirty days notice in writing to
+                  the Assessing Authority.
+                </p>
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                  <strong>Legal Consequence:</strong> Approval of discontinuance freezes future
+                  annual tax liability while preserving all past uncollected arrears for recovery
+                  under Section 3(4).
+                </p>
+              </div>
+
+              <div className="table-container">
+                <table className="gov-table">
+                  <thead>
+                    <tr>
+                      <th>Notice Reference</th>
+                      <th>Taxpayer Unit</th>
+                      <th>Discontinuance Date &amp; Reason</th>
+                      <th>Inspector Field Inspection</th>
+                      <th>Status</th>
+                      <th>Statutory Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {discontinuances.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          style={{ textAlign: "center", padding: "2rem", color: "#64748b" }}
+                        >
+                          No discontinuance notices filed in Circle-Vehari.
+                        </td>
+                      </tr>
+                    ) : (
+                      discontinuances.map((disc) => {
+                        const isPendingInsp = disc.status === "PENDING_INSPECTION";
+                        const isInspected = disc.status === "INSPECTED";
+                        const isClosed = disc.status === "APPROVED";
+                        const isRejected = disc.status === "REJECTED";
+
+                        return (
+                          <tr key={disc.id}>
+                            <td>
+                              <strong>{disc.noticeNumber}</strong>
+                              <span
+                                style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                              >
+                                Filed: {new Date(disc.filedAt).toLocaleDateString()}
+                              </span>
+                            </td>
+                            <td>
+                              <strong>{disc.assesseeLegalName}</strong>
+                              <span
+                                style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                              >
+                                {disc.cnicOrNtn}
+                              </span>
+                            </td>
+                            <td>
+                              <strong style={{ color: "#b91c1c" }}>
+                                Effective: {disc.discontinuanceDate}
+                              </strong>
+                              <span
+                                style={{
+                                  display: "block",
+                                  fontSize: "0.75rem",
+                                  color: "#475569",
+                                  maxWidth: "18rem"
+                                }}
+                              >
+                                {disc.reason}
+                              </span>
+                            </td>
+                            <td>
+                              {disc.inspectorReport ? (
+                                <div>
+                                  <span
+                                    style={{
+                                      fontSize: "0.75rem",
+                                      color: "#166534",
+                                      fontWeight: 600
+                                    }}
+                                  >
+                                    ✓ Verified On-Site
+                                  </span>
+                                  <span
+                                    style={{
+                                      display: "block",
+                                      fontSize: "0.725rem",
+                                      color: "#64748b",
+                                      maxWidth: "18rem"
+                                    }}
+                                  >
+                                    {disc.inspectorReport}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span style={{ fontSize: "0.75rem", color: "#d97706" }}>
+                                  ⏳ Awaiting Field Inspection
+                                </span>
+                              )}
+                            </td>
+                            <td>
+                              <span
+                                className={`badge ${
+                                  isClosed
+                                    ? "badge-approved"
+                                    : isInspected
+                                      ? "badge-submitted"
+                                      : isPendingInsp
+                                        ? "badge-pending"
+                                        : "badge-returned"
+                                }`}
+                              >
+                                {disc.status.replace(/_/g, " ")}
+                              </span>
+                              {disc.etoOrderNumber && (
+                                <span
+                                  style={{
+                                    display: "block",
+                                    fontSize: "0.7rem",
+                                    color: "#64748b",
+                                    fontFamily: "monospace",
+                                    marginTop: "0.2rem"
+                                  }}
+                                >
+                                  {disc.etoOrderNumber}
+                                </span>
+                              )}
+                            </td>
+                            <td>
+                              <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                                {isPendingInsp && (
+                                  <button
+                                    type="button"
+                                    className="btn-secondary"
+                                    style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                    onClick={() => handleOpenDiscontinuanceInspection(disc)}
+                                  >
+                                    🔍 Field Inspection
+                                  </button>
+                                )}
+
+                                {isInspected &&
+                                  (officer.role === "ETO" || officer.role === "DIRECTOR") && (
+                                    <button
+                                      type="button"
+                                      className="btn-primary"
+                                      style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                      onClick={() => handleOpenDiscontinuanceOrder(disc)}
+                                    >
+                                      ⚖️ Issue Closure Order
+                                    </button>
+                                  )}
+
+                                {(isClosed || isRejected) && (
+                                  <button
+                                    type="button"
+                                    className="btn-secondary"
+                                    style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                    onClick={() => {
+                                      const u = units.find((unit) => unit.id === disc.unitId);
+                                      if (u) {
+                                        const doc = generateDiscontinuanceOrder(u, {
+                                          orderNumber: disc.etoOrderNumber || "DISC-ORD-2026",
+                                          orderDate:
+                                            disc.etoOrderDate ||
+                                            new Date().toISOString().split("T")[0]!,
+                                          noticeNumber: disc.noticeNumber,
+                                          discontinuanceDate: disc.discontinuanceDate,
+                                          reason: disc.reason,
+                                          inspectorFindings:
+                                            disc.inspectorReport || "Premises verified closed.",
+                                          etoDecision:
+                                            (disc.etoDecision as "APPROVED" | "REJECTED") ||
+                                            "APPROVED",
+                                          etoReason: disc.etoReason || "Statutory closure verified."
+                                        });
+                                        setActiveDiscontinuanceOrder(doc);
+                                        setShowDiscontinuanceOrderModal(true);
+                                      }
+                                    }}
+                                  >
+                                    📄 View Order
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* SECTION B: RULE 5 STATUTORY REFUNDS & CREDIT ADJUSTMENTS */}
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  borderBottom: "2px solid #0d3822",
+                  paddingBottom: "0.5rem",
+                  marginBottom: "1rem"
+                }}
+              >
+                <h3 style={{ margin: 0, color: "#0d3822", fontSize: "1.15rem" }}>
+                  💰 Rule 5: Excess Tax Refunds &amp; Credit Adjustments (واپسی و ایڈجسٹمنٹ ٹیکس)
+                </h3>
+                <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                  Application Scrutiny &bull; ETO Statutory Decree &bull; Double-Entry Demand Ledger
+                  Credit
+                </span>
+              </div>
+
+              <div
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "6px",
+                  padding: "0.85rem 1rem",
+                  marginBottom: "1rem",
+                  fontSize: "0.85rem",
+                  color: "#334155"
+                }}
+              >
+                <p style={{ margin: "0 0 0.4rem" }}>
+                  <strong>Statutory Ledger Integrity:</strong> When excess tax is deposited or
+                  assessed erroneously, relief is granted via an immutable double-entry credit
+                  (MANUAL_ADJUSTMENT).
+                </p>
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                  <strong>Compliance Rule:</strong> Existing demand entries are never deleted or
+                  mutated. Adjustments credit the ledger with a negative amount (-PKR) linked to the
+                  formal ETO decree.
+                </p>
+              </div>
+
+              <div className="table-container">
+                <table className="gov-table">
+                  <thead>
+                    <tr>
+                      <th>Application No.</th>
+                      <th>Taxpayer Unit</th>
+                      <th>Relief Type &amp; Amount</th>
+                      <th>Legal Grounds &amp; Evidence</th>
+                      <th>Status &amp; Ledger Posting</th>
+                      <th>Statutory Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {refundAdjustments.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          style={{ textAlign: "center", padding: "2rem", color: "#64748b" }}
+                        >
+                          No refund or adjustment applications recorded.
+                        </td>
+                      </tr>
+                    ) : (
+                      refundAdjustments.map((ref) => {
+                        const isPending = ref.status === "PENDING_REVIEW";
+                        const isApproved = ref.status === "APPROVED";
+
+                        return (
+                          <tr key={ref.id}>
+                            <td>
+                              <strong>{ref.applicationNumber}</strong>
+                              <span
+                                style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                              >
+                                Filed: {new Date(ref.filedAt).toLocaleDateString()}
+                              </span>
+                            </td>
+                            <td>
+                              <strong>{ref.assesseeLegalName}</strong>
+                              <span
+                                style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                              >
+                                {ref.cnicOrNtn}
+                              </span>
+                            </td>
+                            <td>
+                              <strong style={{ color: "#1e3a8a" }}>
+                                PKR {ref.amount.toLocaleString()}
+                              </strong>
+                              <span
+                                style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                              >
+                                Type: {ref.type.replace(/_/g, " ")}
+                              </span>
+                            </td>
+                            <td>
+                              <span
+                                style={{
+                                  display: "block",
+                                  fontSize: "0.8rem",
+                                  color: "#334155",
+                                  maxWidth: "20rem"
+                                }}
+                              >
+                                {ref.grounds}
+                              </span>
+                              {ref.evidenceReference && (
+                                <span
+                                  style={{
+                                    display: "block",
+                                    fontSize: "0.725rem",
+                                    color: "#64748b",
+                                    marginTop: "0.2rem"
+                                  }}
+                                >
+                                  Ref: {ref.evidenceReference}
+                                </span>
+                              )}
+                            </td>
+                            <td>
+                              <span
+                                className={`badge ${
+                                  isApproved
+                                    ? "badge-approved"
+                                    : isPending
+                                      ? "badge-pending"
+                                      : "badge-returned"
+                                }`}
+                              >
+                                {ref.status.replace(/_/g, " ")}
+                              </span>
+                              {ref.ledgerEntryId && (
+                                <span
+                                  style={{
+                                    display: "block",
+                                    fontSize: "0.7rem",
+                                    color: "#166534",
+                                    fontWeight: 600,
+                                    marginTop: "0.25rem"
+                                  }}
+                                >
+                                  ✓ Posted to Demand Ledger
+                                </span>
+                              )}
+                            </td>
+                            <td>
+                              <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                                {isPending &&
+                                  (officer.role === "ETO" || officer.role === "DIRECTOR") && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        className="btn-primary"
+                                        style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                        onClick={() => handleAdjudicateRefund(ref, "APPROVED")}
+                                      >
+                                        ⚖️ Approve &amp; Post Credit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn-secondary"
+                                        style={{
+                                          padding: "0.25rem 0.5rem",
+                                          fontSize: "0.75rem",
+                                          color: "#dc2626"
+                                        }}
+                                        onClick={() => handleAdjudicateRefund(ref, "REJECTED")}
+                                      >
+                                        Reject
+                                      </button>
+                                    </>
+                                  )}
+
+                                {isPending && officer.role === "INSPECTOR" && (
+                                  <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                                    Awaiting ETO Scrutiny
+                                  </span>
+                                )}
+
+                                {isApproved && (
+                                  <button
+                                    type="button"
+                                    className="btn-secondary"
+                                    style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                    onClick={() => {
+                                      const u = units.find((unit) => unit.id === ref.unitId);
+                                      if (u) {
+                                        const doc = generateRefundAdjustmentOrder(u, {
+                                          orderNumber: ref.orderNumber || "ADJ-ORD-2026",
+                                          orderDate:
+                                            ref.orderDate ||
+                                            new Date().toISOString().split("T")[0]!,
+                                          applicationNumber: ref.applicationNumber,
+                                          type: ref.type,
+                                          amount: ref.amount,
+                                          grounds: ref.grounds,
+                                          evidenceRef: ref.evidenceReference
+                                        });
+                                        setActiveRefundOrder(doc);
+                                        setShowRefundOrderModal(true);
+                                      }
+                                    }}
+                                  >
+                                    📄 View Order
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        )}
         {activeTab === "EPAY" && (
           <section className="content-panel">
             <div className="panel-header">
@@ -7963,6 +9189,32 @@ export default function HomePage() {
                           ✓ Sole Judicial Authority
                         </td>
                       </tr>
+                      <tr>
+                        <td>Form P.F.T-5 Tax Clearance Certificate (Rule 11)</td>
+                        <td style={{ color: "#b91c1c", fontWeight: 600 }}>✕ Blocked (Violation)</td>
+                        <td style={{ color: "#166534", fontWeight: 700 }}>
+                          ✓ Statutory Approver &amp; Seal
+                        </td>
+                        <td style={{ color: "#166534" }}>✓ Authorized</td>
+                      </tr>
+                      <tr>
+                        <td>Rule 10 Discontinuance Notice &amp; Inspection</td>
+                        <td style={{ color: "#166534", fontWeight: 700 }}>
+                          ✓ Field Inspection Maker
+                        </td>
+                        <td style={{ color: "#166534", fontWeight: 700 }}>
+                          ✓ Statutory Closure Order
+                        </td>
+                        <td style={{ color: "#166534" }}>✓ Oversight</td>
+                      </tr>
+                      <tr>
+                        <td>Rule 5 Statutory Refunds &amp; Ledger Adjustments</td>
+                        <td style={{ color: "#b91c1c", fontWeight: 600 }}>✕ Blocked (Violation)</td>
+                        <td style={{ color: "#166534", fontWeight: 700 }}>
+                          ✓ Statutory Adjudication
+                        </td>
+                        <td style={{ color: "#166534" }}>✓ Authorized</td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -7976,6 +9228,1278 @@ export default function HomePage() {
                 onClick={() => setShowAuthModal(false)}
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 18: FORM P.F.T-5 CLEARANCE CERTIFICATE STUDIO */}
+      {showClearanceModal && activeClearanceCert && (
+        <div className="modal-backdrop" onClick={() => setShowClearanceModal(false)}>
+          <div
+            className="modal-content modal-lg"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "850px" }}
+          >
+            <div className="modal-header">
+              <div>
+                <h3>📜 Form P.F.T-5: Professional Tax Clearance Certificate</h3>
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                  Official statutory certificate issued under Rule 11 &amp; Section 3(1) of Punjab
+                  Finance Act 1977
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setShowClearanceModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div
+              className="modal-body"
+              style={{ maxHeight: "78vh", overflowY: "auto", padding: "1.5rem" }}
+            >
+              {/* Printable Clearance Certificate Container */}
+              <div
+                id="clearance-certificate-printable"
+                style={{
+                  background: "#ffffff",
+                  border: "3px double #0d3822",
+                  outline: "1px solid #10b981",
+                  borderRadius: "8px",
+                  padding: "2.25rem",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+                  position: "relative",
+                  fontFamily: "Georgia, serif"
+                }}
+              >
+                {/* Official Punjab Government Seal Header */}
+                <div
+                  style={{
+                    textAlign: "center",
+                    borderBottom: "2px solid #0d3822",
+                    paddingBottom: "1.25rem",
+                    marginBottom: "1.5rem"
+                  }}
+                >
+                  <div style={{ fontSize: "1.75rem", marginBottom: "0.25rem" }}>🛡️</div>
+                  <h4
+                    style={{
+                      margin: "0 0 0.25rem",
+                      fontSize: "1.2rem",
+                      letterSpacing: "0.08em",
+                      color: "#0d3822",
+                      textTransform: "uppercase"
+                    }}
+                  >
+                    GOVERNMENT OF THE PUNJAB
+                  </h4>
+                  <h5
+                    style={{
+                      margin: "0 0 0.25rem",
+                      fontSize: "1.05rem",
+                      color: "#166534",
+                      fontFamily: "'Noto Nastaliq Urdu', 'Urdu Typesetting', serif"
+                    }}
+                  >
+                    حکومت پنجاب &bull; محکمہ ایکسائز، ٹیکسیشن و نارکوٹکس کنٹرول
+                  </h5>
+                  <p style={{ margin: "0.2rem 0", fontSize: "0.85rem", color: "#475569" }}>
+                    OFFICE OF THE EXCISE &amp; TAXATION OFFICER / ASSESSING AUTHORITY &bull;
+                    CIRCLE-VEHARI
+                  </p>
+                  <div
+                    style={{
+                      display: "inline-block",
+                      marginTop: "0.75rem",
+                      background: "#0d3822",
+                      color: "#ffffff",
+                      padding: "0.35rem 1.5rem",
+                      borderRadius: "4px",
+                      fontSize: "0.95rem",
+                      fontWeight: 700,
+                      letterSpacing: "0.06em"
+                    }}
+                  >
+                    FORM P.F.T-5 &bull; فارم پی ایف ٹی-۵
+                  </div>
+                  <h3 style={{ margin: "0.6rem 0 0", fontSize: "1.25rem", color: "#0d3822" }}>
+                    TAX CLEARANCE CERTIFICATE (سرٹیفکیٹ عدم بقایاجات)
+                  </h3>
+                  <span style={{ fontSize: "0.8rem", color: "#64748b", fontStyle: "italic" }}>
+                    (Issued under Rule 11 of the Punjab Professions and Trades Tax Rules, 1977)
+                  </span>
+                </div>
+
+                {/* Certificate Metadata Grid */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "1rem",
+                    fontSize: "0.85rem",
+                    marginBottom: "1.5rem",
+                    background: "#f8fafc",
+                    padding: "0.85rem 1rem",
+                    borderRadius: "6px",
+                    border: "1px solid #e2e8f0"
+                  }}
+                >
+                  <div>
+                    <p style={{ margin: "0.2rem 0" }}>
+                      <strong>Certificate Serial No:</strong>{" "}
+                      <span style={{ fontFamily: "monospace", color: "#065f46", fontWeight: 700 }}>
+                        {activeClearanceCert.certificateNumber}
+                      </span>
+                    </p>
+                    <p style={{ margin: "0.2rem 0" }}>
+                      <strong>Permanent Demand No:</strong> {activeClearanceCert.demandNo}
+                    </p>
+                    <p style={{ margin: "0.2rem 0" }}>
+                      <strong>Tax District &amp; Circle:</strong> {activeClearanceCert.districtName}{" "}
+                      ({activeClearanceCert.circleName})
+                    </p>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <p style={{ margin: "0.2rem 0" }}>
+                      <strong>Date of Issue:</strong> {activeClearanceCert.issueDate}
+                    </p>
+                    <p style={{ margin: "0.2rem 0" }}>
+                      <strong>Financial Year:</strong> {activeClearanceCert.financialYear}
+                    </p>
+                    <p style={{ margin: "0.2rem 0" }}>
+                      <strong>Valid Until:</strong>{" "}
+                      <span style={{ color: "#166534", fontWeight: 700 }}>
+                        {activeClearanceCert.expiryDate}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Assessee Description */}
+                <div style={{ marginBottom: "1.5rem", fontSize: "0.9rem", lineHeight: 1.6 }}>
+                  <p style={{ margin: "0.4rem 0" }}>
+                    <strong>Name of Assessee / Establishment:</strong>{" "}
+                    <span style={{ fontSize: "1.05rem", color: "#0d3822", fontWeight: 700 }}>
+                      {activeClearanceCert.assesseeLegalName}
+                    </span>
+                    {activeClearanceCert.assesseeTradeName &&
+                      activeClearanceCert.assesseeTradeName !==
+                        activeClearanceCert.assesseeLegalName && (
+                        <span>
+                          {" "}
+                          (Trading as: <em>{activeClearanceCert.assesseeTradeName}</em>)
+                        </span>
+                      )}
+                  </p>
+                  <p style={{ margin: "0.4rem 0" }}>
+                    <strong>CNIC / Registration NTN:</strong>{" "}
+                    <span style={{ fontFamily: "monospace", fontWeight: 600 }}>
+                      {activeClearanceCert.identifierValue}
+                    </span>
+                  </p>
+                  <p style={{ margin: "0.4rem 0" }}>
+                    <strong>Principal Place of Business:</strong>{" "}
+                    {activeClearanceCert.businessAddress}
+                  </p>
+                  <p style={{ margin: "0.4rem 0" }}>
+                    <strong>Statutory Classification:</strong> Second Schedule, Entry{" "}
+                    {activeClearanceCert.scheduleEntry} &bull; {activeClearanceCert.categoryName} (
+                    <em>{activeClearanceCert.subcategoryName}</em>)
+                  </p>
+                </div>
+
+                {/* Formal Statutory Recital (Bilingual English & Urdu) */}
+                <div
+                  style={{
+                    border: "1px solid #cbd5e1",
+                    background: "#f0fdf4",
+                    padding: "1.25rem",
+                    borderRadius: "6px",
+                    marginBottom: "1.5rem",
+                    lineHeight: 1.7
+                  }}
+                >
+                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.92rem", color: "#14532d" }}>
+                    <strong>STATUTORY CERTIFICATION:</strong> This is to formally certify that the
+                    above-named assessee has fully satisfied, settled, and discharged all
+                    professional tax liabilities, assessments, penalties, and arrears levied under
+                    Section 3 of the Punjab Finance Act, 1977 (Act XV of 1977) for the financial
+                    year <strong>{activeClearanceCert.financialYear}</strong>.
+                  </p>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "0.95rem",
+                      color: "#064e3b",
+                      fontFamily: "'Noto Nastaliq Urdu', 'Urdu Typesetting', serif",
+                      direction: "rtl",
+                      textAlign: "right"
+                    }}
+                  >
+                    تصدیق کی جاتی ہے کہ مذکورہ بالا ٹیکس گزار / کاروباری ادارے نے پنجاب فنانس ایکٹ
+                    ۱۹۷۷ء کے تحت مالی سال <strong>{activeClearanceCert.financialYear}</strong> کے
+                    جملہ پیشہ وارانہ ٹیکس، بقایاجات اور قانونی جرمانوں کی مکمل ادائیگی کر دی ہے۔
+                    سرکاری رجسٹر و لیجر کے مطابق مذکورہ یونٹ کے ذمہ کوئی رقم واجب الادا نہیں ہے۔
+                  </p>
+                </div>
+
+                {/* Nil Balance Verification Grid */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr 1fr",
+                    gap: "0.75rem",
+                    marginBottom: "1.75rem",
+                    textAlign: "center"
+                  }}
+                >
+                  <div
+                    style={{
+                      background: "#f8fafc",
+                      padding: "0.75rem",
+                      borderRadius: "6px",
+                      border: "1px solid #e2e8f0"
+                    }}
+                  >
+                    <span style={{ fontSize: "0.75rem", color: "#64748b", display: "block" }}>
+                      Statutory Demand
+                    </span>
+                    <strong style={{ fontSize: "1.1rem", color: "#334155" }}>
+                      PKR {activeClearanceCert.annualTaxAssessed.toLocaleString()}
+                    </strong>
+                  </div>
+                  <div
+                    style={{
+                      background: "#f8fafc",
+                      padding: "0.75rem",
+                      borderRadius: "6px",
+                      border: "1px solid #e2e8f0"
+                    }}
+                  >
+                    <span style={{ fontSize: "0.75rem", color: "#64748b", display: "block" }}>
+                      Total Recovered / Paid
+                    </span>
+                    <strong style={{ fontSize: "1.1rem", color: "#166534" }}>
+                      PKR {activeClearanceCert.totalTaxPaid.toLocaleString()}
+                    </strong>
+                  </div>
+                  <div
+                    style={{
+                      background: "#ecfdf5",
+                      padding: "0.75rem",
+                      borderRadius: "6px",
+                      border: "1px solid #a7f3d0"
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#065f46",
+                        display: "block",
+                        fontWeight: 700
+                      }}
+                    >
+                      Arrears / Balance
+                    </span>
+                    <strong style={{ fontSize: "1.1rem", color: "#065f46" }}>
+                      PKR 0 (NIL / کچھ نہیں)
+                    </strong>
+                  </div>
+                </div>
+
+                {/* Signatures, Seals, and QR Verification Footer */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr 1.2fr",
+                    gap: "1.5rem",
+                    alignItems: "center",
+                    borderTop: "1px dashed #94a3b8",
+                    paddingTop: "1.25rem",
+                    fontSize: "0.8rem"
+                  }}
+                >
+                  {/* Digital QR Box */}
+                  <div
+                    style={{
+                      textAlign: "center",
+                      border: "1px dashed #cbd5e1",
+                      padding: "0.5rem",
+                      borderRadius: "6px",
+                      background: "#f8fafc"
+                    }}
+                  >
+                    <div style={{ fontSize: "2rem" }}>📱</div>
+                    <strong style={{ fontSize: "0.75rem", display: "block", color: "#0d3822" }}>
+                      Scan to Verify Status
+                    </strong>
+                    <span style={{ fontSize: "0.65rem", color: "#64748b", wordBreak: "break-all" }}>
+                      PTAS-PFT5-VERIFY
+                    </span>
+                  </div>
+
+                  {/* Official Government Seal Emblem */}
+                  <div style={{ textAlign: "center" }}>
+                    <div
+                      style={{
+                        display: "inline-block",
+                        width: "70px",
+                        height: "70px",
+                        borderRadius: "50%",
+                        border: "2px solid #0d3822",
+                        padding: "0.4rem",
+                        color: "#0d3822"
+                      }}
+                    >
+                      <div style={{ fontSize: "1.5rem", marginTop: "0.1rem" }}>🏛️</div>
+                      <span style={{ fontSize: "0.55rem", fontWeight: 700, display: "block" }}>
+                        SEAL OF ETO
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Assessing Authority Sign-off */}
+                  <div style={{ textAlign: "right" }}>
+                    <div
+                      style={{
+                        borderBottom: "1px solid #334155",
+                        width: "12rem",
+                        marginLeft: "auto",
+                        marginBottom: "0.4rem"
+                      }}
+                    />
+                    <strong style={{ display: "block", fontSize: "0.9rem", color: "#0d3822" }}>
+                      {activeClearanceCert.issuingOfficerName}
+                    </strong>
+                    <span style={{ display: "block", color: "#475569" }}>
+                      {activeClearanceCert.issuingOfficerTitle}
+                    </span>
+                    <span style={{ display: "block", color: "#64748b", fontSize: "0.75rem" }}>
+                      Assessing Authority &bull; Circle-Vehari
+                    </span>
+                  </div>
+                </div>
+
+                {/* Cryptographic SHA-256 Digest Non-Repudiation */}
+                <div
+                  style={{
+                    marginTop: "1.25rem",
+                    paddingTop: "0.6rem",
+                    borderTop: "1px solid #e2e8f0",
+                    fontSize: "0.68rem",
+                    color: "#64748b",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center"
+                  }}
+                >
+                  <div>
+                    <span>Official SHA-256 Digest: </span>
+                    <span style={{ fontFamily: "monospace", color: "#334155" }}>
+                      {activeClearanceCert.officialSha256}
+                    </span>
+                  </div>
+                  <span>Punjab IT Board &bull; ET&amp;NC Department</span>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className="modal-footer"
+              style={{ display: "flex", justifyContent: "space-between" }}
+            >
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowClearanceModal(false)}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ backgroundColor: "#065f46", borderColor: "#047857" }}
+                onClick={() => window.print()}
+              >
+                🖨️ Print Form P.F.T-5 Certificate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 19: FILE RULE 10 DISCONTINUANCE NOTICE */}
+      {showFileDiscontinuanceModal && (
+        <div className="modal-backdrop" onClick={() => setShowFileDiscontinuanceModal(false)}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "600px" }}
+          >
+            <div className="modal-header">
+              <div>
+                <h3>🛑 File Rule 10 Notice of Discontinuance</h3>
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                  Notice of trade cessation or business closure under Punjab Professions &amp;
+                  Trades Tax Rules, 1977
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setShowFileDiscontinuanceModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleFileDiscontinuance();
+              }}
+            >
+              <div className="modal-body">
+                <div className="form-group" style={{ marginBottom: "1rem" }}>
+                  <label
+                    htmlFor="disc-unit-select"
+                    style={{ fontWeight: 600, display: "block", marginBottom: "0.3rem" }}
+                  >
+                    Select Taxpayer Unit:
+                  </label>
+                  <select
+                    id="disc-unit-select"
+                    value={discUnitId}
+                    onChange={(e) => setDiscUnitId(e.target.value)}
+                    className="form-control"
+                    style={{ width: "100%", padding: "0.5rem" }}
+                  >
+                    {units.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.legalName} ({u.demandUnit.permanentDemandNo}) &bull; PKR{" "}
+                        {computeLedgerBalance(u.ledgerEntries)} bal
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: "1rem" }}>
+                  <label
+                    htmlFor="disc-date-input"
+                    style={{ fontWeight: 600, display: "block", marginBottom: "0.3rem" }}
+                  >
+                    Effective Date of Cessation / Closure:
+                  </label>
+                  <input
+                    id="disc-date-input"
+                    type="date"
+                    value={discDate}
+                    onChange={(e) => setDiscDate(e.target.value)}
+                    className="form-control"
+                    style={{ width: "100%", padding: "0.5rem" }}
+                    required
+                  />
+                  <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                    Statutory Rule 10 requires 30 days prior written notice before closure.
+                  </span>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: "1rem" }}>
+                  <label
+                    htmlFor="disc-reason-input"
+                    style={{ fontWeight: 600, display: "block", marginBottom: "0.3rem" }}
+                  >
+                    Grounds / Reason for Discontinuance:
+                  </label>
+                  <textarea
+                    id="disc-reason-input"
+                    value={discReason}
+                    onChange={(e) => setDiscReason(e.target.value)}
+                    rows={3}
+                    className="form-control"
+                    style={{ width: "100%", padding: "0.5rem" }}
+                    placeholder="E.g., Surrendered commercial lease deed, vacated premises, business insolvent, license canceled..."
+                    required
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: "1rem" }}>
+                  <label
+                    htmlFor="disc-evidence-input"
+                    style={{ fontWeight: 600, display: "block", marginBottom: "0.3rem" }}
+                  >
+                    Documentary Evidence Details:
+                  </label>
+                  <input
+                    id="disc-evidence-input"
+                    type="text"
+                    value={discEvidence}
+                    onChange={(e) => setDiscEvidence(e.target.value)}
+                    className="form-control"
+                    style={{ width: "100%", padding: "0.5rem" }}
+                    placeholder="E.g., Notarized lease surrender deed, electricity disconnection certificate, shop sale agreement"
+                  />
+                </div>
+
+                <div
+                  style={{
+                    background: "#fef3c7",
+                    border: "1px solid #fde68a",
+                    borderRadius: "6px",
+                    padding: "0.75rem",
+                    fontSize: "0.8rem",
+                    color: "#92400e"
+                  }}
+                >
+                  <strong>⚠️ Legal Notice:</strong> Filing this notice will trigger a physical field
+                  inspection by Circle Inspector Muhammad Aslam. Once verified, Assessing Authority
+                  ETO Tariq Mahmood passes the final closure order. Historical arrears remain
+                  recoverable.
+                </div>
+              </div>
+
+              <div
+                className="modal-footer"
+                style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}
+              >
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowFileDiscontinuanceModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  style={{ backgroundColor: "#b91c1c", borderColor: "#991b1b" }}
+                >
+                  Submit Rule 10 Notice
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 20: INSPECTOR DISCONTINUANCE FIELD INSPECTION */}
+      {showDiscontinuanceInspectionModal && (
+        <div className="modal-backdrop" onClick={() => setShowDiscontinuanceInspectionModal(false)}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "600px" }}
+          >
+            <div className="modal-header">
+              <div>
+                <h3>🔍 Circle Inspector Field Verification (Rule 10)</h3>
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                  On-site physical inspection by Tax Inspector Muhammad Aslam
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setShowDiscontinuanceInspectionModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSaveDiscontinuanceInspection();
+              }}
+            >
+              <div className="modal-body">
+                {(() => {
+                  const targetDisc = discontinuances.find((d) => d.id === targetDiscId);
+                  return (
+                    <div
+                      style={{
+                        marginBottom: "1rem",
+                        background: "#f8fafc",
+                        padding: "0.75rem",
+                        borderRadius: "6px",
+                        border: "1px solid #e2e8f0",
+                        fontSize: "0.85rem"
+                      }}
+                    >
+                      <p style={{ margin: "0.2rem 0" }}>
+                        <strong>Notice No:</strong> {targetDisc?.noticeNumber}
+                      </p>
+                      <p style={{ margin: "0.2rem 0" }}>
+                        <strong>Establishment:</strong> {targetDisc?.assesseeLegalName}
+                      </p>
+                      <p style={{ margin: "0.2rem 0" }}>
+                        <strong>Claimed Closure Date:</strong> {targetDisc?.discontinuanceDate}
+                      </p>
+                      <p style={{ margin: "0.2rem 0" }}>
+                        <strong>Claimed Reason:</strong> {targetDisc?.reason}
+                      </p>
+                    </div>
+                  );
+                })()}
+
+                <div className="form-group" style={{ marginBottom: "1rem" }}>
+                  <label
+                    htmlFor="insp-findings-input"
+                    style={{ fontWeight: 600, display: "block", marginBottom: "0.3rem" }}
+                  >
+                    Inspector Field Verification Report &amp; Findings:
+                  </label>
+                  <textarea
+                    id="insp-findings-input"
+                    value={discInspectorFindings}
+                    onChange={(e) => setDiscInspectorFindings(e.target.value)}
+                    rows={4}
+                    className="form-control"
+                    style={{ width: "100%", padding: "0.5rem" }}
+                    placeholder="Detail physical inspection: status of premises, whether shop is shuttered, neighbor inquiries, fixtures removed..."
+                    required
+                  />
+                  <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                    Signed by: {officer.name} ({officer.title}, Circle-Vehari)
+                  </span>
+                </div>
+              </div>
+
+              <div
+                className="modal-footer"
+                style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}
+              >
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowDiscontinuanceInspectionModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  style={{ backgroundColor: "#065f46", borderColor: "#047857" }}
+                >
+                  Submit Inspection Report to ETO
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 21: ETO DISCONTINUANCE ORDER PREVIEW / ISSUANCE */}
+      {showDiscontinuanceOrderModal && (
+        <div className="modal-backdrop" onClick={() => setShowDiscontinuanceOrderModal(false)}>
+          <div
+            className="modal-content modal-lg"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "750px" }}
+          >
+            <div className="modal-header">
+              <div>
+                <h3>⚖️ Statutory Discontinuance Order (Rule 10)</h3>
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                  Official Order passed by Assessing Authority (Excise &amp; Taxation Officer,
+                  Vehari)
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => {
+                  setShowDiscontinuanceOrderModal(false);
+                  setActiveDiscontinuanceOrder(null);
+                }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div
+              className="modal-body"
+              style={{ maxHeight: "75vh", overflowY: "auto", padding: "1.5rem" }}
+            >
+              {/* If previewing a generated document */}
+              {activeDiscontinuanceOrder ? (
+                <div
+                  style={{
+                    background: "#ffffff",
+                    border: "2px solid #0d3822",
+                    padding: "2rem",
+                    borderRadius: "6px",
+                    fontFamily: "Georgia, serif"
+                  }}
+                >
+                  <div
+                    style={{
+                      textAlign: "center",
+                      borderBottom: "1px solid #0d3822",
+                      paddingBottom: "1rem",
+                      marginBottom: "1.5rem"
+                    }}
+                  >
+                    <div style={{ fontSize: "1.5rem" }}>🏛️</div>
+                    <h4 style={{ margin: "0.2rem 0", color: "#0d3822" }}>
+                      GOVERNMENT OF THE PUNJAB
+                    </h4>
+                    <p style={{ margin: 0, fontSize: "0.85rem", color: "#475569" }}>
+                      OFFICE OF THE EXCISE &amp; TAXATION OFFICER &bull; CIRCLE-VEHARI
+                    </p>
+                    <h3 style={{ margin: "0.5rem 0 0", fontSize: "1.15rem", color: "#0d3822" }}>
+                      STATUTORY ORDER UNDER RULE 10 (DISCONTINUANCE OF TRADE)
+                    </h3>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: "0.85rem",
+                      marginBottom: "1rem"
+                    }}
+                  >
+                    <span>
+                      <strong>Order No:</strong> {activeDiscontinuanceOrder.orderNumber}
+                    </span>
+                    <span>
+                      <strong>Dated:</strong> {activeDiscontinuanceOrder.orderDate}
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: "0.88rem", lineHeight: 1.6, marginBottom: "1.25rem" }}>
+                    <p>
+                      <strong>In the matter of:</strong>{" "}
+                      {activeDiscontinuanceOrder.assesseeLegalName} (
+                      {activeDiscontinuanceOrder.assesseeTradeName})
+                    </p>
+                    <p>
+                      <strong>Permanent Demand No:</strong> {activeDiscontinuanceOrder.demandNo}{" "}
+                      &bull; <strong>CNIC/NTN:</strong> {activeDiscontinuanceOrder.identifierValue}
+                    </p>
+                    <p>
+                      <strong>Notice Reference:</strong> {activeDiscontinuanceOrder.noticeNumber}{" "}
+                      (Effective: {activeDiscontinuanceOrder.discontinuanceDate})
+                    </p>
+                    <p>
+                      <strong>Field Verification Report:</strong>{" "}
+                      <em>&quot;{activeDiscontinuanceOrder.inspectorFindings}&quot;</em>
+                    </p>
+                  </div>
+
+                  <div
+                    style={{
+                      background: "#f8fafc",
+                      border: "1px solid #cbd5e1",
+                      padding: "1rem",
+                      borderRadius: "6px",
+                      marginBottom: "1.5rem"
+                    }}
+                  >
+                    <h5 style={{ margin: "0 0 0.5rem", color: "#0d3822" }}>
+                      DECISION &amp; ORDER OF ASSESSING AUTHORITY:
+                    </h5>
+                    <p style={{ margin: "0 0 0.5rem", fontSize: "0.9rem" }}>
+                      <strong>Decision:</strong>{" "}
+                      <span
+                        style={{
+                          color:
+                            activeDiscontinuanceOrder.etoDecision === "APPROVED"
+                              ? "#166534"
+                              : "#b91c1c",
+                          fontWeight: 700
+                        }}
+                      >
+                        {activeDiscontinuanceOrder.etoDecision === "APPROVED"
+                          ? "APPROVED (DISCONTINUED)"
+                          : "REJECTED"}
+                      </span>
+                    </p>
+                    <p style={{ margin: 0, fontSize: "0.85rem", color: "#334155" }}>
+                      {activeDiscontinuanceOrder.etoReason}
+                    </p>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-end",
+                      borderTop: "1px solid #cbd5e1",
+                      paddingTop: "1rem",
+                      fontSize: "0.8rem"
+                    }}
+                  >
+                    <div>
+                      <span
+                        style={{ fontFamily: "monospace", fontSize: "0.7rem", color: "#64748b" }}
+                      >
+                        SHA-256: {activeDiscontinuanceOrder.officialSha256.slice(0, 32)}...
+                      </span>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <strong>{activeDiscontinuanceOrder.etoName}</strong>
+                      <span style={{ display: "block", color: "#64748b" }}>
+                        {activeDiscontinuanceOrder.etoTitle}, Circle-Vehari
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Decision Form for ETO */
+                <div>
+                  {(() => {
+                    const targetDisc = discontinuances.find((d) => d.id === targetDiscId);
+                    return (
+                      <div
+                        style={{
+                          background: "#f8fafc",
+                          border: "1px solid #e2e8f0",
+                          padding: "1rem",
+                          borderRadius: "6px",
+                          marginBottom: "1.25rem",
+                          fontSize: "0.85rem"
+                        }}
+                      >
+                        <p style={{ margin: "0.2rem 0" }}>
+                          <strong>Notice No:</strong> {targetDisc?.noticeNumber}
+                        </p>
+                        <p style={{ margin: "0.2rem 0" }}>
+                          <strong>Taxpayer:</strong> {targetDisc?.assesseeLegalName}
+                        </p>
+                        <p style={{ margin: "0.2rem 0" }}>
+                          <strong>Inspector Findings:</strong>{" "}
+                          <em>&quot;{targetDisc?.inspectorReport}&quot;</em>
+                        </p>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="form-group" style={{ marginBottom: "1rem" }}>
+                    <label style={{ fontWeight: 600, display: "block", marginBottom: "0.4rem" }}>
+                      Assessing Authority Statutory Decision:
+                    </label>
+                    <div style={{ display: "flex", gap: "1.5rem" }}>
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                          cursor: "pointer"
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="disc-decision"
+                          value="APPROVED"
+                          checked={discEtoDecision === "APPROVED"}
+                          onChange={() => setDiscEtoDecision("APPROVED")}
+                        />
+                        <strong style={{ color: "#166534" }}>
+                          Approve Closure (Freeze Future Assessment)
+                        </strong>
+                      </label>
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                          cursor: "pointer"
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="disc-decision"
+                          value="REJECTED"
+                          checked={discEtoDecision === "REJECTED"}
+                          onChange={() => setDiscEtoDecision("REJECTED")}
+                        />
+                        <strong style={{ color: "#b91c1c" }}>
+                          Reject Notice (Continue Annual Assessment)
+                        </strong>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "1rem" }}>
+                    <label
+                      htmlFor="disc-eto-reason"
+                      style={{ fontWeight: 600, display: "block", marginBottom: "0.3rem" }}
+                    >
+                      Legal Reasoning / Order Justification:
+                    </label>
+                    <textarea
+                      id="disc-eto-reason"
+                      value={discEtoReason}
+                      onChange={(e) => setDiscEtoReason(e.target.value)}
+                      rows={3}
+                      className="form-control"
+                      style={{ width: "100%", padding: "0.5rem" }}
+                      placeholder="State statutory grounds under Rule 10 and findings from field survey report..."
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div
+              className="modal-footer"
+              style={{ display: "flex", justifyContent: "space-between" }}
+            >
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setShowDiscontinuanceOrderModal(false);
+                  setActiveDiscontinuanceOrder(null);
+                }}
+              >
+                Close
+              </button>
+              {activeDiscontinuanceOrder ? (
+                <button type="button" className="btn-primary" onClick={() => window.print()}>
+                  🖨️ Print Order Document
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  style={{ backgroundColor: "#065f46", borderColor: "#047857" }}
+                  onClick={() => handleSaveDiscontinuanceOrder(discEtoDecision)}
+                >
+                  ⚖️ Sign &amp; Promulgate Rule 10 Order
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 22: FILE RULE 5 REFUND / ADJUSTMENT APPLICATION */}
+      {showRefundModal && (
+        <div className="modal-backdrop" onClick={() => setShowRefundModal(false)}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "600px" }}
+          >
+            <div className="modal-header">
+              <div>
+                <h3>💰 File Rule 5 Refund / Credit Adjustment</h3>
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                  Statutory claim for excess deposit or erroneous tax assessment under Rule 5
+                </p>
+              </div>
+              <button type="button" className="btn-close" onClick={() => setShowRefundModal(false)}>
+                &times;
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleFileRefundApplication();
+              }}
+            >
+              <div className="modal-body">
+                <div className="form-group" style={{ marginBottom: "1rem" }}>
+                  <label
+                    htmlFor="ref-unit-select"
+                    style={{ fontWeight: 600, display: "block", marginBottom: "0.3rem" }}
+                  >
+                    Select Taxpayer Unit:
+                  </label>
+                  <select
+                    id="ref-unit-select"
+                    value={refUnitId}
+                    onChange={(e) => setRefUnitId(e.target.value)}
+                    className="form-control"
+                    style={{ width: "100%", padding: "0.5rem" }}
+                  >
+                    {units.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.legalName} ({u.demandUnit.permanentDemandNo}) &bull; PKR{" "}
+                        {computeLedgerBalance(u.ledgerEntries)} bal
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: "1rem" }}>
+                  <label
+                    htmlFor="ref-type-select"
+                    style={{ fontWeight: 600, display: "block", marginBottom: "0.3rem" }}
+                  >
+                    Relief Mechanism:
+                  </label>
+                  <select
+                    id="ref-type-select"
+                    value={refType}
+                    onChange={(e) => setRefType(e.target.value as "CREDIT_ADJUSTMENT" | "REFUND")}
+                    className="form-control"
+                    style={{ width: "100%", padding: "0.5rem" }}
+                  >
+                    <option value="CREDIT_ADJUSTMENT">
+                      Double-Entry Credit Adjustment (Carry forward against future demand)
+                    </option>
+                    <option value="REFUND">
+                      Cash Treasury Refund (State Bank / Treasury Voucher)
+                    </option>
+                  </select>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: "1rem" }}>
+                  <label
+                    htmlFor="ref-amount-input"
+                    style={{ fontWeight: 600, display: "block", marginBottom: "0.3rem" }}
+                  >
+                    Claimed Relief Amount (PKR):
+                  </label>
+                  <input
+                    id="ref-amount-input"
+                    type="number"
+                    min={1}
+                    value={refAmount}
+                    onChange={(e) => setRefAmount(Number(e.target.value))}
+                    className="form-control"
+                    style={{ width: "100%", padding: "0.5rem" }}
+                    required
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: "1rem" }}>
+                  <label
+                    htmlFor="ref-grounds-input"
+                    style={{ fontWeight: 600, display: "block", marginBottom: "0.3rem" }}
+                  >
+                    Legal Grounds for Claim:
+                  </label>
+                  <textarea
+                    id="ref-grounds-input"
+                    value={refGrounds}
+                    onChange={(e) => setRefGrounds(e.target.value)}
+                    rows={3}
+                    className="form-control"
+                    style={{ width: "100%", padding: "0.5rem" }}
+                    placeholder="E.g., Inadvertent duplicate Challan 32-A deposit at NBP; rectification of rate schedule subcategory..."
+                    required
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: "1rem" }}>
+                  <label
+                    htmlFor="ref-evidence-input"
+                    style={{ fontWeight: 600, display: "block", marginBottom: "0.3rem" }}
+                  >
+                    Documentary Evidence Reference:
+                  </label>
+                  <input
+                    id="ref-evidence-input"
+                    type="text"
+                    value={refEvidence}
+                    onChange={(e) => setRefEvidence(e.target.value)}
+                    className="form-control"
+                    style={{ width: "100%", padding: "0.5rem" }}
+                    placeholder="E.g., National Bank Challan 32-A scroll reference, bank stamp copy, PSID 99201991"
+                  />
+                </div>
+              </div>
+
+              <div
+                className="modal-footer"
+                style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}
+              >
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowRefundModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  style={{ backgroundColor: "#065f46", borderColor: "#047857" }}
+                >
+                  Submit Application for ETO Review
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 23: RULE 5 REFUND ADJUDICATION ORDER STUDIO */}
+      {showRefundOrderModal && activeRefundOrder && (
+        <div className="modal-backdrop" onClick={() => setShowRefundOrderModal(false)}>
+          <div
+            className="modal-content modal-lg"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "750px" }}
+          >
+            <div className="modal-header">
+              <div>
+                <h3>📄 Rule 5 Statutory Refund / Adjustment Decree</h3>
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                  Adjudication Order issued by Assessing Authority under Rule 5 of 1977 Rules
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => {
+                  setShowRefundOrderModal(false);
+                  setActiveRefundOrder(null);
+                }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div
+              className="modal-body"
+              style={{ maxHeight: "75vh", overflowY: "auto", padding: "1.5rem" }}
+            >
+              <div
+                style={{
+                  background: "#ffffff",
+                  border: "2px solid #0d3822",
+                  padding: "2rem",
+                  borderRadius: "6px",
+                  fontFamily: "Georgia, serif"
+                }}
+              >
+                <div
+                  style={{
+                    textAlign: "center",
+                    borderBottom: "1px solid #0d3822",
+                    paddingBottom: "1rem",
+                    marginBottom: "1.5rem"
+                  }}
+                >
+                  <div style={{ fontSize: "1.5rem" }}>🏛️</div>
+                  <h4 style={{ margin: "0.2rem 0", color: "#0d3822" }}>GOVERNMENT OF THE PUNJAB</h4>
+                  <p style={{ margin: 0, fontSize: "0.85rem", color: "#475569" }}>
+                    OFFICE OF THE EXCISE &amp; TAXATION OFFICER &bull; CIRCLE-VEHARI
+                  </p>
+                  <h3 style={{ margin: "0.5rem 0 0", fontSize: "1.15rem", color: "#0d3822" }}>
+                    STATUTORY ADJUDICATION ORDER UNDER RULE 5 (EXCESS TAX ADJUSTMENT)
+                  </h3>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: "0.85rem",
+                    marginBottom: "1rem"
+                  }}
+                >
+                  <span>
+                    <strong>Order No:</strong> {activeRefundOrder.orderNumber}
+                  </span>
+                  <span>
+                    <strong>Dated:</strong> {activeRefundOrder.orderDate}
+                  </span>
+                </div>
+
+                <div style={{ fontSize: "0.88rem", lineHeight: 1.6, marginBottom: "1.25rem" }}>
+                  <p>
+                    <strong>Assessee:</strong> {activeRefundOrder.assesseeLegalName} (
+                    {activeRefundOrder.assesseeTradeName})
+                  </p>
+                  <p>
+                    <strong>Demand No:</strong> {activeRefundOrder.demandNo} &bull;{" "}
+                    <strong>CNIC/NTN:</strong> {activeRefundOrder.identifierValue}
+                  </p>
+                  <p>
+                    <strong>Application Ref:</strong> {activeRefundOrder.applicationNumber}
+                  </p>
+                  <p>
+                    <strong>Relief Mode:</strong> {activeRefundOrder.type.replace(/_/g, " ")}
+                  </p>
+                  <p>
+                    <strong>Claimed Amount:</strong> PKR{" "}
+                    {activeRefundOrder.amount.toLocaleString()}
+                  </p>
+                  <p>
+                    <strong>Grounds of Relief:</strong> <em>{activeRefundOrder.grounds}</em>
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    background: "#f0fdf4",
+                    border: "1px solid #bbf7d0",
+                    padding: "1rem",
+                    borderRadius: "6px",
+                    marginBottom: "1.5rem"
+                  }}
+                >
+                  <h5 style={{ margin: "0 0 0.5rem", color: "#166534" }}>
+                    ORDER OF ASSESSING AUTHORITY:
+                  </h5>
+                  <p style={{ margin: "0 0 0.5rem", fontSize: "0.9rem", color: "#14532d" }}>
+                    Having examined the bank deposit scrolls, the claim is verified. An immutable
+                    double-entry credit of{" "}
+                    <strong>PKR {activeRefundOrder.amount.toLocaleString()}</strong> has been
+                    posted to the permanent demand ledger of {activeRefundOrder.assesseeLegalName}{" "}
+                    under transaction reference {activeRefundOrder.orderNumber}.
+                  </p>
+                  <p style={{ margin: 0, fontSize: "0.75rem", color: "#166534" }}>
+                    ✓ Recorded in Demand &amp; Payment Ledger &bull; Immutable entry idempotency
+                    verified
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-end",
+                    borderTop: "1px solid #cbd5e1",
+                    paddingTop: "1rem",
+                    fontSize: "0.8rem"
+                  }}
+                >
+                  <div>
+                    <span style={{ fontFamily: "monospace", fontSize: "0.7rem", color: "#64748b" }}>
+                      SHA-256: {activeRefundOrder.officialSha256.slice(0, 32)}...
+                    </span>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <strong>{activeRefundOrder.etoName}</strong>
+                    <span style={{ display: "block", color: "#64748b" }}>
+                      {activeRefundOrder.etoTitle}, Circle-Vehari
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className="modal-footer"
+              style={{ display: "flex", justifyContent: "space-between" }}
+            >
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setShowRefundOrderModal(false);
+                  setActiveRefundOrder(null);
+                }}
+              >
+                Close
+              </button>
+              <button type="button" className="btn-primary" onClick={() => window.print()}>
+                🖨️ Print Statutory Order
               </button>
             </div>
           </div>

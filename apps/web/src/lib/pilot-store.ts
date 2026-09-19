@@ -64,6 +64,11 @@ export interface StoredUnit {
   readonly servedBy?: string | undefined;
   readonly recipientName?: string | undefined;
   readonly witnessDetails?: string | undefined;
+  readonly isDiscontinued?: boolean | undefined;
+  readonly discontinuanceStatus?:
+    "ACTIVE" | "PENDING_INSPECTION" | "INSPECTED" | "DISCONTINUED" | undefined;
+  readonly discontinuanceDate?: string | undefined;
+  readonly discontinuanceReason?: string | undefined;
   readonly createdAt: string;
 }
 
@@ -168,12 +173,79 @@ export interface AppealRecord {
   readonly sha256Hash?: string | undefined;
 }
 
+export interface DiscontinuanceRecord {
+  readonly id: string;
+  readonly noticeNumber: string;
+  readonly unitId: string;
+  readonly assesseeLegalName: string;
+  readonly assesseeTradeName?: string | undefined;
+  readonly cnicOrNtn: string;
+  readonly discontinuanceDate: string; // YYYY-MM-DD
+  readonly reason: string;
+  readonly evidenceDetails: string;
+  readonly status: "PENDING_INSPECTION" | "INSPECTED" | "APPROVED" | "REJECTED";
+  readonly filedAt: string;
+  readonly filedBy: string;
+  readonly inspectorReport?: string | undefined;
+  readonly inspectedAt?: string | undefined;
+  readonly inspectedBy?: string | undefined;
+  readonly etoOrderNumber?: string | undefined;
+  readonly etoOrderDate?: string | undefined;
+  readonly etoDecision?: "APPROVED" | "REJECTED" | undefined;
+  readonly etoReason?: string | undefined;
+  readonly adjudicatedBy?: string | undefined;
+}
+
+export interface RefundAdjustmentRecord {
+  readonly id: string;
+  readonly applicationNumber: string;
+  readonly unitId: string;
+  readonly assesseeLegalName: string;
+  readonly assesseeTradeName?: string | undefined;
+  readonly cnicOrNtn: string;
+  readonly type: "CREDIT_ADJUSTMENT" | "REFUND";
+  readonly amount: number;
+  readonly grounds: string;
+  readonly evidenceReference: string;
+  readonly status: "PENDING_REVIEW" | "APPROVED" | "REJECTED";
+  readonly filedAt: string;
+  readonly filedBy: string;
+  readonly orderNumber?: string | undefined;
+  readonly orderDate?: string | undefined;
+  readonly adjudicatedBy?: string | undefined;
+  readonly rejectionReason?: string | undefined;
+  readonly ledgerEntryId?: string | undefined;
+}
+
+export interface ClearanceCertificateRecord {
+  readonly id: string;
+  readonly certificateNumber: string;
+  readonly unitId: string;
+  readonly assesseeLegalName: string;
+  readonly assesseeTradeName?: string | undefined;
+  readonly cnicOrNtn: string;
+  readonly categoryName: string;
+  readonly scheduleEntry: string;
+  readonly financialYear: string;
+  readonly issueDate: string;
+  readonly validUntil: string;
+  readonly issuedByOfficerId: string;
+  readonly issuedByOfficerName: string;
+  readonly issuedByOfficerTitle: string;
+  readonly officialSha256: string;
+  readonly qrPayload: string;
+  readonly clearedAmountPkr: number;
+}
+
 export interface PilotState {
   currentOfficer: MockOfficer;
   units: StoredUnit[];
   auditLogs: PilotAuditItem[];
   reconciliations: EpayReconciliationRecord[];
   appeals: AppealRecord[];
+  discontinuances?: DiscontinuanceRecord[] | undefined;
+  refundAdjustments?: RefundAdjustmentRecord[] | undefined;
+  clearanceCertificates?: ClearanceCertificateRecord[] | undefined;
 }
 
 const STORAGE_KEY = "ptas_pilot_vehari_v2";
@@ -537,6 +609,81 @@ export function createInitialAppeals(): AppealRecord[] {
   ];
 }
 
+export function createInitialDiscontinuances(): DiscontinuanceRecord[] {
+  return [
+    {
+      id: "disc-01",
+      noticeNumber: "DISC-VEH-2026-001",
+      unitId: "unit-almadina-center-03",
+      assesseeLegalName: "Muhammad Siddique",
+      assesseeTradeName: "Al-Madina Commercial Center",
+      cnicOrNtn: "36601-3829104-5",
+      discontinuanceDate: "2026-07-31",
+      reason:
+        "Surrendered commercial shop lease agreement due to liquidation and relocation of stock.",
+      evidenceDetails:
+        "Notarized lease termination deed and municipal trade license cancellation receipt attached.",
+      status: "INSPECTED",
+      filedAt: "2026-08-05T10:00:00.000Z",
+      filedBy: "officer-inspector-aslam",
+      inspectorReport:
+        "Physical inspection conducted on 2026-08-12 by Inspector Muhammad Aslam. Shop premises at Karkhana Bazar verified completely vacated. Shutter locked with 'To-Let' banner displayed. No commercial business active.",
+      inspectedAt: "2026-08-12T11:30:00.000Z",
+      inspectedBy: "officer-inspector-aslam"
+    }
+  ];
+}
+
+export function createInitialRefundAdjustments(): RefundAdjustmentRecord[] {
+  return [
+    {
+      id: "ref-01",
+      applicationNumber: "REF-VEH-2026-001",
+      unitId: "unit-vehari-cotton-01",
+      assesseeLegalName: "Vehari Cotton Ginners (Pvt.) Ltd.",
+      assesseeTradeName: "Vehari Ginning & Pressing Mills",
+      cnicOrNtn: "NTN-7412983-1",
+      type: "CREDIT_ADJUSTMENT",
+      amount: 2000,
+      grounds:
+        "Taxpayer mistakenly paid PKR 12,000 under Challan 32-A against an assessment demand of PKR 10,000. Statutory credit adjustment applied under Rule 5 of 1977 Rules.",
+      evidenceReference: "Challan 32-A Bank Deposit Scroll Ref: NBP-VHR-8849192",
+      status: "APPROVED",
+      filedAt: "2026-07-15T09:00:00.000Z",
+      filedBy: "officer-inspector-aslam",
+      orderNumber: "ETO/VEH/ADJ/2026/01",
+      orderDate: "2026-07-18",
+      adjudicatedBy: "officer-eto-mahmood",
+      ledgerEntryId: "entry-adj-01"
+    }
+  ];
+}
+
+export function createInitialClearanceCertificates(): ClearanceCertificateRecord[] {
+  return [
+    {
+      id: "cert-01",
+      certificateNumber: "PFT-CC-VEH-2026-0001",
+      unitId: "unit-vehari-cotton-01",
+      assesseeLegalName: "Vehari Cotton Ginners (Pvt.) Ltd.",
+      assesseeTradeName: "Vehari Ginning & Pressing Mills",
+      cnicOrNtn: "NTN-7412983-1",
+      categoryName: "Companies (Paid-up capital up to Rs 5 million)",
+      scheduleEntry: "1(i)",
+      financialYear: FINANCIAL_YEAR_2026_27,
+      issueDate: "2026-07-20",
+      validUntil: "2027-06-30",
+      issuedByOfficerId: "officer-eto-mahmood",
+      issuedByOfficerName: "Tariq Mahmood",
+      issuedByOfficerTitle: "Excise & Taxation Officer (Assessing Authority)",
+      officialSha256: "3f9c6d48293e502bc14a7e91d5f2a1b384c2e6f7d0a9b8c7e6f5d4a3b2c1e0f9",
+      qrPayload:
+        "PTAS-PUNJAB:CERT=PFT-CC-VEH-2026-0001:CNIC=36601-1829384-5:STATUS=CLEARED:BAL=0:FY=2026-2027",
+      clearedAmountPkr: 10000
+    }
+  ];
+}
+
 export function loadPilotState(): PilotState {
   if (typeof window === "undefined") {
     return {
@@ -544,7 +691,10 @@ export function loadPilotState(): PilotState {
       units: createInitialPilotUnits(),
       auditLogs: createInitialAuditLogs(),
       reconciliations: createInitialReconciliations(),
-      appeals: createInitialAppeals()
+      appeals: createInitialAppeals(),
+      discontinuances: createInitialDiscontinuances(),
+      refundAdjustments: createInitialRefundAdjustments(),
+      clearanceCertificates: createInitialClearanceCertificates()
     };
   }
 
@@ -556,7 +706,10 @@ export function loadPilotState(): PilotState {
         units: createInitialPilotUnits(),
         auditLogs: createInitialAuditLogs(),
         reconciliations: createInitialReconciliations(),
-        appeals: createInitialAppeals()
+        appeals: createInitialAppeals(),
+        discontinuances: createInitialDiscontinuances(),
+        refundAdjustments: createInitialRefundAdjustments(),
+        clearanceCertificates: createInitialClearanceCertificates()
       };
       savePilotState(initial);
       return initial;
@@ -567,6 +720,9 @@ export function loadPilotState(): PilotState {
     return {
       ...parsed,
       appeals: parsed.appeals ?? createInitialAppeals(),
+      discontinuances: parsed.discontinuances ?? createInitialDiscontinuances(),
+      refundAdjustments: parsed.refundAdjustments ?? createInitialRefundAdjustments(),
+      clearanceCertificates: parsed.clearanceCertificates ?? createInitialClearanceCertificates(),
       currentOfficer: matchingOfficer
     };
   } catch {
@@ -575,7 +731,10 @@ export function loadPilotState(): PilotState {
       units: createInitialPilotUnits(),
       auditLogs: createInitialAuditLogs(),
       reconciliations: createInitialReconciliations(),
-      appeals: createInitialAppeals()
+      appeals: createInitialAppeals(),
+      discontinuances: createInitialDiscontinuances(),
+      refundAdjustments: createInitialRefundAdjustments(),
+      clearanceCertificates: createInitialClearanceCertificates()
     };
   }
 }
@@ -596,7 +755,10 @@ export function resetPilotState(): PilotState {
     units: createInitialPilotUnits(),
     auditLogs: createInitialAuditLogs(),
     reconciliations: createInitialReconciliations(),
-    appeals: createInitialAppeals()
+    appeals: createInitialAppeals(),
+    discontinuances: createInitialDiscontinuances(),
+    refundAdjustments: createInitialRefundAdjustments(),
+    clearanceCertificates: createInitialClearanceCertificates()
   };
   savePilotState(cleanState);
   return cleanState;

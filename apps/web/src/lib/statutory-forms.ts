@@ -7,7 +7,7 @@
  */
 
 import { computeContentSha256, computeLedgerBalance } from "@ptas/domain";
-import type { StoredUnit } from "./pilot-store";
+import type { MockOfficer, StoredUnit } from "./pilot-store";
 
 export interface FormPFT1Model {
   readonly isApproved: boolean;
@@ -822,6 +822,320 @@ export function generateAppellateOrderDocument(
     appellateAuthorityName: "Shahid Nawaz",
     appellateAuthorityDesignation:
       "Director Excise & Taxation / Appellate Authority, Multan Division",
+    canonicalOrderText,
+    officialSha256
+  };
+}
+
+/**
+ * Model for Form P.F.T-5: Official Professional Tax Clearance Certificate
+ * Governed by Rule 11 & Scope: Mandatory for tenders, license renewals, and company filings.
+ */
+export interface TaxClearanceCertificateModel {
+  readonly isEligible: boolean;
+  readonly ineligibilityReason?: string | undefined;
+  readonly certificateNumber: string;
+  readonly issueDate: string;
+  readonly expiryDate: string;
+  readonly financialYear: string;
+  readonly district: string;
+  readonly districtName?: string;
+  readonly tehsil: string;
+  readonly circle: string;
+  readonly circleName?: string;
+  readonly assesseeLegalName: string;
+  readonly assesseeTradeName?: string | undefined;
+  readonly identifierType: "CNIC" | "NTN";
+  readonly identifierValue: string;
+  readonly address: string;
+  readonly businessAddress?: string;
+  readonly demandNo: string;
+  readonly categoryName: string;
+  readonly subcategoryName?: string;
+  readonly scheduleEntry: string;
+  readonly annualTaxAssessed: number;
+  readonly taxRatePkr?: number;
+  readonly totalTaxPaid: number;
+  readonly currentOutstandingBalance: number;
+  readonly headOfAccount: string;
+  readonly issuingOfficerName: string;
+  readonly issuingOfficerTitle: string;
+  readonly officialSha256: string;
+  readonly qrPayload: string;
+  readonly canonicalCertificateText: string;
+}
+
+export function generateTaxClearanceCertificate(
+  unit: StoredUnit,
+  issuingOfficer: MockOfficer,
+  financialYear: string = "2026-2027",
+  refDate: string = "2026-08-20"
+): TaxClearanceCertificateModel {
+  const currentBalance = computeLedgerBalance(unit.ledgerEntries);
+  const demandNo = unit.demandUnit.permanentDemandNo;
+
+  if (currentBalance > 0) {
+    return {
+      isEligible: false,
+      ineligibilityReason: `Cannot issue Clearance Certificate: Unit has PKR ${currentBalance.toLocaleString()} outstanding arrears. Total balance must be zero.`,
+      certificateNumber: "INELIGIBLE",
+      issueDate: refDate,
+      expiryDate: "2027-06-30",
+      financialYear,
+      district: "Vehari",
+      districtName: "Vehari",
+      tehsil: "Tehsil Vehari",
+      circle: "Circle-Vehari",
+      circleName: "Circle-Vehari",
+      assesseeLegalName: unit.legalName,
+      assesseeTradeName: unit.tradeName,
+      identifierType: unit.identifierType,
+      identifierValue: unit.identifierValue,
+      address: unit.address,
+      businessAddress: unit.address,
+      demandNo,
+      categoryName: unit.statutoryRule.category,
+      subcategoryName: unit.statutoryRule.subcategory,
+      scheduleEntry: `Entry ${unit.statutoryRule.subclassification_code}`,
+      annualTaxAssessed: unit.statutoryRule.annual_rate_pkr,
+      taxRatePkr: unit.statutoryRule.annual_rate_pkr,
+      totalTaxPaid: 0,
+      currentOutstandingBalance: currentBalance,
+      headOfAccount: "B01601 (Punjab Professional Tax - Provincial)",
+      issuingOfficerName: issuingOfficer.name,
+      issuingOfficerTitle: issuingOfficer.title,
+      officialSha256: "",
+      qrPayload: "",
+      canonicalCertificateText: ""
+    };
+  }
+
+  const totalPaid = Math.abs(
+    unit.ledgerEntries.filter((e) => e.amount < 0).reduce((sum, e) => sum + e.amount, 0)
+  );
+
+  const cleanSuffix = unit.id
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(-4)
+    .toUpperCase();
+  const certNumber = `PFT-CC-VEH-2026-${cleanSuffix || "0001"}`;
+
+  const canonicalCertificateText = [
+    "GOVERNMENT OF THE PUNJAB - EXCISE, TAXATION & NARCOTICS CONTROL DEPARTMENT",
+    "OFFICE OF THE EXCISE & TAXATION OFFICER (ASSESSING AUTHORITY), TEHSIL VEHARI",
+    "FORM P.F.T-5: CERTIFICATE OF PROFESSIONAL TAX CLEARANCE (عدم بقایاجات سرٹیفکیٹ)",
+    `Certificate Number: ${certNumber}`,
+    `Financial Year: ${financialYear}`,
+    `Issue Date: ${refDate} | Expiry Date: 30-JUN-2027`,
+    `Assessee Legal Name: ${unit.legalName}`,
+    `Trade / Business Name: ${unit.tradeName ?? unit.legalName}`,
+    `CNIC / Registration No: ${unit.identifierType}: ${unit.identifierValue}`,
+    `Commercial Address: ${unit.address}`,
+    `Second Schedule Classification: Entry ${unit.statutoryRule.subclassification_code} (${unit.statutoryRule.category})`,
+    `Statutory Head of Account: B01601 (Punjab Professional Tax - Provincial)`,
+    `Assessed Liability: PKR ${unit.statutoryRule.annual_rate_pkr}`,
+    `Discharged Liability: PKR ${totalPaid}`,
+    `Outstanding Arrears as of ${refDate}: NIL (PKR 0)`,
+    "Statutory Certification: This is to certify that the business establishment / professional named above has fully discharged all Professional Tax liabilities assessed under Section 3 of the Punjab Finance Act, 1977 for the Financial Year 2026-2027. There are no outstanding arrears or penalties standing against this assessee in Circle-Vehari as on the date of issue.",
+    `Issuing Assessing Authority: Tariq Mahmood, Excise & Taxation Officer, Vehari`
+  ].join("\n");
+
+  const officialSha256 = computeContentSha256(canonicalCertificateText);
+  const qrPayload = `PTAS-PUNJAB:PFT-5:${certNumber}:ID=${unit.identifierValue}:STATUS=NIL_ARREARS:SHA=${officialSha256.slice(0, 16)}`;
+
+  return {
+    isEligible: true,
+    certificateNumber: certNumber,
+    issueDate: refDate,
+    expiryDate: "2027-06-30",
+    financialYear,
+    district: "Vehari",
+    districtName: "Vehari",
+    tehsil: "Tehsil Vehari",
+    circle: "Circle-Vehari",
+    circleName: "Circle-Vehari",
+    assesseeLegalName: unit.legalName,
+    assesseeTradeName: unit.tradeName,
+    identifierType: unit.identifierType,
+    identifierValue: unit.identifierValue,
+    address: unit.address,
+    businessAddress: unit.address,
+    demandNo,
+    categoryName: unit.statutoryRule.category,
+    subcategoryName: unit.statutoryRule.subcategory,
+    scheduleEntry: `Entry ${unit.statutoryRule.subclassification_code}`,
+    annualTaxAssessed: unit.statutoryRule.annual_rate_pkr,
+    taxRatePkr: unit.statutoryRule.annual_rate_pkr,
+    totalTaxPaid: totalPaid,
+    currentOutstandingBalance: 0,
+    headOfAccount: "B01601 (Punjab Professional Tax - Provincial)",
+    issuingOfficerName: "Tariq Mahmood",
+    issuingOfficerTitle: "Excise & Taxation Officer (Assessing Authority)",
+    officialSha256,
+    qrPayload,
+    canonicalCertificateText
+  };
+}
+
+export interface DiscontinuanceOrderModel {
+  readonly orderNumber: string;
+  readonly orderDate: string;
+  readonly noticeNumber: string;
+  readonly unitName: string;
+  readonly assesseeLegalName?: string;
+  readonly tradeName?: string | undefined;
+  readonly assesseeTradeName?: string | undefined;
+  readonly identifier: string;
+  readonly identifierValue?: string;
+  readonly demandNo?: string;
+  readonly address: string;
+  readonly discontinuanceDate: string;
+  readonly reason: string;
+  readonly inspectorFindings: string;
+  readonly etoDecision: "APPROVED" | "REJECTED";
+  readonly etoReason: string;
+  readonly issuingOfficerName: string;
+  readonly etoName?: string;
+  readonly etoTitle?: string;
+  readonly canonicalOrderText: string;
+  readonly officialSha256: string;
+}
+
+export function generateDiscontinuanceOrder(
+  unit: StoredUnit,
+  input: {
+    readonly orderNumber: string;
+    readonly orderDate: string;
+    readonly noticeNumber: string;
+    readonly discontinuanceDate: string;
+    readonly reason: string;
+    readonly inspectorFindings: string;
+    readonly etoDecision: "APPROVED" | "REJECTED";
+    readonly etoReason: string;
+  }
+): DiscontinuanceOrderModel {
+  const canonicalOrderText = [
+    "GOVERNMENT OF THE PUNJAB - EXCISE & TAXATION DEPARTMENT, TEHSIL VEHARI",
+    "ORDER UNDER RULE 10 OF PUNJAB PROFESSIONS & TRADES TAX RULES, 1977 (BUSINESS DISCONTINUANCE)",
+    `Order Number: ${input.orderNumber} | Order Date: ${input.orderDate}`,
+    `Notice Reference: ${input.noticeNumber}`,
+    `Assessee: ${unit.legalName} (${unit.tradeName ?? unit.legalName}) | ${unit.identifierType}: ${unit.identifierValue}`,
+    `Address: ${unit.address}`,
+    `Cessation Date: ${input.discontinuanceDate}`,
+    `Reason Stated: ${input.reason}`,
+    `Inspector Inspection Findings: ${input.inspectorFindings}`,
+    `Assessing Authority Decision: ${input.etoDecision}`,
+    `Statutory Grounds: ${input.etoReason}`,
+    "Assessing Authority: Tariq Mahmood, Excise & Taxation Officer, Vehari"
+  ].join("\n");
+
+  const officialSha256 = computeContentSha256(canonicalOrderText);
+
+  return {
+    orderNumber: input.orderNumber,
+    orderDate: input.orderDate,
+    noticeNumber: input.noticeNumber,
+    unitName: unit.legalName,
+    assesseeLegalName: unit.legalName,
+    tradeName: unit.tradeName,
+    assesseeTradeName: unit.tradeName,
+    identifier: `${unit.identifierType}: ${unit.identifierValue}`,
+    identifierValue: unit.identifierValue,
+    demandNo: unit.demandUnit.permanentDemandNo,
+    address: unit.address,
+    discontinuanceDate: input.discontinuanceDate,
+    reason: input.reason,
+    inspectorFindings: input.inspectorFindings,
+    etoDecision: input.etoDecision,
+    etoReason: input.etoReason,
+    issuingOfficerName: "Tariq Mahmood, Excise & Taxation Officer",
+    etoName: "Tariq Mahmood",
+    etoTitle: "Excise & Taxation Officer",
+    canonicalOrderText,
+    officialSha256
+  };
+}
+
+export interface RefundAdjustmentOrderModel {
+  readonly orderNumber: string;
+  readonly orderDate: string;
+  readonly applicationNumber: string;
+  readonly unitName: string;
+  readonly assesseeLegalName?: string;
+  readonly tradeName?: string | undefined;
+  readonly assesseeTradeName?: string | undefined;
+  readonly identifier: string;
+  readonly identifierValue?: string;
+  readonly demandNo?: string;
+  readonly address: string;
+  readonly type: "CREDIT_ADJUSTMENT" | "REFUND";
+  readonly reliefType?: string;
+  readonly amount: number;
+  readonly claimedAmount?: number;
+  readonly amountWords: string;
+  readonly grounds: string;
+  readonly evidenceRef: string;
+  readonly headOfAccount: string;
+  readonly approvingOfficerName: string;
+  readonly etoName?: string;
+  readonly etoTitle?: string;
+  readonly canonicalOrderText: string;
+  readonly officialSha256: string;
+}
+
+export function generateRefundAdjustmentOrder(
+  unit: StoredUnit,
+  input: {
+    readonly orderNumber: string;
+    readonly orderDate: string;
+    readonly applicationNumber: string;
+    readonly type: "CREDIT_ADJUSTMENT" | "REFUND";
+    readonly amount: number;
+    readonly grounds: string;
+    readonly evidenceRef: string;
+  }
+): RefundAdjustmentOrderModel {
+  const amountWords = numberToWordsPkr(input.amount);
+  const canonicalOrderText = [
+    "GOVERNMENT OF THE PUNJAB - EXCISE & TAXATION DEPARTMENT, TEHSIL VEHARI",
+    "ORDER UNDER RULE 5 OF PUNJAB PROFESSIONS & TRADES TAX RULES, 1977 (STATUTORY REFUND / CREDIT ADJUSTMENT)",
+    `Order Number: ${input.orderNumber} | Order Date: ${input.orderDate}`,
+    `Application Reference: ${input.applicationNumber}`,
+    `Assessee: ${unit.legalName} (${unit.tradeName ?? unit.legalName}) | ${unit.identifierType}: ${unit.identifierValue}`,
+    `Address: ${unit.address}`,
+    `Adjustment Type: ${input.type}`,
+    `Amount Authorized: PKR ${input.amount} (${amountWords})`,
+    `Head of Account: B01601 (Punjab Professional Tax - Provincial)`,
+    `Stated Grounds: ${input.grounds}`,
+    `Verified Evidence Reference: ${input.evidenceRef}`,
+    "Approving Authority: Tariq Mahmood, Excise & Taxation Officer / Assessing Authority, Vehari"
+  ].join("\n");
+
+  const officialSha256 = computeContentSha256(canonicalOrderText);
+
+  return {
+    orderNumber: input.orderNumber,
+    orderDate: input.orderDate,
+    applicationNumber: input.applicationNumber,
+    unitName: unit.legalName,
+    assesseeLegalName: unit.legalName,
+    tradeName: unit.tradeName,
+    assesseeTradeName: unit.tradeName,
+    identifier: `${unit.identifierType}: ${unit.identifierValue}`,
+    identifierValue: unit.identifierValue,
+    demandNo: unit.demandUnit.permanentDemandNo,
+    address: unit.address,
+    type: input.type,
+    reliefType: input.type,
+    amount: input.amount,
+    claimedAmount: input.amount,
+    amountWords,
+    grounds: input.grounds,
+    evidenceRef: input.evidenceRef,
+    headOfAccount: "B01601",
+    approvingOfficerName: "Tariq Mahmood, Excise & Taxation Officer",
+    etoName: "Tariq Mahmood",
+    etoTitle: "Excise & Taxation Officer",
     canonicalOrderText,
     officialSha256
   };
