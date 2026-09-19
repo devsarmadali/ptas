@@ -67,7 +67,7 @@ export default function HomePage() {
   const [paymentChannel, setPaymentChannel] = useState<"CHALLAN_32A" | "EPAY_PUNJAB">(
     "CHALLAN_32A"
   );
-  const [paymentReceiptNo, setPaymentReceiptNo] = useState("CHALLAN-32A-2026-");
+  const [paymentReceiptNo, setPaymentReceiptNo] = useState("PFT2-VEH-2026-");
   const [paymentDate, setPaymentDate] = useState("2026-09-19");
 
   // Receipt Upload & Evidence Preview State
@@ -1321,7 +1321,7 @@ export default function HomePage() {
                                         );
                                       }}
                                     >
-                                      📎 View Challan 32-A Scan
+                                      📎 View Form PFT-2 / Challan Scan
                                     </button>
                                   </div>
                                 )}
@@ -2107,20 +2107,20 @@ export default function HomePage() {
                     }
                   >
                     <option value="CHALLAN_32A">
-                      Challan 32-A (National Bank of Pakistan / Treasury)
+                      Form PFT-2 Challan (National Bank of Pakistan / Treasury Form 32-A)
                     </option>
                     <option value="EPAY_PUNJAB">ePay Punjab (Mobile Banking / 1Link / ATM)</option>
                   </select>
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="pay-receipt-no">Challan / PSID / Transaction No. *</label>
+                  <label htmlFor="pay-receipt-no">Form PFT-2 Serial / Challan / PSID No. *</label>
                   <input
                     id="pay-receipt-no"
                     type="text"
                     required
                     className="form-control"
-                    placeholder="e.g. 32A-VEH-2026-0091"
+                    placeholder="e.g. PFT-2/VEH/2026/0001 or PSID-992144"
                     value={paymentReceiptNo}
                     onChange={(e) => setPaymentReceiptNo(e.target.value)}
                   />
@@ -2140,7 +2140,7 @@ export default function HomePage() {
 
                 <div className="form-group">
                   <label htmlFor="pay-receipt-file">
-                    Challan Form 32-A / Bank Slip Scan (Supabase Storage)
+                    Stamped Form PFT-2 Bank Copy / Challan Scan (Supabase Storage)
                   </label>
                   <input
                     id="pay-receipt-file"
@@ -2150,8 +2150,9 @@ export default function HomePage() {
                     onChange={handleFileChange}
                   />
                   <p className="form-help">
-                    Scanned image or PDF of stamped National Bank Challan 32-A. Cryptographic
-                    SHA-256 digest is computed in-browser before upload.
+                    Scanned image or PDF of National Bank stamped Form PFT-2 (or Challan 32-A)
+                    deposit receipt. Cryptographic SHA-256 digest is computed in-browser before
+                    upload.
                   </p>
                 </div>
 
@@ -2298,7 +2299,7 @@ export default function HomePage() {
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <span>📜</span>
                 <h3 id="preview-modal-title">
-                  Challan Form 32-A Treasury Receipt &bull; {previewScanTitle}
+                  Form PFT-2 Stamped Treasury Receipt Evidence &bull; {previewScanTitle}
                 </h3>
               </div>
               <button
