@@ -1,5 +1,10 @@
 export type DemandLedgerEntryType =
-  "ASSESSMENT_DEMAND" | "REVISION_ADJUSTMENT" | "PENALTY_DEMAND" | "MANUAL_ADJUSTMENT" | "REVERSAL";
+  | "ASSESSMENT_DEMAND"
+  | "REVISION_ADJUSTMENT"
+  | "PENALTY_DEMAND"
+  | "MANUAL_ADJUSTMENT"
+  | "PAYMENT_CREDIT"
+  | "REVERSAL";
 
 export interface DemandUnit {
   readonly id: string;
@@ -63,6 +68,23 @@ export interface CreateRevisionAdjustmentInput {
   readonly actorId: string;
   readonly correlationId: string;
   readonly idempotencyKey: string;
+  readonly postedAt?: Date | string | undefined;
+  readonly metadata?: Record<string, unknown> | undefined;
+}
+
+export type PaymentChannel = "CHALLAN_32A" | "EPAY_PUNJAB" | "BANK_TRANSFER" | "OTC";
+
+export interface CreatePaymentReceiptInput {
+  readonly id?: string | undefined;
+  readonly demandUnitId: string;
+  readonly financialYearId: string;
+  readonly amount: number; // Positive payment amount in PKR; will be posted as signed negative credit
+  readonly receiptNumber: string; // e.g. Challan 32-A number or ePay PSID
+  readonly paymentChannel: PaymentChannel;
+  readonly actorId: string;
+  readonly correlationId: string;
+  readonly idempotencyKey: string;
+  readonly depositDate?: string | undefined;
   readonly postedAt?: Date | string | undefined;
   readonly metadata?: Record<string, unknown> | undefined;
 }
@@ -200,6 +222,45 @@ export function createRevisionAdjustmentEntry(
       previousAmount: previousRounded,
       newAmount: newRounded,
       delta,
+      ...input.metadata
+    }
+  });
+}
+
+/**
+ * Creates an append-only PAYMENT_CREDIT entry for recorded tax payments (e.g. Challan 32-A deposit or ePay).
+ * In accordance with statutory double-entry demand ledger rules, a payment receipt is posted as
+ * a negative amount (-amount) against the demand unit, which directly reduces the derived balance.
+ */
+export function createPaymentReceiptEntry(input: CreatePaymentReceiptInput): DemandLedgerEntry {
+  if (input.amount <= 0) {
+    throw new Error("Payment receipt amount must be greater than zero");
+  }
+
+  const receiptNumber = input.receiptNumber.trim();
+  if (!receiptNumber) {
+    throw new Error("receiptNumber is required");
+  }
+
+  const creditAmount = roundToTwoDecimals(-input.amount);
+
+  return createDemandLedgerEntry({
+    id: input.id,
+    demandUnitId: input.demandUnitId,
+    financialYearId: input.financialYearId,
+    entryType: "PAYMENT_CREDIT",
+    amount: creditAmount,
+    sourceType: "PAYMENT_RECEIPT",
+    sourceId: receiptNumber,
+    idempotencyKey: input.idempotencyKey,
+    correlationId: input.correlationId,
+    postedBy: input.actorId,
+    postedAt: input.postedAt,
+    metadata: {
+      receiptNumber,
+      paymentChannel: input.paymentChannel,
+      depositedAmount: roundToTwoDecimals(input.amount),
+      depositDate: input.depositDate ?? new Date().toISOString().split("T")[0],
       ...input.metadata
     }
   });

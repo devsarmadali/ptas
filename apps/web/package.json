@@ -11,7 +11,9 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@ptas/database": "workspace:*",
     "@ptas/domain": "workspace:*",
+    "@ptas/integrations": "workspace:*",
     "@ptas/ui": "workspace:*",
     "next": "16.2.10",
     "react": "19.2.7",

@@ -1,0 +1,2236 @@
+{
+  "schema_version": "2.0",
+  "source": {
+    "title": "Punjab Professional Tax - Second Schedule rate rules",
+    "source_document": "punjab-finance-act-1977-doc-pdf (1).pdf",
+    "schedule": "SECOND SCHEDULE (See section 3)",
+    "jurisdiction": "Punjab, Pakistan",
+    "currency": "PKR",
+    "rate_period": "per annum",
+    "source_pages": [1, 2, 3, 4, 5],
+    "source_scope_note": "This rule set reproduces the statutory classifications and annual rates appearing in the user-provided PDF. Machine fields normalize the legal text for implementation. Tertiary classifications are an analytical/entity-type allocation layer derived only from distinct types expressly enumerated inside the same statutory entry; they do not create new tax rates.",
+    "amendment_notes_visible_in_pdf": [
+      "Second Schedule substituted by the Punjab Finance Act 2019 (XV of 2019), as noted in the PDF footnote.",
+      "Entry 3 substituted by the Punjab Finance Act 2021 (XIX of 2021), as noted in the PDF footnote.",
+      "In entry 6(vii)(d), 'Motor Vehicle' was substituted for 'Motor Car' by the Punjab Finance Act 2021 (XIX of 2021).",
+      "Entry 11 was inserted by the Punjab Finance Act 2021 (XIX of 2021)."
+    ],
+    "code_note": "subclassification_code follows the numbering hierarchy printed in the Second Schedule. rule_id is a stable machine-friendly key. tertiary_code is an implementation code for a finer entity-type allocation within an existing statutory subclassification and is not a statutory schedule number."
+  },
+  "location_scope_enum": {
+    "METROPOLITAN_OR_MUNICIPAL_CORPORATION": "Within Metropolitan and Municipal Corporation limits",
+    "OTHER": "Others"
+  },
+  "rules": [
+    {
+      "subclassification_code": "1(i)",
+      "rule_id": "PFT-1.i",
+      "category_code": "1",
+      "category": "Companies",
+      "subcategory": "Paid-up capital up to Rs 5 million",
+      "official_text": "Companies registered under the Companies Act, 2017 or under the relevant law for the time being in force, with paid up capital — up to rupees 5 million",
+      "annual_rate_pkr": 10000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "paid_up_capital_pkr",
+          "operator": "<=",
+          "value": 5000000
+        }
+      ],
+      "source_page": 1,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "1(ii)",
+      "rule_id": "PFT-1.ii",
+      "category_code": "1",
+      "category": "Companies",
+      "subcategory": "Paid-up capital > Rs 5 million and <= Rs 50 million",
+      "official_text": "Companies registered under the Companies Act, 2017 or under the relevant law for the time being in force, with paid up capital — exceeding rupees 5 million but not exceeding rupees 50 million",
+      "annual_rate_pkr": 30000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "paid_up_capital_pkr",
+          "operator": ">",
+          "value": 5000000
+        },
+        {
+          "field": "paid_up_capital_pkr",
+          "operator": "<=",
+          "value": 50000000
+        }
+      ],
+      "source_page": 1,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "1(iii)",
+      "rule_id": "PFT-1.iii",
+      "category_code": "1",
+      "category": "Companies",
+      "subcategory": "Paid-up capital > Rs 50 million and <= Rs 100 million",
+      "official_text": "Companies registered under the Companies Act, 2017 or under the relevant law for the time being in force, with paid up capital — exceeding rupees 50 million but not exceeding rupees 100 million",
+      "annual_rate_pkr": 70000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "paid_up_capital_pkr",
+          "operator": ">",
+          "value": 50000000
+        },
+        {
+          "field": "paid_up_capital_pkr",
+          "operator": "<=",
+          "value": 100000000
+        }
+      ],
+      "source_page": 1,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "1(iv)",
+      "rule_id": "PFT-1.iv",
+      "category_code": "1",
+      "category": "Companies",
+      "subcategory": "Paid-up capital > Rs 100 million and <= Rs 200 million",
+      "official_text": "Companies registered under the Companies Act, 2017 or under the relevant law for the time being in force, with paid up capital — exceeding rupees 100 million but not exceeding rupees 200 million",
+      "annual_rate_pkr": 100000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "paid_up_capital_pkr",
+          "operator": ">",
+          "value": 100000000
+        },
+        {
+          "field": "paid_up_capital_pkr",
+          "operator": "<=",
+          "value": 200000000
+        }
+      ],
+      "source_page": 1,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "1(v)",
+      "rule_id": "PFT-1.v",
+      "category_code": "1",
+      "category": "Companies",
+      "subcategory": "Paid-up capital > Rs 200 million",
+      "official_text": "Companies registered under the Companies Act, 2017 or under the relevant law for the time being in force, with paid up capital — exceeding rupees 200 million",
+      "annual_rate_pkr": 100000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "paid_up_capital_pkr",
+          "operator": ">",
+          "value": 200000000
+        }
+      ],
+      "source_page": 1,
+      "notes": "Same annual rate as 1(iv); paid-up capital is required to distinguish 1(iv) from 1(v).",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "2(i)",
+      "rule_id": "PFT-2.i",
+      "category_code": "2",
+      "category": "Factories (persons other than companies)",
+      "subcategory": "Employees not exceeding 10",
+      "official_text": "Persons other than companies, owning factories as defined under the Factories Act, 1932 and having — employees not exceeding 10",
+      "annual_rate_pkr": 1500,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "is_company",
+          "operator": "=",
+          "value": false
+        },
+        {
+          "field": "employee_count",
+          "operator": "<=",
+          "value": 10
+        }
+      ],
+      "source_page": 1,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "2(ii)",
+      "rule_id": "PFT-2.ii",
+      "category_code": "2",
+      "category": "Factories (persons other than companies)",
+      "subcategory": "Employees > 10 and <= 25",
+      "official_text": "Persons other than companies, owning factories as defined under the Factories Act, 1932 and having — employees exceeding 10 but not exceeding 25",
+      "annual_rate_pkr": 5000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "is_company",
+          "operator": "=",
+          "value": false
+        },
+        {
+          "field": "employee_count",
+          "operator": ">",
+          "value": 10
+        },
+        {
+          "field": "employee_count",
+          "operator": "<=",
+          "value": 25
+        }
+      ],
+      "source_page": 1,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "2(iii)",
+      "rule_id": "PFT-2.iii",
+      "category_code": "2",
+      "category": "Factories (persons other than companies)",
+      "subcategory": "Employees > 25",
+      "official_text": "Persons other than companies, owning factories as defined under the Factories Act, 1932 and having — employees exceeding 25",
+      "annual_rate_pkr": 7500,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "is_company",
+          "operator": "=",
+          "value": false
+        },
+        {
+          "field": "employee_count",
+          "operator": ">",
+          "value": 25
+        }
+      ],
+      "source_page": 1,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "3(i)(a)",
+      "rule_id": "PFT-3.i.a",
+      "category_code": "3",
+      "category": "Commercial establishments (persons other than companies)",
+      "subcategory": "10+ employees | Within Metropolitan and Municipal Corporation limits",
+      "official_text": "Persons other than companies owning commercial establishments having 10 or more employees — within Metropolitan and Municipal Corporation limits",
+      "annual_rate_pkr": 6000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "is_company",
+          "operator": "=",
+          "value": false
+        },
+        {
+          "field": "employee_count",
+          "operator": ">=",
+          "value": 10
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "METROPOLITAN_OR_MUNICIPAL_CORPORATION"
+        }
+      ],
+      "source_page": 1,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "3(i)(b)",
+      "rule_id": "PFT-3.i.b",
+      "category_code": "3",
+      "category": "Commercial establishments (persons other than companies)",
+      "subcategory": "10+ employees | Others",
+      "official_text": "Persons other than companies owning commercial establishments having 10 or more employees — others",
+      "annual_rate_pkr": 4000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "is_company",
+          "operator": "=",
+          "value": false
+        },
+        {
+          "field": "employee_count",
+          "operator": ">=",
+          "value": 10
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "OTHER"
+        }
+      ],
+      "source_page": 1,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "3(ii)",
+      "rule_id": "PFT-3.ii",
+      "category_code": "3",
+      "category": "Commercial establishments (persons other than companies)",
+      "subcategory": "All other commercial establishments other than wholesalers and retailers",
+      "official_text": "All other commercial establishments other than wholesalers and retailers",
+      "annual_rate_pkr": 2000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "is_company",
+          "operator": "=",
+          "value": false
+        },
+        {
+          "field": "establishment_type",
+          "operator": "NOT_IN",
+          "value": ["wholesaler", "retailer"]
+        }
+      ],
+      "source_page": 2,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "4(i)",
+      "rule_id": "PFT-4.i",
+      "category_code": "4",
+      "category": "Importers / Exporters",
+      "subcategory": "Preceding-FY import/export value > Rs 100,000 and <= Rs 1 million",
+      "official_text": "Persons engaged in the import or export of goods who, during the preceding financial year, imported or exported goods of the value — exceeding rupees 1 lac but not exceeding rupees 1 million",
+      "annual_rate_pkr": 2000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "preceding_fy_import_export_value_pkr",
+          "operator": ">",
+          "value": 100000
+        },
+        {
+          "field": "preceding_fy_import_export_value_pkr",
+          "operator": "<=",
+          "value": 1000000
+        }
+      ],
+      "source_page": 2,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "trade_direction",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": ["PFT-T04-IMPORTER", "PFT-T04-EXPORTER"]
+      }
+    },
+    {
+      "subclassification_code": "4(ii)",
+      "rule_id": "PFT-4.ii",
+      "category_code": "4",
+      "category": "Importers / Exporters",
+      "subcategory": "Preceding-FY import/export value > Rs 1 million and <= Rs 5 million",
+      "official_text": "Persons engaged in the import or export of goods who, during the preceding financial year, imported or exported goods of the value — exceeding rupees 1 million but not exceeding rupees 5 million",
+      "annual_rate_pkr": 3000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "preceding_fy_import_export_value_pkr",
+          "operator": ">",
+          "value": 1000000
+        },
+        {
+          "field": "preceding_fy_import_export_value_pkr",
+          "operator": "<=",
+          "value": 5000000
+        }
+      ],
+      "source_page": 2,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "trade_direction",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": ["PFT-T04-IMPORTER", "PFT-T04-EXPORTER"]
+      }
+    },
+    {
+      "subclassification_code": "4(iii)",
+      "rule_id": "PFT-4.iii",
+      "category_code": "4",
+      "category": "Importers / Exporters",
+      "subcategory": "Preceding-FY import/export value > Rs 5 million",
+      "official_text": "Persons engaged in the import or export of goods who, during the preceding financial year, imported or exported goods of the value — exceeding rupees 5 million",
+      "annual_rate_pkr": 5000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "preceding_fy_import_export_value_pkr",
+          "operator": ">",
+          "value": 5000000
+        }
+      ],
+      "source_page": 2,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "trade_direction",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": ["PFT-T04-IMPORTER", "PFT-T04-EXPORTER"]
+      }
+    },
+    {
+      "subclassification_code": "5(i)",
+      "rule_id": "PFT-5.i",
+      "category_code": "5",
+      "category": "Contractors / Builders / Property Developers (specified supplies)",
+      "subcategory": "Preceding-FY supply value not exceeding Rs 1 million",
+      "official_text": "Contractors, builders and property developers, who during the preceding financial year supplied to the Federal or the Provincial Government or a company or a factory or a commercial establishment or an autonomous or a semi autonomous organization or any Local Authority; goods, commodities and services of the value — not exceeding rupees 1 million",
+      "annual_rate_pkr": 1000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "preceding_fy_supply_recipient",
+          "operator": "IN",
+          "value": [
+            "Federal Government",
+            "Provincial Government",
+            "company",
+            "factory",
+            "commercial establishment",
+            "autonomous organization",
+            "semi autonomous organization",
+            "Local Authority"
+          ]
+        },
+        {
+          "field": "preceding_fy_supply_value_pkr",
+          "operator": "<=",
+          "value": 1000000
+        }
+      ],
+      "source_page": 2,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "business_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": ["PFT-T05-CONTRACTOR", "PFT-T05-BUILDER", "PFT-T05-PROPERTY-DEVELOPER"]
+      }
+    },
+    {
+      "subclassification_code": "5(ii)",
+      "rule_id": "PFT-5.ii",
+      "category_code": "5",
+      "category": "Contractors / Builders / Property Developers (specified supplies)",
+      "subcategory": "Preceding-FY supply value > Rs 1 million and <= Rs 10 million",
+      "official_text": "Contractors, builders and property developers, who during the preceding financial year supplied to the Federal or the Provincial Government or a company or a factory or a commercial establishment or an autonomous or a semi autonomous organization or any Local Authority; goods, commodities and services of the value — exceeding rupees 1 million but not exceeding rupees 10 million",
+      "annual_rate_pkr": 6000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "preceding_fy_supply_recipient",
+          "operator": "IN",
+          "value": [
+            "Federal Government",
+            "Provincial Government",
+            "company",
+            "factory",
+            "commercial establishment",
+            "autonomous organization",
+            "semi autonomous organization",
+            "Local Authority"
+          ]
+        },
+        {
+          "field": "preceding_fy_supply_value_pkr",
+          "operator": ">",
+          "value": 1000000
+        },
+        {
+          "field": "preceding_fy_supply_value_pkr",
+          "operator": "<=",
+          "value": 10000000
+        }
+      ],
+      "source_page": 2,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "business_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": ["PFT-T05-CONTRACTOR", "PFT-T05-BUILDER", "PFT-T05-PROPERTY-DEVELOPER"]
+      }
+    },
+    {
+      "subclassification_code": "5(iii)",
+      "rule_id": "PFT-5.iii",
+      "category_code": "5",
+      "category": "Contractors / Builders / Property Developers (specified supplies)",
+      "subcategory": "Preceding-FY supply value > Rs 10 million and <= Rs 50 million",
+      "official_text": "Contractors, builders and property developers, who during the preceding financial year supplied to the Federal or the Provincial Government or a company or a factory or a commercial establishment or an autonomous or a semi autonomous organization or any Local Authority; goods, commodities and services of the value — exceeding rupees 10 million but not exceeding rupees 50 million",
+      "annual_rate_pkr": 10000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "preceding_fy_supply_recipient",
+          "operator": "IN",
+          "value": [
+            "Federal Government",
+            "Provincial Government",
+            "company",
+            "factory",
+            "commercial establishment",
+            "autonomous organization",
+            "semi autonomous organization",
+            "Local Authority"
+          ]
+        },
+        {
+          "field": "preceding_fy_supply_value_pkr",
+          "operator": ">",
+          "value": 10000000
+        },
+        {
+          "field": "preceding_fy_supply_value_pkr",
+          "operator": "<=",
+          "value": 50000000
+        }
+      ],
+      "source_page": 2,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "business_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": ["PFT-T05-CONTRACTOR", "PFT-T05-BUILDER", "PFT-T05-PROPERTY-DEVELOPER"]
+      }
+    },
+    {
+      "subclassification_code": "5(iv)",
+      "rule_id": "PFT-5.iv",
+      "category_code": "5",
+      "category": "Contractors / Builders / Property Developers (specified supplies)",
+      "subcategory": "Preceding-FY supply value > Rs 50 million",
+      "official_text": "Contractors, builders and property developers, who during the preceding financial year supplied to the Federal or the Provincial Government or a company or a factory or a commercial establishment or an autonomous or a semi autonomous organization or any Local Authority; goods, commodities and services of the value — exceeding rupees 50 million",
+      "annual_rate_pkr": 20000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "preceding_fy_supply_recipient",
+          "operator": "IN",
+          "value": [
+            "Federal Government",
+            "Provincial Government",
+            "company",
+            "factory",
+            "commercial establishment",
+            "autonomous organization",
+            "semi autonomous organization",
+            "Local Authority"
+          ]
+        },
+        {
+          "field": "preceding_fy_supply_value_pkr",
+          "operator": ">",
+          "value": 50000000
+        }
+      ],
+      "source_page": 2,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "business_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": ["PFT-T05-CONTRACTOR", "PFT-T05-BUILDER", "PFT-T05-PROPERTY-DEVELOPER"]
+      }
+    },
+    {
+      "subclassification_code": "6(i)",
+      "rule_id": "PFT-6.i",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Medical Consultants or Specialists / Dental Surgeons",
+      "official_text": "Medical Consultants or Specialists/Dental Surgeons",
+      "annual_rate_pkr": 5000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "profession_type",
+          "operator": "IN",
+          "value": ["Medical Consultant", "Medical Specialist", "Dental Surgeon"]
+        }
+      ],
+      "source_page": 2,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "profession_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": [
+          "PFT-T06I-MEDICAL-CONSULTANT",
+          "PFT-T06I-MEDICAL-SPECIALIST",
+          "PFT-T06I-DENTAL-SURGEON"
+        ]
+      }
+    },
+    {
+      "subclassification_code": "6(ii)",
+      "rule_id": "PFT-6.ii",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Registered Medical Practitioners",
+      "official_text": "Registered Medical Practitioners",
+      "annual_rate_pkr": 4000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "profession_type",
+          "operator": "=",
+          "value": "Registered Medical Practitioner"
+        }
+      ],
+      "source_page": 2,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "6(iii)(a)",
+      "rule_id": "PFT-6.iii.a",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Others including Homoeopaths, Hakeems and Ayuervedics | Within Metropolitan and Municipal Corporation limits",
+      "official_text": "Others including Homoeopaths, Hakeems and Ayuervedics — within Metropolitan and Municipal Corporation limits",
+      "annual_rate_pkr": 3000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "profession_type",
+          "operator": "IN",
+          "value": ["Homoeopath", "Hakeem", "Ayuervedic", "Other under 6(iii)"]
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "METROPOLITAN_OR_MUNICIPAL_CORPORATION"
+        }
+      ],
+      "source_page": 2,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "profession_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": [
+          "PFT-T06III-OTHER",
+          "PFT-T06III-HOMOEOPATH",
+          "PFT-T06III-HAKEEM",
+          "PFT-T06III-AYURVEDIC"
+        ]
+      }
+    },
+    {
+      "subclassification_code": "6(iii)(b)",
+      "rule_id": "PFT-6.iii.b",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Others including Homoeopaths, Hakeems and Ayuervedics | Others",
+      "official_text": "Others including Homoeopaths, Hakeems and Ayuervedics — others",
+      "annual_rate_pkr": 1000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "profession_type",
+          "operator": "IN",
+          "value": ["Homoeopath", "Hakeem", "Ayuervedic", "Other under 6(iii)"]
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "OTHER"
+        }
+      ],
+      "source_page": 3,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "profession_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": [
+          "PFT-T06III-OTHER",
+          "PFT-T06III-HOMOEOPATH",
+          "PFT-T06III-HAKEEM",
+          "PFT-T06III-AYURVEDIC"
+        ]
+      }
+    },
+    {
+      "subclassification_code": "6(iv)(a)",
+      "rule_id": "PFT-6.iv.a",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Auditing firms | Within Metropolitan and Municipal Corporation limits",
+      "official_text": "Auditing firms (per professionally qualified person) — within Metropolitan and Municipal Corporation limits",
+      "annual_rate_pkr": 6000,
+      "rate_basis": "per annum per professionally qualified person",
+      "criteria": [
+        {
+          "field": "service_type",
+          "operator": "=",
+          "value": "Auditing firm"
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "METROPOLITAN_OR_MUNICIPAL_CORPORATION"
+        }
+      ],
+      "source_page": 3,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "6(iv)(b)",
+      "rule_id": "PFT-6.iv.b",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Auditing firms | Others",
+      "official_text": "Auditing firms (per professionally qualified person) — others",
+      "annual_rate_pkr": 4000,
+      "rate_basis": "per annum per professionally qualified person",
+      "criteria": [
+        {
+          "field": "service_type",
+          "operator": "=",
+          "value": "Auditing firm"
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "OTHER"
+        }
+      ],
+      "source_page": 3,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "6(v)(a)",
+      "rule_id": "PFT-6.v.a",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Management and Tax Consultants / Architects / Engineering, Technical and Scientific Consultants | Within Metropolitan and Municipal Corporation limits",
+      "official_text": "Management and Tax Consultants Architects, Engineering, Technical and Scientific Consultants — within Metropolitan and Municipal Corporation limits",
+      "annual_rate_pkr": 6000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "service_type",
+          "operator": "IN",
+          "value": [
+            "Management Consultant",
+            "Tax Consultant",
+            "Architect",
+            "Engineering Consultant",
+            "Technical Consultant",
+            "Scientific Consultant"
+          ]
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "METROPOLITAN_OR_MUNICIPAL_CORPORATION"
+        }
+      ],
+      "source_page": 3,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "profession_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": [
+          "PFT-T06V-MANAGEMENT-CONSULTANT",
+          "PFT-T06V-TAX-CONSULTANT",
+          "PFT-T06V-ARCHITECT",
+          "PFT-T06V-ENGINEERING-CONSULTANT",
+          "PFT-T06V-TECHNICAL-CONSULTANT",
+          "PFT-T06V-SCIENTIFIC-CONSULTANT"
+        ]
+      }
+    },
+    {
+      "subclassification_code": "6(v)(b)",
+      "rule_id": "PFT-6.v.b",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Management and Tax Consultants / Architects / Engineering, Technical and Scientific Consultants | Others",
+      "official_text": "Management and Tax Consultants Architects, Engineering, Technical and Scientific Consultants — others",
+      "annual_rate_pkr": 4000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "service_type",
+          "operator": "IN",
+          "value": [
+            "Management Consultant",
+            "Tax Consultant",
+            "Architect",
+            "Engineering Consultant",
+            "Technical Consultant",
+            "Scientific Consultant"
+          ]
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "OTHER"
+        }
+      ],
+      "source_page": 3,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "profession_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": [
+          "PFT-T06V-MANAGEMENT-CONSULTANT",
+          "PFT-T06V-TAX-CONSULTANT",
+          "PFT-T06V-ARCHITECT",
+          "PFT-T06V-ENGINEERING-CONSULTANT",
+          "PFT-T06V-TECHNICAL-CONSULTANT",
+          "PFT-T06V-SCIENTIFIC-CONSULTANT"
+        ]
+      }
+    },
+    {
+      "subclassification_code": "6(vi)",
+      "rule_id": "PFT-6.vi",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Lawyers",
+      "official_text": "Lawyers",
+      "annual_rate_pkr": 1000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "profession_type",
+          "operator": "=",
+          "value": "Lawyer"
+        }
+      ],
+      "source_page": 3,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "6(vii)(a)",
+      "rule_id": "PFT-6.vii.a",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Members of Stock Exchanges",
+      "official_text": "Members of Stock Exchanges",
+      "annual_rate_pkr": 10000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "service_type",
+          "operator": "=",
+          "value": "Stock Exchange Member"
+        }
+      ],
+      "source_page": 3,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "6(vii)(b)(i)",
+      "rule_id": "PFT-6.vii.b.i",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Money Changer | Within Metropolitan and Municipal Corporation limits",
+      "official_text": "Money Changer — within Metropolitan and Municipal Corporation limits",
+      "annual_rate_pkr": 6000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "service_type",
+          "operator": "=",
+          "value": "Money Changer"
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "METROPOLITAN_OR_MUNICIPAL_CORPORATION"
+        }
+      ],
+      "source_page": 3,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "6(vii)(b)(ii)",
+      "rule_id": "PFT-6.vii.b.ii",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Money Changer | Others",
+      "official_text": "Money Changer — others",
+      "annual_rate_pkr": 2000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "service_type",
+          "operator": "=",
+          "value": "Money Changer"
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "OTHER"
+        }
+      ],
+      "source_page": 3,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "6(vii)(c)(i)",
+      "rule_id": "PFT-6.vii.c.i",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Motorcycle / Scooter Dealers | Within Metropolitan and Municipal Corporation limits",
+      "official_text": "Motorcycle/Scooter dealers — within Metropolitan and Municipal Corporation limits",
+      "annual_rate_pkr": 10000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "dealer_type",
+          "operator": "IN",
+          "value": ["Motorcycle Dealer", "Scooter Dealer"]
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "METROPOLITAN_OR_MUNICIPAL_CORPORATION"
+        }
+      ],
+      "source_page": 3,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "dealer_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": ["PFT-T06VIIC-MOTORCYCLE-DEALER", "PFT-T06VIIC-SCOOTER-DEALER"]
+      }
+    },
+    {
+      "subclassification_code": "6(vii)(c)(ii)",
+      "rule_id": "PFT-6.vii.c.ii",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Motorcycle / Scooter Dealers | Others",
+      "official_text": "Motorcycle/Scooter dealers — others",
+      "annual_rate_pkr": 6000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "dealer_type",
+          "operator": "IN",
+          "value": ["Motorcycle Dealer", "Scooter Dealer"]
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "OTHER"
+        }
+      ],
+      "source_page": 3,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "dealer_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": ["PFT-T06VIIC-MOTORCYCLE-DEALER", "PFT-T06VIIC-SCOOTER-DEALER"]
+      }
+    },
+    {
+      "subclassification_code": "6(vii)(d)(i)",
+      "rule_id": "PFT-6.vii.d.i",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Motor Vehicle Dealers and Real Estate Agents | Within Metropolitan and Municipal Corporation limits",
+      "official_text": "Motor Vehicle Dealers and Real Estate Agents — within Metropolitan and Municipal Corporation limits",
+      "annual_rate_pkr": 20000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "service_or_dealer_type",
+          "operator": "IN",
+          "value": ["Motor Vehicle Dealer", "Real Estate Agent"]
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "METROPOLITAN_OR_MUNICIPAL_CORPORATION"
+        }
+      ],
+      "source_page": 4,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "dealer_or_agent_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": ["PFT-T06VIID-MOTOR-VEHICLE-DEALER", "PFT-T06VIID-REAL-ESTATE-AGENT"]
+      }
+    },
+    {
+      "subclassification_code": "6(vii)(d)(ii)",
+      "rule_id": "PFT-6.vii.d.ii",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Motor Vehicle Dealers and Real Estate Agents | Others",
+      "official_text": "Motor Vehicle Dealers and Real Estate Agents — others",
+      "annual_rate_pkr": 10000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "service_or_dealer_type",
+          "operator": "IN",
+          "value": ["Motor Vehicle Dealer", "Real Estate Agent"]
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "OTHER"
+        }
+      ],
+      "source_page": 4,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "dealer_or_agent_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": ["PFT-T06VIID-MOTOR-VEHICLE-DEALER", "PFT-T06VIID-REAL-ESTATE-AGENT"]
+      }
+    },
+    {
+      "subclassification_code": "6(vii)(e)(i)",
+      "rule_id": "PFT-6.vii.e.i",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Recruiting Agents | Within Metropolitan and Municipal Corporation limits",
+      "official_text": "Recruiting Agents — within Metropolitan and Municipal Corporation limits",
+      "annual_rate_pkr": 20000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "service_type",
+          "operator": "=",
+          "value": "Recruiting Agent"
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "METROPOLITAN_OR_MUNICIPAL_CORPORATION"
+        }
+      ],
+      "source_page": 4,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "6(vii)(e)(ii)",
+      "rule_id": "PFT-6.vii.e.ii",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Recruiting Agents | Others",
+      "official_text": "Recruiting Agents — others",
+      "annual_rate_pkr": 10000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "service_type",
+          "operator": "=",
+          "value": "Recruiting Agent"
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "OTHER"
+        }
+      ],
+      "source_page": 4,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "6(viii)(i)",
+      "rule_id": "PFT-6.viii.i",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Carriage of goods and passengers by road | Within Metropolitan and Municipal Corporation limits",
+      "official_text": "Carriage of goods and passengers by road — within Metropolitan and Municipal Corporation limits",
+      "annual_rate_pkr": 4000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "service_type",
+          "operator": "=",
+          "value": "Carriage of goods and passengers by road"
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "METROPOLITAN_OR_MUNICIPAL_CORPORATION"
+        }
+      ],
+      "source_page": 4,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "transport_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": ["PFT-T06VIII-GOODS-CARRIAGE", "PFT-T06VIII-PASSENGER-CARRIAGE"]
+      }
+    },
+    {
+      "subclassification_code": "6(viii)(ii)",
+      "rule_id": "PFT-6.viii.ii",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Carriage of goods and passengers by road | Others",
+      "official_text": "Carriage of goods and passengers by road — others",
+      "annual_rate_pkr": 2000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "service_type",
+          "operator": "=",
+          "value": "Carriage of goods and passengers by road"
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "OTHER"
+        }
+      ],
+      "source_page": 4,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "transport_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": ["PFT-T06VIII-GOODS-CARRIAGE", "PFT-T06VIII-PASSENGER-CARRIAGE"]
+      }
+    },
+    {
+      "subclassification_code": "6(ix)(i)",
+      "rule_id": "PFT-6.ix.i",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Health Clubs and Gymnasiums | Within Metropolitan and Municipal Corporation limits",
+      "official_text": "Health Clubs and Gymnasiums — within Metropolitan and Municipal Corporation limits",
+      "annual_rate_pkr": 4000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "service_type",
+          "operator": "IN",
+          "value": ["Health Club", "Gymnasium"]
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "METROPOLITAN_OR_MUNICIPAL_CORPORATION"
+        }
+      ],
+      "source_page": 4,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "establishment_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": ["PFT-T06IX-HEALTH-CLUB", "PFT-T06IX-GYMNASIUM"]
+      }
+    },
+    {
+      "subclassification_code": "6(ix)(ii)",
+      "rule_id": "PFT-6.ix.ii",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Health Clubs and Gymnasiums | Others",
+      "official_text": "Health Clubs and Gymnasiums — others",
+      "annual_rate_pkr": 2000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "service_type",
+          "operator": "IN",
+          "value": ["Health Club", "Gymnasium"]
+        },
+        {
+          "field": "location_scope",
+          "operator": "=",
+          "value": "OTHER"
+        }
+      ],
+      "source_page": 4,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "establishment_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": ["PFT-T06IX-HEALTH-CLUB", "PFT-T06IX-GYMNASIUM"]
+      }
+    },
+    {
+      "subclassification_code": "6(x)",
+      "rule_id": "PFT-6.x",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Jewelers / Departmental Stores / Electronic Goods Stores / Cable Operators / Printing Presses / Pesticide Dealers",
+      "official_text": "Jewelers, departmental stores, electronic goods stores, cable operators, printing presses and pesticide dealers",
+      "annual_rate_pkr": 2000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "business_type",
+          "operator": "IN",
+          "value": [
+            "Jeweler",
+            "Departmental Store",
+            "Electronic Goods Store",
+            "Cable Operator",
+            "Printing Press",
+            "Pesticide Dealer"
+          ]
+        }
+      ],
+      "source_page": 4,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "establishment_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": [
+          "PFT-T06X-JEWELER",
+          "PFT-T06X-DEPARTMENTAL-STORE",
+          "PFT-T06X-ELECTRONIC-GOODS-STORE",
+          "PFT-T06X-CABLE-OPERATOR",
+          "PFT-T06X-PRINTING-PRESS",
+          "PFT-T06X-PESTICIDE-DEALER"
+        ]
+      }
+    },
+    {
+      "subclassification_code": "6(xi)",
+      "rule_id": "PFT-6.xi",
+      "category_code": "6",
+      "category": "Professions and service providers",
+      "subcategory": "Tobacco Venders — Wholesalers",
+      "official_text": "Tobacco venders — Wholesalers",
+      "annual_rate_pkr": 4000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "business_type",
+          "operator": "=",
+          "value": "Tobacco Wholesaler"
+        }
+      ],
+      "source_page": 4,
+      "notes": "",
+      "tertiary": {
+        "applicable": false,
+        "dimension": null,
+        "required_when_identifiable": false,
+        "rate_effect": "none",
+        "allowed_codes": []
+      }
+    },
+    {
+      "subclassification_code": "7",
+      "rule_id": "PFT-7",
+      "category_code": "7",
+      "category": "Franchisees / Authorized Dealers / Agents / Distributors",
+      "subcategory": "Flat rate",
+      "official_text": "Franchisee, Authorized dealers/Agents and distributors",
+      "annual_rate_pkr": 5000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "business_type",
+          "operator": "IN",
+          "value": ["Franchisee", "Authorized Dealer", "Authorized Agent", "Distributor"]
+        }
+      ],
+      "source_page": 4,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "business_role",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": [
+          "PFT-T07-FRANCHISEE",
+          "PFT-T07-AUTHORIZED-DEALER",
+          "PFT-T07-AUTHORIZED-AGENT",
+          "PFT-T07-DISTRIBUTOR"
+        ]
+      }
+    },
+    {
+      "subclassification_code": "8",
+      "rule_id": "PFT-8",
+      "category_code": "8",
+      "category": "Property Developers / Builders / Marketing Agents or Companies",
+      "subcategory": "Development, marketing and management of residential, commercial or industrial properties",
+      "official_text": "Property Developers / Builders & Marketing Agent/Company engaged in the development marketing and management of residential, commercial or industrial properties",
+      "annual_rate_pkr": 50000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "business_activity",
+          "operator": "=",
+          "value": "Development/marketing/management of residential, commercial or industrial properties"
+        }
+      ],
+      "source_page": 5,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "property_business_role",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": [
+          "PFT-T08-PROPERTY-DEVELOPER",
+          "PFT-T08-BUILDER",
+          "PFT-T08-MARKETING-AGENT",
+          "PFT-T08-MARKETING-COMPANY"
+        ]
+      }
+    },
+    {
+      "subclassification_code": "9",
+      "rule_id": "PFT-9",
+      "category_code": "9",
+      "category": "Hotels / Hostels / Guest Houses / Motels / Resorts",
+      "subcategory": "Lodging facilities",
+      "official_text": "Hotels, Hostels (except hostels owned and operated by an educational institution itself) / Guest Houses / Motels / Resorts providing lodging facilities",
+      "annual_rate_pkr": 5000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "business_type",
+          "operator": "IN",
+          "value": ["Hotel", "Hostel", "Guest House", "Motel", "Resort"]
+        },
+        {
+          "field": "provides_lodging",
+          "operator": "=",
+          "value": true
+        },
+        {
+          "field": "educational_institution_owned_and_operated_hostel",
+          "operator": "=",
+          "value": false
+        }
+      ],
+      "source_page": 5,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "lodging_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": [
+          "PFT-T09-HOTEL",
+          "PFT-T09-HOSTEL",
+          "PFT-T09-GUEST-HOUSE",
+          "PFT-T09-MOTEL",
+          "PFT-T09-RESORT"
+        ]
+      }
+    },
+    {
+      "subclassification_code": "10",
+      "rule_id": "PFT-10",
+      "category_code": "10",
+      "category": "Restaurants / Eateries / Fast Food Points / Ice Cream Parlors / Bakeries / Confectioners / Sweets Shops",
+      "subcategory": "With air conditioning facility",
+      "official_text": "Restaurants / Eateries / Fast Food Points / Ice Cream Parlors / Bakeries / Confectioners / Sweets Shops with air conditioning facility",
+      "annual_rate_pkr": 5000,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "business_type",
+          "operator": "IN",
+          "value": [
+            "Restaurant",
+            "Eatery",
+            "Fast Food Point",
+            "Ice Cream Parlor",
+            "Bakery",
+            "Confectioner",
+            "Sweets Shop"
+          ]
+        },
+        {
+          "field": "air_conditioning_facility",
+          "operator": "=",
+          "value": true
+        }
+      ],
+      "source_page": 5,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "food_establishment_type",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": [
+          "PFT-T10-RESTAURANT",
+          "PFT-T10-EATERY",
+          "PFT-T10-FAST-FOOD",
+          "PFT-T10-ICE-CREAM-PARLOR",
+          "PFT-T10-BAKERY",
+          "PFT-T10-CONFECTIONER",
+          "PFT-T10-SWEETS-SHOP"
+        ]
+      }
+    },
+    {
+      "subclassification_code": "11",
+      "rule_id": "PFT-11",
+      "category_code": "11",
+      "category": "Persons engaged in profession, trade, calling or employment assessed to pay income tax",
+      "subcategory": "Assessed to pay income tax during the preceding financial years",
+      "official_text": "Persons who are engaged in a profession, trade, calling or employment who were assessed to pay income tax during the preceding financial years",
+      "annual_rate_pkr": 200,
+      "rate_basis": "per annum",
+      "criteria": [
+        {
+          "field": "engaged_in",
+          "operator": "IN",
+          "value": ["profession", "trade", "calling", "employment"]
+        },
+        {
+          "field": "assessed_to_pay_income_tax_in_preceding_financial_years",
+          "operator": "=",
+          "value": true
+        }
+      ],
+      "source_page": 5,
+      "notes": "",
+      "tertiary": {
+        "applicable": true,
+        "dimension": "engagement_basis",
+        "required_when_identifiable": true,
+        "rate_effect": "none",
+        "allowed_codes": [
+          "PFT-T11-PROFESSION",
+          "PFT-T11-TRADE",
+          "PFT-T11-CALLING",
+          "PFT-T11-EMPLOYMENT"
+        ]
+      }
+    }
+  ],
+  "classification_hierarchy": {
+    "level_1": "category",
+    "level_2": "statutory subclassification / slab",
+    "level_3": "tertiary classification (entity/profession/establishment type where the official entry bundles multiple types)",
+    "tertiary_rate_effect": "none",
+    "tertiary_code_is_statutory": false,
+    "fallback_rule": "If the entity type cannot be identified reliably, leave tertiary_code null and flag for review; do not invent a tertiary type."
+  },
+  "tertiary_taxonomy": [
+    {
+      "tertiary_code": "PFT-T04-IMPORTER",
+      "parent_category_code": "4",
+      "dimension": "trade_direction",
+      "tertiary_classification": "Importer",
+      "source_term": "import of goods",
+      "aliases": ["importer", "importers"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T04-EXPORTER",
+      "parent_category_code": "4",
+      "dimension": "trade_direction",
+      "tertiary_classification": "Exporter",
+      "source_term": "export of goods",
+      "aliases": ["exporter", "exporters"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T05-CONTRACTOR",
+      "parent_category_code": "5",
+      "dimension": "business_type",
+      "tertiary_classification": "Contractor",
+      "source_term": "Contractors",
+      "aliases": ["contractor", "contractors"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T05-BUILDER",
+      "parent_category_code": "5",
+      "dimension": "business_type",
+      "tertiary_classification": "Builder",
+      "source_term": "builders",
+      "aliases": ["builder", "builders"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T05-PROPERTY-DEVELOPER",
+      "parent_category_code": "5",
+      "dimension": "business_type",
+      "tertiary_classification": "Property Developer",
+      "source_term": "property developers",
+      "aliases": ["property developer", "property developers"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06I-MEDICAL-CONSULTANT",
+      "parent_category_code": "6",
+      "dimension": "profession_type",
+      "tertiary_classification": "Medical Consultant",
+      "source_term": "Medical Consultants",
+      "aliases": ["medical consultant", "medical consultants"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06I-MEDICAL-SPECIALIST",
+      "parent_category_code": "6",
+      "dimension": "profession_type",
+      "tertiary_classification": "Medical Specialist",
+      "source_term": "Specialists",
+      "aliases": ["medical specialist", "medical specialists", "specialist", "specialists"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06I-DENTAL-SURGEON",
+      "parent_category_code": "6",
+      "dimension": "profession_type",
+      "tertiary_classification": "Dental Surgeon",
+      "source_term": "Dental Surgeons",
+      "aliases": ["dental surgeon", "dental surgeons"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06III-OTHER",
+      "parent_category_code": "6",
+      "dimension": "profession_type",
+      "tertiary_classification": "Other profession/service under 6(iii)",
+      "source_term": "Others",
+      "aliases": [],
+      "is_residual": true,
+      "notes": "Residual type because the official entry says “Others including ...”.",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06III-HOMOEOPATH",
+      "parent_category_code": "6",
+      "dimension": "profession_type",
+      "tertiary_classification": "Homoeopath",
+      "source_term": "Homoeopaths",
+      "aliases": ["homoeopath", "homoeopaths", "homeopath", "homeopaths"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06III-HAKEEM",
+      "parent_category_code": "6",
+      "dimension": "profession_type",
+      "tertiary_classification": "Hakeem",
+      "source_term": "Hakeems",
+      "aliases": ["hakeem", "hakeems", "hakim", "hakims"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06III-AYURVEDIC",
+      "parent_category_code": "6",
+      "dimension": "profession_type",
+      "tertiary_classification": "Ayurvedic Practitioner",
+      "source_term": "Ayuervedics",
+      "aliases": ["ayurvedic", "ayurvedics"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06V-MANAGEMENT-CONSULTANT",
+      "parent_category_code": "6",
+      "dimension": "profession_type",
+      "tertiary_classification": "Management Consultant",
+      "source_term": "Management Consultants",
+      "aliases": ["management consultant", "management consultants"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06V-TAX-CONSULTANT",
+      "parent_category_code": "6",
+      "dimension": "profession_type",
+      "tertiary_classification": "Tax Consultant",
+      "source_term": "Tax Consultants",
+      "aliases": ["tax consultant", "tax consultants"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06V-ARCHITECT",
+      "parent_category_code": "6",
+      "dimension": "profession_type",
+      "tertiary_classification": "Architect",
+      "source_term": "Architects",
+      "aliases": ["architect", "architects"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06V-ENGINEERING-CONSULTANT",
+      "parent_category_code": "6",
+      "dimension": "profession_type",
+      "tertiary_classification": "Engineering Consultant",
+      "source_term": "Engineering Consultants",
+      "aliases": ["engineering consultant", "engineering consultants"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06V-TECHNICAL-CONSULTANT",
+      "parent_category_code": "6",
+      "dimension": "profession_type",
+      "tertiary_classification": "Technical Consultant",
+      "source_term": "Technical Consultants",
+      "aliases": ["technical consultant", "technical consultants"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06V-SCIENTIFIC-CONSULTANT",
+      "parent_category_code": "6",
+      "dimension": "profession_type",
+      "tertiary_classification": "Scientific Consultant",
+      "source_term": "Scientific Consultants",
+      "aliases": ["scientific consultant", "scientific consultants"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06VIIC-MOTORCYCLE-DEALER",
+      "parent_category_code": "6",
+      "dimension": "dealer_type",
+      "tertiary_classification": "Motorcycle Dealer",
+      "source_term": "Motorcycle dealers",
+      "aliases": [
+        "motorcycle dealer",
+        "motorcycle dealers",
+        "motor cycle dealer",
+        "motor cycle dealers"
+      ],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06VIIC-SCOOTER-DEALER",
+      "parent_category_code": "6",
+      "dimension": "dealer_type",
+      "tertiary_classification": "Scooter Dealer",
+      "source_term": "Scooter dealers",
+      "aliases": ["scooter dealer", "scooter dealers"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06VIID-MOTOR-VEHICLE-DEALER",
+      "parent_category_code": "6",
+      "dimension": "dealer_or_agent_type",
+      "tertiary_classification": "Motor Vehicle Dealer",
+      "source_term": "Motor Vehicle Dealers",
+      "aliases": ["motor vehicle dealer", "motor vehicle dealers"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06VIID-REAL-ESTATE-AGENT",
+      "parent_category_code": "6",
+      "dimension": "dealer_or_agent_type",
+      "tertiary_classification": "Real Estate Agent",
+      "source_term": "Real Estate Agents",
+      "aliases": ["real estate agent", "real estate agents"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06VIII-GOODS-CARRIAGE",
+      "parent_category_code": "6",
+      "dimension": "transport_type",
+      "tertiary_classification": "Goods Carriage by Road",
+      "source_term": "Carriage of goods by road",
+      "aliases": ["carriage of goods by road", "goods carriage by road"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06VIII-PASSENGER-CARRIAGE",
+      "parent_category_code": "6",
+      "dimension": "transport_type",
+      "tertiary_classification": "Passenger Carriage by Road",
+      "source_term": "Carriage of passengers by road",
+      "aliases": ["carriage of passengers by road", "passenger carriage by road"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06IX-HEALTH-CLUB",
+      "parent_category_code": "6",
+      "dimension": "establishment_type",
+      "tertiary_classification": "Health Club",
+      "source_term": "Health Clubs",
+      "aliases": ["health club", "health clubs"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06IX-GYMNASIUM",
+      "parent_category_code": "6",
+      "dimension": "establishment_type",
+      "tertiary_classification": "Gymnasium",
+      "source_term": "Gymnasiums",
+      "aliases": ["gymnasium", "gymnasiums"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06X-JEWELER",
+      "parent_category_code": "6",
+      "dimension": "establishment_type",
+      "tertiary_classification": "Jeweler",
+      "source_term": "Jewelers",
+      "aliases": ["jeweler", "jewelers", "jeweller", "jewellers"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06X-DEPARTMENTAL-STORE",
+      "parent_category_code": "6",
+      "dimension": "establishment_type",
+      "tertiary_classification": "Departmental Store",
+      "source_term": "departmental stores",
+      "aliases": ["departmental store", "departmental stores"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06X-ELECTRONIC-GOODS-STORE",
+      "parent_category_code": "6",
+      "dimension": "establishment_type",
+      "tertiary_classification": "Electronic Goods Store",
+      "source_term": "electronic goods stores",
+      "aliases": ["electronic goods store", "electronic goods stores"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06X-CABLE-OPERATOR",
+      "parent_category_code": "6",
+      "dimension": "establishment_type",
+      "tertiary_classification": "Cable Operator",
+      "source_term": "cable operators",
+      "aliases": ["cable operator", "cable operators"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06X-PRINTING-PRESS",
+      "parent_category_code": "6",
+      "dimension": "establishment_type",
+      "tertiary_classification": "Printing Press",
+      "source_term": "printing presses",
+      "aliases": ["printing press", "printing presses"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T06X-PESTICIDE-DEALER",
+      "parent_category_code": "6",
+      "dimension": "establishment_type",
+      "tertiary_classification": "Pesticide Dealer",
+      "source_term": "pesticide dealers",
+      "aliases": ["pesticide dealer", "pesticide dealers"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T07-FRANCHISEE",
+      "parent_category_code": "7",
+      "dimension": "business_role",
+      "tertiary_classification": "Franchisee",
+      "source_term": "Franchisee",
+      "aliases": ["franchisee", "franchisees"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T07-AUTHORIZED-DEALER",
+      "parent_category_code": "7",
+      "dimension": "business_role",
+      "tertiary_classification": "Authorized Dealer",
+      "source_term": "Authorized dealers",
+      "aliases": [
+        "authorized dealer",
+        "authorized dealers",
+        "authorised dealer",
+        "authorised dealers"
+      ],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T07-AUTHORIZED-AGENT",
+      "parent_category_code": "7",
+      "dimension": "business_role",
+      "tertiary_classification": "Authorized Agent",
+      "source_term": "Agents",
+      "aliases": ["authorized agent", "authorized agents", "authorised agent", "authorised agents"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T07-DISTRIBUTOR",
+      "parent_category_code": "7",
+      "dimension": "business_role",
+      "tertiary_classification": "Distributor",
+      "source_term": "distributors",
+      "aliases": ["distributor", "distributors"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T08-PROPERTY-DEVELOPER",
+      "parent_category_code": "8",
+      "dimension": "property_business_role",
+      "tertiary_classification": "Property Developer",
+      "source_term": "Property Developers",
+      "aliases": ["property developer", "property developers"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T08-BUILDER",
+      "parent_category_code": "8",
+      "dimension": "property_business_role",
+      "tertiary_classification": "Builder",
+      "source_term": "Builders",
+      "aliases": ["builder", "builders"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T08-MARKETING-AGENT",
+      "parent_category_code": "8",
+      "dimension": "property_business_role",
+      "tertiary_classification": "Marketing Agent",
+      "source_term": "Marketing Agent",
+      "aliases": ["marketing agent", "marketing agents"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T08-MARKETING-COMPANY",
+      "parent_category_code": "8",
+      "dimension": "property_business_role",
+      "tertiary_classification": "Marketing Company",
+      "source_term": "Marketing Company",
+      "aliases": ["marketing company", "marketing companies"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T09-HOTEL",
+      "parent_category_code": "9",
+      "dimension": "lodging_type",
+      "tertiary_classification": "Hotel",
+      "source_term": "Hotels",
+      "aliases": ["hotel", "hotels"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T09-HOSTEL",
+      "parent_category_code": "9",
+      "dimension": "lodging_type",
+      "tertiary_classification": "Hostel",
+      "source_term": "Hostels",
+      "aliases": ["hostel", "hostels"],
+      "is_residual": false,
+      "notes": "The statutory entry excludes hostels owned and operated by an educational institution itself.",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T09-GUEST-HOUSE",
+      "parent_category_code": "9",
+      "dimension": "lodging_type",
+      "tertiary_classification": "Guest House",
+      "source_term": "Guest Houses",
+      "aliases": ["guest house", "guest houses", "guesthouse", "guesthouses"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T09-MOTEL",
+      "parent_category_code": "9",
+      "dimension": "lodging_type",
+      "tertiary_classification": "Motel",
+      "source_term": "Motels",
+      "aliases": ["motel", "motels"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T09-RESORT",
+      "parent_category_code": "9",
+      "dimension": "lodging_type",
+      "tertiary_classification": "Resort",
+      "source_term": "Resorts",
+      "aliases": ["resort", "resorts"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T10-RESTAURANT",
+      "parent_category_code": "10",
+      "dimension": "food_establishment_type",
+      "tertiary_classification": "Restaurant",
+      "source_term": "Restaurants",
+      "aliases": ["restaurant", "restaurants"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T10-EATERY",
+      "parent_category_code": "10",
+      "dimension": "food_establishment_type",
+      "tertiary_classification": "Eatery",
+      "source_term": "Eateries",
+      "aliases": ["eatery", "eateries"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T10-FAST-FOOD",
+      "parent_category_code": "10",
+      "dimension": "food_establishment_type",
+      "tertiary_classification": "Fast Food Point",
+      "source_term": "Fast Food Points",
+      "aliases": ["fast food point", "fast food points"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T10-ICE-CREAM-PARLOR",
+      "parent_category_code": "10",
+      "dimension": "food_establishment_type",
+      "tertiary_classification": "Ice Cream Parlor",
+      "source_term": "Ice Cream Parlors",
+      "aliases": [
+        "ice cream parlor",
+        "ice cream parlors",
+        "ice cream parlour",
+        "ice cream parlours"
+      ],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T10-BAKERY",
+      "parent_category_code": "10",
+      "dimension": "food_establishment_type",
+      "tertiary_classification": "Bakery",
+      "source_term": "Bakeries",
+      "aliases": ["bakery", "bakeries"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T10-CONFECTIONER",
+      "parent_category_code": "10",
+      "dimension": "food_establishment_type",
+      "tertiary_classification": "Confectioner",
+      "source_term": "Confectioners",
+      "aliases": ["confectioner", "confectioners", "confectionery"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T10-SWEETS-SHOP",
+      "parent_category_code": "10",
+      "dimension": "food_establishment_type",
+      "tertiary_classification": "Sweets Shop",
+      "source_term": "Sweets Shops",
+      "aliases": ["sweets shop", "sweets shops", "sweet shop", "sweet shops"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T11-PROFESSION",
+      "parent_category_code": "11",
+      "dimension": "engagement_basis",
+      "tertiary_classification": "Profession",
+      "source_term": "profession",
+      "aliases": ["profession"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T11-TRADE",
+      "parent_category_code": "11",
+      "dimension": "engagement_basis",
+      "tertiary_classification": "Trade",
+      "source_term": "trade",
+      "aliases": ["trade"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T11-CALLING",
+      "parent_category_code": "11",
+      "dimension": "engagement_basis",
+      "tertiary_classification": "Calling",
+      "source_term": "calling",
+      "aliases": ["calling"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    },
+    {
+      "tertiary_code": "PFT-T11-EMPLOYMENT",
+      "parent_category_code": "11",
+      "dimension": "engagement_basis",
+      "tertiary_classification": "Employment",
+      "source_term": "employment",
+      "aliases": ["employment"],
+      "is_residual": false,
+      "notes": "",
+      "basis": "source-enumerated type; aliases are spelling/number normalization only"
+    }
+  ],
+  "implementation_rules": [
+    "Determine the statutory category and subclassification first from the source criteria and known facts.",
+    "If the matched statutory subclassification has tertiary.applicable=true, allocate a tertiary_code only from that rule’s allowed_codes.",
+    "Tertiary classification is an analytical entity-type split inside the same statutory rule; it never changes annual_rate_pkr.",
+    "Prefer explicit entity-name/nature evidence for tertiary allocation. Do not use the assessment amount to choose between tertiary types sharing the same statutory rate.",
+    "If more than one allowed tertiary type is plausible and the name/nature does not resolve it, leave tertiary_code null and mark the record for review.",
+    "After the annual statutory rule is established, a separate project-level multi-year check may test recovery_amount == annual_rate_pkr × exact whole number of years."
+  ]
+}

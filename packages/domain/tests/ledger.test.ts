@@ -4,6 +4,7 @@ import {
   computeLedgerBalance,
   createDemandLedgerEntry,
   createInitialDemandEntry,
+  createPaymentReceiptEntry,
   createReversalEntry,
   createRevisionAdjustmentEntry
 } from "../src/ledger.js";
@@ -225,6 +226,55 @@ describe("ledger domain operations", () => {
     const updatedEntries = [...entries, reversal2];
     expect(computeLedgerBalance(updatedEntries, fyId2)).toBe(0);
     expect(computeLedgerBalance(updatedEntries)).toBe(12000);
+  });
+
+  it("creates a payment receipt entry that reduces derived balance", () => {
+    const demandEntry = createInitialDemandEntry({
+      demandUnitId,
+      financialYearId: fyId1,
+      assessmentVersionId: version1Id,
+      amount: 4000,
+      actorId,
+      correlationId: "c-pay-1",
+      idempotencyKey: "k-pay-1"
+    });
+
+    const paymentEntry = createPaymentReceiptEntry({
+      demandUnitId,
+      financialYearId: fyId1,
+      amount: 4000,
+      receiptNumber: "CHALLAN-32A-2026-0091",
+      paymentChannel: "CHALLAN_32A",
+      actorId,
+      correlationId: "c-pay-2",
+      idempotencyKey: "k-pay-2",
+      depositDate: "2026-07-15"
+    });
+
+    expect(paymentEntry.entryType).toBe("PAYMENT_CREDIT");
+    expect(paymentEntry.amount).toBe(-4000); // Signed negative credit
+    expect(paymentEntry.sourceType).toBe("PAYMENT_RECEIPT");
+    expect(paymentEntry.sourceId).toBe("CHALLAN-32A-2026-0091");
+    expect(paymentEntry.metadata.paymentChannel).toBe("CHALLAN_32A");
+    expect(paymentEntry.metadata.depositedAmount).toBe(4000);
+
+    // Derived balance should drop from 4000 to 0
+    expect(computeLedgerBalance([demandEntry, paymentEntry], fyId1)).toBe(0);
+  });
+
+  it("rejects non-positive payment receipt amounts", () => {
+    expect(() =>
+      createPaymentReceiptEntry({
+        demandUnitId,
+        financialYearId: fyId1,
+        amount: 0,
+        receiptNumber: "CHALLAN-0",
+        paymentChannel: "CHALLAN_32A",
+        actorId,
+        correlationId: "c-err",
+        idempotencyKey: "k-err"
+      })
+    ).toThrow(/greater than zero/);
   });
 
   it("enforces immutable ledger guard", () => {

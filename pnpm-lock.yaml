@@ -38,9 +38,15 @@ importers:
 
   apps/web:
     dependencies:
+      '@ptas/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       '@ptas/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@ptas/integrations':
+        specifier: workspace:*
+        version: link:../../packages/integrations
       '@ptas/ui':
         specifier: workspace:*
         version: link:../../packages/ui

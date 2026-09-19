@@ -11,3 +11,5 @@ export * from "./legal-configuration.js";
 export * from "./assessment.js";
 export * from "./ledger.js";
 export * from "./document.js";
+export * from "./statutory-rules.js";
+export * from "./statutory-rules-data.js";
