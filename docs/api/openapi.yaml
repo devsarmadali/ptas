@@ -207,6 +207,67 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/AssessmentVersion" }
         default: { $ref: "#/components/responses/Problem" }
+  /demand-units/{demandUnitId}/entries:
+    get:
+      operationId: listDemandLedgerEntries
+      parameters:
+        - $ref: "#/components/parameters/DemandUnitId"
+        - name: financialYearId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Immutable demand ledger entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/DemandLedgerEntry" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: postDemandLedgerEntry
+      parameters:
+        - $ref: "#/components/parameters/DemandUnitId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PostDemandLedgerEntry" }
+      responses:
+        "201":
+          description: Posted append-only demand ledger entry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DemandLedgerEntry" }
+        default: { $ref: "#/components/responses/Problem" }
+  /demand-units/{demandUnitId}/balance:
+    get:
+      operationId: getDemandLedgerBalance
+      parameters:
+        - $ref: "#/components/parameters/DemandUnitId"
+        - name: financialYearId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Derived demand ledger balance
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [demandUnitId, balance]
+                properties:
+                  demandUnitId: { type: string, format: uuid }
+                  financialYearId: { type: [string, "null"], format: uuid }
+                  balance: { type: number }
+        default: { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
     sessionAuth:
@@ -216,6 +277,11 @@ components:
   parameters:
     JurisdictionId:
       name: jurisdictionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DemandUnitId:
+      name: demandUnitId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -426,3 +492,63 @@ components:
         payload: { type: object }
         status: { type: string, enum: [DRAFT, APPROVED, ACTIVE, RETIRED] }
         approvalEvidenceId: { type: [string, "null"], format: uuid }
+    DemandUnit:
+      type: object
+      required: [id, taxpayerId, permanentDemandNo, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        taxpayerId: { type: string, format: uuid }
+        permanentDemandNo: { type: string }
+        createdAt: { type: string, format: date-time }
+    DemandLedgerEntry:
+      type: object
+      required:
+        [
+          id,
+          demandUnitId,
+          financialYearId,
+          entryType,
+          amount,
+          sourceType,
+          sourceId,
+          idempotencyKey,
+          correlationId,
+          postedBy,
+          postedAt,
+          metadata
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        demandUnitId: { type: string, format: uuid }
+        financialYearId: { type: string, format: uuid }
+        entryType:
+          {
+            type: string,
+            enum:
+              [ASSESSMENT_DEMAND, REVISION_ADJUSTMENT, PENALTY_DEMAND, MANUAL_ADJUSTMENT, REVERSAL]
+          }
+        amount: { type: number }
+        sourceType: { type: string }
+        sourceId: { type: string, format: uuid }
+        reversesEntryId: { type: [string, "null"], format: uuid }
+        idempotencyKey: { type: string }
+        correlationId: { type: string }
+        postedBy: { type: string, format: uuid }
+        postedAt: { type: string, format: date-time }
+        metadata: { type: object }
+    PostDemandLedgerEntry:
+      type: object
+      required: [financialYearId, entryType, amount, sourceType, sourceId]
+      properties:
+        financialYearId: { type: string, format: uuid }
+        entryType:
+          {
+            type: string,
+            enum:
+              [ASSESSMENT_DEMAND, REVISION_ADJUSTMENT, PENALTY_DEMAND, MANUAL_ADJUSTMENT, REVERSAL]
+          }
+        amount: { type: number, not: { enum: [0] } }
+        sourceType: { type: string }
+        sourceId: { type: string, format: uuid }
+        reversesEntryId: { type: string, format: uuid }
+        metadata: { type: object }
