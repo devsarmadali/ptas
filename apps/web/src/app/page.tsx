@@ -35,6 +35,7 @@ import {
 import { computeFileSha256, uploadReceiptScan } from "../lib/storage";
 import { pushPilotStateToSupabase } from "../lib/supabase-sync";
 import {
+  generateCircleDispatchRegister,
   generateFormPFT1,
   generateFormPFT2,
   generateFormPFT3Rows,
@@ -86,6 +87,19 @@ export default function HomePage() {
   const [collectorDesignation, setCollectorDesignation] = useState(
     "The Collector / Tehsildar (Recovery), District Vehari"
   );
+
+  // Batch Notice Generation & Circle Dispatch Register State
+  const [showBatchPft1Modal, setShowBatchPft1Modal] = useState(false);
+  const [showBatchPft2Modal, setShowBatchPft2Modal] = useState(false);
+  const [showDispatchRegisterModal, setShowDispatchRegisterModal] = useState(false);
+  const [selectedDispatchUnitIds, setSelectedDispatchUnitIds] = useState<string[]>([]);
+  const [showRecordBatchServiceModal, setShowRecordBatchServiceModal] = useState(false);
+  const [batchServedDate, setBatchServedDate] = useState("2026-07-15");
+  const [batchServerName, setBatchServerName] = useState("Muhammad Aslam, Tax Inspector");
+  const [batchServiceStatus, setBatchServiceStatus] = useState<
+    "SERVED" | "REFUSED" | "UNTRACEABLE"
+  >("SERVED");
+  const [batchRecipientNote, setBatchRecipientNote] = useState("");
 
   // New Unit Form State
   const [newLegalName, setNewLegalName] = useState("");
@@ -763,6 +777,58 @@ export default function HomePage() {
     if (!recoveryTargetUnit) return null;
     return generateLandRevenueRecoveryCertificate(recoveryTargetUnit, collectorDesignation);
   }, [recoveryTargetUnit, collectorDesignation]);
+
+  // Approved units eligible for Form PFT-1 Notice and Form PFT-2 Challan
+  const approvedUnits = useMemo(() => {
+    return units.filter((u) => u.assessments[0]?.status === "APPROVED");
+  }, [units]);
+
+  // Statutory Circle Notice Dispatch & Service Register (Rule 6)
+  const circleDispatchRegisterData = useMemo(() => {
+    return generateCircleDispatchRegister(units, "2026-07-02");
+  }, [units]);
+
+  // Handler: Record Batch Service
+  const handleRecordBatchService = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedDispatchUnitIds.length === 0) {
+      showToast("error", "Please select at least one unit to record service.");
+      return;
+    }
+
+    const updatedUnits = units.map((u) => {
+      if (selectedDispatchUnitIds.includes(u.id)) {
+        return {
+          ...u,
+          serviceStatus: batchServiceStatus,
+          servedAt: batchServedDate,
+          servedBy: batchServerName,
+          recipientName:
+            batchRecipientNote.trim() || (batchServiceStatus === "SERVED" ? u.legalName : undefined)
+        };
+      }
+      return u;
+    });
+
+    const newAudit: PilotAuditItem = {
+      id: `audit-${Date.now()}`,
+      eventType: "BATCH_NOTICES_SERVED",
+      actorName: officer.name,
+      actorRole: officer.role,
+      target: `Batch of ${selectedDispatchUnitIds.length} notices`,
+      timestamp: new Date().toISOString(),
+      correlationId: `corr-batch-svc-${Date.now()}`,
+      details: `Process service recorded as '${batchServiceStatus}' on ${batchServedDate} by ${batchServerName} for ${selectedDispatchUnitIds.length} units in Circle-Vehari.`
+    };
+
+    syncState(updatedUnits, [newAudit, ...auditLogs]);
+    setShowRecordBatchServiceModal(false);
+    setSelectedDispatchUnitIds([]);
+    showToast(
+      "success",
+      `Process service recorded for ${selectedDispatchUnitIds.length} units (${batchServiceStatus}).`
+    );
+  };
 
   // Handler: Open Show Cause Notice Modal
   const handleOpenNoticeModal = (unitId: string) => {
@@ -1657,11 +1723,38 @@ export default function HomePage() {
                 </p>
               </div>
 
-              <div className="panel-actions">
+              <div
+                className="panel-actions"
+                style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
+              >
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowDispatchRegisterModal(true)}
+                  title="View Circle Dispatch & Service Register"
+                >
+                  📋 Dispatch Register
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowBatchPft1Modal(true)}
+                  title="Batch print all approved Form PFT-1 notices"
+                >
+                  📚 Batch Print Notices ({approvedUnits.length})
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => window.print()}
+                  title="Print active Form PFT-1 notice"
+                >
+                  🖨️ Print Single Notice
+                </button>
                 <select
                   aria-label="Select Unit for Notice"
                   className="form-control"
-                  style={{ maxWidth: "20rem" }}
+                  style={{ maxWidth: "16rem" }}
                   value={selectedUnitId}
                   onChange={(e) => setSelectedUnitId(e.target.value)}
                 >
@@ -2026,11 +2119,30 @@ export default function HomePage() {
                 </p>
               </div>
 
-              <div className="panel-actions">
+              <div
+                className="panel-actions"
+                style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
+              >
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowBatchPft2Modal(true)}
+                  title="Batch print all approved Form PFT-2 challans"
+                >
+                  📚 Batch Print Challans ({approvedUnits.length})
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => window.print()}
+                  title="Print active Form PFT-2 challan"
+                >
+                  🖨️ Print Single Challan
+                </button>
                 <select
                   aria-label="Select Unit for Challan"
                   className="form-control"
-                  style={{ maxWidth: "20rem" }}
+                  style={{ maxWidth: "16rem" }}
                   value={selectedUnitId}
                   onChange={(e) => setSelectedUnitId(e.target.value)}
                 >
@@ -4429,6 +4541,858 @@ export default function HomePage() {
                 ✓ Issue &amp; Forward Certificate (Rule 12)
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 8: BATCH PRINT FORM P.F.T-1 NOTICES BOOK (RULE 6) */}
+      {showBatchPft1Modal && (
+        <div className="modal-overlay">
+          <div
+            className="modal-card"
+            style={{ maxWidth: "56rem", maxHeight: "90vh", overflowY: "auto" }}
+          >
+            <div className="modal-header">
+              <div>
+                <h3 style={{ margin: 0 }}>
+                  📚 Batch Print Form P.F.T-1 Demand Notices (Circle-Vehari)
+                </h3>
+                <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                  Official batch notice book containing {approvedUnits.length} approved notices with
+                  individual service receipt counterfoils and page breaks for physical printing.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowBatchPft1Modal(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="modal-body">
+              {approvedUnits.map((u, idx) => {
+                const noticeData = generateFormPFT1(u);
+
+                return (
+                  <div key={u.id} className="batch-sheet">
+                    <div className="doc-box">
+                      <div
+                        style={{
+                          textAlign: "center",
+                          borderBottom: "2px solid #0d3822",
+                          paddingBottom: "1rem",
+                          marginBottom: "1.5rem"
+                        }}
+                      >
+                        <h3
+                          style={{
+                            margin: "0 0 0.25rem",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.05em"
+                          }}
+                        >
+                          GOVERNMENT OF THE PUNJAB
+                        </h3>
+                        <h4 style={{ margin: "0 0 0.25rem", color: "#0d3822" }}>
+                          EXCISE &amp; TAXATION DEPARTMENT
+                        </h4>
+                        <div
+                          style={{
+                            display: "inline-block",
+                            border: "1px solid #0d3822",
+                            padding: "0.25rem 0.75rem",
+                            fontWeight: 700,
+                            marginTop: "0.5rem"
+                          }}
+                        >
+                          FORM P.F.T-1 &bull; NOTICE OF TAX DEMAND (نوٹس ڈیمانڈ)
+                        </div>
+                        <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: "#64748b" }}>
+                          [See Rule 6 of the Punjab Professions and Trades Tax Rules, 1977]
+                        </p>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: "1rem",
+                          marginBottom: "1rem",
+                          fontSize: "0.9rem"
+                        }}
+                      >
+                        <div>
+                          <strong>Demand Notice No:</strong> {noticeData.noticeNumber}
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <strong>Date of Issue:</strong> {noticeData.issueDate}
+                        </div>
+                        <div>
+                          <strong>Permanent Demand No:</strong> {noticeData.demandNumber}
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <strong>Tax Year:</strong> {noticeData.financialYear}
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          background: "#f8fafc",
+                          border: "1px solid #e2e8f0",
+                          borderRadius: "6px",
+                          padding: "1rem",
+                          marginBottom: "1rem",
+                          fontSize: "0.9rem"
+                        }}
+                      >
+                        <div>
+                          <strong>To (Assessee):</strong> {noticeData.assesseeLegalName}
+                        </div>
+                        {noticeData.assesseeTradeName && (
+                          <div>
+                            <strong>Trade Name:</strong> {noticeData.assesseeTradeName}
+                          </div>
+                        )}
+                        <div>
+                          <strong>CNIC / NTN:</strong> {noticeData.taxNumber}
+                        </div>
+                        <div>
+                          <strong>Premises Address:</strong> {noticeData.address}
+                        </div>
+                        <div>
+                          <strong>Statutory Entry:</strong> {noticeData.scheduleEntry} -{" "}
+                          {noticeData.statutoryCategoryText}
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: "0.9rem", lineHeight: 1.6, marginBottom: "1rem" }}>
+                        <p>
+                          Please take notice that for the financial year{" "}
+                          <strong>{noticeData.financialYear}</strong>, a sum of{" "}
+                          <strong style={{ color: "#0d3822" }}>
+                            PKR {noticeData.taxAmount.toLocaleString()} ({noticeData.taxAmountWords}
+                            )
+                          </strong>{" "}
+                          has been determined to be payable by you as Punjab Professional Tax under
+                          Section 3 of the Punjab Finance Act, 1977.
+                        </p>
+                        <p>
+                          You are required to pay the above sum within <strong>30 days</strong> of
+                          the service of this notice or by <strong>{noticeData.dueDate}</strong>,
+                          whichever is later, through the enclosed{" "}
+                          <strong>Form P.F.T-2 Challan</strong> into the Treasury / National Bank of
+                          Pakistan (Account Head B01601).
+                        </p>
+                      </div>
+
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-end",
+                          marginBottom: "1.5rem"
+                        }}
+                      >
+                        <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                          <div>SHA-256 Digest:</div>
+                          <div style={{ fontFamily: "monospace" }}>
+                            {noticeData.officialSha256.slice(0, 32)}...
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "center" }}>
+                          <div style={{ fontWeight: 700 }}>{noticeData.assessingAuthorityName}</div>
+                          <div style={{ fontSize: "0.8rem", color: "#475569" }}>
+                            {noticeData.assessingAuthorityTitle}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Service Receipt Counterfoil */}
+                      <div className="counterfoil-box">
+                        <div
+                          style={{
+                            textAlign: "center",
+                            fontWeight: 700,
+                            fontSize: "0.85rem",
+                            marginBottom: "0.5rem"
+                          }}
+                        >
+                          رسید نوٹس تعمیل (SERVICE RECEIPT COUNTERFOIL - TO BE RETURNED BY PROCESS
+                          SERVER)
+                        </div>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: "0.5rem",
+                            fontSize: "0.8rem"
+                          }}
+                        >
+                          <div>
+                            Demand No: <strong>{noticeData.serviceReceipt.demandNumber}</strong>
+                          </div>
+                          <div>
+                            Assessed Tax:{" "}
+                            <strong>
+                              PKR {noticeData.serviceReceipt.taxPayable.toLocaleString()}
+                            </strong>
+                          </div>
+                          <div>
+                            Assessee: <strong>{noticeData.serviceReceipt.assesseeName}</strong>
+                          </div>
+                          <div>
+                            Process Server: <strong>{noticeData.serviceReceipt.serverName}</strong>
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginTop: "1rem",
+                            fontSize: "0.8rem",
+                            borderTop: "1px dotted #94a3b8",
+                            paddingTop: "0.5rem"
+                          }}
+                        >
+                          <div>Date of Delivery: _______________</div>
+                          <div>Signature / Thumb Impression of Assessee: ___________________</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {idx < approvedUnits.length - 1 && (
+                      <div
+                        className="page-break"
+                        style={{
+                          pageBreakAfter: "always",
+                          breakAfter: "page",
+                          height: "1px",
+                          margin: "2rem 0",
+                          borderBottom: "2px dashed #94a3b8"
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="modal-footer" style={{ justifyContent: "space-between" }}>
+              <button type="button" className="btn-primary" onClick={() => window.print()}>
+                🖨️ Print Batch Book ({approvedUnits.length} Notices)
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowBatchPft1Modal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 9: BATCH PRINT FORM P.F.T-2 CHALLANS BOOK (RULE 9) */}
+      {showBatchPft2Modal && (
+        <div className="modal-overlay">
+          <div
+            className="modal-card"
+            style={{ maxWidth: "68rem", maxHeight: "90vh", overflowY: "auto" }}
+          >
+            <div className="modal-header">
+              <div>
+                <h3 style={{ margin: 0 }}>📚 Batch Print Form P.F.T-2 Challans (Circle-Vehari)</h3>
+                <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                  Official 3-copy side-by-side challan book containing {approvedUnits.length}{" "}
+                  approved challans formatted 1 unit per sheet with cutting lines for bank &amp;
+                  department.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowBatchPft2Modal(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="modal-body">
+              {approvedUnits.map((u, idx) => {
+                const challanData = generateFormPFT2(u);
+
+                return (
+                  <div key={u.id} className="batch-sheet">
+                    <div style={{ marginBottom: "0.5rem", fontSize: "0.85rem", color: "#475569" }}>
+                      Sheet #{idx + 1}: <strong>{u.legalName}</strong> (
+                      {u.demandUnit.permanentDemandNo}) &bull; Challan No:{" "}
+                      {challanData.challanNumber}
+                    </div>
+
+                    <div className="challan-grid">
+                      {challanData.copies.map((copy) => (
+                        <div key={copy.copyTitle} className="challan-card">
+                          <div
+                            style={{
+                              textAlign: "center",
+                              borderBottom: "1px solid #0d3822",
+                              paddingBottom: "0.4rem"
+                            }}
+                          >
+                            <div style={{ fontSize: "0.75rem", fontWeight: 700 }}>
+                              GOVT. OF THE PUNJAB
+                            </div>
+                            <div style={{ fontSize: "0.7rem", color: "#0d3822" }}>
+                              EXCISE &amp; TAXATION
+                            </div>
+                            <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#0d3822" }}>
+                              FORM P.F.T-2
+                            </div>
+                            <div
+                              style={{
+                                fontSize: "0.7rem",
+                                background: "#f0fdf4",
+                                padding: "0.15rem",
+                                fontWeight: 700
+                              }}
+                            >
+                              {copy.copyTitle}
+                            </div>
+                            <div style={{ fontSize: "0.65rem", color: "#64748b" }}>
+                              {copy.copyTitleUrdu}
+                            </div>
+                          </div>
+
+                          <div style={{ fontSize: "0.75rem", lineHeight: 1.4 }}>
+                            <div>
+                              <strong>Head:</strong> {copy.headOfAccount}
+                            </div>
+                            <div>
+                              <strong>District:</strong> {copy.district} &bull; FY: {copy.taxYear}
+                            </div>
+                            <div>
+                              <strong>Due:</strong> {copy.dueDate}
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              background: "#f8fafc",
+                              padding: "0.4rem",
+                              borderRadius: "4px",
+                              fontSize: "0.72rem"
+                            }}
+                          >
+                            <div>
+                              <strong>Assessee:</strong> {copy.taxpayerInfo.legalName}
+                            </div>
+                            <div>
+                              <strong>CNIC/NTN:</strong> {copy.taxpayerInfo.taxNo}
+                            </div>
+                            <div>
+                              <strong>Address:</strong> {copy.taxpayerInfo.address}
+                            </div>
+                            <div>
+                              <strong>Entry:</strong> {copy.taxpayerInfo.classification}
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              borderTop: "1px dashed #cbd5e1",
+                              borderBottom: "1px dashed #cbd5e1",
+                              padding: "0.4rem 0",
+                              fontSize: "0.75rem"
+                            }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                              <span>Current Tax:</span>
+                              <strong>PKR {copy.taxPayable.currentTax.toLocaleString()}</strong>
+                            </div>
+                            {copy.taxPayable.penalty > 0 && (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  color: "#dc2626"
+                                }}
+                              >
+                                <span>Penalty Demand:</span>
+                                <strong>PKR {copy.taxPayable.penalty.toLocaleString()}</strong>
+                              </div>
+                            )}
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                fontWeight: 700,
+                                marginTop: "0.25rem",
+                                color: "#0d3822"
+                              }}
+                            >
+                              <span>Total Payable:</span>
+                              <span>PKR {copy.taxPayable.totalPayable.toLocaleString()}</span>
+                            </div>
+                          </div>
+
+                          <div style={{ fontSize: "0.68rem", color: "#334155" }}>
+                            <div>Demand No: {copy.assessmentInfo.demandNo}</div>
+                            <div>Circle: {copy.assessmentInfo.circleName}</div>
+                          </div>
+
+                          <div
+                            style={{
+                              borderTop: "1px solid #cbd5e1",
+                              paddingTop: "0.3rem",
+                              fontSize: "0.68rem",
+                              background: "#f8fafc",
+                              padding: "0.35rem"
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontWeight: 700,
+                                textAlign: "center",
+                                marginBottom: "0.2rem"
+                              }}
+                            >
+                              FOR BANK USE ONLY
+                            </div>
+                            <div>Scroll No: ________ Branch: {copy.bankUse.branchName}</div>
+                            <div style={{ marginTop: "0.2rem" }}>
+                              Received Date: _________ Signature: ________
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {idx < approvedUnits.length - 1 && (
+                      <div
+                        className="page-break"
+                        style={{
+                          pageBreakAfter: "always",
+                          breakAfter: "page",
+                          height: "1px",
+                          margin: "2rem 0",
+                          borderBottom: "2px dashed #94a3b8"
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="modal-footer" style={{ justifyContent: "space-between" }}>
+              <button type="button" className="btn-primary" onClick={() => window.print()}>
+                🖨️ Print Batch Challans ({approvedUnits.length} Sheets)
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowBatchPft2Modal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 10: CIRCLE NOTICE DISPATCH & SERVICE REGISTER (RULE 6) */}
+      {showDispatchRegisterModal && (
+        <div className="modal-overlay">
+          <div
+            className="modal-card"
+            style={{ maxWidth: "64rem", maxHeight: "90vh", overflowY: "auto" }}
+          >
+            <div className="modal-header">
+              <div>
+                <h3 style={{ margin: 0 }}>
+                  📋 Circle Notice Dispatch &amp; Service Register (فہرست ترسیل و تعمیل نوٹس جات)
+                </h3>
+                <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                  Official statutory register maintained under Rule 6 of the Punjab Professions and
+                  Trades Tax Rules, 1977 for Circle-Vehari.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowDispatchRegisterModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="modal-body">
+              {/* Summary KPIs */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                  gap: "0.75rem",
+                  marginBottom: "1rem"
+                }}
+              >
+                <div
+                  style={{
+                    background: "#f8fafc",
+                    padding: "0.75rem",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1"
+                  }}
+                >
+                  <div style={{ fontSize: "0.75rem", color: "#64748b" }}>Total Dispatched</div>
+                  <div style={{ fontSize: "1.25rem", fontWeight: 700 }}>
+                    {circleDispatchRegisterData.totalNotices}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    background: "#f0fdf4",
+                    padding: "0.75rem",
+                    borderRadius: "6px",
+                    border: "1px solid #bbf7d0"
+                  }}
+                >
+                  <div style={{ fontSize: "0.75rem", color: "#166534" }}>
+                    Total Served (تعمیل شدہ)
+                  </div>
+                  <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "#166534" }}>
+                    {circleDispatchRegisterData.totalServed}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    background: "#fffbeb",
+                    padding: "0.75rem",
+                    borderRadius: "6px",
+                    border: "1px solid #fde68a"
+                  }}
+                >
+                  <div style={{ fontSize: "0.75rem", color: "#92400e" }}>
+                    Pending Service (زیر تعمیل)
+                  </div>
+                  <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "#b45309" }}>
+                    {circleDispatchRegisterData.totalPending}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    background: "#eff6ff",
+                    padding: "0.75rem",
+                    borderRadius: "6px",
+                    border: "1px solid #bfdbfe"
+                  }}
+                >
+                  <div style={{ fontSize: "0.75rem", color: "#1e40af" }}>Gross Demand</div>
+                  <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "#1e40af" }}>
+                    PKR {circleDispatchRegisterData.totalAssessedSum.toLocaleString()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Toolbar */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "0.75rem"
+                }}
+              >
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ fontSize: "0.8rem", padding: "0.35rem 0.65rem" }}
+                    onClick={() => {
+                      if (selectedDispatchUnitIds.length === units.length) {
+                        setSelectedDispatchUnitIds([]);
+                      } else {
+                        setSelectedDispatchUnitIds(units.map((u) => u.id));
+                      }
+                    }}
+                  >
+                    {selectedDispatchUnitIds.length === units.length
+                      ? "Deselect All"
+                      : "Select All"}
+                  </button>
+                  <span style={{ fontSize: "0.8rem", color: "#475569" }}>
+                    {selectedDispatchUnitIds.length} notices selected
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    style={{ fontSize: "0.8rem", padding: "0.35rem 0.75rem" }}
+                    disabled={selectedDispatchUnitIds.length === 0}
+                    onClick={() => setShowRecordBatchServiceModal(true)}
+                  >
+                    ✍️ Record Batch Service ({selectedDispatchUnitIds.length})
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ fontSize: "0.8rem", padding: "0.35rem 0.75rem" }}
+                    onClick={() => window.print()}
+                  >
+                    🖨️ Print Dispatch Register
+                  </button>
+                </div>
+              </div>
+
+              {/* Dispatch Register Table */}
+              <div className="table-responsive">
+                <table className="data-table" style={{ fontSize: "0.8rem" }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: "2.5rem" }}>Select</th>
+                      <th>Notice &amp; Demand No</th>
+                      <th>Assessee Name &amp; Address</th>
+                      <th>Entry</th>
+                      <th>Assessed Tax</th>
+                      <th>Process Server</th>
+                      <th>Service Status</th>
+                      <th>Delivered On / Recipient</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {circleDispatchRegisterData.rows.map((r) => {
+                      const matchingUnit = units.find(
+                        (u) => u.demandUnit.permanentDemandNo === r.demandNumber
+                      );
+                      const isSelected = matchingUnit
+                        ? selectedDispatchUnitIds.includes(matchingUnit.id)
+                        : false;
+
+                      return (
+                        <tr key={r.noticeNumber}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                if (!matchingUnit) return;
+                                if (e.target.checked) {
+                                  setSelectedDispatchUnitIds([
+                                    ...selectedDispatchUnitIds,
+                                    matchingUnit.id
+                                  ]);
+                                } else {
+                                  setSelectedDispatchUnitIds(
+                                    selectedDispatchUnitIds.filter((id) => id !== matchingUnit.id)
+                                  );
+                                }
+                              }}
+                            />
+                          </td>
+                          <td>
+                            <strong>{r.noticeNumber}</strong>
+                            <span
+                              style={{ display: "block", fontSize: "0.7rem", color: "#64748b" }}
+                            >
+                              {r.demandNumber} &bull; Dispatched: {r.dispatchDate}
+                            </span>
+                          </td>
+                          <td>
+                            <strong>{r.assesseeLegalName}</strong>
+                            {r.assesseeTradeName && (
+                              <span
+                                style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                              >
+                                {r.assesseeTradeName}
+                              </span>
+                            )}
+                            <span
+                              style={{ display: "block", fontSize: "0.7rem", color: "#475569" }}
+                            >
+                              {r.identifier} &bull; {r.address}
+                            </span>
+                          </td>
+                          <td>{r.scheduleEntry}</td>
+                          <td>
+                            <strong>PKR {r.assessedAmount.toLocaleString()}</strong>
+                          </td>
+                          <td>{r.serverName}</td>
+                          <td>
+                            <span
+                              className={`badge ${
+                                r.serviceStatus === "SERVED"
+                                  ? "badge-approved"
+                                  : r.serviceStatus === "REFUSED"
+                                    ? "badge-rejected"
+                                    : "badge-draft"
+                              }`}
+                            >
+                              {r.serviceStatus === "SERVED"
+                                ? "تعمیل شدہ"
+                                : r.serviceStatus === "REFUSED"
+                                  ? "انکاری"
+                                  : "زیر تعمیل (PENDING)"}
+                            </span>
+                          </td>
+                          <td>
+                            {r.servedAt ? (
+                              <>
+                                <div>{r.servedAt}</div>
+                                {r.recipientName && (
+                                  <div style={{ fontSize: "0.7rem", color: "#166534" }}>
+                                    Rec: {r.recipientName}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <span style={{ color: "#94a3b8" }}>—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div
+                style={{
+                  marginTop: "1rem",
+                  fontSize: "0.75rem",
+                  color: "#64748b",
+                  display: "flex",
+                  justifyContent: "space-between"
+                }}
+              >
+                <span>
+                  SHA-256 Non-Repudiation Digest:{" "}
+                  <code>{circleDispatchRegisterData.officialSha256.slice(0, 32)}...</code>
+                </span>
+                <span>Assessing Authority: Tariq Mahmood, ETO Tehsil Vehari</span>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowDispatchRegisterModal(false)}
+              >
+                Close Register
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 11: RECORD BATCH SERVICE DETAILS */}
+      {showRecordBatchServiceModal && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: "32rem" }}>
+            <div className="modal-header">
+              <h3>✍️ Record Batch Notice Service (تعمیل نوٹس جات)</h3>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowRecordBatchServiceModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleRecordBatchService}>
+              <div className="modal-body">
+                <div
+                  style={{
+                    background: "#f0fdf4",
+                    border: "1px solid #bbf7d0",
+                    padding: "0.75rem",
+                    borderRadius: "6px",
+                    marginBottom: "1rem",
+                    fontSize: "0.85rem"
+                  }}
+                >
+                  Recording field service for <strong>{selectedDispatchUnitIds.length}</strong>{" "}
+                  selected notice(s) in Circle-Vehari.
+                </div>
+
+                <div className="form-group">
+                  <label>Date of Delivery / Service in Field:</label>
+                  <input
+                    type="date"
+                    required
+                    value={batchServedDate}
+                    onChange={(e) => setBatchServedDate(e.target.value)}
+                    className="form-control"
+                    style={{ width: "100%" }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Process Server / Tax Inspector Name:</label>
+                  <input
+                    type="text"
+                    required
+                    value={batchServerName}
+                    onChange={(e) => setBatchServerName(e.target.value)}
+                    className="form-control"
+                    style={{ width: "100%" }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Service Outcome / Status:</label>
+                  <select
+                    value={batchServiceStatus}
+                    onChange={(e) =>
+                      setBatchServiceStatus(e.target.value as "SERVED" | "REFUSED" | "UNTRACEABLE")
+                    }
+                    className="form-control"
+                    style={{ width: "100%" }}
+                  >
+                    <option value="SERVED">
+                      SERVED (تعمیل شدہ - Delivered to Assessee or Adult Member)
+                    </option>
+                    <option value="REFUSED">
+                      REFUSED (انکاری - Refused to Accept Service / Witnessed)
+                    </option>
+                    <option value="UNTRACEABLE">
+                      UNTRACEABLE (پتہ نامعلوم / Untraceable at Premises)
+                    </option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Recipient Name or Witness Note:</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Received by Proprietor / Witnessed by Market Union"
+                    value={batchRecipientNote}
+                    onChange={(e) => setBatchRecipientNote(e.target.value)}
+                    className="form-control"
+                    style={{ width: "100%" }}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowRecordBatchServiceModal(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  ✓ Confirm &amp; Save Batch Service
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

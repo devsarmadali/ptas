@@ -59,6 +59,11 @@ export interface StoredUnit {
   readonly ledgerEntries: DemandLedgerEntry[];
   readonly isRecoveryCertified?: boolean | undefined;
   readonly recoveryCertifiedAt?: string | undefined;
+  readonly serviceStatus?: "PENDING" | "SERVED" | "REFUSED" | "UNTRACEABLE" | undefined;
+  readonly servedAt?: string | undefined;
+  readonly servedBy?: string | undefined;
+  readonly recipientName?: string | undefined;
+  readonly witnessDetails?: string | undefined;
   readonly createdAt: string;
 }
 
@@ -338,6 +343,10 @@ export function createInitialPilotUnits(): StoredUnit[] {
       assessments: [u1AsmApp],
       assessmentVersions: [u1VerApp],
       ledgerEntries: [entryDemand1, entryPay1],
+      serviceStatus: "SERVED",
+      servedAt: "2026-07-03",
+      servedBy: "Muhammad Aslam, Tax Inspector",
+      recipientName: "Tariq Aziz, Director",
       createdAt: "2026-07-01T09:00:00.000Z"
     },
     {
@@ -355,6 +364,10 @@ export function createInitialPilotUnits(): StoredUnit[] {
       assessments: [u2AsmApp],
       assessmentVersions: [u2VerApp],
       ledgerEntries: [entryDemand2],
+      serviceStatus: "SERVED",
+      servedAt: "2026-07-04",
+      servedBy: "Muhammad Aslam, Tax Inspector",
+      recipientName: "Muhammad Akram, Proprietor",
       createdAt: "2026-07-02T10:00:00.000Z"
     },
     {
@@ -372,6 +385,7 @@ export function createInitialPilotUnits(): StoredUnit[] {
       assessments: [u3AsmSub],
       assessmentVersions: [u3VerSub],
       ledgerEntries: [],
+      serviceStatus: "PENDING",
       createdAt: "2026-07-10T11:00:00.000Z"
     },
     {
@@ -389,6 +403,10 @@ export function createInitialPilotUnits(): StoredUnit[] {
       assessments: [u4AsmApp],
       assessmentVersions: [u4VerApp],
       ledgerEntries: [entryDemand4],
+      serviceStatus: "SERVED",
+      servedAt: "2026-07-14",
+      servedBy: "Muhammad Aslam, Tax Inspector",
+      recipientName: "Chaudhry Riaz, Owner",
       createdAt: "2026-07-12T14:00:00.000Z"
     }
   ];

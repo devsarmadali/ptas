@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  generateCircleDispatchRegister,
   generateFormPFT1,
   generateFormPFT2,
   generateFormPFT3Rows,
@@ -84,5 +85,23 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     expect(cert.totalArrearsRecoverable).toBe(4000);
     expect(cert.officialSha256).toHaveLength(64);
     expect(cert.recoverySection).toContain("Punjab Land Revenue Act 1967");
+  });
+
+  it("generates Circle Notice Dispatch & Service Register under Rule 6", () => {
+    const register = generateCircleDispatchRegister(units, "2026-07-02");
+    expect(register.circleName).toBe("Circle-Vehari");
+    expect(register.district).toBe("Vehari");
+    expect(register.financialYear).toBe("2026-2027");
+    expect(register.totalNotices).toBe(4);
+    expect(register.rows).toHaveLength(4);
+    expect(register.totalServed).toBe(3); // Cotton Ginners, Kisan Pesticides, Chenab Sweets
+    expect(register.totalPending).toBe(1); // Al-Madina
+    expect(register.officialSha256).toHaveLength(64);
+
+    const firstRow = register.rows[0]!;
+    expect(firstRow.noticeNumber).toContain("PFT-1/VEH/2026");
+    expect(firstRow.demandNumber).toBe("PDN-VEH-2026-0001");
+    expect(firstRow.serverName).toContain("Muhammad Aslam");
+    expect(firstRow.serviceStatus).toBe("SERVED");
   });
 });

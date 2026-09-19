@@ -625,3 +625,38 @@ textarea {
   padding-top: 1.25rem;
   background: #fdfefe;
 }
+
+/* Print Media Styles for Field Batch Notices & Dispatch Registers */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .no-print,
+  .tabs-nav,
+  .officer-banner,
+  .demo-header,
+  .panel-actions,
+  .modal-header .close-btn,
+  .modal-footer {
+    display: none !important;
+  }
+
+  .page-break {
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .batch-sheet {
+    margin-bottom: 2rem;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .doc-box,
+  .challan-card {
+    border: 1px solid #000000 !important;
+    box-shadow: none !important;
+  }
+}

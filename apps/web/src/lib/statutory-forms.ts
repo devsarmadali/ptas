@@ -146,6 +146,40 @@ export interface LandRevenueRecoveryCertificateModel {
   readonly officialSha256: string;
 }
 
+export interface CircleDispatchRowModel {
+  readonly serialNumber: number;
+  readonly noticeNumber: string;
+  readonly demandNumber: string;
+  readonly dispatchDate: string;
+  readonly assesseeLegalName: string;
+  readonly assesseeTradeName?: string | undefined;
+  readonly identifier: string;
+  readonly address: string;
+  readonly scheduleEntry: string;
+  readonly categoryName: string;
+  readonly assessedAmount: number;
+  readonly dueDate: string;
+  readonly serverName: string;
+  readonly serviceStatus: "PENDING" | "SERVED" | "REFUSED" | "UNTRACEABLE";
+  readonly servedAt?: string | undefined;
+  readonly recipientName?: string | undefined;
+}
+
+export interface CircleDispatchRegisterModel {
+  readonly registerTitle: string;
+  readonly registerTitleUrdu: string;
+  readonly circleName: string;
+  readonly district: string;
+  readonly financialYear: string;
+  readonly dispatchDate: string;
+  readonly totalNotices: number;
+  readonly totalAssessedSum: number;
+  readonly totalServed: number;
+  readonly totalPending: number;
+  readonly rows: readonly CircleDispatchRowModel[];
+  readonly officialSha256: string;
+}
+
 /**
  * Converts integer currency amount to official English words (Pakistani Rupees).
  */
@@ -577,4 +611,78 @@ export function generateFormPFT3Rows(units: readonly StoredUnit[]): readonly For
       lastPaymentDate
     };
   });
+}
+
+/**
+ * Generates the official Circle Notice Dispatch & Service Register
+ * (فہرست ترسیل و تعمیل نوٹس جات زیر رول 6) for field tracking by Circle Inspector.
+ */
+export function generateCircleDispatchRegister(
+  units: readonly StoredUnit[],
+  customDispatchDate: string = "2026-07-02"
+): CircleDispatchRegisterModel {
+  let totalAssessedSum = 0;
+  let totalServed = 0;
+  let totalPending = 0;
+
+  const rows: CircleDispatchRowModel[] = units.map((u, idx) => {
+    const latestVersion = u.assessmentVersions[0];
+    const taxAmount = latestVersion?.snapshot.taxAmount ?? 0;
+    totalAssessedSum += taxAmount;
+
+    const status = u.serviceStatus ?? "PENDING";
+    if (status === "SERVED") {
+      totalServed++;
+    } else {
+      totalPending++;
+    }
+
+    return {
+      serialNumber: idx + 1,
+      noticeNumber: `PFT-1/VEH/2026/${u.id.slice(-4)}`,
+      demandNumber: u.demandUnit.permanentDemandNo,
+      dispatchDate: customDispatchDate,
+      assesseeLegalName: u.legalName,
+      assesseeTradeName: u.tradeName,
+      identifier: `${u.identifierType}: ${u.identifierValue}`,
+      address: u.address,
+      scheduleEntry: `Entry ${u.statutoryRule.subclassification_code}`,
+      categoryName: u.statutoryRule.category,
+      assessedAmount: taxAmount,
+      dueDate: "31/08/2026",
+      serverName: u.servedBy ?? "Muhammad Aslam, Tax Inspector",
+      serviceStatus: status,
+      servedAt: u.servedAt,
+      recipientName: u.recipientName ?? (status === "SERVED" ? u.legalName : undefined)
+    };
+  });
+
+  const canonicalRegisterText = [
+    "GOVERNMENT OF THE PUNJAB - EXCISE & TAXATION DEPARTMENT",
+    "CIRCLE DISPATCH & NOTICE SERVICE REGISTER (فہرست ترسیل و تعمیل نوٹس جات)",
+    "(Maintained under Rule 6 of Punjab Professions and Trades Tax Rules, 1977)",
+    `District: Vehari | Circle: Circle-Vehari | Financial Year: 2026-2027 | Dispatch Date: ${customDispatchDate}`,
+    `Total Dispatched Notices: ${rows.length} | Gross Assessed Sum: PKR ${totalAssessedSum} | Total Served: ${totalServed} | Pending: ${totalPending}`,
+    ...rows.map(
+      (r) =>
+        `#${r.serialNumber} | ${r.noticeNumber} | ${r.demandNumber} | ${r.assesseeLegalName} | PKR ${r.assessedAmount} | Status: ${r.serviceStatus}`
+    )
+  ].join("\n");
+
+  const officialSha256 = computeContentSha256(canonicalRegisterText);
+
+  return {
+    registerTitle: "Circle Notice Dispatch & Service Register (Rule 6)",
+    registerTitleUrdu: "فہرست ترسیل و تعمیل نوٹس جات زیر رول 6",
+    circleName: "Circle-Vehari",
+    district: "Vehari",
+    financialYear: "2026-2027",
+    dispatchDate: customDispatchDate,
+    totalNotices: rows.length,
+    totalAssessedSum,
+    totalServed,
+    totalPending,
+    rows,
+    officialSha256
+  };
 }
