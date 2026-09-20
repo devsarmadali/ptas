@@ -6,13 +6,109 @@
  * - Form P.F.T-3: Assessment & Demand Register (Rule 11, Punjab Professions & Trades Tax Rules 1977)
  */
 
-import { computeContentSha256, computeLedgerBalance } from "@ptas/domain";
+import {
+  computeContentSha256,
+  computeLedgerBalance,
+  generateDocumentPin,
+  type StatutoryRuleDefinition
+} from "@ptas/domain";
 import type { MockOfficer, StoredUnit } from "./pilot-store";
+
+export function getScheduleEntryLabel(rule: StatutoryRuleDefinition): string {
+  return `Class ${rule.rule_code}`;
+}
+
+export interface Pft2NoticeNumberOptions {
+  demandNumber: string;
+  issueDate: string; // YYYY-MM-DD
+  formTypeCode?: string | undefined; // "STD" | "NCUM" | "ARR" | "REV" | string
+  demandScope?: "CURRENT" | "ARREAR" | "COMBINED" | string | undefined;
+  paymentScope?: "FULL" | "PARTIAL" | string | undefined;
+  amount: number;
+}
+
+/**
+ * Official Punjab Form P.F.T-2 Notice / Challan Number Generator
+ * Follows exact statutory pattern:
+ * PFT2 - Demand No. - Issued month code - issue date code - form type code - current/arrear - combined/partial - amount
+ * Example: PFT2-PDN-VEH-2026-0001-09-20-STD-CUR-FULL-5000
+ */
+export function generatePft2NoticeNumber(params: Pft2NoticeNumberOptions): string {
+  const demandClean = (params.demandNumber || "DEMAND-0000").trim();
+
+  // Extract month and date codes from issueDate (YYYY-MM-DD)
+  const parts = params.issueDate ? params.issueDate.split("-") : [];
+  const monthCode = parts.length >= 2 && parts[1] ? parts[1].padStart(2, "0") : "01";
+  const dateCode = parts.length >= 3 && parts[2] ? parts[2].padStart(2, "0") : "01";
+
+  // Form type code
+  let formType = (params.formTypeCode || "STD").toUpperCase().trim();
+  if (formType === "STANDARD") formType = "STD";
+  else if (formType === "NOTICE_CUM_CHALLAN") formType = "NCUM";
+  else if (formType === "ARREARS_DEMAND") formType = "ARR";
+  else if (formType === "REVISED_ASSESSMENT") formType = "REV";
+
+  // Current / Arrear code
+  let scope = (params.demandScope || "CURRENT").toUpperCase().trim();
+  if (scope === "CURRENT") scope = "CUR";
+  else if (scope === "ARREAR" || scope === "ARREARS") scope = "ARR";
+  else if (scope === "COMBINED") scope = "COMB";
+
+  // Combined / Partial code
+  let payment = (params.paymentScope || "FULL").toUpperCase().trim();
+  if (payment === "PARTIAL") payment = "PART";
+  else if (payment === "COMBINED" || payment === "FULL") payment = "FULL";
+
+  const amountInt = Math.round(params.amount || 0);
+
+  return `PFT2-${demandClean}-${monthCode}-${dateCode}-${formType}-${scope}-${payment}-${amountInt}`;
+}
+
+export type StatutoryDocCode =
+  "PFT1" | "PFT2" | "PFT3" | "PFT5" | "RCPT" | "SCN" | "LRC" | "APP" | "DSC" | "RFD";
+
+export interface StandardDocNumberParams {
+  readonly province?: string;
+  readonly department?: string;
+  readonly districtCode?: string;
+  readonly circleCode?: string;
+  readonly docCode: StatutoryDocCode;
+  readonly financialYear?: string;
+  readonly sequence: number | string;
+}
+
+/**
+ * Standardized Non-Overlapping Punjab Statutory Document Numbering System.
+ * Guarantees zero collision across all tehsils, circles, districts, and financial years.
+ * Format: [PROVINCE]/[DEPARTMENT]/[DISTRICT]/[CIRCLE]/[DOC_CODE]/[FY]/[SEQUENCE]
+ * Example: PB/ET/VHR/CIR-1/PFT1/2026-27/00001
+ */
+export function formatStandardDocNumber(params: StandardDocNumberParams): string {
+  const prov = (params.province ?? "PB").toUpperCase().trim();
+  const dept = (params.department ?? "ET").toUpperCase().trim();
+  const dist = (params.districtCode ?? "VHR").toUpperCase().trim();
+  const circle = (params.circleCode ?? "CIR-1").toUpperCase().trim();
+  const fy = (params.financialYear ?? "2026-27").trim();
+
+  const seqStr =
+    typeof params.sequence === "number"
+      ? String(params.sequence).padStart(5, "0")
+      : params.sequence.replace(/[^0-9]/g, "").length > 0
+        ? params.sequence
+            .replace(/[^0-9]/g, "")
+            .slice(-5)
+            .padStart(5, "0")
+        : params.sequence.slice(-5).padStart(5, "0");
+
+  return `${prov}/${dept}/${dist}/${circle}/${params.docCode}/${fy}/${seqStr}`;
+}
 
 export interface FormPFT1Model {
   readonly isApproved: boolean;
   readonly noticeNumber: string;
+  readonly pin: string;
   readonly demandNumber: string;
+  readonly provincialUin?: string | undefined;
   readonly taxNumber: string;
   readonly issueDate: string;
   readonly dueDate: string;
@@ -25,6 +121,12 @@ export interface FormPFT1Model {
   readonly taxAmountWords: string;
   readonly statutoryCategoryText: string;
   readonly scheduleEntry: string;
+  readonly subclassificationCode: string | null;
+  readonly statutoryTertiaryCode?: string | null;
+  readonly tertiarySlab: string | null;
+  readonly slabRatePkr: number;
+  readonly rateBasis: string;
+  readonly statutoryClassificationFull: string;
   readonly financialYear: string;
   readonly assessingAuthorityName: string;
   readonly assessingAuthorityTitle: string;
@@ -46,6 +148,13 @@ export interface FormPFT1Model {
 export interface FormPFT2CopyModel {
   readonly copyTitle: string;
   readonly copyTitleUrdu: string;
+  readonly noticeNumber?: string | undefined;
+  readonly pin?: string | undefined;
+  readonly formType?: string | undefined;
+  readonly demandScope?: string | undefined;
+  readonly paymentScope?: string | undefined;
+  readonly isPartial?: boolean | undefined;
+  readonly remainingBalance?: number | undefined;
   readonly headOfAccount: string;
   readonly district: string;
   readonly taxYear: string;
@@ -53,7 +162,16 @@ export interface FormPFT2CopyModel {
   readonly qrPayload: string;
   readonly taxpayerInfo: {
     readonly taxNo: string;
+    readonly provincialUin?: string | undefined;
     readonly classification: string;
+    readonly subclassificationCode: string | null;
+    readonly statutoryTertiaryCode?: string | null;
+    readonly categoryName: string;
+    readonly tertiarySlab: string | null;
+    readonly slabRatePkr: number;
+    readonly rateBasis: string;
+    readonly classificationFull: string;
+    readonly statutoryClassificationFull: string;
     readonly legalName: string;
     readonly tradeName?: string | undefined;
     readonly address: string;
@@ -66,6 +184,8 @@ export interface FormPFT2CopyModel {
     readonly penalty: number;
     readonly totalPayable: number;
     readonly totalPayableWords: string;
+    readonly isPartial?: boolean | undefined;
+    readonly remainingBalance?: number | undefined;
   };
   readonly assessmentInfo: {
     readonly demandNo: string;
@@ -85,6 +205,13 @@ export interface FormPFT2Model {
   readonly isApproved: boolean;
   readonly displayAmount: number;
   readonly challanNumber: string;
+  readonly noticeNumber: string;
+  readonly pin: string;
+  readonly formType?: string | undefined;
+  readonly demandScope?: string | undefined;
+  readonly paymentScope?: string | undefined;
+  readonly isPartial?: boolean | undefined;
+  readonly remainingBalance?: number | undefined;
   readonly canonicalChallanText: string;
   readonly officialSha256: string;
   readonly qrPayload: string;
@@ -94,12 +221,18 @@ export interface FormPFT2Model {
 export interface FormPFT3RowModel {
   readonly serialNumber: number;
   readonly permanentDemandNo: string;
+  readonly provincialUin?: string | undefined;
   readonly assessmentNo: string;
   readonly legalName: string;
   readonly tradeName?: string | undefined;
   readonly identifier: string;
   readonly scheduleEntry: string;
   readonly categoryName: string;
+  readonly subclassificationCode: string | null;
+  readonly statutoryTertiaryCode?: string | null;
+  readonly tertiarySlab: string | null;
+  readonly slabRatePkr: number;
+  readonly rateBasis: string;
   readonly assessedCurrentTax: number;
   readonly arrears: number;
   readonly totalDemand: number;
@@ -111,6 +244,7 @@ export interface FormPFT3RowModel {
 
 export interface ShowCausePenaltyNoticeModel {
   readonly noticeNumber: string;
+  readonly pin: string;
   readonly noticeDate: string;
   readonly demandNumber: string;
   readonly hearingDate: string;
@@ -130,6 +264,7 @@ export interface ShowCausePenaltyNoticeModel {
 
 export interface LandRevenueRecoveryCertificateModel {
   readonly certificateNumber: string;
+  readonly pin: string;
   readonly issueDate: string;
   readonly collectorDesignation: string;
   readonly collectorDistrict: string;
@@ -185,6 +320,7 @@ export interface CircleDispatchRegisterModel {
 
 export interface AppellateOrderModel {
   readonly orderNumber: string;
+  readonly pin: string;
   readonly appealNumber: string;
   readonly courtTitle: string;
   readonly courtTitleUrdu: string;
@@ -316,28 +452,64 @@ export function numberToWordsPkr(amount: number): string {
   return `${result.trim()} Rupees Only`;
 }
 
+export interface GenerateFormPFT1Options {
+  readonly isTampered?: boolean | undefined;
+  readonly tamperedAmount?: number | undefined;
+  readonly noticeNumber?: string | undefined;
+  readonly pin?: string | undefined;
+  readonly dueDate?: string | undefined;
+  readonly issueDate?: string | undefined;
+}
+
 /**
  * Generates Form P.F.T-1 (Notice of Tax Demand under Section 3 read with Rule 6).
  */
 export function generateFormPFT1(
   unit: StoredUnit,
-  isTampered = false,
-  tamperedAmount = 100
+  optionsOrTampered: GenerateFormPFT1Options | boolean = false,
+  legacyTamperedAmount = 100
 ): FormPFT1Model {
+  const opts: GenerateFormPFT1Options =
+    typeof optionsOrTampered === "boolean"
+      ? { isTampered: optionsOrTampered, tamperedAmount: legacyTamperedAmount }
+      : (optionsOrTampered ?? {});
+
   const latestAssessment = unit.assessments[0];
   const latestVersion = unit.assessmentVersions[0];
   const isApproved = latestAssessment?.status === "APPROVED";
 
-  const taxAmount = isTampered ? tamperedAmount : (latestVersion?.snapshot.taxAmount ?? 0);
+  const taxAmount = opts.isTampered
+    ? (opts.tamperedAmount ?? 100)
+    : (latestVersion?.snapshot.taxAmount ?? 0);
   const taxAmountWords = numberToWordsPkr(taxAmount);
   const serial = unit.demandUnit?.permanentDemandNo
     ? unit.demandUnit.permanentDemandNo.replace(/[^0-9]/g, "").slice(-4)
     : unit.id.slice(-4);
-  const noticeNumber = `PFT-1/VEH/2026/${serial}`;
+  const noticeNumber =
+    opts.noticeNumber || formatStandardDocNumber({ docCode: "PFT1", sequence: serial });
+  const pin = opts.pin || generateDocumentPin(noticeNumber);
   const demandNumber = unit.demandUnit.permanentDemandNo;
   const taxNumber = `${unit.identifierType}: ${unit.identifierValue}`;
-  const issueDate = "01/07/2026";
-  const dueDate = "31/08/2026";
+  const issueDate = opts.issueDate || "01/07/2026";
+  const dueDate = opts.dueDate || "31/08/2026";
+
+  const subclassificationCode = unit.statutoryRule.subclassification_code;
+  const statutoryTertiaryCode = unit.statutoryRule.statutory_tertiary_code;
+  const tertiarySlab = unit.statutoryRule.statutory_tertiary_classification ?? null;
+  const slabRatePkr = unit.statutoryRule.annual_rate_pkr;
+  const rateBasis = unit.statutoryRule.rate_basis;
+  const scheduleEntry = getScheduleEntryLabel(unit.statutoryRule);
+
+  const classificationParts = [
+    scheduleEntry,
+    unit.statutoryRule.category,
+    unit.statutoryRule.subclassification_label
+      ? `Subclass: ${unit.statutoryRule.subclassification_label}`
+      : null,
+    tertiarySlab ? `Tertiary: ${tertiarySlab}` : null,
+    `(Statutory Rate: PKR ${slabRatePkr.toLocaleString()} ${rateBasis})`
+  ].filter(Boolean);
+  const statutoryClassificationFull = classificationParts.join(" — ");
 
   const canonicalNoticeText = [
     "GOVERNMENT OF THE PUNJAB - EXCISE & TAXATION DEPARTMENT",
@@ -345,24 +517,27 @@ export function generateFormPFT1(
     "DISTRICT VEHARI - OFFICE OF THE ASSESSING AUTHORITY",
     "FORM P.F.T-1: NOTICE OF TAX DEMAND",
     "(Section 03 of Punjab Finance Act 1977 read with rule 6 of the Punjab Professions & Trades Tax Rules, 1977)",
+    `Notice No: ${noticeNumber} | Security PIN: ${pin}`,
     `Demand No: ${demandNumber} | Date: ${issueDate} | Circle: Circle-Vehari`,
     `Tax No: ${taxNumber}`,
     `To: ${unit.legalName}`,
     `Address: ${unit.address}`,
-    `Statutory Notice Text: According to Section 03 of Punjab Finance Act, 1977 you are liable to pay Tax on Professions, Trades, Employment or Callings amounting to Rs. ${taxAmount} (in words) ${taxAmountWords} as Entry ${unit.statutoryRule.subclassification_code} (${unit.statutoryRule.category}) for the year 2026-2027.`,
+    `Statutory Notice Text: According to Section 03 of Punjab Finance Act, 1977 you are liable to pay Tax on Professions, Trades, Employment or Callings amounting to Rs. ${taxAmount} (in words) ${taxAmountWords} under ${scheduleEntry} (${unit.statutoryRule.category}${unit.statutoryRule.subclassification_label ? ` — ${unit.statutoryRule.subclassification_label}` : ""}${tertiarySlab ? ` — Slab: ${tertiarySlab}` : ""}) for the year 2026-2027.`,
     "Directive: You are directed to make the payment in the National Bank of Pakistan or State Bank of Pakistan within one month of the service of this Notice through Payment Challan Form P.F.T-2 attached herewith and furnish a copy of paid Challan to the undersigned.",
     "Statutory Default Warning: In case of default, a penalty, not exceeding the amount of tax, shall be imposed and unpaid dues shall be recovered as arrears of Land Revenue.",
     "Assessing Authority: Tariq Mahmood, Excise & Taxation Officer, Professional Tax, Tehsil Vehari",
-    `Service Receipt Counterfoil: Demand No: ${demandNumber} | Tax Payable: Rs. ${taxAmount} | Due Date: ${dueDate} | Class: Entry ${unit.statutoryRule.subclassification_code}`
+    `Service Receipt Counterfoil: Demand No: ${demandNumber} | Tax Payable: Rs. ${taxAmount} | Due Date: ${dueDate} | Class: ${scheduleEntry} [${tertiarySlab ?? unit.statutoryRule.category}]`
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalNoticeText);
-  const qrPayload = `PTAS-PUNJAB:PFT-1:${demandNumber}:TAX=${taxAmount}:YEAR=2026-2027:DUE=${dueDate}:SHA=${officialSha256.slice(0, 16)}`;
+  const qrPayload = `PTAS-PUNJAB:PFT-1:${demandNumber}:TAX=${taxAmount}:YEAR=2026-2027:DUE=${dueDate}:SHA=${officialSha256.slice(0, 16)}:PIN=${pin}`;
 
   return {
     isApproved,
     noticeNumber,
+    pin,
     demandNumber,
+    provincialUin: unit.provincialUin,
     taxNumber,
     issueDate,
     dueDate,
@@ -374,7 +549,13 @@ export function generateFormPFT1(
     taxAmount,
     taxAmountWords,
     statutoryCategoryText: unit.statutoryRule.category,
-    scheduleEntry: `Entry ${unit.statutoryRule.subclassification_code}`,
+    scheduleEntry,
+    subclassificationCode,
+    statutoryTertiaryCode,
+    tertiarySlab,
+    slabRatePkr,
+    rateBasis,
+    statutoryClassificationFull,
     financialYear: "2026-2027",
     assessingAuthorityName: "Tariq Mahmood",
     assessingAuthorityTitle: "Excise & Taxation Officer / Assessing Authority, Tehsil Vehari",
@@ -386,7 +567,7 @@ export function generateFormPFT1(
       taxPayable: taxAmount,
       dueDate,
       assesseeName: unit.legalName,
-      assesseeClass: `Entry ${unit.statutoryRule.subclassification_code} - ${unit.statutoryRule.category}`,
+      assesseeClass: `${scheduleEntry} - ${unit.statutoryRule.category}${tertiarySlab ? ` [Slab: ${tertiarySlab}]` : ""} | Rate: PKR ${slabRatePkr.toLocaleString()}`,
       taxNumber,
       serverName: "Muhammad Aslam",
       serverRole: "Tax Inspector / Service Officer, Circle-Vehari"
@@ -394,48 +575,122 @@ export function generateFormPFT1(
   };
 }
 
+export interface GenerateFormPFT2Options {
+  readonly customAmount?: number | undefined;
+  readonly isPartial?: boolean | undefined;
+  readonly remainingBalance?: number | undefined;
+  readonly dueDate?: string | undefined;
+  readonly issueDate?: string | undefined;
+  readonly formType?: string | undefined;
+  readonly demandScope?: string | undefined;
+  readonly paymentScope?: string | undefined;
+  readonly noticeNumber?: string | undefined;
+  readonly pin?: string | undefined;
+  readonly isTampered?: boolean | undefined;
+  readonly tamperedAmount?: number | undefined;
+}
+
 /**
  * Generates the authentic 3-copy Form P.F.T-2 (Payment Challan under Section 3 read with Rule 9).
  */
 export function generateFormPFT2(
   unit: StoredUnit,
-  isTampered = false,
-  tamperedAmount = 100
+  optionsOrTampered: GenerateFormPFT2Options | boolean = false,
+  legacyTamperedAmount = 100
 ): FormPFT2Model {
+  const opts: GenerateFormPFT2Options =
+    typeof optionsOrTampered === "boolean"
+      ? { isTampered: optionsOrTampered, tamperedAmount: legacyTamperedAmount }
+      : (optionsOrTampered ?? {});
+
   const latestAssessment = unit.assessments[0];
   const latestVersion = unit.assessmentVersions[0];
   const isApproved = latestAssessment?.status === "APPROVED";
 
-  const taxAmount = isTampered ? tamperedAmount : (latestVersion?.snapshot.taxAmount ?? 0);
+  const baseTax = latestVersion?.snapshot.taxAmount ?? 0;
   let penalty = 0;
   for (const entry of unit.ledgerEntries) {
     if (entry.entryType === "PENALTY_DEMAND") {
       penalty += entry.amount;
     }
   }
-  const totalPayable = taxAmount + penalty;
+
+  const isPartial = opts.isPartial ?? opts.paymentScope === "PARTIAL";
+  const paymentScope = opts.paymentScope ?? (isPartial ? "PARTIAL" : "FULL");
+  const demandScope = opts.demandScope ?? "CURRENT";
+  const formType = opts.formType ?? "STD";
+
+  const totalAssessed = baseTax + penalty;
+  const totalPayable = opts.isTampered
+    ? (opts.tamperedAmount ?? 100)
+    : opts.customAmount !== undefined
+      ? opts.customAmount
+      : totalAssessed;
+
+  const remainingBalance =
+    opts.remainingBalance !== undefined
+      ? opts.remainingBalance
+      : isPartial
+        ? Math.max(0, totalAssessed - totalPayable)
+        : 0;
+
   const totalPayableWords = numberToWordsPkr(totalPayable);
   const challanSerial = unit.demandUnit?.permanentDemandNo
     ? unit.demandUnit.permanentDemandNo.replace(/[^0-9]/g, "").slice(-4)
     : unit.id.slice(-4);
-  const challanNumber = `PFT-2/VEH/2026/${challanSerial}`;
+  const challanNumber = formatStandardDocNumber({ docCode: "PFT2", sequence: challanSerial });
   const demandNo = unit.demandUnit.permanentDemandNo;
-  const dueDate = "31/08/2026";
+  const dueDate = opts.dueDate || "31/08/2026";
+  const issueDate = opts.issueDate || "2026-07-01";
   const taxYear = "2026-2027";
   const district = "Vehari";
   const headOfAccount = "B01601 (Punjab Professional Tax - Provincial)";
+
+  const noticeNumber =
+    opts.noticeNumber ||
+    generatePft2NoticeNumber({
+      demandNumber: demandNo,
+      issueDate,
+      formTypeCode: formType,
+      demandScope,
+      paymentScope,
+      amount: totalPayable
+    });
+
+  const pin = opts.pin || generateDocumentPin(noticeNumber || challanNumber);
+
+  const subclassificationCode = unit.statutoryRule.subclassification_code;
+  const statutoryTertiaryCode = unit.statutoryRule.statutory_tertiary_code;
+  const categoryName = unit.statutoryRule.category;
+  const tertiarySlab = unit.statutoryRule.statutory_tertiary_classification ?? null;
+  const slabRatePkr = unit.statutoryRule.annual_rate_pkr;
+  const rateBasis = unit.statutoryRule.rate_basis;
+  const scheduleEntry = getScheduleEntryLabel(unit.statutoryRule);
+
+  const classificationParts = [
+    scheduleEntry,
+    categoryName,
+    unit.statutoryRule.subclassification_label
+      ? `Subclass: ${unit.statutoryRule.subclassification_label}`
+      : null,
+    tertiarySlab ? `Tertiary: ${tertiarySlab}` : null,
+    `(PKR ${slabRatePkr.toLocaleString()} ${rateBasis})`
+  ].filter(Boolean);
+  const classificationFull = classificationParts.join(" — ");
 
   const canonicalChallanText = [
     "GOVERNMENT OF THE PUNJAB - EXCISE & TAXATION DEPARTMENT",
     "FORM P.F.T-2: PUNJAB PROFESSIONS & TRADES TAX PAYMENT CHALLAN",
     "(Section 3 of Punjab Finance Act 1977 read with rule 9 of the Punjab Professions & Trades Tax Rules, 1977)",
     `Head of Account: ${headOfAccount}`,
-    `Challan No: ${challanNumber} | District: ${district} | Tax Year: ${taxYear} | Due Date: ${dueDate}`,
+    `Challan No: ${challanNumber} | Notice No: ${noticeNumber} | Security PIN: ${pin}`,
+    `District: ${district} | Tax Year: ${taxYear} | Due Date: ${dueDate}`,
+    `Form Type: ${formType} | Scope: ${demandScope} (${paymentScope})${isPartial ? ` | Remaining Balance: PKR ${remainingBalance}` : ""}`,
     `Taxpayer: ${unit.legalName} | Trade Name: ${unit.tradeName ?? unit.legalName}`,
     `Identifier: ${unit.identifierType}: ${unit.identifierValue}`,
     `Address: ${unit.address}`,
-    `Classification: Entry ${unit.statutoryRule.subclassification_code} - ${unit.statutoryRule.category}`,
-    `Detail of Tax: Current Tax: Rs. ${taxAmount} | Arrears: Rs. 0 | Penalty: Rs. ${penalty} | Total Payable: Rs. ${totalPayable}`,
+    `Classification: ${classificationFull}`,
+    `Detail of Tax: Current Tax: Rs. ${baseTax} | Arrears: Rs. 0 | Penalty: Rs. ${penalty} | Total Payable: Rs. ${totalPayable}`,
     `Amount in Words: ${totalPayableWords}`,
     `Assessment Information: Demand No: ${demandNo} | Circle: Circle-Vehari`,
     "Assessing Authority: Tariq Mahmood, ETO Tehsil Vehari",
@@ -443,9 +698,16 @@ export function generateFormPFT2(
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalChallanText);
-  const qrPayload = `PTAS-PUNJAB:PFT-2:${challanNumber}:DEMAND=${demandNo}:AMOUNT=${totalPayable}:DUE=${dueDate}:SHA=${officialSha256.slice(0, 16)}`;
+  const qrPayload = `PTAS-PUNJAB:PFT-2:${challanNumber}:DEMAND=${demandNo}:AMOUNT=${totalPayable}:DUE=${dueDate}:SHA=${officialSha256.slice(0, 16)}:PIN=${pin}`;
 
   const sharedData = {
+    noticeNumber,
+    pin,
+    formType,
+    demandScope,
+    paymentScope,
+    isPartial,
+    remainingBalance,
     headOfAccount,
     district,
     taxYear,
@@ -453,7 +715,16 @@ export function generateFormPFT2(
     qrPayload,
     taxpayerInfo: {
       taxNo: `${unit.identifierType}: ${unit.identifierValue}`,
-      classification: `Entry ${unit.statutoryRule.subclassification_code} - ${unit.statutoryRule.category}`,
+      provincialUin: unit.provincialUin,
+      classification: `${scheduleEntry} - ${categoryName}`,
+      subclassificationCode,
+      statutoryTertiaryCode,
+      categoryName,
+      tertiarySlab,
+      slabRatePkr,
+      rateBasis,
+      classificationFull,
+      statutoryClassificationFull: classificationFull,
       legalName: unit.legalName,
       tradeName: unit.tradeName,
       address: unit.address,
@@ -461,11 +732,13 @@ export function generateFormPFT2(
       email: "info@punjab-taxpayer.gov.pk"
     },
     taxPayable: {
-      currentTax: taxAmount,
+      currentTax: baseTax,
       arrears: 0,
       penalty,
       totalPayable,
-      totalPayableWords
+      totalPayableWords,
+      isPartial,
+      remainingBalance
     },
     assessmentInfo: {
       demandNo,
@@ -503,6 +776,13 @@ export function generateFormPFT2(
     isApproved,
     displayAmount: totalPayable,
     challanNumber,
+    noticeNumber,
+    pin,
+    formType,
+    demandScope,
+    paymentScope,
+    isPartial,
+    remainingBalance,
     canonicalChallanText,
     officialSha256,
     qrPayload,
@@ -522,7 +802,8 @@ export function generateShowCausePenaltyNotice(
   const latestVersion = unit.assessmentVersions[0];
   const taxAmount = latestVersion?.snapshot.taxAmount ?? 0;
   const demandNo = unit.demandUnit.permanentDemandNo;
-  const noticeNumber = `SCN-PEN-VEH/2026/${unit.id.slice(-4)}`;
+  const noticeNumber = formatStandardDocNumber({ docCode: "SCN", sequence: unit.id.slice(-4) });
+  const pin = generateDocumentPin(noticeNumber);
   const noticeDate = new Date().toISOString().split("T")[0]!;
 
   const hearingDateObj = new Date();
@@ -532,15 +813,17 @@ export function generateShowCausePenaltyNotice(
   const daysOverdue = customDaysOverdue ?? 35;
   const maximumPenaltyExposable = taxAmount; // Section 3(4) statutory ceiling: not exceeding amount of tax
 
+  const entryLabel = getScheduleEntryLabel(unit.statutoryRule);
+
   const canonicalNoticeText = [
     "OFFICE OF THE EXCISE & TAXATION OFFICER / ASSESSING AUTHORITY, VEHARI",
     "NOTICE TO SHOW CAUSE FOR IMPOSITION OF PENALTY",
     "(Under Section 3(4) of the Punjab Finance Act, 1977 read with Rule 10 of the Punjab Professions & Trades Tax Rules, 1977)",
-    `Notice No: ${noticeNumber} | Date of Issue: ${noticeDate} | Demand Notice No: ${demandNo}`,
+    `Notice No: ${noticeNumber} | Security PIN: ${pin} | Date of Issue: ${noticeDate} | Demand Notice No: ${demandNo}`,
     `Assessee Legal Name: ${unit.legalName} | Trade Name: ${unit.tradeName ?? unit.legalName}`,
     `Identifier: ${unit.identifierType}: ${unit.identifierValue}`,
     `Business Address: ${unit.address}`,
-    `Classification: Entry ${unit.statutoryRule.subclassification_code} - ${unit.statutoryRule.category}`,
+    `Classification: ${entryLabel} - ${unit.statutoryRule.category}`,
     `Assessed Tax Demand: PKR ${taxAmount} | Days Overdue: ${daysOverdue} days`,
     `Maximum Statutory Penalty Imposable: PKR ${maximumPenaltyExposable} (100% of assessed tax)`,
     `Hearing / Explanation Due Date: ${hearingDate} at 10:00 AM`,
@@ -551,6 +834,7 @@ export function generateShowCausePenaltyNotice(
 
   return {
     noticeNumber,
+    pin,
     noticeDate,
     demandNumber: demandNo,
     hearingDate,
@@ -558,7 +842,7 @@ export function generateShowCausePenaltyNotice(
     assesseeTradeName: unit.tradeName,
     address: unit.address,
     identifier: `${unit.identifierType}: ${unit.identifierValue}`,
-    scheduleEntry: `Entry ${unit.statutoryRule.subclassification_code} - ${unit.statutoryRule.category}`,
+    scheduleEntry: `${entryLabel} - ${unit.statutoryRule.category}`,
     originalTaxAmount: taxAmount,
     daysOverdue,
     maximumPenaltyExposable,
@@ -590,7 +874,11 @@ export function generateLandRevenueRecoveryCertificate(
   const totalArrearsRecoverable = taxAmount + penalty;
   const totalArrearsWords = numberToWordsPkr(totalArrearsRecoverable);
   const demandNo = unit.demandUnit.permanentDemandNo;
-  const certificateNumber = `CERT-LRA-VEH/2026/${unit.id.slice(-4)}`;
+  const certificateNumber = formatStandardDocNumber({
+    docCode: "LRC",
+    sequence: unit.id.slice(-4)
+  });
+  const pin = generateDocumentPin(certificateNumber);
   const issueDate = new Date().toISOString().split("T")[0]!;
   const collectorDesignation =
     customCollectorDesignation ?? "The Collector / Tehsildar (Recovery), District Vehari";
@@ -599,7 +887,7 @@ export function generateLandRevenueRecoveryCertificate(
     "OFFICE OF THE EXCISE & TAXATION OFFICER / ASSESSING AUTHORITY, VEHARI",
     "CERTIFICATE OF RECOVERY AS ARREARS OF LAND REVENUE",
     "(Under Rule 12 of Punjab Professions & Trades Tax Rules, 1977 read with Sections 80 & 81 of the Punjab Land Revenue Act, 1967)",
-    `Certificate No: ${certificateNumber} | Issue Date: ${issueDate}`,
+    `Certificate No: ${certificateNumber} | Security PIN: ${pin} | Issue Date: ${issueDate}`,
     `To: ${collectorDesignation}`,
     `Defaulter Assessee: ${unit.legalName} | Trade Name: ${unit.tradeName ?? unit.legalName}`,
     `Identifier: ${unit.identifierType}: ${unit.identifierValue}`,
@@ -615,6 +903,7 @@ export function generateLandRevenueRecoveryCertificate(
 
   return {
     certificateNumber,
+    pin,
     issueDate,
     collectorDesignation,
     collectorDistrict: "District Vehari",
@@ -657,12 +946,18 @@ export function generateFormPFT3Rows(units: readonly StoredUnit[]): readonly For
     return {
       serialNumber: idx + 1,
       permanentDemandNo: u.demandUnit.permanentDemandNo,
+      provincialUin: u.provincialUin,
       assessmentNo: `ASM-VEH-2026-${u.id.slice(-4)}`,
       legalName: u.legalName,
       tradeName: u.tradeName,
       identifier: `${u.identifierType}: ${u.identifierValue}`,
-      scheduleEntry: `Entry ${u.statutoryRule.subclassification_code}`,
+      scheduleEntry: getScheduleEntryLabel(u.statutoryRule),
       categoryName: u.statutoryRule.category,
+      subclassificationCode: u.statutoryRule.subclassification_code,
+      statutoryTertiaryCode: u.statutoryRule.statutory_tertiary_code,
+      tertiarySlab: u.statutoryRule.statutory_tertiary_classification ?? null,
+      slabRatePkr: u.statutoryRule.annual_rate_pkr,
+      rateBasis: u.statutoryRule.rate_basis,
       assessedCurrentTax: currentTax,
       arrears: 0,
       totalDemand: currentTax,
@@ -700,14 +995,14 @@ export function generateCircleDispatchRegister(
 
     return {
       serialNumber: idx + 1,
-      noticeNumber: `PFT-1/VEH/2026/${u.id.slice(-4)}`,
+      noticeNumber: formatStandardDocNumber({ docCode: "PFT1", sequence: u.id.slice(-4) }),
       demandNumber: u.demandUnit.permanentDemandNo,
       dispatchDate: customDispatchDate,
       assesseeLegalName: u.legalName,
       assesseeTradeName: u.tradeName,
       identifier: `${u.identifierType}: ${u.identifierValue}`,
       address: u.address,
-      scheduleEntry: `Entry ${u.statutoryRule.subclassification_code}`,
+      scheduleEntry: getScheduleEntryLabel(u.statutoryRule),
       categoryName: u.statutoryRule.category,
       assessedAmount: taxAmount,
       dueDate: "31/08/2026",
@@ -757,6 +1052,7 @@ export function generateAppellateOrderDocument(
 ): AppellateOrderModel {
   const { unit } = input;
   const orderNumber = input.orderNumber ?? `ETD/MLN/APP-ORD/2026/${unit.id.slice(-4)}`;
+  const pin = generateDocumentPin(orderNumber);
   const hearingDate = input.hearingDate ?? "2026-08-05";
   const orderDate = input.orderDate ?? new Date().toISOString().split("T")[0] ?? "2026-08-05";
   const courtTitle =
@@ -794,12 +1090,12 @@ export function generateAppellateOrderDocument(
     "GOVERNMENT OF THE PUNJAB - EXCISE & TAXATION DEPARTMENT",
     courtTitle,
     "ORDER PASSED UNDER SECTION 7 OF PUNJAB FINANCE ACT, 1977 READ WITH RULE 13 OF PUNJAB PROFESSIONS & TRADES TAX RULES, 1977",
-    `Appeal No: ${input.appealNumber} | Order No: ${orderNumber} | Date of Order: ${orderDate}`,
+    `Appeal No: ${input.appealNumber} | Order No: ${orderNumber} | Security PIN: ${pin} | Date of Order: ${orderDate}`,
     `Appellant: ${unit.legalName} (${unit.tradeName ?? unit.legalName}) | CNIC/Identifier: ${unit.identifierType}: ${unit.identifierValue}`,
     `Address: ${unit.address}`,
     "Respondent: Assessing Authority / Excise & Taxation Officer, Vehari",
     `Impugned Demand Notice: ${noticeNumber} | Permanent Demand No: ${demandNumber}`,
-    `Original Assessed Amount: PKR ${originalTax} | Schedule Entry: Entry ${unit.statutoryRule.subclassification_code}`,
+    `Original Assessed Amount: PKR ${originalTax} | Schedule Class: ${getScheduleEntryLabel(unit.statutoryRule)}`,
     `Ground of Appeal: ${input.groundOfAppeal}`,
     `Undisputed Tax Deposited: PKR ${input.undisputedTaxDeposited}`,
     `Decision: ${input.decisionType} | Relief Granted: PKR ${input.reliefAmount} | Revised Demand: PKR ${input.revisedTaxAmount}`,
@@ -811,6 +1107,7 @@ export function generateAppellateOrderDocument(
 
   return {
     orderNumber,
+    pin,
     appealNumber: input.appealNumber,
     courtTitle,
     courtTitleUrdu,
@@ -824,7 +1121,7 @@ export function generateAppellateOrderDocument(
     respondentTitle: "Assessing Authority / Excise & Taxation Officer, Vehari",
     impugnedNoticeNumber: noticeNumber,
     demandNumber,
-    scheduleEntry: `Entry ${unit.statutoryRule.subclassification_code} (${unit.statutoryRule.category})`,
+    scheduleEntry: `${getScheduleEntryLabel(unit.statutoryRule)} (${unit.statutoryRule.category})`,
     originalTaxAmount: originalTax,
     groundOfAppeal: input.groundOfAppeal,
     undisputedTaxDeposited: input.undisputedTaxDeposited,
@@ -849,6 +1146,7 @@ export interface TaxClearanceCertificateModel {
   readonly isEligible: boolean;
   readonly ineligibilityReason?: string | undefined;
   readonly certificateNumber: string;
+  readonly pin: string;
   readonly issueDate: string;
   readonly expiryDate: string;
   readonly financialYear: string;
@@ -893,6 +1191,7 @@ export function generateTaxClearanceCertificate(
       isEligible: false,
       ineligibilityReason: `Cannot issue Clearance Certificate: Unit has PKR ${currentBalance.toLocaleString()} outstanding arrears. Total balance must be zero.`,
       certificateNumber: "INELIGIBLE",
+      pin: "",
       issueDate: refDate,
       expiryDate: "2027-06-30",
       financialYear,
@@ -910,7 +1209,7 @@ export function generateTaxClearanceCertificate(
       demandNo,
       categoryName: unit.statutoryRule.category,
       subcategoryName: unit.statutoryRule.subcategory,
-      scheduleEntry: `Entry ${unit.statutoryRule.subclassification_code}`,
+      scheduleEntry: getScheduleEntryLabel(unit.statutoryRule),
       annualTaxAssessed: unit.statutoryRule.annual_rate_pkr,
       taxRatePkr: unit.statutoryRule.annual_rate_pkr,
       totalTaxPaid: 0,
@@ -932,20 +1231,21 @@ export function generateTaxClearanceCertificate(
     .replace(/[^a-zA-Z0-9]/g, "")
     .slice(-4)
     .toUpperCase();
-  const certNumber = `PFT-CC-VEH-2026-${cleanSuffix || "0001"}`;
+  const certNumber = formatStandardDocNumber({ docCode: "PFT5", sequence: cleanSuffix || "0001" });
+  const pin = generateDocumentPin(certNumber);
 
   const canonicalCertificateText = [
     "GOVERNMENT OF THE PUNJAB - EXCISE, TAXATION & NARCOTICS CONTROL DEPARTMENT",
     "OFFICE OF THE EXCISE & TAXATION OFFICER (ASSESSING AUTHORITY), TEHSIL VEHARI",
     "FORM P.F.T-5: CERTIFICATE OF PROFESSIONAL TAX CLEARANCE (عدم بقایاجات سرٹیفکیٹ)",
-    `Certificate Number: ${certNumber}`,
+    `Certificate Number: ${certNumber} | Security PIN: ${pin}`,
     `Financial Year: ${financialYear}`,
     `Issue Date: ${refDate} | Expiry Date: 30-JUN-2027`,
     `Assessee Legal Name: ${unit.legalName}`,
     `Trade / Business Name: ${unit.tradeName ?? unit.legalName}`,
     `CNIC / Registration No: ${unit.identifierType}: ${unit.identifierValue}`,
     `Commercial Address: ${unit.address}`,
-    `Second Schedule Classification: Entry ${unit.statutoryRule.subclassification_code} (${unit.statutoryRule.category})`,
+    `Second Schedule Classification: ${getScheduleEntryLabel(unit.statutoryRule)} (${unit.statutoryRule.category})`,
     `Statutory Head of Account: B01601 (Punjab Professional Tax - Provincial)`,
     `Assessed Liability: PKR ${unit.statutoryRule.annual_rate_pkr}`,
     `Discharged Liability: PKR ${totalPaid}`,
@@ -955,11 +1255,12 @@ export function generateTaxClearanceCertificate(
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalCertificateText);
-  const qrPayload = `PTAS-PUNJAB:PFT-5:${certNumber}:ID=${unit.identifierValue}:STATUS=NIL_ARREARS:SHA=${officialSha256.slice(0, 16)}`;
+  const qrPayload = `PTAS-PUNJAB:PFT-5:${certNumber}:ID=${unit.identifierValue}:STATUS=NIL_ARREARS:SHA=${officialSha256.slice(0, 16)}:PIN=${pin}`;
 
   return {
     isEligible: true,
     certificateNumber: certNumber,
+    pin,
     issueDate: refDate,
     expiryDate: "2027-06-30",
     financialYear,
@@ -977,7 +1278,7 @@ export function generateTaxClearanceCertificate(
     demandNo,
     categoryName: unit.statutoryRule.category,
     subcategoryName: unit.statutoryRule.subcategory,
-    scheduleEntry: `Entry ${unit.statutoryRule.subclassification_code}`,
+    scheduleEntry: getScheduleEntryLabel(unit.statutoryRule),
     annualTaxAssessed: unit.statutoryRule.annual_rate_pkr,
     taxRatePkr: unit.statutoryRule.annual_rate_pkr,
     totalTaxPaid: totalPaid,
@@ -993,6 +1294,7 @@ export function generateTaxClearanceCertificate(
 
 export interface DiscontinuanceOrderModel {
   readonly orderNumber: string;
+  readonly pin: string;
   readonly orderDate: string;
   readonly noticeNumber: string;
   readonly unitName: string;
@@ -1028,10 +1330,11 @@ export function generateDiscontinuanceOrder(
     readonly etoReason: string;
   }
 ): DiscontinuanceOrderModel {
+  const pin = generateDocumentPin(input.orderNumber);
   const canonicalOrderText = [
     "GOVERNMENT OF THE PUNJAB - EXCISE & TAXATION DEPARTMENT, TEHSIL VEHARI",
     "ORDER UNDER RULE 10 OF PUNJAB PROFESSIONS & TRADES TAX RULES, 1977 (BUSINESS DISCONTINUANCE)",
-    `Order Number: ${input.orderNumber} | Order Date: ${input.orderDate}`,
+    `Order Number: ${input.orderNumber} | Security PIN: ${pin} | Order Date: ${input.orderDate}`,
     `Notice Reference: ${input.noticeNumber}`,
     `Assessee: ${unit.legalName} (${unit.tradeName ?? unit.legalName}) | ${unit.identifierType}: ${unit.identifierValue}`,
     `Address: ${unit.address}`,
@@ -1047,6 +1350,7 @@ export function generateDiscontinuanceOrder(
 
   return {
     orderNumber: input.orderNumber,
+    pin,
     orderDate: input.orderDate,
     noticeNumber: input.noticeNumber,
     unitName: unit.legalName,
@@ -1072,6 +1376,7 @@ export function generateDiscontinuanceOrder(
 
 export interface RefundAdjustmentOrderModel {
   readonly orderNumber: string;
+  readonly pin: string;
   readonly orderDate: string;
   readonly applicationNumber: string;
   readonly unitName: string;
@@ -1109,11 +1414,12 @@ export function generateRefundAdjustmentOrder(
     readonly evidenceRef: string;
   }
 ): RefundAdjustmentOrderModel {
+  const pin = generateDocumentPin(input.orderNumber);
   const amountWords = numberToWordsPkr(input.amount);
   const canonicalOrderText = [
     "GOVERNMENT OF THE PUNJAB - EXCISE & TAXATION DEPARTMENT, TEHSIL VEHARI",
     "ORDER UNDER RULE 5 OF PUNJAB PROFESSIONS & TRADES TAX RULES, 1977 (STATUTORY REFUND / CREDIT ADJUSTMENT)",
-    `Order Number: ${input.orderNumber} | Order Date: ${input.orderDate}`,
+    `Order Number: ${input.orderNumber} | Security PIN: ${pin} | Order Date: ${input.orderDate}`,
     `Application Reference: ${input.applicationNumber}`,
     `Assessee: ${unit.legalName} (${unit.tradeName ?? unit.legalName}) | ${unit.identifierType}: ${unit.identifierValue}`,
     `Address: ${unit.address}`,
@@ -1129,6 +1435,7 @@ export function generateRefundAdjustmentOrder(
 
   return {
     orderNumber: input.orderNumber,
+    pin,
     orderDate: input.orderDate,
     applicationNumber: input.applicationNumber,
     unitName: unit.legalName,

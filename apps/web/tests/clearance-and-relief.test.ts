@@ -38,7 +38,7 @@ describe("Phase 6: Tax Clearance Certificate (PFT-5) & Statutory Relief (Rules 5
 
     const cert = generateTaxClearanceCertificate(clearedUnit, eto!);
     expect(cert.isEligible).toBe(true);
-    expect(cert.certificateNumber).toMatch(/^PFT-CC-VEH-2026-/);
+    expect(cert.certificateNumber).toMatch(/PB\/ET\/VHR\/CIR-1\/PFT5\/2026-27\/\d{5}/);
     expect(cert.currentOutstandingBalance).toBe(0);
     expect(cert.totalTaxPaid).toBe(10000);
     expect(cert.headOfAccount).toContain("B01601");
@@ -94,7 +94,7 @@ describe("Phase 6: Tax Clearance Certificate (PFT-5) & Statutory Relief (Rules 5
   it("maintains default seed state for Clearance, Discontinuance, and Refunds", () => {
     const certs = createInitialClearanceCertificates();
     expect(certs.length).toBeGreaterThanOrEqual(1);
-    expect(certs[0]?.certificateNumber).toContain("PFT-CC-VEH-2026");
+    expect(certs[0]?.certificateNumber).toMatch(/PB\/ET\/VHR\/CIR-1\/PFT5\/2026-27\/\d{5}/);
 
     const discs = createInitialDiscontinuances();
     expect(discs.length).toBeGreaterThanOrEqual(1);

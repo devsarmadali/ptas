@@ -13,7 +13,8 @@ import {
   exportDefaulterRecoveryCsv,
   exportNoticeDispatchCsv,
   exportPft3RegisterCsv,
-  exportReliefAdjustmentsCsv
+  exportReliefAdjustmentsCsv,
+  exportStatutorySlabDistributionCsv
 } from "../src/lib/mis-analytics.js";
 
 describe("Phase 7: Executive MIS Analytics & Statutory Revenue Reporting Hub", () => {
@@ -218,5 +219,73 @@ describe("Phase 7: Executive MIS Analytics & Statutory Revenue Reporting Hub", (
     expect(["OPTIMAL", "ATTENTION_REQUIRED"]).toContain(
       metrics.roleMetrics.director.circleIntegrityStatus
     );
+  });
+
+  it("computes statutory slab yields across all 47 Second Schedule sub-classes and tertiary tiers", () => {
+    const metrics = computeExecutiveMetrics(
+      units,
+      appeals,
+      discontinuances,
+      refundAdjustments,
+      clearanceCertificates
+    );
+
+    expect(metrics.slabYields).toHaveLength(47);
+
+    // Verify properties of each slab
+    for (const slab of metrics.slabYields) {
+      if (Number(slab.categoryCode) <= 6) {
+        expect(slab.subclassificationCode).toBeTruthy();
+      } else {
+        expect(slab.subclassificationCode).toBeNull();
+      }
+      expect(slab.categoryCode).toBeTruthy();
+      expect(slab.categoryName).toBeTruthy();
+      expect(slab.tertiarySlab).toBeTruthy();
+      expect(slab.slabRatePkr).toBeGreaterThan(0);
+      expect(slab.rateBasis).toBeTruthy();
+      expect(slab.assessedUnitsCount).toBeGreaterThanOrEqual(0);
+      expect(slab.assessedDemandPkr).toBeGreaterThanOrEqual(0);
+      expect(slab.realizedRecoveryPkr).toBeGreaterThanOrEqual(0);
+      expect(slab.outstandingArrearsPkr).toBeGreaterThanOrEqual(0);
+      expect(slab.recoveryRatePct).toBeGreaterThanOrEqual(0);
+      expect(slab.recoveryRatePct).toBeLessThanOrEqual(100);
+    }
+
+    // Category 1(i): Companies <= 5M (Vehari Cotton Ginners)
+    const slab1i = metrics.slabYields.find((s) => s.subclassificationCode === "1(i)");
+    expect(slab1i).toBeDefined();
+    expect(slab1i!.slabRatePkr).toBe(10000);
+    expect(slab1i!.assessedUnitsCount).toBeGreaterThanOrEqual(1);
+    expect(slab1i!.assessedDemandPkr).toBeGreaterThanOrEqual(10000);
+
+    // Category 3(i)(b): Commercial Establishments - Other (Al-Madina)
+    const slab3ib = metrics.slabYields.find((s) => s.ruleId === "PFT-3.i.b");
+    expect(slab3ib).toBeDefined();
+    expect(slab3ib!.slabRatePkr).toBe(4000);
+    expect(slab3ib!.assessedUnitsCount).toBeGreaterThanOrEqual(1);
+    expect(slab3ib!.assessedDemandPkr).toBeGreaterThanOrEqual(4000);
+  });
+
+  it("generates RFC-4180 compliant CSV for Statutory Slab Distribution", () => {
+    const metrics = computeExecutiveMetrics(
+      units,
+      appeals,
+      discontinuances,
+      refundAdjustments,
+      clearanceCertificates
+    );
+
+    const csv = exportStatutorySlabDistributionCsv(metrics.slabYields, "2026-2027");
+    expect(csv).toContain(
+      "Schedule Sub-Class Code,Primary Category Code,Primary Category Name,Tertiary Slab / Criteria,Statutory Slab Rate (PKR),Rate Basis,Assessed Units Count,Assessed Demand (PKR),Realized Recovery (PKR),Outstanding Arrears (PKR),Recovery Compliance (%)"
+    );
+    expect(csv).toContain("1(i)");
+    expect(csv).toContain("3(i)");
+    expect(csv).toContain("Companies");
+    expect(csv).toContain("commercial establishments");
+
+    const lines = csv.split("\r\n");
+    expect(lines.length).toBe(48); // 47 slabs + 1 header
   });
 });

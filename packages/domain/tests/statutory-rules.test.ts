@@ -75,13 +75,17 @@ describe("Punjab Professional Tax Statutory Rules (Second Schedule, Section 3)",
 
     it("evaluates 3(i)(a) for Metropolitan/MC limits (PKR 6,000)", () => {
       const rule = getStatutoryRuleById("PFT-3.i.a");
-      expect(rule?.subclassification_code).toBe("3(i)(a)");
+      expect(rule?.rule_code).toBe("3(i)(a)");
+      expect(rule?.subclassification_code).toBe("3(i)");
+      expect(rule?.statutory_tertiary_code).toBe("3(i)(a)");
       expect(rule?.annual_rate_pkr).toBe(6000);
     });
 
     it("evaluates 3(i)(b) for 10+ employees Others e.g. Vehari (PKR 4,000)", () => {
       const rule = getStatutoryRuleById("PFT-3.i.b");
-      expect(rule?.subclassification_code).toBe("3(i)(b)");
+      expect(rule?.rule_code).toBe("3(i)(b)");
+      expect(rule?.subclassification_code).toBe("3(i)");
+      expect(rule?.statutory_tertiary_code).toBe("3(i)(b)");
       expect(rule?.annual_rate_pkr).toBe(4000);
     });
 

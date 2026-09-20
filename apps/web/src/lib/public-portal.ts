@@ -17,12 +17,16 @@ import {
   computeLedgerBalance,
   getRulesByCategory,
   getStatutoryRuleById,
-  type StatutoryRuleDefinition
+  normalizeDocumentPin,
+  type StatutoryRuleDefinition,
+  validateDocumentPin
 } from "@ptas/domain";
 import {
   type ClearanceCertificateRecord,
+  type Pft2ChallanRecord,
   type PilotAuditItem,
   type PilotState,
+  type StatutoryReceiptRecord,
   type StoredUnit
 } from "./pilot-store";
 import {
@@ -32,7 +36,7 @@ import {
 } from "./statutory-forms";
 
 export type DocumentVerificationType =
-  "FORM_PFT1_NOTICE" | "FORM_PFT2_CHALLAN" | "FORM_PFT5_CLEARANCE";
+  "FORM_PFT1_NOTICE" | "FORM_PFT2_CHALLAN" | "FORM_PFT5_CLEARANCE" | "FORM_PFT_RECEIPT";
 
 export type VerificationStatus =
   | "AUTHENTIC_VALID"
@@ -60,6 +64,7 @@ export interface DocumentVerificationResult {
   readonly qrPayload: string;
   readonly verifiedAt: string;
   readonly issuingAuthority: string;
+  readonly pin?: string | undefined;
 }
 
 export interface TaxpayerLiabilityLookupResult {
@@ -70,6 +75,7 @@ export interface TaxpayerLiabilityLookupResult {
   readonly identifierType: string;
   readonly identifierValue: string;
   readonly permanentDemandNo: string;
+  readonly provincialUin?: string | undefined;
   readonly address: string;
   readonly categoryName: string;
   readonly scheduleEntry: string;
@@ -102,7 +108,8 @@ export interface SelfAssessmentResult {
   readonly categoryCode: string;
   readonly categoryName: string;
   readonly ruleId: string;
-  readonly subclassificationCode: string;
+  readonly subclassificationCode: string | null;
+  readonly statutoryTertiaryCode?: string | null;
   readonly subcategory: string;
   readonly officialLegalText: string;
   readonly annualRatePkr: number;
@@ -151,10 +158,38 @@ export function generate17DigitEPayPsid(unitId: string): string {
 export function verifyStatutoryDocument(
   input: string,
   units: readonly StoredUnit[],
-  clearanceCerts: readonly ClearanceCertificateRecord[] = []
+  clearanceCerts: readonly ClearanceCertificateRecord[] = [],
+  receipts: readonly StatutoryReceiptRecord[] = [],
+  challans: readonly Pft2ChallanRecord[] = []
 ): DocumentVerificationResult {
   const trimmed = input.trim();
+  let effectiveInput = trimmed;
+
+  // Extract reference if a full verification URL was pasted or scanned
+  if (
+    trimmed.includes("?") &&
+    (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.includes("/verify"))
+  ) {
+    try {
+      const url = new URL(
+        trimmed.startsWith("http") ? trimmed : `https://ptas.punjab.gov.pk/${trimmed}`
+      );
+      const ref =
+        url.searchParams.get("ref") ||
+        url.searchParams.get("pdn") ||
+        url.searchParams.get("doc") ||
+        url.searchParams.get("pin") ||
+        url.searchParams.get("notice");
+      if (ref) {
+        effectiveInput = ref;
+      }
+    } catch {
+      // ignore URL parse errors and fall back to raw input
+    }
+  }
+
   const normalized = normalizeQuery(trimmed);
+  const normalizedEffective = normalizeQuery(effectiveInput);
   const now = new Date().toISOString();
 
   if (!trimmed) {
@@ -180,10 +215,241 @@ export function verifyStatutoryDocument(
     };
   }
 
-  // 1. Check for Form P.F.T-5 (Tax Clearance Certificate)
+  // 0. Check for 6-Digit Document Security PIN Verification (دستاویزی تصدیقی پن کوڈ)
+  const cleanPin = normalizeDocumentPin(trimmed);
+  if (validateDocumentPin(cleanPin)) {
+    // Check issued PFT-2 Challans by PIN
+    const challanByPin = challans.find((c) => c.pin === cleanPin);
+    if (challanByPin) {
+      const ref = challanByPin.noticeNumber ?? challanByPin.challanNumber;
+      return {
+        isValid: true,
+        documentType: "FORM_PFT2_CHALLAN",
+        verificationStatus: "AUTHENTIC_VALID",
+        title: "Authentic Form P.F.T-2 Payment Challan",
+        message: `✓ Official Form P.F.T-2 Challan verified via Document Security PIN ${cleanPin}. Notice No: ${ref} | Assessed Demand: PKR ${challanByPin.amountPayable.toLocaleString()} (Due: ${challanByPin.dueDate}).`,
+        documentReference: ref,
+        unitName: challanByPin.legalName,
+        tradeName: challanByPin.tradeName,
+        identifier: challanByPin.identifierValue,
+        address: challanByPin.address,
+        categoryName: challanByPin.category,
+        scheduleEntry: challanByPin.subclassificationCode
+          ? `Class ${challanByPin.subclassificationCode}`
+          : "Statutory Challan",
+        assessedAmount: challanByPin.amountPayable,
+        outstandingBalance: challanByPin.remainingBalance ?? 0,
+        officialSha256: challanByPin.officialSha256,
+        qrPayload: challanByPin.qrPayload,
+        verifiedAt: now,
+        issuingAuthority: "Tariq Mahmood, Excise & Taxation Officer (Assessing Authority), Vehari",
+        pin: challanByPin.pin ?? cleanPin
+      };
+    }
+
+    // Check issued Receipts by PIN
+    const receiptByPin = receipts.find((r) => r.pin === cleanPin);
+    if (receiptByPin) {
+      return {
+        isValid: true,
+        documentType: "FORM_PFT_RECEIPT",
+        verificationStatus: "AUTHENTIC_VALID",
+        title: "Authentic Statutory Payment Receipt",
+        message: `✓ Official Payment Receipt verified via Document Security PIN ${cleanPin}. Amount: PKR ${receiptByPin.amountPaidPkr.toLocaleString()} fully credited to Punjab Professional Tax Account (Bank Scroll/CPR: ${receiptByPin.bankScrollRef}).`,
+        documentReference: receiptByPin.receiptNumber,
+        unitName: receiptByPin.assesseeLegalName,
+        tradeName: receiptByPin.assesseeTradeName,
+        identifier: `${receiptByPin.identifierType}: ${receiptByPin.identifierValue}`,
+        address: receiptByPin.address,
+        categoryName: receiptByPin.statutoryCategory,
+        scheduleEntry: receiptByPin.subclassificationCode
+          ? `Class ${receiptByPin.subclassificationCode}`
+          : "Statutory Receipt",
+        assessedAmount: receiptByPin.amountPaidPkr,
+        outstandingBalance: 0,
+        officialSha256: receiptByPin.officialSha256,
+        qrPayload: receiptByPin.qrPayload,
+        verifiedAt: now,
+        issuingAuthority: `${receiptByPin.receivingOfficerName} (${receiptByPin.receivingOfficerTitle})`,
+        pin: receiptByPin.pin ?? cleanPin
+      };
+    }
+
+    // Check Clearance Certificates by PIN
+    const certByPin = clearanceCerts.find((c) => c.pin === cleanPin);
+    if (certByPin) {
+      const unit = units.find((u) => u.id === certByPin.unitId);
+      const liveBalance = unit ? computeLedgerBalance(unit.ledgerEntries) : 0;
+      if (liveBalance > 0) {
+        return {
+          isValid: false,
+          documentType: "FORM_PFT5_CLEARANCE",
+          verificationStatus: "REVOKED_ARREARS_PENDING",
+          title: "Clearance Revoked / Arrears Pending",
+          message: `Warning: This certificate (${certByPin.certificateNumber}) verified by PIN ${cleanPin} is INVALIDated by live ledger arrears of PKR ${liveBalance.toLocaleString()}.`,
+          documentReference: certByPin.certificateNumber,
+          unitName: certByPin.assesseeLegalName,
+          tradeName: certByPin.assesseeTradeName,
+          identifier: certByPin.cnicOrNtn,
+          address: unit?.address ?? "Vehari",
+          categoryName: certByPin.categoryName,
+          scheduleEntry: certByPin.scheduleEntry,
+          assessedAmount: certByPin.clearedAmountPkr,
+          outstandingBalance: liveBalance,
+          officialSha256: certByPin.officialSha256,
+          qrPayload: certByPin.qrPayload,
+          verifiedAt: now,
+          issuingAuthority: `${certByPin.issuedByOfficerName} (${certByPin.issuedByOfficerTitle})`,
+          pin: certByPin.pin ?? cleanPin
+        };
+      }
+      return {
+        isValid: true,
+        documentType: "FORM_PFT5_CLEARANCE",
+        verificationStatus: "AUTHENTIC_VALID",
+        title: "Authentic Form P.F.T-5 Tax Clearance Certificate",
+        message: `✓ Official Tax Clearance Certificate verified via Document Security PIN ${cleanPin}. Assessee has NIL outstanding arrears for Financial Year ${certByPin.financialYear}.`,
+        documentReference: certByPin.certificateNumber,
+        unitName: certByPin.assesseeLegalName,
+        tradeName: certByPin.assesseeTradeName,
+        identifier: certByPin.cnicOrNtn,
+        address: unit?.address ?? "Vehari",
+        categoryName: certByPin.categoryName,
+        scheduleEntry: certByPin.scheduleEntry,
+        assessedAmount: certByPin.clearedAmountPkr,
+        outstandingBalance: 0,
+        officialSha256: certByPin.officialSha256,
+        qrPayload: certByPin.qrPayload,
+        verifiedAt: now,
+        issuingAuthority: `${certByPin.issuedByOfficerName} (${certByPin.issuedByOfficerTitle})`,
+        pin: certByPin.pin ?? cleanPin
+      };
+    }
+
+    // Check units (PFT-1 or PFT-2 generated PIN)
+    for (const u of units) {
+      const pft1 = generateFormPFT1(u);
+      if (pft1.pin === cleanPin) {
+        const balance = computeLedgerBalance(u.ledgerEntries);
+        return {
+          isValid: pft1.isApproved,
+          documentType: "FORM_PFT1_NOTICE",
+          verificationStatus: pft1.isApproved ? "AUTHENTIC_VALID" : "UNAPPROVED_DRAFT",
+          title: pft1.isApproved
+            ? "Authentic Form P.F.T-1 Notice of Demand"
+            : "Unapproved Draft Notice",
+          message: pft1.isApproved
+            ? `✓ Official Notice of Demand verified via Document Security PIN ${cleanPin}. Assessed Tax: PKR ${pft1.taxAmount.toLocaleString()} • Current Ledger Balance: PKR ${balance.toLocaleString()}.`
+            : "Notice: This demand notice reflects a draft assessment not yet approved by the Assessing Authority.",
+          documentReference: pft1.noticeNumber,
+          unitName: u.legalName,
+          tradeName: u.tradeName,
+          identifier: `${u.identifierType}: ${u.identifierValue}`,
+          address: u.address,
+          categoryName: u.statutoryRule.category,
+          scheduleEntry: u.statutoryRule.subclassification_code
+            ? `Class ${u.statutoryRule.subclassification_code}`
+            : `Class ${u.statutoryRule.category_code}`,
+          assessedAmount: pft1.taxAmount,
+          outstandingBalance: balance,
+          officialSha256: pft1.officialSha256,
+          qrPayload: pft1.qrPayload,
+          verifiedAt: now,
+          issuingAuthority:
+            "Tariq Mahmood, Excise & Taxation Officer / Assessing Authority, Vehari",
+          pin: pft1.pin ?? cleanPin
+        };
+      }
+
+      const pft2 = generateFormPFT2(u);
+      if (pft2.pin === cleanPin) {
+        const balance = computeLedgerBalance(u.ledgerEntries);
+        return {
+          isValid: pft2.isApproved,
+          documentType: "FORM_PFT2_CHALLAN",
+          verificationStatus: pft2.isApproved ? "AUTHENTIC_VALID" : "UNAPPROVED_DRAFT",
+          title: pft2.isApproved
+            ? "Authentic Form P.F.T-2 Payment Challan"
+            : "Unapproved Draft Challan",
+          message: pft2.isApproved
+            ? `✓ Official Form P.F.T-2 Challan verified via Document Security PIN ${cleanPin}. Notice: ${pft2.noticeNumber} | Total payable: PKR ${pft2.displayAmount.toLocaleString()}.`
+            : "Notice: This payment challan is based on an unapproved draft assessment awaiting ETO review.",
+          documentReference: pft2.noticeNumber,
+          unitName: u.legalName,
+          tradeName: u.tradeName,
+          identifier: `${u.identifierType}: ${u.identifierValue}`,
+          address: u.address,
+          categoryName: u.statutoryRule.category,
+          scheduleEntry: u.statutoryRule.subclassification_code
+            ? `Class ${u.statutoryRule.subclassification_code}`
+            : `Class ${u.statutoryRule.category_code}`,
+          assessedAmount: pft2.displayAmount,
+          outstandingBalance: balance,
+          officialSha256: pft2.officialSha256,
+          qrPayload: pft2.qrPayload,
+          verifiedAt: now,
+          issuingAuthority:
+            "Tariq Mahmood, Excise & Taxation Officer (Assessing Authority), Vehari",
+          pin: pft2.pin ?? cleanPin
+        };
+      }
+    }
+  }
+
+  // 1. Check for Statutory Payment Receipt (Form P.F.T Receipt under Rule 10)
+  const isReceipt =
+    trimmed.toUpperCase().includes("RCPT") ||
+    effectiveInput.toUpperCase().includes("RCPT") ||
+    trimmed.toUpperCase().includes("PFT-REC") ||
+    effectiveInput.toUpperCase().includes("PFT-REC") ||
+    trimmed.toUpperCase().includes("RECEIPT");
+
+  if (isReceipt) {
+    const matchingReceipt = receipts.find(
+      (r) =>
+        normalizeQuery(r.receiptNumber) === normalized ||
+        normalizeQuery(r.receiptNumber) === normalizedEffective ||
+        trimmed.includes(r.receiptNumber) ||
+        effectiveInput.includes(r.receiptNumber) ||
+        normalizeQuery(r.challanNumber) === normalized ||
+        normalizeQuery(r.challanNumber) === normalizedEffective ||
+        normalizeQuery(r.demandNumber) === normalizedEffective
+    );
+
+    if (matchingReceipt) {
+      return {
+        isValid: true,
+        documentType: "FORM_PFT_RECEIPT",
+        verificationStatus: "AUTHENTIC_VALID",
+        title: "Authentic Statutory Payment Receipt",
+        message: `✓ Official Payment Receipt verified under Rule 10 of 1977 Rules. Amount: PKR ${matchingReceipt.amountPaidPkr.toLocaleString()} fully credited to Punjab Professional Tax Account (Bank Scroll/CPR: ${matchingReceipt.bankScrollRef}).`,
+        documentReference: matchingReceipt.receiptNumber,
+        unitName: matchingReceipt.assesseeLegalName,
+        tradeName: matchingReceipt.assesseeTradeName,
+        identifier: `${matchingReceipt.identifierType}: ${matchingReceipt.identifierValue}`,
+        address: matchingReceipt.address,
+        categoryName: matchingReceipt.statutoryCategory,
+        scheduleEntry: matchingReceipt.subclassificationCode
+          ? `Class ${matchingReceipt.subclassificationCode}`
+          : "Statutory Receipt",
+        assessedAmount: matchingReceipt.amountPaidPkr,
+        outstandingBalance: 0,
+        officialSha256: matchingReceipt.officialSha256,
+        qrPayload: matchingReceipt.qrPayload,
+        verifiedAt: now,
+        issuingAuthority: `${matchingReceipt.receivingOfficerName} (${matchingReceipt.receivingOfficerTitle})`,
+        pin: matchingReceipt.pin
+      };
+    }
+  }
+
+  // 2. Check for Form P.F.T-5 (Tax Clearance Certificate)
   const isPft5 =
     trimmed.startsWith("PTAS-PUNJAB:PFT-5") ||
+    trimmed.toUpperCase().includes("PFT5") ||
+    effectiveInput.toUpperCase().includes("PFT5") ||
     trimmed.toUpperCase().includes("PFT-CC-") ||
+    effectiveInput.toUpperCase().includes("PFT-CC-") ||
     trimmed.toUpperCase().includes("CLEARANCE");
 
   if (isPft5) {
@@ -241,24 +507,66 @@ export function verifyStatutoryDocument(
         officialSha256: matchingCert.officialSha256,
         qrPayload: matchingCert.qrPayload,
         verifiedAt: now,
-        issuingAuthority: `${matchingCert.issuedByOfficerName} (${matchingCert.issuedByOfficerTitle})`
+        issuingAuthority: `${matchingCert.issuedByOfficerName} (${matchingCert.issuedByOfficerTitle})`,
+        pin: matchingCert.pin
       };
     }
   }
 
-  // 2. Check for Form P.F.T-2 (3-Copy Bank Payment Challan)
+  // 3. Check for Form P.F.T-2 (3-Copy Bank Payment Challan)
   const isPft2 =
     trimmed.startsWith("PTAS-PUNJAB:PFT-2") ||
     trimmed.toUpperCase().includes("PFT-2") ||
+    trimmed.toUpperCase().includes("PFT2") ||
     trimmed.toUpperCase().includes("CHALLAN");
 
   if (isPft2) {
+    // Check issued challans registry
+    const matchingChallan = challans.find(
+      (c) =>
+        (c.noticeNumber && c.noticeNumber === trimmed) ||
+        c.challanNumber === trimmed ||
+        (c.noticeNumber && normalizeQuery(c.noticeNumber) === normalized) ||
+        normalizeQuery(c.challanNumber) === normalized ||
+        (c.noticeNumber && trimmed.includes(c.noticeNumber)) ||
+        trimmed.includes(c.challanNumber)
+    );
+
+    if (matchingChallan) {
+      const ref = matchingChallan.noticeNumber ?? matchingChallan.challanNumber;
+      return {
+        isValid: true,
+        documentType: "FORM_PFT2_CHALLAN",
+        verificationStatus: "AUTHENTIC_VALID",
+        title: "Authentic Form P.F.T-2 Payment Challan",
+        message: `✓ Official Punjab Professional Tax Payment Challan verified. Notice: ${ref} | Total payable: PKR ${matchingChallan.amountPayable.toLocaleString()} (Due Date: ${matchingChallan.dueDate}).`,
+        documentReference: ref,
+        unitName: matchingChallan.legalName,
+        tradeName: matchingChallan.tradeName,
+        identifier: matchingChallan.identifierValue,
+        address: matchingChallan.address,
+        categoryName: matchingChallan.category,
+        scheduleEntry: matchingChallan.subclassificationCode
+          ? `Class ${matchingChallan.subclassificationCode}`
+          : "Statutory Challan",
+        assessedAmount: matchingChallan.amountPayable,
+        outstandingBalance: matchingChallan.remainingBalance ?? 0,
+        officialSha256: matchingChallan.officialSha256,
+        qrPayload: matchingChallan.qrPayload,
+        verifiedAt: now,
+        issuingAuthority: "Tariq Mahmood, Excise & Taxation Officer (Assessing Authority), Vehari",
+        pin: matchingChallan.pin
+      };
+    }
+
     const matchingUnit = units.find((u) => {
       const doc = generateFormPFT2(u);
       return (
         normalizeQuery(doc.challanNumber) === normalized ||
+        normalizeQuery(doc.noticeNumber) === normalized ||
         normalizeQuery(u.demandUnit.permanentDemandNo) === normalized ||
-        trimmed.includes(doc.challanNumber)
+        trimmed.includes(doc.challanNumber) ||
+        trimmed.includes(doc.noticeNumber)
       );
     });
 
@@ -276,24 +584,27 @@ export function verifyStatutoryDocument(
         message: pft2.isApproved
           ? `✓ Official Punjab Professional Tax Payment Challan verified. Total payable: PKR ${pft2.displayAmount.toLocaleString()} (Current Ledger Balance: PKR ${balance.toLocaleString()}).`
           : "Notice: This payment challan is based on an unapproved draft assessment awaiting ETO review.",
-        documentReference: pft2.challanNumber,
+        documentReference: pft2.noticeNumber,
         unitName: matchingUnit.legalName,
         tradeName: matchingUnit.tradeName,
         identifier: `${matchingUnit.identifierType}: ${matchingUnit.identifierValue}`,
         address: matchingUnit.address,
         categoryName: matchingUnit.statutoryRule.category,
-        scheduleEntry: `Entry ${matchingUnit.statutoryRule.subclassification_code}`,
+        scheduleEntry: matchingUnit.statutoryRule.subclassification_code
+          ? `Class ${matchingUnit.statutoryRule.subclassification_code}`
+          : `Class ${matchingUnit.statutoryRule.category_code}`,
         assessedAmount: pft2.displayAmount,
         outstandingBalance: balance,
         officialSha256: pft2.officialSha256,
         qrPayload: pft2.qrPayload,
         verifiedAt: now,
-        issuingAuthority: "Tariq Mahmood, Excise & Taxation Officer (Assessing Authority), Vehari"
+        issuingAuthority: "Tariq Mahmood, Excise & Taxation Officer (Assessing Authority), Vehari",
+        pin: pft2.pin
       };
     }
   }
 
-  // 3. Check for Form P.F.T-1 (Notice of Tax Demand under Rule 6) or general PDN lookup
+  // 4. Check for Form P.F.T-1 (Notice of Tax Demand under Rule 6) or general PDN lookup
   const matchingUnit = units.find((u) => {
     const pft1 = generateFormPFT1(u);
     return (
@@ -325,13 +636,16 @@ export function verifyStatutoryDocument(
       identifier: `${matchingUnit.identifierType}: ${matchingUnit.identifierValue}`,
       address: matchingUnit.address,
       categoryName: matchingUnit.statutoryRule.category,
-      scheduleEntry: `Entry ${matchingUnit.statutoryRule.subclassification_code}`,
+      scheduleEntry: matchingUnit.statutoryRule.subclassification_code
+        ? `Class ${matchingUnit.statutoryRule.subclassification_code}`
+        : `Class ${matchingUnit.statutoryRule.category_code}`,
       assessedAmount: pft1.taxAmount,
       outstandingBalance: balance,
       officialSha256: pft1.officialSha256,
       qrPayload: pft1.qrPayload,
       verifiedAt: now,
-      issuingAuthority: "Tariq Mahmood, Excise & Taxation Officer / Assessing Authority, Vehari"
+      issuingAuthority: "Tariq Mahmood, Excise & Taxation Officer / Assessing Authority, Vehari",
+      pin: pft1.pin
     };
   }
 
@@ -372,6 +686,7 @@ export function lookupTaxpayerLiability(
   const unit = units.find((u) => {
     const idClean = normalizeQuery(u.identifierValue);
     const pdnClean = normalizeQuery(u.demandUnit.permanentDemandNo);
+    const uinClean = u.provincialUin ? normalizeQuery(u.provincialUin) : "";
     const legalClean = normalizeQuery(u.legalName);
     const tradeClean = u.tradeName ? normalizeQuery(u.tradeName) : "";
 
@@ -381,6 +696,9 @@ export function lookupTaxpayerLiability(
       normalized.includes(idClean) ||
       pdnClean === normalized ||
       pdnClean.includes(normalized) ||
+      (uinClean
+        ? uinClean === normalized || uinClean.includes(normalized) || normalized.includes(uinClean)
+        : false) ||
       legalClean.includes(normalized) ||
       (tradeClean ? tradeClean.includes(normalized) : false)
     );
@@ -420,9 +738,12 @@ export function lookupTaxpayerLiability(
     identifierType: unit.identifierType,
     identifierValue: unit.identifierValue,
     permanentDemandNo: unit.demandUnit.permanentDemandNo,
+    provincialUin: unit.provincialUin,
     address: unit.address,
     categoryName: unit.statutoryRule.category,
-    scheduleEntry: `Entry ${unit.statutoryRule.subclassification_code}`,
+    scheduleEntry: unit.statutoryRule.subclassification_code
+      ? `Class ${unit.statutoryRule.subclassification_code}`
+      : `Class ${unit.statutoryRule.category_code}`,
     annualTaxRate: unit.statutoryRule.annual_rate_pkr,
     assessedTax,
     penalties,
@@ -533,6 +854,7 @@ export function calculateRule4SelfAssessment(
     categoryName: matchedRule.category,
     ruleId: matchedRule.rule_id,
     subclassificationCode: matchedRule.subclassification_code,
+    statutoryTertiaryCode: matchedRule.statutory_tertiary_code,
     subcategory: matchedRule.subcategory,
     officialLegalText: matchedRule.official_text,
     annualRatePkr: matchedRule.annual_rate_pkr,
@@ -638,7 +960,9 @@ export function simulateCitizenPayment(
         assesseeTradeName: targetUnit.tradeName,
         cnicOrNtn: `${targetUnit.identifierType}: ${targetUnit.identifierValue}`,
         categoryName: targetUnit.statutoryRule.category,
-        scheduleEntry: `Entry ${targetUnit.statutoryRule.subclassification_code}`,
+        scheduleEntry: targetUnit.statutoryRule.subclassification_code
+          ? `Class ${targetUnit.statutoryRule.subclassification_code}`
+          : `Class ${targetUnit.statutoryRule.category_code}`,
         financialYear: "2026-2027",
         issueDate: certModel.issueDate,
         validUntil: certModel.expiryDate,

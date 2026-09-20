@@ -54,7 +54,7 @@ describe("Phase 8: Public Assessee Portal & Real-Time QR / Document Verification
       const pft2 = generateFormPFT2(unit);
       expect(pft2.qrPayload).toBeDefined();
       expect(pft2.qrPayload).toMatch(
-        /^PTAS-PUNJAB:PFT-2:PFT-2\/VEH\/2026\/0001:DEMAND=PDN-VEH-2026-0001:AMOUNT=10000:DUE=31\/08\/2026:SHA=/
+        /^PTAS-PUNJAB:PFT-2:PB\/ET\/VHR\/CIR-1\/PFT2\/2026-27\/00001:DEMAND=PDN-VEH-2026-0001:AMOUNT=10000:DUE=31\/08\/2026:SHA=/
       );
       expect(pft2.copies).toHaveLength(3);
 
@@ -70,7 +70,7 @@ describe("Phase 8: Public Assessee Portal & Real-Time QR / Document Verification
       const cert = generateTaxClearanceCertificate(clearedUnit, eto!);
       expect(cert.isEligible).toBe(true);
       expect(cert.qrPayload).toMatch(
-        /^PTAS-PUNJAB:PFT-5:PFT-CC-VEH-2026-ON01:ID=NTN-7412983-1:STATUS=NIL_ARREARS:SHA=/
+        /^PTAS-PUNJAB:PFT-5:PB\/ET\/VHR\/CIR-1\/PFT5\/2026-27\/00001:ID=NTN-7412983-1:STATUS=NIL_ARREARS:SHA=/
       );
     });
   });
@@ -104,7 +104,7 @@ describe("Phase 8: Public Assessee Portal & Real-Time QR / Document Verification
       expect(res.documentType).toBe("FORM_PFT2_CHALLAN");
       expect(res.verificationStatus).toBe("AUTHENTIC_VALID");
       expect(res.unitName).toBe(unit.legalName);
-      expect(res.scheduleEntry).toBe("Entry 6(x)");
+      expect(res.scheduleEntry).toBe("Class 6(x)");
     });
 
     it("authenticates a valid Form P.F.T-5 Tax Clearance Certificate with NIL ledger arrears", () => {
@@ -133,7 +133,7 @@ describe("Phase 8: Public Assessee Portal & Real-Time QR / Document Verification
         assesseeLegalName: unpaidUnit.legalName,
         cnicOrNtn: unpaidUnit.identifierValue,
         categoryName: unpaidUnit.statutoryRule.category,
-        scheduleEntry: "Entry 6(x)",
+        scheduleEntry: "Class 6(x)",
         financialYear: "2026-2027",
         issueDate: "2026-07-01",
         validUntil: "2027-06-30",
@@ -153,11 +153,42 @@ describe("Phase 8: Public Assessee Portal & Real-Time QR / Document Verification
       expect(res.outstandingBalance).toBeGreaterThan(0);
     });
 
-    it("returns INVALID_NOT_FOUND when non-existent document number is scanned/searched", () => {
-      const res = verifyStatutoryDocument("PFT-UNKNOWN-99999", initialUnits, initialCerts);
-      expect(res.isValid).toBe(false);
-      expect(res.documentType).toBe("UNKNOWN");
-      expect(res.verificationStatus).toBe("INVALID_NOT_FOUND");
+    it("authenticates a valid document using its official 6-digit Document Security PIN", () => {
+      const unit = initialUnits.find((u) => u.id === "unit-vehari-cotton-01")!;
+      const pft2 = generateFormPFT2(unit);
+      expect(pft2.pin).toMatch(/^\d{6}$/);
+
+      // Authenticate Form PFT-2 via PIN
+      const res = verifyStatutoryDocument(pft2.pin, initialUnits, initialCerts);
+      expect(res.isValid).toBe(true);
+      expect(res.documentType).toBe("FORM_PFT2_CHALLAN");
+      expect(res.verificationStatus).toBe("AUTHENTIC_VALID");
+      expect(res.pin).toBe(pft2.pin);
+      expect(res.unitName).toBe(unit.legalName);
+    });
+
+    it("authenticates Form PFT-2 using the structured statutory Notice Number", () => {
+      const unit = initialUnits.find((u) => u.id === "unit-vehari-cotton-01")!;
+      const pft2 = generateFormPFT2(unit);
+
+      // Authenticate via structured Notice Number
+      const res = verifyStatutoryDocument(pft2.noticeNumber, initialUnits, initialCerts);
+      expect(res.isValid).toBe(true);
+      expect(res.documentType).toBe("FORM_PFT2_CHALLAN");
+      expect(res.verificationStatus).toBe("AUTHENTIC_VALID");
+      expect(res.unitName).toBe(unit.legalName);
+    });
+
+    it("returns INVALID_NOT_FOUND when non-existent document number or PIN is scanned/searched", () => {
+      const res1 = verifyStatutoryDocument("PFT-UNKNOWN-99999", initialUnits, initialCerts);
+      expect(res1.isValid).toBe(false);
+      expect(res1.documentType).toBe("UNKNOWN");
+      expect(res1.verificationStatus).toBe("INVALID_NOT_FOUND");
+
+      const res2 = verifyStatutoryDocument("000000", initialUnits, initialCerts);
+      expect(res2.isValid).toBe(false);
+      expect(res2.documentType).toBe("UNKNOWN");
+      expect(res2.verificationStatus).toBe("INVALID_NOT_FOUND");
     });
   });
 
@@ -174,8 +205,8 @@ describe("Phase 8: Public Assessee Portal & Real-Time QR / Document Verification
       expect(result!.assessedTax).toBe(2000);
       expect(result!.outstandingBalance).toBe(2000);
       expect(result!.isClearanceEligible).toBe(false);
-      expect(result!.noticeNumber).toContain("PFT-1/VEH/2026");
-      expect(result!.challanNumber).toContain("PFT-2/VEH/2026");
+      expect(result!.noticeNumber).toMatch(/PB\/ET\/VHR\/CIR-1\/PFT1\/2026-27\/\d{5}/);
+      expect(result!.challanNumber).toMatch(/PB\/ET\/VHR\/CIR-1\/PFT2\/2026-27\/\d{5}/);
     });
 
     it("finds taxpayer by NTN and confirms clearance eligibility when fully paid", () => {
@@ -209,7 +240,8 @@ describe("Phase 8: Public Assessee Portal & Real-Time QR / Document Verification
       });
       expect(res.categoryCode).toBe("3");
       expect(res.ruleId).toBe("PFT-3.i.b");
-      expect(res.subclassificationCode).toBe("3(i)(b)");
+      expect(res.subclassificationCode).toBe("3(i)");
+      expect(res.statutoryTertiaryCode).toBe("3(i)(b)");
       expect(res.annualRatePkr).toBe(4000);
       expect(res.officialLegalText).toContain(
         "commercial establishments having 10 or more employees"
@@ -223,7 +255,8 @@ describe("Phase 8: Public Assessee Portal & Real-Time QR / Document Verification
         isMetropolitan: true
       });
       expect(res.ruleId).toBe("PFT-3.i.a");
-      expect(res.subclassificationCode).toBe("3(i)(a)");
+      expect(res.subclassificationCode).toBe("3(i)");
+      expect(res.statutoryTertiaryCode).toBe("3(i)(a)");
       expect(res.annualRatePkr).toBe(6000);
     });
 
@@ -339,7 +372,7 @@ describe("Phase 8: Public Assessee Portal & Real-Time QR / Document Verification
       expect(result.success).toBe(true);
       expect(result.newBalance).toBe(0);
       expect(result.clearanceIssued).toBe(true);
-      expect(result.clearanceCertNumber).toMatch(/^PFT-CC-VEH-2026-/);
+      expect(result.clearanceCertNumber).toMatch(/^PB\/ET\/VHR\/CIR-1\/PFT5\/2026-27\/\d{5}/);
 
       // Check clearance certificates list
       expect(updatedClearanceCerts.length).toBe(initialCerts.length + 1);

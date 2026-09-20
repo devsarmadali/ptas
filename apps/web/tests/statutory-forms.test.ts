@@ -6,6 +6,7 @@ import {
   generateFormPFT2,
   generateFormPFT3Rows,
   generateLandRevenueRecoveryCertificate,
+  generatePft2NoticeNumber,
   generateShowCausePenaltyNotice,
   numberToWordsPkr
 } from "../src/lib/statutory-forms.js";
@@ -31,7 +32,13 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     expect(pft1.assesseeLegalName).toBe(alMadinaUnit.legalName);
     expect(pft1.taxAmount).toBe(4000);
     expect(pft1.taxAmountWords).toBe("Four Thousand Rupees Only");
-    expect(pft1.scheduleEntry).toBe("Entry 3(i)(b)");
+    expect(pft1.scheduleEntry).toBe("Class 3(i)(b)");
+    expect(pft1.subclassificationCode).toBe("3(i)");
+    expect(pft1.statutoryTertiaryCode).toBe("3(i)(b)");
+    expect(pft1.tertiarySlab).toContain("Other");
+    expect(pft1.slabRatePkr).toBe(4000);
+    expect(pft1.rateBasis).toContain("annum");
+    expect(pft1.statutoryClassificationFull).toContain("3(i)");
     expect(pft1.officialSha256).toHaveLength(64);
     expect(pft1.serviceReceipt.demandNumber).toBe("PDN-VEH-2026-0003");
     expect(pft1.serviceReceipt.serverRole).toContain("Service Officer");
@@ -50,6 +57,11 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     expect(taxpayerCopy.district).toBe("Vehari");
     expect(taxpayerCopy.taxPayable.currentTax).toBe(4000);
     expect(taxpayerCopy.taxPayable.totalPayableWords).toBe("Four Thousand Rupees Only");
+    expect(taxpayerCopy.taxpayerInfo.subclassificationCode).toBe("3(i)");
+    expect(taxpayerCopy.taxpayerInfo.statutoryTertiaryCode).toBe("3(i)(b)");
+    expect(taxpayerCopy.taxpayerInfo.tertiarySlab).toContain("Other");
+    expect(taxpayerCopy.taxpayerInfo.slabRatePkr).toBe(4000);
+    expect(taxpayerCopy.taxpayerInfo.statutoryClassificationFull).toContain("3(i)");
     expect(pft2.officialSha256).toHaveLength(64);
   });
 
@@ -64,12 +76,16 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
 
     const alMadinaRow = rows.find((r) => r.legalName.includes("Al-Madina"))!;
     expect(alMadinaRow.assessedCurrentTax).toBe(4000);
-    expect(alMadinaRow.scheduleEntry).toBe("Entry 3(i)(b)");
+    expect(alMadinaRow.scheduleEntry).toBe("Class 3(i)(b)");
+    expect(alMadinaRow.subclassificationCode).toBe("3(i)");
+    expect(alMadinaRow.statutoryTertiaryCode).toBe("3(i)(b)");
+    expect(alMadinaRow.tertiarySlab).toContain("Other");
+    expect(alMadinaRow.slabRatePkr).toBe(4000);
   });
 
   it("generates Show Cause Notice for Imposition of Penalty (Rule 10 & Sec 3(4))", () => {
     const scn = generateShowCausePenaltyNotice(alMadinaUnit, 45);
-    expect(scn.noticeNumber).toContain("SCN-PEN-VEH/2026");
+    expect(scn.noticeNumber).toMatch(/PB\/ET\/VHR\/CIR-1\/SCN\/2026-27\/\d{5}/);
     expect(scn.demandNumber).toBe("PDN-VEH-2026-0003");
     expect(scn.originalTaxAmount).toBe(4000);
     expect(scn.maximumPenaltyExposable).toBe(4000); // 100% cap
@@ -80,7 +96,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
 
   it("generates Certificate of Recovery as Arrears of Land Revenue (Rule 12)", () => {
     const cert = generateLandRevenueRecoveryCertificate(alMadinaUnit);
-    expect(cert.certificateNumber).toContain("CERT-LRA-VEH/2026");
+    expect(cert.certificateNumber).toMatch(/PB\/ET\/VHR\/CIR-1\/LRC\/2026-27\/\d{5}/);
     expect(cert.collectorDesignation).toContain("The Collector / Tehsildar (Recovery)");
     expect(cert.originalTaxAmount).toBe(4000);
     expect(cert.totalArrearsRecoverable).toBe(4000);
@@ -100,7 +116,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     expect(register.officialSha256).toHaveLength(64);
 
     const firstRow = register.rows[0]!;
-    expect(firstRow.noticeNumber).toContain("PFT-1/VEH/2026");
+    expect(firstRow.noticeNumber).toMatch(/PB\/ET\/VHR\/CIR-1\/PFT1\/2026-27\/\d{5}/);
     expect(firstRow.demandNumber).toBe("PDN-VEH-2026-0001");
     expect(firstRow.serverName).toContain("Muhammad Aslam");
     expect(firstRow.serviceStatus).toBe("SERVED");
@@ -115,13 +131,13 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
       orderDate: "2026-08-05",
       unit: alMadinaUnit,
       groundOfAppeal:
-        "Establishment employs fewer than 10 workers and is liable under Entry 3(ii) at PKR 2,000",
+        "Establishment employs fewer than 10 workers and is liable under Class 3(ii) at PKR 2,000",
       undisputedTaxDeposited: 2000,
       decisionType: "REDUCE",
       reliefAmount: 2000,
       revisedTaxAmount: 2000,
       findingsAndReasoning:
-        "Field inspection by ETO confirms 6 staff members. Assessment reduced to Entry 3(ii)."
+        "Field inspection by ETO confirms 6 staff members. Assessment reduced to Class 3(ii)."
     });
 
     expect(order.appealNumber).toBe("ETD/MLN/APP/2026/001");
@@ -133,5 +149,75 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     expect(order.appellateAuthorityName).toBe("Shahid Nawaz");
     expect(order.officialSha256).toHaveLength(64);
     expect(order.operativeOrderUrdu).toContain("اپیل جزوی منظور کی جاتی ہے");
+    expect(order.pin).toMatch(/^\d{6}$/);
+  });
+
+  it("generates statutory PFT-2 Notice Number following prescribed statutory format", () => {
+    const noticeNo1 = generatePft2NoticeNumber({
+      demandNumber: "PDN-VEH-2026-0001",
+      issueDate: "2026-09-20",
+      formTypeCode: "STD",
+      demandScope: "CUR",
+      paymentScope: "FULL",
+      amount: 5000
+    });
+    expect(noticeNo1).toBe("PFT2-PDN-VEH-2026-0001-09-20-STD-CUR-FULL-5000");
+
+    const noticeNo2 = generatePft2NoticeNumber({
+      demandNumber: "PDN-VEH-2026-0002",
+      issueDate: "2026-09-20",
+      formTypeCode: "NCUM",
+      demandScope: "COMB",
+      paymentScope: "PART",
+      amount: 2500
+    });
+    expect(noticeNo2).toBe("PFT2-PDN-VEH-2026-0002-09-20-NCUM-COMB-PART-2500");
+  });
+
+  it("generates Form P.F.T-2 with custom options, partial payment, and document security PIN", () => {
+    const pft2 = generateFormPFT2(alMadinaUnit, {
+      dueDate: "2026-09-30",
+      issueDate: "2026-09-20",
+      formType: "NCUM",
+      demandScope: "CUR",
+      paymentScope: "PART",
+      customAmount: 2000,
+      isPartial: true,
+      remainingBalance: 2000,
+      noticeNumber: "PFT2-PDN-VEH-2026-0003-09-20-NCUM-CUR-PART-2000",
+      pin: "654321"
+    });
+
+    expect(pft2.pin).toBe("654321");
+    expect(pft2.noticeNumber).toBe("PFT2-PDN-VEH-2026-0003-09-20-NCUM-CUR-PART-2000");
+    expect(pft2.formType).toBe("NCUM");
+    expect(pft2.demandScope).toBe("CUR");
+    expect(pft2.paymentScope).toBe("PART");
+    expect(pft2.displayAmount).toBe(2000);
+    expect(pft2.isPartial).toBe(true);
+    expect(pft2.remainingBalance).toBe(2000);
+
+    // Check all copies have the PIN and notice number
+    for (const copy of pft2.copies) {
+      expect(copy.pin).toBe("654321");
+      expect(copy.noticeNumber).toBe("PFT2-PDN-VEH-2026-0003-09-20-NCUM-CUR-PART-2000");
+      expect(copy.taxPayable.totalPayable).toBe(2000);
+      expect(copy.dueDate).toBe("2026-09-30");
+    }
+  });
+
+  it("verifies that all statutory documents contain a valid 6-digit numeric Document Security PIN", () => {
+    const pft1 = generateFormPFT1(alMadinaUnit);
+    expect(pft1.pin).toMatch(/^\d{6}$/);
+
+    const pft2 = generateFormPFT2(alMadinaUnit);
+    expect(pft2.pin).toMatch(/^\d{6}$/);
+    expect(pft2.noticeNumber).toMatch(/^PFT2-PDN-VEH-2026-0003-/);
+
+    const scn = generateShowCausePenaltyNotice(alMadinaUnit, 30);
+    expect(scn.pin).toMatch(/^\d{6}$/);
+
+    const lrc = generateLandRevenueRecoveryCertificate(alMadinaUnit);
+    expect(lrc.pin).toMatch(/^\d{6}$/);
   });
 });

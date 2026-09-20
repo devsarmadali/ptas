@@ -11,9 +11,12 @@ import {
   type AuditActor,
   type StatutoryRuleDefinition,
   type Taxpayer,
+  VEHARI_PILOT_JURISDICTION,
   createAssessment,
   createTaxpayer,
   findDuplicateCandidates,
+  generateUinForUnit,
+  getAllStatutoryRules,
   getStatutoryRuleById,
   getStatutoryRuleBySubclassification,
   maskIdentifier,
@@ -500,7 +503,14 @@ export function convertValidSurveyUnitsToStoredUnits(
 
     const unitId = `unit-survey-${Date.now()}-${idx}`;
     const demandUnitId = `du-survey-${Date.now()}-${idx}`;
-    const permanentDemandNo = `PDN-VEH-2026-${String(existingUnitsCount + idx + 1).padStart(4, "0")}`;
+    const sequenceNumber = existingUnitsCount + idx + 1;
+    const permanentDemandNo = `PDN-VEH-2026-${String(sequenceNumber).padStart(4, "0")}`;
+    const provincialUin = generateUinForUnit({
+      jurisdiction: VEHARI_PILOT_JURISDICTION,
+      rule: item.statutoryRule,
+      allRules: getAllStatutoryRules(),
+      sequenceNumber
+    });
 
     // Create Draft Assessment under official statutory rule
     const { assessment: draftAsm, version: draftVer } = createAssessment<StoredUnitSnapshot>(
@@ -513,7 +523,10 @@ export function convertValidSurveyUnitsToStoredUnits(
           statutoryCategory: item.statutoryRule.category,
           legalBasis: item.statutoryRule.official_text,
           ruleId: item.statutoryRule.rule_id,
-          subclassificationCode: item.statutoryRule.subclassification_code
+          ruleCode: item.statutoryRule.rule_code,
+          subclassificationCode: item.statutoryRule.subclassification_code,
+          statutoryTertiaryCode: item.statutoryRule.statutory_tertiary_code,
+          rateSourceLevel: item.statutoryRule.rate_source_level
         }
       },
       actor,
@@ -534,7 +547,10 @@ export function convertValidSurveyUnitsToStoredUnits(
       identifierValue: item.identifierValue,
       address: item.address,
       circleId: CIRCLE_VEHARI_ID,
+      provincialUin,
       categoryCode: item.categoryCode,
+      subclassificationCode: item.statutoryRule.subclassification_code,
+      statutoryTertiaryCode: item.statutoryRule.statutory_tertiary_code,
       statutoryRuleId: item.statutoryRule.rule_id,
       statutoryRule: item.statutoryRule,
       demandUnit: {

@@ -15,9 +15,14 @@ import {
   createAssessment,
   createInitialDemandEntry,
   createPaymentReceiptEntry,
+  getAllStatutoryRules,
   getStatutoryRuleById,
-  submitAssessmentVersion
+  submitAssessmentVersion,
+  generateUinForUnit,
+  generateDocumentPin,
+  VEHARI_PILOT_JURISDICTION
 } from "@ptas/domain";
+import { formatStandardDocNumber } from "./statutory-forms";
 
 export type MockRole = "INSPECTOR" | "ETO" | "DIRECTOR";
 
@@ -38,7 +43,11 @@ export interface StoredUnitSnapshot {
   statutoryCategory: string;
   legalBasis: string;
   ruleId: string;
-  subclassificationCode: string;
+  subclassificationCode: string | null;
+  ruleCode?: string;
+  statutoryTertiaryCode?: string | null;
+  tertiaryDimensions?: Record<string, string>;
+  rateSourceLevel?: "category" | "subclassification" | "statutory_tertiary";
   [key: string]: unknown;
 }
 
@@ -51,8 +60,13 @@ export interface StoredUnit {
   readonly address: string;
   readonly circleId: string;
   readonly categoryCode: string;
+  readonly subclassificationCode?: string | null | undefined;
+  readonly statutoryTertiaryCode?: string | null | undefined;
+  readonly tertiaryDimensions?: Record<string, string> | undefined;
   readonly statutoryRuleId: string;
   readonly statutoryRule: StatutoryRuleDefinition;
+  /** Province-wide Unique Identification Number (format: DDD-TTT-CC-SS-UU-RR-NNNNN-VV) */
+  readonly provincialUin: string;
   readonly demandUnit: DemandUnit;
   readonly assessments: Assessment[];
   readonly assessmentVersions: AssessmentVersion<StoredUnitSnapshot>[];
@@ -235,6 +249,86 @@ export interface ClearanceCertificateRecord {
   readonly officialSha256: string;
   readonly qrPayload: string;
   readonly clearedAmountPkr: number;
+  readonly pin?: string | undefined;
+}
+
+export type Pft2Status = "ISSUED" | "RECEIVED" | "CANCELLED";
+
+export interface Pft2ChallanRecord {
+  readonly id: string;
+  readonly challanNumber: string;
+  readonly demandNumber: string;
+  readonly unitId: string;
+  readonly legalName: string;
+  readonly tradeName?: string | undefined;
+  readonly identifierType: string;
+  readonly identifierValue: string;
+  readonly address: string;
+  readonly subclassificationCode: string | null;
+  readonly statutoryTertiaryCode?: string | null;
+  readonly category: string;
+  readonly tertiarySlab: string | null;
+  readonly amountPayable: number;
+  readonly noticeNumber?: string | undefined;
+  readonly pin?: string | undefined;
+  readonly formType?:
+    | "STANDARD"
+    | "NOTICE_CUM_CHALLAN"
+    | "ARREARS_DEMAND"
+    | "REVISED_ASSESSMENT"
+    | string
+    | undefined;
+  readonly demandScope?: "CURRENT" | "ARREAR" | "COMBINED" | string | undefined;
+  readonly paymentScope?: "FULL" | "PARTIAL" | string | undefined;
+  readonly fullAssessedAmount?: number | undefined;
+  readonly partialAmount?: number | undefined;
+  readonly remainingBalance?: number | undefined;
+  readonly provincialUin?: string | undefined;
+  readonly issueDate: string;
+  readonly dueDate: string;
+  readonly status: Pft2Status;
+  readonly cancelledReason?: string | undefined;
+  readonly cancelledAt?: string | undefined;
+  readonly cancelledBy?: string | undefined;
+  readonly receiptNumber?: string | undefined;
+  readonly receivedAt?: string | undefined;
+  readonly receivedBy?: string | undefined;
+  readonly bankScrollRef?: string | undefined;
+  readonly paymentChannel?: string | undefined;
+  readonly officialSha256: string;
+  readonly qrPayload: string;
+}
+
+export interface StatutoryReceiptRecord {
+  readonly id: string;
+  readonly receiptNumber: string;
+  readonly noticeNumber?: string | undefined;
+  readonly pin?: string | undefined;
+  readonly provincialUin?: string | undefined;
+  readonly challanNumber: string;
+  readonly demandNumber: string;
+  readonly unitId: string;
+  readonly assesseeLegalName: string;
+  readonly assesseeTradeName?: string | undefined;
+  readonly identifierType: string;
+  readonly identifierValue: string;
+  readonly address: string;
+  readonly statutoryCategory: string;
+  readonly subclassificationCode: string | null;
+  readonly statutoryTertiaryCode?: string | null;
+  readonly tertiarySlab: string | null;
+  readonly amountPaidPkr: number;
+  readonly amountPaidWords: string;
+  readonly dateOfReceipt: string;
+  readonly timeOfReceipt: string;
+  readonly paymentChannel: string;
+  readonly bankBranch?: string | undefined;
+  readonly bankScrollRef: string;
+  readonly receivingOfficerName: string;
+  readonly receivingOfficerTitle: string;
+  readonly officialSha256: string;
+  readonly qrPayload: string;
+  readonly remarks?: string | undefined;
 }
 
 export interface PilotState {
@@ -246,9 +340,11 @@ export interface PilotState {
   discontinuances?: DiscontinuanceRecord[] | undefined;
   refundAdjustments?: RefundAdjustmentRecord[] | undefined;
   clearanceCertificates?: ClearanceCertificateRecord[] | undefined;
+  pft2Challans?: Pft2ChallanRecord[] | undefined;
+  statutoryReceipts?: StatutoryReceiptRecord[] | undefined;
 }
 
-const STORAGE_KEY = "ptas_pilot_vehari_v2";
+const STORAGE_KEY = "ptas_pilot_vehari_v3";
 
 export function createInitialPilotUnits(): StoredUnit[] {
   const inspectorActor: AuditActor = {
@@ -263,10 +359,11 @@ export function createInitialPilotUnits(): StoredUnit[] {
     jurisdictionId: TEHSIL_VEHARI_ID
   };
 
+  const allRules = getAllStatutoryRules();
   const rule1 = getStatutoryRuleById("PFT-1.i")!; // Companies <= 5m: PKR 10,000
   const rule6x = getStatutoryRuleById("PFT-6.x")!; // Pesticide Dealer: PKR 2,000
   const rule3ib = getStatutoryRuleById("PFT-3.i.b")!; // Commercial 10+ emp, Others: PKR 4,000
-  const rule10 = getStatutoryRuleById("PFT-10")!; // AC Food Establishment: PKR 5,000
+  const rule10 = getStatutoryRuleById("PFT-10")!; // AC Food Establishment: PKR 5,000 (Category Direct Rate)
 
   // Unit 1: Vehari Cotton Ginners (Pvt.) Ltd. (Companies <= 5m -> PKR 10,000, fully paid via ePay)
   const unit1Id = "unit-vehari-cotton-01";
@@ -286,7 +383,11 @@ export function createInitialPilotUnits(): StoredUnit[] {
         statutoryCategory: rule1.category,
         legalBasis: rule1.official_text,
         ruleId: rule1.rule_id,
-        subclassificationCode: rule1.subclassification_code
+        ruleCode: rule1.rule_code,
+        subclassificationCode: rule1.subclassification_code,
+        statutoryTertiaryCode: rule1.statutory_tertiary_code,
+        rateSourceLevel: rule1.rate_source_level,
+        tertiaryDimensions: { entity_type: "private_limited", paid_up_capital_band: "up_to_5m" }
       }
     },
     inspectorActor,
@@ -341,7 +442,11 @@ export function createInitialPilotUnits(): StoredUnit[] {
         statutoryCategory: rule6x.category,
         legalBasis: rule6x.official_text,
         ruleId: rule6x.rule_id,
-        subclassificationCode: rule6x.subclassification_code
+        ruleCode: rule6x.rule_code,
+        subclassificationCode: rule6x.subclassification_code,
+        statutoryTertiaryCode: rule6x.statutory_tertiary_code,
+        rateSourceLevel: rule6x.rate_source_level,
+        tertiaryDimensions: { profession_type: "pesticide_dealer" }
       }
     },
     inspectorActor,
@@ -385,7 +490,11 @@ export function createInitialPilotUnits(): StoredUnit[] {
         statutoryCategory: rule3ib.category,
         legalBasis: rule3ib.official_text,
         ruleId: rule3ib.rule_id,
-        subclassificationCode: rule3ib.subclassification_code
+        ruleCode: rule3ib.rule_code,
+        subclassificationCode: rule3ib.subclassification_code,
+        statutoryTertiaryCode: rule3ib.statutory_tertiary_code,
+        rateSourceLevel: rule3ib.rate_source_level,
+        tertiaryDimensions: { location_scope: "others", employee_band: "10_or_more" }
       }
     },
     inspectorActor,
@@ -393,7 +502,8 @@ export function createInitialPilotUnits(): StoredUnit[] {
   );
   const { assessment: u3AsmSub, version: u3VerSub } = submitAssessmentVersion(u3AsmInit, u3VerInit);
 
-  // Unit 4: Chenab Sweets & Bakers (AC) (Entry 10 -> PKR 5,000, Approved, Pending payment)
+  // Unit 4: Chenab Sweets & Bakers (AC) (Class 10 -> PKR 5,000, Approved, Pending payment)
+  // Direct Category Rate: subclassification_code is null!
   const unit4Id = "unit-chenab-sweets-04";
   const demandUnit4: DemandUnit = {
     id: "du-04",
@@ -411,7 +521,14 @@ export function createInitialPilotUnits(): StoredUnit[] {
         statutoryCategory: rule10.category,
         legalBasis: rule10.official_text,
         ruleId: rule10.rule_id,
-        subclassificationCode: rule10.subclassification_code
+        ruleCode: rule10.rule_code,
+        subclassificationCode: rule10.subclassification_code,
+        statutoryTertiaryCode: rule10.statutory_tertiary_code,
+        rateSourceLevel: rule10.rate_source_level,
+        tertiaryDimensions: {
+          air_conditioning_facility: "yes",
+          food_establishment_type: "sweet_shop_bakery"
+        }
       }
     },
     inspectorActor,
@@ -446,8 +563,17 @@ export function createInitialPilotUnits(): StoredUnit[] {
       address: "Factory Area, Khanewal Road, Vehari",
       circleId: CIRCLE_VEHARI_ID,
       categoryCode: "1",
+      subclassificationCode: rule1.subclassification_code,
+      statutoryTertiaryCode: rule1.statutory_tertiary_code,
+      tertiaryDimensions: { entity_type: "private_limited", paid_up_capital_band: "up_to_5m" },
       statutoryRuleId: rule1.rule_id,
       statutoryRule: rule1,
+      provincialUin: generateUinForUnit({
+        jurisdiction: VEHARI_PILOT_JURISDICTION,
+        rule: rule1,
+        allRules,
+        sequenceNumber: 1
+      }),
       demandUnit: demandUnit1,
       assessments: [u1AsmApp],
       assessmentVersions: [u1VerApp],
@@ -467,8 +593,17 @@ export function createInitialPilotUnits(): StoredUnit[] {
       address: "Grain Market, Club Road, Vehari",
       circleId: CIRCLE_VEHARI_ID,
       categoryCode: "6",
+      subclassificationCode: rule6x.subclassification_code,
+      statutoryTertiaryCode: rule6x.statutory_tertiary_code,
+      tertiaryDimensions: { profession_type: "pesticide_dealer" },
       statutoryRuleId: rule6x.rule_id,
       statutoryRule: rule6x,
+      provincialUin: generateUinForUnit({
+        jurisdiction: VEHARI_PILOT_JURISDICTION,
+        rule: rule6x,
+        allRules,
+        sequenceNumber: 2
+      }),
       demandUnit: demandUnit2,
       assessments: [u2AsmApp],
       assessmentVersions: [u2VerApp],
@@ -488,8 +623,17 @@ export function createInitialPilotUnits(): StoredUnit[] {
       address: "Karkhana Bazar, Vehari",
       circleId: CIRCLE_VEHARI_ID,
       categoryCode: "3",
+      subclassificationCode: rule3ib.subclassification_code,
+      statutoryTertiaryCode: rule3ib.statutory_tertiary_code,
+      tertiaryDimensions: { location_scope: "others", employee_band: "10_or_more" },
       statutoryRuleId: rule3ib.rule_id,
       statutoryRule: rule3ib,
+      provincialUin: generateUinForUnit({
+        jurisdiction: VEHARI_PILOT_JURISDICTION,
+        rule: rule3ib,
+        allRules,
+        sequenceNumber: 3
+      }),
       demandUnit: demandUnit3,
       assessments: [u3AsmSub],
       assessmentVersions: [u3VerSub],
@@ -506,8 +650,20 @@ export function createInitialPilotUnits(): StoredUnit[] {
       address: "Luddan Road, Near DPO Chowk, Vehari",
       circleId: CIRCLE_VEHARI_ID,
       categoryCode: "10",
+      subclassificationCode: null,
+      statutoryTertiaryCode: null,
+      tertiaryDimensions: {
+        air_conditioning_facility: "yes",
+        food_establishment_type: "sweet_shop_bakery"
+      },
       statutoryRuleId: rule10.rule_id,
       statutoryRule: rule10,
+      provincialUin: generateUinForUnit({
+        jurisdiction: VEHARI_PILOT_JURISDICTION,
+        rule: rule10,
+        allRules,
+        sequenceNumber: 4
+      }),
       demandUnit: demandUnit4,
       assessments: [u4AsmApp],
       assessmentVersions: [u4VerApp],
@@ -587,7 +743,7 @@ export function createInitialAppeals(): AppealRecord[] {
   return [
     {
       id: "appeal-01",
-      appealNumber: "ETD/MLN/APP/2026/001",
+      appealNumber: formatStandardDocNumber({ docCode: "APP", sequence: "00001" }),
       unitId: "unit-kisan-pesticides-02",
       appellantName: "Muhammad Akram",
       appellantTradeName: "Kisan Pesticides & Fertilizer Agency",
@@ -599,7 +755,7 @@ export function createInitialAppeals(): AppealRecord[] {
       isWithinLimitation: true,
       condonationRequested: false,
       groundOfAppeal:
-        "The appellant disputes classification under Entry 6(x) (Pesticide Dealers) at PKR 2,000, claiming the business strictly retails seeds and urea without pesticide distribution.",
+        "The appellant disputes classification under Class 6(x) (Pesticide Dealers) at PKR 2,000, claiming the business strictly retails seeds and urea without pesticide distribution.",
       undisputedPaid: 1000,
       status: "HEARING_SCHEDULED",
       hearingDate: "2026-08-05",
@@ -613,7 +769,7 @@ export function createInitialDiscontinuances(): DiscontinuanceRecord[] {
   return [
     {
       id: "disc-01",
-      noticeNumber: "DISC-VEH-2026-001",
+      noticeNumber: formatStandardDocNumber({ docCode: "DSC", sequence: "00001" }),
       unitId: "unit-almadina-center-03",
       assesseeLegalName: "Muhammad Siddique",
       assesseeTradeName: "Al-Madina Commercial Center",
@@ -638,7 +794,7 @@ export function createInitialRefundAdjustments(): RefundAdjustmentRecord[] {
   return [
     {
       id: "ref-01",
-      applicationNumber: "REF-VEH-2026-001",
+      applicationNumber: formatStandardDocNumber({ docCode: "RFD", sequence: "00001" }),
       unitId: "unit-vehari-cotton-01",
       assesseeLegalName: "Vehari Cotton Ginners (Pvt.) Ltd.",
       assesseeTradeName: "Vehari Ginning & Pressing Mills",
@@ -660,10 +816,12 @@ export function createInitialRefundAdjustments(): RefundAdjustmentRecord[] {
 }
 
 export function createInitialClearanceCertificates(): ClearanceCertificateRecord[] {
+  const certificateNumber = formatStandardDocNumber({ docCode: "PFT5", sequence: "00001" });
   return [
     {
       id: "cert-01",
-      certificateNumber: "PFT-CC-VEH-2026-0001",
+      certificateNumber,
+      pin: generateDocumentPin(certificateNumber),
       unitId: "unit-vehari-cotton-01",
       assesseeLegalName: "Vehari Cotton Ginners (Pvt.) Ltd.",
       assesseeTradeName: "Vehari Ginning & Pressing Mills",
@@ -684,17 +842,152 @@ export function createInitialClearanceCertificates(): ClearanceCertificateRecord
   ];
 }
 
+export function createInitialPft2Challans(units: StoredUnit[]): Pft2ChallanRecord[] {
+  const challans: Pft2ChallanRecord[] = [];
+  const issueDate = "2026-07-01";
+  const dueDate = "2026-08-31";
+
+  for (let i = 0; i < units.length; i++) {
+    const u = units[i]!;
+    const serial =
+      u.demandUnit.permanentDemandNo.replace(/[^0-9]/g, "").slice(-4) ||
+      String(i + 1).padStart(4, "0");
+    const challanNumber = formatStandardDocNumber({ docCode: "PFT2", sequence: serial });
+    const amountPayable = u.statutoryRule.annual_rate_pkr;
+    const isPaid = u.id === "unit-vehari-cotton-01";
+    const receiptNumber = isPaid
+      ? formatStandardDocNumber({ docCode: "RCPT", sequence: "00001" })
+      : undefined;
+    const noticeNumber = `PFT2-${u.demandUnit.permanentDemandNo}-07-01-STD-CUR-FULL-${amountPayable}`;
+    const pin = generateDocumentPin(noticeNumber);
+
+    challans.push({
+      id: `pft2-${u.id}`,
+      challanNumber,
+      noticeNumber,
+      pin,
+      demandNumber: u.demandUnit.permanentDemandNo,
+      provincialUin: u.provincialUin,
+      unitId: u.id,
+      legalName: u.legalName,
+      tradeName: u.tradeName,
+      identifierType: u.identifierType,
+      identifierValue: u.identifierValue,
+      address: u.address,
+      subclassificationCode: u.statutoryRule.subclassification_code,
+      statutoryTertiaryCode: u.statutoryRule.statutory_tertiary_code,
+      category: u.statutoryRule.category,
+      tertiarySlab: u.statutoryRule.statutory_tertiary_classification ?? null,
+      amountPayable,
+      formType: "STANDARD",
+      demandScope: "CURRENT",
+      paymentScope: "FULL",
+      fullAssessedAmount: amountPayable,
+      remainingBalance: 0,
+      issueDate,
+      dueDate,
+      status: isPaid ? "RECEIVED" : "ISSUED",
+      receiptNumber,
+      receivedAt: isPaid ? "2026-07-15" : undefined,
+      receivedBy: isPaid ? "Muhammad Aslam (Tax Inspector)" : undefined,
+      bankScrollRef: isPaid ? "ePay-PUNJAB-TXN-994182" : undefined,
+      paymentChannel: isPaid ? "ePay Punjab (Digital Bank Transfer)" : undefined,
+      officialSha256: `sha256-pft2-${serial}-${amountPayable}`,
+      qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-2&ref=${challanNumber}&pdn=${u.demandUnit.permanentDemandNo}&amt=${amountPayable}&pin=${pin}`
+    });
+  }
+
+  // Add one cancelled challan to demonstrate complete lifecycle
+  const cancelledNumber = formatStandardDocNumber({ docCode: "PFT2", sequence: "00099" });
+  const cancelledNoticeNumber = "PFT2-PDN-VEH-2026-0099-07-01-REV-CUR-FULL-4000";
+  const cancelledPin = generateDocumentPin(cancelledNoticeNumber);
+  challans.push({
+    id: "pft2-cancelled-demo",
+    challanNumber: cancelledNumber,
+    noticeNumber: cancelledNoticeNumber,
+    pin: cancelledPin,
+    demandNumber: "PDN-VEH-2026-0099",
+    unitId: "unit-demo-superseded",
+    legalName: "Bismillah General Store (Vehari)",
+    tradeName: "Bismillah Store",
+    identifierType: "CNIC",
+    identifierValue: "36601-9988776-1",
+    address: "Circular Road, Vehari",
+    subclassificationCode: "3(i)",
+    statutoryTertiaryCode: "3(i)(b)",
+    category: "Commercial Establishments",
+    tertiarySlab: "Others",
+    amountPayable: 4000,
+    formType: "REVISED_ASSESSMENT",
+    demandScope: "CURRENT",
+    paymentScope: "FULL",
+    fullAssessedAmount: 4000,
+    remainingBalance: 0,
+    issueDate: "2026-07-01",
+    dueDate: "2026-08-31",
+    status: "CANCELLED",
+    cancelledReason: "Superseded by revised assessment under Rule 12 (employment re-verified)",
+    cancelledAt: "2026-07-28",
+    cancelledBy: "Tariq Mahmood (ETO)",
+    officialSha256: "sha256-pft2-cancelled-00099",
+    qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-2&ref=${cancelledNumber}&pdn=PDN-VEH-2026-0099&amt=4000&pin=${cancelledPin}`
+  });
+
+  return challans;
+}
+
+export function createInitialStatutoryReceipts(units: StoredUnit[]): StatutoryReceiptRecord[] {
+  const cottonUnit = units.find((u) => u.id === "unit-vehari-cotton-01") ?? units[0]!;
+  const receiptNumber = formatStandardDocNumber({ docCode: "RCPT", sequence: "00001" });
+  const challanNumber = formatStandardDocNumber({ docCode: "PFT2", sequence: "00001" });
+  return [
+    {
+      id: "rec-01",
+      receiptNumber,
+      challanNumber,
+      demandNumber: cottonUnit.demandUnit.permanentDemandNo,
+      unitId: cottonUnit.id,
+      assesseeLegalName: cottonUnit.legalName,
+      assesseeTradeName: cottonUnit.tradeName,
+      identifierType: cottonUnit.identifierType,
+      identifierValue: cottonUnit.identifierValue,
+      address: cottonUnit.address,
+      statutoryCategory: cottonUnit.statutoryRule.category,
+      subclassificationCode: cottonUnit.statutoryRule.subclassification_code,
+      statutoryTertiaryCode: cottonUnit.statutoryRule.statutory_tertiary_code,
+      tertiarySlab: cottonUnit.statutoryRule.statutory_tertiary_classification ?? null,
+      amountPaidPkr: 10000,
+      amountPaidWords: "Ten Thousand Rupees Only",
+      dateOfReceipt: "2026-07-15",
+      timeOfReceipt: "11:24 AM",
+      paymentChannel: "ePay Punjab (Digital Bank Transfer)",
+      bankBranch: "State Bank / 1Link Portal",
+      bankScrollRef: "ePay-PUNJAB-TXN-994182",
+      receivingOfficerName: "Muhammad Aslam",
+      receivingOfficerTitle: "Tax Inspector, Circle-Vehari",
+      officialSha256: "8e3c1a9f02b4d6e8a1c3e5f7b9d2a4c6e8f0a2b4c6d8e0f2a4b6c8e0d2f4a6b8",
+      qrPayload:
+        "https://ptas.punjab.gov.pk/verify?type=PFT-REC&ref=PFT-REC-2026-0001&pdn=PDN-VEH-2026-0001&amt=10000&sha=8e3c1a9f",
+      remarks: "Full annual liability discharged via ePay Punjab electronic treasury gateway."
+    }
+  ];
+}
+
 export function loadPilotState(): PilotState {
+  const initialUnits = createInitialPilotUnits();
+
   if (typeof window === "undefined") {
     return {
       currentOfficer: MOCK_OFFICERS[0],
-      units: createInitialPilotUnits(),
+      units: initialUnits,
       auditLogs: createInitialAuditLogs(),
       reconciliations: createInitialReconciliations(),
       appeals: createInitialAppeals(),
       discontinuances: createInitialDiscontinuances(),
       refundAdjustments: createInitialRefundAdjustments(),
-      clearanceCertificates: createInitialClearanceCertificates()
+      clearanceCertificates: createInitialClearanceCertificates(),
+      pft2Challans: createInitialPft2Challans(initialUnits),
+      statutoryReceipts: createInitialStatutoryReceipts(initialUnits)
     };
   }
 
@@ -703,13 +996,15 @@ export function loadPilotState(): PilotState {
     if (!raw) {
       const initial: PilotState = {
         currentOfficer: MOCK_OFFICERS[0],
-        units: createInitialPilotUnits(),
+        units: initialUnits,
         auditLogs: createInitialAuditLogs(),
         reconciliations: createInitialReconciliations(),
         appeals: createInitialAppeals(),
         discontinuances: createInitialDiscontinuances(),
         refundAdjustments: createInitialRefundAdjustments(),
-        clearanceCertificates: createInitialClearanceCertificates()
+        clearanceCertificates: createInitialClearanceCertificates(),
+        pft2Challans: createInitialPft2Challans(initialUnits),
+        statutoryReceipts: createInitialStatutoryReceipts(initialUnits)
       };
       savePilotState(initial);
       return initial;
@@ -723,18 +1018,23 @@ export function loadPilotState(): PilotState {
       discontinuances: parsed.discontinuances ?? createInitialDiscontinuances(),
       refundAdjustments: parsed.refundAdjustments ?? createInitialRefundAdjustments(),
       clearanceCertificates: parsed.clearanceCertificates ?? createInitialClearanceCertificates(),
+      pft2Challans: parsed.pft2Challans ?? createInitialPft2Challans(parsed.units || initialUnits),
+      statutoryReceipts:
+        parsed.statutoryReceipts ?? createInitialStatutoryReceipts(parsed.units || initialUnits),
       currentOfficer: matchingOfficer
     };
   } catch {
     return {
       currentOfficer: MOCK_OFFICERS[0],
-      units: createInitialPilotUnits(),
+      units: initialUnits,
       auditLogs: createInitialAuditLogs(),
       reconciliations: createInitialReconciliations(),
       appeals: createInitialAppeals(),
       discontinuances: createInitialDiscontinuances(),
       refundAdjustments: createInitialRefundAdjustments(),
-      clearanceCertificates: createInitialClearanceCertificates()
+      clearanceCertificates: createInitialClearanceCertificates(),
+      pft2Challans: createInitialPft2Challans(initialUnits),
+      statutoryReceipts: createInitialStatutoryReceipts(initialUnits)
     };
   }
 }
@@ -750,15 +1050,18 @@ export function savePilotState(state: PilotState): void {
 }
 
 export function resetPilotState(): PilotState {
+  const initialUnits = createInitialPilotUnits();
   const cleanState: PilotState = {
     currentOfficer: MOCK_OFFICERS[0],
-    units: createInitialPilotUnits(),
+    units: initialUnits,
     auditLogs: createInitialAuditLogs(),
     reconciliations: createInitialReconciliations(),
     appeals: createInitialAppeals(),
     discontinuances: createInitialDiscontinuances(),
     refundAdjustments: createInitialRefundAdjustments(),
-    clearanceCertificates: createInitialClearanceCertificates()
+    clearanceCertificates: createInitialClearanceCertificates(),
+    pft2Challans: createInitialPft2Challans(initialUnits),
+    statutoryReceipts: createInitialStatutoryReceipts(initialUnits)
   };
   savePilotState(cleanState);
   return cleanState;

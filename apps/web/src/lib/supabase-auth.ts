@@ -190,10 +190,19 @@ export async function signInOfficer(email: string, password?: string): Promise<S
 
   try {
     const supabase = getSupabaseAuthClient();
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: normalizedEmail,
-      password: effectivePassword
-    });
+    const networkTimeout = new Promise<{ data: { user: null }; error: Error }>((resolve) =>
+      setTimeout(
+        () => resolve({ data: { user: null }, error: new Error("Auth network timeout") }),
+        1200
+      )
+    );
+    const { data, error } = await Promise.race([
+      supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: effectivePassword
+      }),
+      networkTimeout
+    ]);
 
     if (!error && data.user) {
       const officer: MockOfficer = {

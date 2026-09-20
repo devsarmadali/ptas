@@ -16,6 +16,7 @@
 import {
   computeDefaulterAging,
   computeLedgerBalance,
+  getAllStatutoryRules,
   getStatutoryCategories,
   type StatutoryCategorySummary
 } from "@ptas/domain";
@@ -38,6 +39,32 @@ export interface CategoryYieldSummary {
   readonly realizedRecovery: number;
   readonly outstandingArrears: number;
   readonly compliancePct: number;
+}
+
+export interface SlabYieldSummary {
+  readonly ruleId: string;
+  readonly ruleCode: string;
+  readonly categoryCode: string;
+  readonly categoryName: string;
+  readonly subclassificationCode: string | null;
+  readonly subclassificationLabel?: string | null | undefined;
+  readonly statutoryTertiaryCode?: string | null | undefined;
+  readonly statutoryTertiaryClassification?: string | null | undefined;
+  readonly tertiarySlab: string | null;
+  readonly slabRatePkr: number;
+  readonly rateBasis: string;
+  readonly unitCount: number;
+  readonly assessedUnitsCount: number;
+  readonly assessedDemand: number;
+  readonly assessedDemandPkr: number;
+  readonly penaltyDemand: number;
+  readonly totalDemand: number;
+  readonly realizedRecovery: number;
+  readonly realizedRecoveryPkr: number;
+  readonly outstandingArrears: number;
+  readonly outstandingArrearsPkr: number;
+  readonly compliancePct: number;
+  readonly recoveryRatePct: number;
 }
 
 export interface DefaulterFunnelStage {
@@ -113,6 +140,7 @@ export interface RolePerspectiveMetrics {
 export interface ExecutiveMetrics {
   readonly kpis: RevenueKpis;
   readonly categoryYields: readonly CategoryYieldSummary[];
+  readonly slabYields: readonly SlabYieldSummary[];
   readonly defaulterFunnel: DefaulterAgingFunnel;
   readonly pendency: OperationalPendency;
   readonly roleMetrics: RolePerspectiveMetrics;
@@ -174,9 +202,25 @@ export function computeExecutiveMetrics(
     catArrears.set(cat.category_code, 0);
   }
 
+  // Statutory Sub-Class & Tertiary Slab maps (47 Second Schedule entries)
+  const slabUnitCount = new Map<string, number>();
+  const slabAssessed = new Map<string, number>();
+  const slabPenalty = new Map<string, number>();
+  const slabRealized = new Map<string, number>();
+  const slabArrears = new Map<string, number>();
+
+  for (const r of getAllStatutoryRules()) {
+    slabUnitCount.set(r.rule_id, 0);
+    slabAssessed.set(r.rule_id, 0);
+    slabPenalty.set(r.rule_id, 0);
+    slabRealized.set(r.rule_id, 0);
+    slabArrears.set(r.rule_id, 0);
+  }
+
   // Iterate over all registered units
   for (const u of units) {
     const catCode = u.statutoryRule?.category_code ?? u.categoryCode ?? "1";
+    const ruleId = u.statutoryRuleId ?? u.statutoryRule?.rule_id ?? "PFT-1.i";
     let uAssessed = 0;
     let uPenalty = 0;
     let uRealized = 0;
@@ -227,6 +271,13 @@ export function computeExecutiveMetrics(
     catPenalty.set(catCode, round2((catPenalty.get(catCode) ?? 0) + uPenalty));
     catRealized.set(catCode, round2((catRealized.get(catCode) ?? 0) + uRealized));
     catArrears.set(catCode, round2((catArrears.get(catCode) ?? 0) + (uBalance > 0 ? uBalance : 0)));
+
+    // Update slab map
+    slabUnitCount.set(ruleId, (slabUnitCount.get(ruleId) ?? 0) + 1);
+    slabAssessed.set(ruleId, round2((slabAssessed.get(ruleId) ?? 0) + uAssessed));
+    slabPenalty.set(ruleId, round2((slabPenalty.get(ruleId) ?? 0) + uPenalty));
+    slabRealized.set(ruleId, round2((slabRealized.get(ruleId) ?? 0) + uRealized));
+    slabArrears.set(ruleId, round2((slabArrears.get(ruleId) ?? 0) + (uBalance > 0 ? uBalance : 0)));
 
     // Defaulter aging distribution
     const aging = computeDefaulterAging(
@@ -299,6 +350,57 @@ export function computeExecutiveMetrics(
     };
   });
 
+  // Statutory Sub-Class & Tertiary Slab yield summaries (47 Second Schedule Entries)
+  const slabYields: SlabYieldSummary[] = getAllStatutoryRules().map((r) => {
+    const assessed = slabAssessed.get(r.rule_id) ?? 0;
+    const penalty = slabPenalty.get(r.rule_id) ?? 0;
+    const totalDem = round2(assessed + penalty);
+    const realized = slabRealized.get(r.rule_id) ?? 0;
+    const arrears = slabArrears.get(r.rule_id) ?? 0;
+    const count = slabUnitCount.get(r.rule_id) ?? 0;
+    const compliance =
+      totalDem > 0 ? Math.min(100, Math.round((realized / totalDem) * 1000) / 10) : 100;
+
+    let tertiaryLabel: string;
+    if (r.subclassification_label && r.statutory_tertiary_classification) {
+      tertiaryLabel = `${r.subclassification_label} — ${r.statutory_tertiary_classification}`;
+    } else if (r.statutory_tertiary_classification) {
+      tertiaryLabel = r.statutory_tertiary_classification;
+    } else if (r.subclassification_label) {
+      tertiaryLabel = r.subclassification_label;
+    } else if (r.subcategory) {
+      tertiaryLabel = r.subcategory;
+    } else {
+      tertiaryLabel = "Direct Category Rate";
+    }
+
+    return {
+      ruleId: r.rule_id,
+      ruleCode: r.rule_code,
+      categoryCode: r.category_code,
+      categoryName: r.category,
+      subclassificationCode: r.subclassification_code,
+      subclassificationLabel: r.subclassification_label ?? null,
+      statutoryTertiaryCode: r.statutory_tertiary_code ?? null,
+      statutoryTertiaryClassification: r.statutory_tertiary_classification ?? null,
+      tertiarySlab: tertiaryLabel,
+      slabRatePkr: r.annual_rate_pkr,
+      rateBasis: r.rate_basis,
+      unitCount: count,
+      assessedUnitsCount: count,
+      assessedDemand: assessed,
+      assessedDemandPkr: assessed,
+      penaltyDemand: penalty,
+      totalDemand: totalDem,
+      realizedRecovery: realized,
+      realizedRecoveryPkr: realized,
+      outstandingArrears: arrears,
+      outstandingArrearsPkr: arrears,
+      compliancePct: compliance,
+      recoveryRatePct: compliance
+    };
+  });
+
   // Operational Pendency Velocity
   let pendingDraftAssessments = 0;
   let unservedNotices = 0;
@@ -352,6 +454,7 @@ export function computeExecutiveMetrics(
       defaulterUnitsCount: defaulterCount
     },
     categoryYields,
+    slabYields,
     defaulterFunnel: {
       current: { count: currentCount, amount: round2(currentAmt) },
       overdue30Days: { count: overdueCount, amount: round2(overdueAmt) },
@@ -421,6 +524,7 @@ export function escapeCsvCell(val: unknown): string {
 export function exportPft3RegisterCsv(units: readonly StoredUnit[]): string {
   const headers = [
     "S.No",
+    "Provincial UIN",
     "Permanent Demand No",
     "Assessment No",
     "Assessee Legal Name",
@@ -428,7 +532,10 @@ export function exportPft3RegisterCsv(units: readonly StoredUnit[]): string {
     "CNIC / NTN",
     "Business Address",
     "Schedule Category",
-    "Schedule Entry",
+    "Schedule Sub-Class Code",
+    "Tertiary Class / Slab",
+    "Rate Basis",
+    "Statutory Slab Rate (PKR)",
     "Assessed Current Tax (PKR)",
     "Penalties (PKR)",
     "Total Demand (PKR)",
@@ -464,6 +571,7 @@ export function exportPft3RegisterCsv(units: readonly StoredUnit[]): string {
 
     return [
       idx + 1,
+      u.provincialUin ?? "",
       u.demandUnit.permanentDemandNo,
       `ASM-VEH-2026-${u.id.slice(-4)}`,
       u.legalName,
@@ -471,7 +579,12 @@ export function exportPft3RegisterCsv(units: readonly StoredUnit[]): string {
       `${u.identifierType}: ${u.identifierValue}`,
       u.address,
       u.statutoryRule.category,
-      `Entry ${u.statutoryRule.subclassification_code}`,
+      u.statutoryRule.subclassification_code
+        ? `Class ${u.statutoryRule.subclassification_code}`
+        : `Class ${u.statutoryRule.category_code}`,
+      u.statutoryRule.subcategory,
+      u.statutoryRule.rate_basis,
+      u.statutoryRule.annual_rate_pkr,
       baseDemand,
       penalties,
       totalDemand,
@@ -497,12 +610,16 @@ export function exportPft3RegisterCsv(units: readonly StoredUnit[]): string {
 export function exportDefaulterRecoveryCsv(units: readonly StoredUnit[]): string {
   const headers = [
     "S.No",
+    "Provincial UIN",
     "Permanent Demand No",
     "Assessee Legal Name",
     "Trade Name",
     "CNIC / NTN",
     "Commercial Address",
-    "Schedule Entry",
+    "Category",
+    "Schedule Sub-Class Code",
+    "Tertiary Class / Slab",
+    "Statutory Slab Rate (PKR)",
     "Due Date",
     "Days Overdue",
     "Original Demand (PKR)",
@@ -533,12 +650,18 @@ export function exportDefaulterRecoveryCsv(units: readonly StoredUnit[]): string
 
     return [
       idx + 1,
+      u.provincialUin ?? "",
       u.demandUnit.permanentDemandNo,
       u.legalName,
       u.tradeName ?? "",
       `${u.identifierType}: ${u.identifierValue}`,
       u.address,
-      `Entry ${u.statutoryRule.subclassification_code}`,
+      u.statutoryRule.category,
+      u.statutoryRule.subclassification_code
+        ? `Class ${u.statutoryRule.subclassification_code}`
+        : `Class ${u.statutoryRule.category_code}`,
+      u.statutoryRule.subcategory,
+      u.statutoryRule.annual_rate_pkr,
       aging.dueDate,
       aging.daysOverdue,
       aging.originalDemand,
@@ -564,14 +687,17 @@ export function exportDefaulterRecoveryCsv(units: readonly StoredUnit[]): string
 export function exportNoticeDispatchCsv(units: readonly StoredUnit[]): string {
   const headers = [
     "S.No",
+    "Provincial UIN",
     "Notice No",
     "Permanent Demand No",
     "Assessee Legal Name",
     "Trade Name",
     "CNIC / NTN",
     "Commercial Address",
-    "Schedule Entry",
     "Category",
+    "Schedule Sub-Class Code",
+    "Tertiary Class / Slab",
+    "Statutory Slab Rate (PKR)",
     "Assessed Amount (PKR)",
     "Notice Channel",
     "Service Status",
@@ -587,14 +713,19 @@ export function exportNoticeDispatchCsv(units: readonly StoredUnit[]): string {
 
     return [
       idx + 1,
+      u.provincialUin ?? "",
       `PFT-1/VEH/2026/${u.id.slice(-4)}`,
       u.demandUnit.permanentDemandNo,
       u.legalName,
       u.tradeName ?? "",
       `${u.identifierType}: ${u.identifierValue}`,
       u.address,
-      `Entry ${u.statutoryRule.subclassification_code}`,
       u.statutoryRule.category,
+      u.statutoryRule.subclassification_code
+        ? `Class ${u.statutoryRule.subclassification_code}`
+        : `Class ${u.statutoryRule.category_code}`,
+      u.statutoryRule.subcategory,
+      u.statutoryRule.annual_rate_pkr,
       taxAmount,
       "Personal Service (Rule 6)",
       u.serviceStatus ?? "PENDING",
@@ -604,6 +735,56 @@ export function exportNoticeDispatchCsv(units: readonly StoredUnit[]): string {
       u.witnessDetails ?? "N/A"
     ];
   });
+
+  const lines = [
+    headers.map(escapeCsvCell).join(","),
+    ...rows.map((row) => row.map(escapeCsvCell).join(","))
+  ];
+
+  return lines.join("\r\n");
+}
+
+export function exportStatutorySlabDistributionCsv(
+  input: readonly SlabYieldSummary[] | readonly StoredUnit[],
+  financialYear = "2026-2027"
+): string {
+  void financialYear;
+  let slabs: readonly SlabYieldSummary[];
+  if (input.length > 0 && "subclassificationCode" in input[0]!) {
+    slabs = input as readonly SlabYieldSummary[];
+  } else if (input.length > 0 && "demandUnit" in input[0]!) {
+    slabs = computeExecutiveMetrics(input as readonly StoredUnit[]).slabYields;
+  } else {
+    slabs = computeExecutiveMetrics([]).slabYields;
+  }
+
+  const headers = [
+    "Schedule Sub-Class Code",
+    "Primary Category Code",
+    "Primary Category Name",
+    "Tertiary Slab / Criteria",
+    "Statutory Slab Rate (PKR)",
+    "Rate Basis",
+    "Assessed Units Count",
+    "Assessed Demand (PKR)",
+    "Realized Recovery (PKR)",
+    "Outstanding Arrears (PKR)",
+    "Recovery Compliance (%)"
+  ];
+
+  const rows = slabs.map((slab) => [
+    slab.ruleCode ?? slab.statutoryTertiaryCode ?? slab.subclassificationCode ?? slab.categoryCode,
+    slab.categoryCode,
+    slab.categoryName,
+    slab.tertiarySlab ?? "—",
+    String(slab.slabRatePkr),
+    slab.rateBasis,
+    String(slab.assessedUnitsCount),
+    String(slab.assessedDemandPkr),
+    String(slab.realizedRecoveryPkr),
+    String(slab.outstandingArrearsPkr),
+    `${slab.recoveryRatePct}%`
+  ]);
 
   const lines = [
     headers.map(escapeCsvCell).join(","),
@@ -628,7 +809,7 @@ export function exportClearanceCertificatesCsv(
     "Trade Name",
     "CNIC / NTN",
     "Statutory Category",
-    "Schedule Entry",
+    "Schedule Class",
     "Financial Year",
     "Cleared Amount (PKR)",
     "Issued By Officer",

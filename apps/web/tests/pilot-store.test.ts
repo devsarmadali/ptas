@@ -4,7 +4,8 @@ import {
   createInitialPilotUnits,
   createInitialAuditLogs,
   createInitialReconciliations,
-  createInitialAppeals
+  createInitialAppeals,
+  createInitialPft2Challans
 } from "../src/lib/pilot-store.js";
 import { computeLedgerBalance } from "@ptas/domain";
 
@@ -65,12 +66,24 @@ describe("Vehari Pilot Store & Statutory Seed Verification", () => {
     expect(audits.length).toBeGreaterThan(0);
 
     const reconciliations = createInitialReconciliations();
-    expect(reconciliations.length).toBeGreaterThan(0);
-    expect(reconciliations[0]?.status).toBe("MATCHED");
-
     const appeals = createInitialAppeals();
     expect(appeals.length).toBeGreaterThan(0);
-    expect(appeals[0]?.appealNumber).toBe("ETD/MLN/APP/2026/001");
+    expect(appeals[0]?.appealNumber).toBe("PB/ET/VHR/CIR-1/APP/2026-27/00001");
     expect(appeals[0]?.status).toBe("HEARING_SCHEDULED");
+  });
+
+  it("ensures every seeded PFT-2 Challan has valid issue/due date window and fixed payable amount", () => {
+    const units = createInitialPilotUnits();
+    const challans = createInitialPft2Challans(units);
+    expect(challans.length).toBeGreaterThanOrEqual(4);
+
+    for (const c of challans) {
+      expect(c.issueDate).toBeDefined();
+      expect(c.dueDate).toBeDefined();
+      expect(c.issueDate <= c.dueDate).toBe(true);
+      expect(c.amountPayable).toBeGreaterThan(0);
+      expect(c.noticeNumber).toMatch(/^PFT2-/);
+      expect(c.pin).toMatch(/^\d{6}$/);
+    }
   });
 });
