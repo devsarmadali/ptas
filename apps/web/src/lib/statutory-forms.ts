@@ -21,17 +21,32 @@ export function getScheduleEntryLabel(rule: StatutoryRuleDefinition): string {
 export interface Pft2NoticeNumberOptions {
   demandNumber: string;
   issueDate: string; // YYYY-MM-DD
-  formTypeCode?: string | undefined; // "STD" | "NCUM" | "ARR" | "REV" | string
-  demandScope?: "CURRENT" | "ARREAR" | "COMBINED" | string | undefined;
-  paymentScope?: "FULL" | "PARTIAL" | string | undefined;
+  formTypeCode?: string | undefined; // "01" | "02" | "03" | "04" | "STD" | string
+  demandScope?: "01" | "02" | "03" | "CURRENT" | "ARREAR" | "COMBINED" | string | undefined;
+  paymentScope?: "01" | "02" | "FULL" | "PARTIAL" | string | undefined;
   amount: number;
 }
 
 /**
  * Official Punjab Form P.F.T-2 Notice / Challan Number Generator
- * Follows exact statutory pattern:
- * PFT2 - Demand No. - Issued month code - issue date code - form type code - current/arrear - combined/partial - amount
- * Example: PFT2-PDN-VEH-2026-0001-09-20-STD-CUR-FULL-5000
+ * Follows exact statutory pattern with numeric digit codes (NO text codes):
+ * PFT2 - Demand No. - Issued month code - issue date code - form type code - current/arrear code - combined/partial code - amount
+ *
+ * Digit Codes:
+ * - Form Type Code (2 digits):
+ *     01 = Standard Challan
+ *     02 = Notice-cum-Challan
+ *     03 = Arrears Demand Challan
+ *     04 = Revised Assessment Challan
+ * - Current / Arrear Code (2 digits):
+ *     01 = Current Year Demand
+ *     02 = Arrears Demand Only
+ *     03 = Combined (Current + Arrears)
+ * - Combined / Partial Code (2 digits):
+ *     01 = Full / Combined Payment
+ *     02 = Partial Payment
+ *
+ * Example: PFT2-PDN-VEH-2026-0001-09-20-01-01-01-5000
  */
 export function generatePft2NoticeNumber(params: Pft2NoticeNumberOptions): string {
   const demandClean = (params.demandNumber || "DEMAND-0000").trim();
@@ -41,27 +56,84 @@ export function generatePft2NoticeNumber(params: Pft2NoticeNumberOptions): strin
   const monthCode = parts.length >= 2 && parts[1] ? parts[1].padStart(2, "0") : "01";
   const dateCode = parts.length >= 3 && parts[2] ? parts[2].padStart(2, "0") : "01";
 
-  // Form type code
-  let formType = (params.formTypeCode || "STD").toUpperCase().trim();
-  if (formType === "STANDARD") formType = "STD";
-  else if (formType === "NOTICE_CUM_CHALLAN") formType = "NCUM";
-  else if (formType === "ARREARS_DEMAND") formType = "ARR";
-  else if (formType === "REVISED_ASSESSMENT") formType = "REV";
+  // Form type digit code (01: Standard, 02: Notice-cum-Challan, 03: Arrears, 04: Revised)
+  const rawForm = (params.formTypeCode || "01").toUpperCase().trim();
+  let formTypeDigit = "01";
+  if (rawForm === "01" || rawForm === "1" || rawForm === "STD" || rawForm === "STANDARD") {
+    formTypeDigit = "01";
+  } else if (
+    rawForm === "02" ||
+    rawForm === "2" ||
+    rawForm === "NCUM" ||
+    rawForm === "NOTICE_CUM_CHALLAN"
+  ) {
+    formTypeDigit = "02";
+  } else if (
+    rawForm === "03" ||
+    rawForm === "3" ||
+    rawForm === "ARR" ||
+    rawForm === "ARREARS_DEMAND"
+  ) {
+    formTypeDigit = "03";
+  } else if (
+    rawForm === "04" ||
+    rawForm === "4" ||
+    rawForm === "REV" ||
+    rawForm === "REVISED_ASSESSMENT"
+  ) {
+    formTypeDigit = "04";
+  } else if (/^\d+$/.test(rawForm)) {
+    formTypeDigit = rawForm.padStart(2, "0");
+  }
 
-  // Current / Arrear code
-  let scope = (params.demandScope || "CURRENT").toUpperCase().trim();
-  if (scope === "CURRENT") scope = "CUR";
-  else if (scope === "ARREAR" || scope === "ARREARS") scope = "ARR";
-  else if (scope === "COMBINED") scope = "COMB";
+  // Current / Arrear digit code (01: Current, 02: Arrear, 03: Combined)
+  const rawScope = (params.demandScope || "01").toUpperCase().trim();
+  let scopeDigit = "01";
+  if (rawScope === "01" || rawScope === "1" || rawScope === "CUR" || rawScope === "CURRENT") {
+    scopeDigit = "01";
+  } else if (
+    rawScope === "02" ||
+    rawScope === "2" ||
+    rawScope === "ARR" ||
+    rawScope === "ARREAR" ||
+    rawScope === "ARREARS"
+  ) {
+    scopeDigit = "02";
+  } else if (
+    rawScope === "03" ||
+    rawScope === "3" ||
+    rawScope === "COMB" ||
+    rawScope === "COMBINED"
+  ) {
+    scopeDigit = "03";
+  } else if (/^\d+$/.test(rawScope)) {
+    scopeDigit = rawScope.padStart(2, "0");
+  }
 
-  // Combined / Partial code
-  let payment = (params.paymentScope || "FULL").toUpperCase().trim();
-  if (payment === "PARTIAL") payment = "PART";
-  else if (payment === "COMBINED" || payment === "FULL") payment = "FULL";
+  // Combined / Partial digit code (01: Full / Combined, 02: Partial)
+  const rawPayment = (params.paymentScope || "01").toUpperCase().trim();
+  let paymentDigit = "01";
+  if (
+    rawPayment === "01" ||
+    rawPayment === "1" ||
+    rawPayment === "FULL" ||
+    rawPayment === "COMBINED"
+  ) {
+    paymentDigit = "01";
+  } else if (
+    rawPayment === "02" ||
+    rawPayment === "2" ||
+    rawPayment === "PART" ||
+    rawPayment === "PARTIAL"
+  ) {
+    paymentDigit = "02";
+  } else if (/^\d+$/.test(rawPayment)) {
+    paymentDigit = rawPayment.padStart(2, "0");
+  }
 
   const amountInt = Math.round(params.amount || 0);
 
-  return `PFT2-${demandClean}-${monthCode}-${dateCode}-${formType}-${scope}-${payment}-${amountInt}`;
+  return `PFT2-${demandClean}-${monthCode}-${dateCode}-${formTypeDigit}-${scopeDigit}-${paymentDigit}-${amountInt}`;
 }
 
 export type StatutoryDocCode =

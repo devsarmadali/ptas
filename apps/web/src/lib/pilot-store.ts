@@ -22,7 +22,7 @@ import {
   generateDocumentPin,
   VEHARI_PILOT_JURISDICTION
 } from "@ptas/domain";
-import { formatStandardDocNumber } from "./statutory-forms";
+import { formatStandardDocNumber, generatePft2NoticeNumber } from "./statutory-forms";
 
 export type MockRole = "INSPECTOR" | "ETO" | "DIRECTOR";
 
@@ -858,7 +858,14 @@ export function createInitialPft2Challans(units: StoredUnit[]): Pft2ChallanRecor
     const receiptNumber = isPaid
       ? formatStandardDocNumber({ docCode: "RCPT", sequence: "00001" })
       : undefined;
-    const noticeNumber = `PFT2-${u.demandUnit.permanentDemandNo}-07-01-STD-CUR-FULL-${amountPayable}`;
+    const noticeNumber = generatePft2NoticeNumber({
+      demandNumber: u.demandUnit.permanentDemandNo,
+      issueDate,
+      formTypeCode: "01",
+      demandScope: "01",
+      paymentScope: "01",
+      amount: amountPayable
+    });
     const pin = generateDocumentPin(noticeNumber);
 
     challans.push({
@@ -899,7 +906,7 @@ export function createInitialPft2Challans(units: StoredUnit[]): Pft2ChallanRecor
 
   // Add one cancelled challan to demonstrate complete lifecycle
   const cancelledNumber = formatStandardDocNumber({ docCode: "PFT2", sequence: "00099" });
-  const cancelledNoticeNumber = "PFT2-PDN-VEH-2026-0099-07-01-REV-CUR-FULL-4000";
+  const cancelledNoticeNumber = "PFT2-PDN-VEH-2026-0099-07-01-04-01-01-4000";
   const cancelledPin = generateDocumentPin(cancelledNoticeNumber);
   challans.push({
     id: "pft2-cancelled-demo",

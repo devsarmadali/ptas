@@ -19419,18 +19419,24 @@ export default function HomePage({
                           }
                           required
                         >
-                          <option value="STANDARD">Standard Payment Challan (STD)</option>
-                          <option value="NOTICE_CUM_CHALLAN">Notice-cum-Challan (NCUM)</option>
-                          <option value="ARREARS_DEMAND">Arrears Recovery Demand (ARR)</option>
+                          <option value="STANDARD">
+                            01 - Standard Payment Challan (عام چالان)
+                          </option>
+                          <option value="NOTICE_CUM_CHALLAN">
+                            02 - Notice-cum-Challan (نوٹس مع چالان)
+                          </option>
+                          <option value="ARREARS_DEMAND">
+                            03 - Arrears Recovery Demand (بقایاجات چالان)
+                          </option>
                           <option value="REVISED_ASSESSMENT">
-                            Revised Assessment / Relief (REV)
+                            04 - Revised Assessment / Relief (نظرثانی شدہ چالان)
                           </option>
                         </select>
                       </div>
 
                       <div className="form-group">
                         <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                          Demand Scope:
+                          Demand Scope Code (دائرہ کار کوڈ):
                         </label>
                         <select
                           className="form-control"
@@ -19442,9 +19448,15 @@ export default function HomePage({
                           }
                           required
                         >
-                          <option value="CURRENT">Current Year Demand (CUR)</option>
-                          <option value="ARREAR">Arrears / Prior Outstanding (ARR)</option>
-                          <option value="COMBINED">Combined Current &amp; Arrears (COMB)</option>
+                          <option value="CURRENT">
+                            01 - Current Year Demand (موجودہ سالانہ ٹیکس)
+                          </option>
+                          <option value="ARREAR">
+                            02 - Arrears / Prior Outstanding (بقایاجات)
+                          </option>
+                          <option value="COMBINED">
+                            03 - Combined Current &amp; Arrears (مشترکہ ڈیمانڈ)
+                          </option>
                         </select>
                       </div>
                     </div>
@@ -19637,8 +19649,21 @@ export default function HomePage({
                         <span>Challan Payable: PKR {effectiveAmount.toLocaleString()}</span>
                         <span>Due Date: {issuePft2DueDate}</span>
                         <span>
-                          Type: {issuePft2FormType} &bull; {issuePft2DemandScope} &bull;{" "}
-                          {issuePft2PaymentScope}
+                          Digit Codes: [Type:{" "}
+                          {issuePft2FormType === "STANDARD"
+                            ? "01"
+                            : issuePft2FormType === "NOTICE_CUM_CHALLAN"
+                              ? "02"
+                              : issuePft2FormType === "ARREARS_DEMAND"
+                                ? "03"
+                                : "04"}
+                          ] &bull; [Scope:{" "}
+                          {issuePft2DemandScope === "CURRENT"
+                            ? "01"
+                            : issuePft2DemandScope === "ARREAR"
+                              ? "02"
+                              : "03"}
+                          ] &bull; [Payment: {issuePft2PaymentScope === "FULL" ? "01" : "02"}]
                         </span>
                       </div>
                     </div>

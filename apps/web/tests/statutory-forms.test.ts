@@ -152,47 +152,49 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     expect(order.pin).toMatch(/^\d{6}$/);
   });
 
-  it("generates statutory PFT-2 Notice Number following prescribed statutory format", () => {
+  it("generates statutory PFT-2 Notice Number containing numeric digit codes instead of text", () => {
     const noticeNo1 = generatePft2NoticeNumber({
       demandNumber: "PDN-VEH-2026-0001",
       issueDate: "2026-09-20",
-      formTypeCode: "STD",
-      demandScope: "CUR",
-      paymentScope: "FULL",
+      formTypeCode: "01",
+      demandScope: "01",
+      paymentScope: "01",
       amount: 5000
     });
-    expect(noticeNo1).toBe("PFT2-PDN-VEH-2026-0001-09-20-STD-CUR-FULL-5000");
+    // PFT2 - Demand No. - Month - Date - FormType(01) - Scope(01) - Payment(01) - Amount
+    expect(noticeNo1).toBe("PFT2-PDN-VEH-2026-0001-09-20-01-01-01-5000");
 
     const noticeNo2 = generatePft2NoticeNumber({
       demandNumber: "PDN-VEH-2026-0002",
       issueDate: "2026-09-20",
-      formTypeCode: "NCUM",
-      demandScope: "COMB",
-      paymentScope: "PART",
+      formTypeCode: "NOTICE_CUM_CHALLAN",
+      demandScope: "COMBINED",
+      paymentScope: "PARTIAL",
       amount: 2500
     });
-    expect(noticeNo2).toBe("PFT2-PDN-VEH-2026-0002-09-20-NCUM-COMB-PART-2500");
+    // Converts text input gracefully to numeric digit codes: 02 (NCUM), 03 (COMB), 02 (PART)
+    expect(noticeNo2).toBe("PFT2-PDN-VEH-2026-0002-09-20-02-03-02-2500");
   });
 
   it("generates Form P.F.T-2 with custom options, partial payment, and document security PIN", () => {
     const pft2 = generateFormPFT2(alMadinaUnit, {
       dueDate: "2026-09-30",
       issueDate: "2026-09-20",
-      formType: "NCUM",
-      demandScope: "CUR",
-      paymentScope: "PART",
+      formType: "02",
+      demandScope: "01",
+      paymentScope: "02",
       customAmount: 2000,
       isPartial: true,
       remainingBalance: 2000,
-      noticeNumber: "PFT2-PDN-VEH-2026-0003-09-20-NCUM-CUR-PART-2000",
+      noticeNumber: "PFT2-PDN-VEH-2026-0003-09-20-02-01-02-2000",
       pin: "654321"
     });
 
     expect(pft2.pin).toBe("654321");
-    expect(pft2.noticeNumber).toBe("PFT2-PDN-VEH-2026-0003-09-20-NCUM-CUR-PART-2000");
-    expect(pft2.formType).toBe("NCUM");
-    expect(pft2.demandScope).toBe("CUR");
-    expect(pft2.paymentScope).toBe("PART");
+    expect(pft2.noticeNumber).toBe("PFT2-PDN-VEH-2026-0003-09-20-02-01-02-2000");
+    expect(pft2.formType).toBe("02");
+    expect(pft2.demandScope).toBe("01");
+    expect(pft2.paymentScope).toBe("02");
     expect(pft2.displayAmount).toBe(2000);
     expect(pft2.isPartial).toBe(true);
     expect(pft2.remainingBalance).toBe(2000);
@@ -200,7 +202,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     // Check all copies have the PIN and notice number
     for (const copy of pft2.copies) {
       expect(copy.pin).toBe("654321");
-      expect(copy.noticeNumber).toBe("PFT2-PDN-VEH-2026-0003-09-20-NCUM-CUR-PART-2000");
+      expect(copy.noticeNumber).toBe("PFT2-PDN-VEH-2026-0003-09-20-02-01-02-2000");
       expect(copy.taxPayable.totalPayable).toBe(2000);
       expect(copy.dueDate).toBe("2026-09-30");
     }

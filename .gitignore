@@ -17,3 +17,6 @@ artifacts/
 *.zip
 *.pdf
 *.tsbuildinfo
+
+.vercel
+.env*
