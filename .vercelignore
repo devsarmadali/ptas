@@ -1,0 +1,13 @@
+node_modules
+.next
+.turbo
+dist
+coverage
+playwright-report
+test-results
+local-data
+artifacts
+*.pdf
+*.zip
+.git
+.pnpm-store
