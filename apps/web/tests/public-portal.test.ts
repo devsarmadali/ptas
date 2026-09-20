@@ -42,7 +42,7 @@ describe("Phase 8: Public Assessee Portal & Real-Time QR / Document Verification
       const pft1 = generateFormPFT1(unit);
       expect(pft1.qrPayload).toBeDefined();
       expect(pft1.qrPayload).toMatch(
-        /^PTAS-PUNJAB:PFT-1:PDN-VEH-2026-0001:TAX=10000:YEAR=2026-2027:DUE=31\/08\/2026:SHA=/
+        /^PTAS-PUNJAB:PFT-1:0001:TAX=10000:YEAR=2026-2027:DUE=31\/08\/2026:SHA=/
       );
       expect(pft1.officialSha256).toHaveLength(64);
     });
@@ -54,7 +54,7 @@ describe("Phase 8: Public Assessee Portal & Real-Time QR / Document Verification
       const pft2 = generateFormPFT2(unit);
       expect(pft2.qrPayload).toBeDefined();
       expect(pft2.qrPayload).toMatch(
-        /^PTAS-PUNJAB:PFT-2:PB\/ET\/VHR\/CIR-1\/PFT2\/2026-27\/00001:DEMAND=PDN-VEH-2026-0001:AMOUNT=10000:DUE=31\/08\/2026:SHA=/
+        /^PTAS-PUNJAB:PFT-2:PB\/ET\/VHR\/CIR-1\/PFT2\/2026-27\/00001:DEMAND=0001:AMOUNT=10000:DUE=31\/08\/2026:SHA=/
       );
       expect(pft2.copies).toHaveLength(3);
 
@@ -201,7 +201,7 @@ describe("Phase 8: Public Assessee Portal & Real-Time QR / Document Verification
       expect(result!.legalName).toBe("Muhammad Akram");
       expect(result!.tradeName).toBe("Kisan Pesticides & Fertilizer Agency");
       expect(result!.identifierValue).toBe("36601-2948192-3");
-      expect(result!.permanentDemandNo).toBe("PDN-VEH-2026-0002");
+      expect(result!.permanentDemandNo).toBe("0002");
       expect(result!.assessedTax).toBe(2000);
       expect(result!.outstandingBalance).toBe(2000);
       expect(result!.isClearanceEligible).toBe(false);
@@ -220,7 +220,7 @@ describe("Phase 8: Public Assessee Portal & Real-Time QR / Document Verification
     });
 
     it("finds taxpayer by Permanent Demand Number (PDN)", () => {
-      const result = lookupTaxpayerLiability("PDN-VEH-2026-0003", initialUnits);
+      const result = lookupTaxpayerLiability("0003", initialUnits);
       expect(result).not.toBeNull();
       expect(result!.legalName).toContain("Al-Madina");
     });

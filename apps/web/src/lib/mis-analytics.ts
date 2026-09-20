@@ -524,7 +524,7 @@ export function escapeCsvCell(val: unknown): string {
 export function exportPft3RegisterCsv(units: readonly StoredUnit[]): string {
   const headers = [
     "S.No",
-    "Provincial UIN",
+    "PIN (Professional Identification Number)",
     "Permanent Demand No",
     "Assessment No",
     "Assessee Legal Name",
@@ -610,7 +610,7 @@ export function exportPft3RegisterCsv(units: readonly StoredUnit[]): string {
 export function exportDefaulterRecoveryCsv(units: readonly StoredUnit[]): string {
   const headers = [
     "S.No",
-    "Provincial UIN",
+    "PIN (Professional Identification Number)",
     "Permanent Demand No",
     "Assessee Legal Name",
     "Trade Name",
@@ -687,7 +687,7 @@ export function exportDefaulterRecoveryCsv(units: readonly StoredUnit[]): string
 export function exportNoticeDispatchCsv(units: readonly StoredUnit[]): string {
   const headers = [
     "S.No",
-    "Provincial UIN",
+    "PIN (Professional Identification Number)",
     "Notice No",
     "Permanent Demand No",
     "Assessee Legal Name",

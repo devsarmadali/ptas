@@ -46,10 +46,25 @@ export interface Pft2NoticeNumberOptions {
  *     01 = Full / Combined Payment
  *     02 = Partial Payment
  *
- * Example: PFT2-PDN-VEH-2026-0001-09-20-01-01-01-5000
+ * Example: PFT2-0001-09-20-01-01-01-5000
  */
+/**
+ * Formats a demand number to circle-wise 4 digits (e.g. "0005").
+ * Demand numbers are circle-scoped; province-wide uniqueness is guaranteed by PIN.
+ */
+export function formatDemandNumber(demand: string | number | undefined | null): string {
+  if (!demand) return "0001";
+  const str = String(demand).trim();
+  const match = str.match(/(\d{4,5})$/);
+  if (match && match[1]) {
+    return match[1].padStart(4, "0");
+  }
+  const digits = str.replace(/\D/g, "");
+  return digits ? digits.slice(-4).padStart(4, "0") : "0001";
+}
+
 export function generatePft2NoticeNumber(params: Pft2NoticeNumberOptions): string {
-  const demandClean = (params.demandNumber || "DEMAND-0000").trim();
+  const demandClean = formatDemandNumber(params.demandNumber);
 
   // Extract month and date codes from issueDate (YYYY-MM-DD)
   const parts = params.issueDate ? params.issueDate.split("-") : [];
@@ -560,7 +575,7 @@ export function generateFormPFT1(
   const noticeNumber =
     opts.noticeNumber || formatStandardDocNumber({ docCode: "PFT1", sequence: serial });
   const pin = opts.pin || generateDocumentPin(noticeNumber);
-  const demandNumber = unit.demandUnit.permanentDemandNo;
+  const demandNumber = formatDemandNumber(unit.demandUnit?.permanentDemandNo);
   const taxNumber = `${unit.identifierType}: ${unit.identifierValue}`;
   const issueDate = opts.issueDate || "01/07/2026";
   const dueDate = opts.dueDate || "31/08/2026";
@@ -711,7 +726,7 @@ export function generateFormPFT2(
     ? unit.demandUnit.permanentDemandNo.replace(/[^0-9]/g, "").slice(-4)
     : unit.id.slice(-4);
   const challanNumber = formatStandardDocNumber({ docCode: "PFT2", sequence: challanSerial });
-  const demandNo = unit.demandUnit.permanentDemandNo;
+  const demandNo = formatDemandNumber(unit.demandUnit?.permanentDemandNo);
   const dueDate = opts.dueDate || "31/08/2026";
   const issueDate = opts.issueDate || "2026-07-01";
   const taxYear = "2026-2027";
@@ -828,20 +843,20 @@ export function generateFormPFT2(
 
   const copy1: FormPFT2CopyModel = {
     ...sharedData,
-    copyTitle: "PART 1: TAXPAYER'S COPY",
-    copyTitleUrdu: "کاپ برائے ٹیکس دہندہ"
+    copyTitle: "TAXPAYER'S COPY",
+    copyTitleUrdu: ""
   };
 
   const copy2: FormPFT2CopyModel = {
     ...sharedData,
-    copyTitle: "PART 2: BANK'S COPY",
-    copyTitleUrdu: "کاپ برائے بینک"
+    copyTitle: "BANK'S COPY",
+    copyTitleUrdu: ""
   };
 
   const copy3: FormPFT2CopyModel = {
     ...sharedData,
-    copyTitle: "PART 3: DEPARTMENT'S COPY",
-    copyTitleUrdu: "کاپ برائے محکمہ ایکسائز"
+    copyTitle: "DEPARTMENT'S COPY",
+    copyTitleUrdu: ""
   };
 
   return {
@@ -873,7 +888,7 @@ export function generateShowCausePenaltyNotice(
 ): ShowCausePenaltyNoticeModel {
   const latestVersion = unit.assessmentVersions[0];
   const taxAmount = latestVersion?.snapshot.taxAmount ?? 0;
-  const demandNo = unit.demandUnit.permanentDemandNo;
+  const demandNo = formatDemandNumber(unit.demandUnit.permanentDemandNo);
   const noticeNumber = formatStandardDocNumber({ docCode: "SCN", sequence: unit.id.slice(-4) });
   const pin = generateDocumentPin(noticeNumber);
   const noticeDate = new Date().toISOString().split("T")[0]!;
@@ -945,7 +960,7 @@ export function generateLandRevenueRecoveryCertificate(
   }
   const totalArrearsRecoverable = taxAmount + penalty;
   const totalArrearsWords = numberToWordsPkr(totalArrearsRecoverable);
-  const demandNo = unit.demandUnit.permanentDemandNo;
+  const demandNo = formatDemandNumber(unit.demandUnit.permanentDemandNo);
   const certificateNumber = formatStandardDocNumber({
     docCode: "LRC",
     sequence: unit.id.slice(-4)
@@ -1017,7 +1032,7 @@ export function generateFormPFT3Rows(units: readonly StoredUnit[]): readonly For
 
     return {
       serialNumber: idx + 1,
-      permanentDemandNo: u.demandUnit.permanentDemandNo,
+      permanentDemandNo: formatDemandNumber(u.demandUnit.permanentDemandNo),
       provincialUin: u.provincialUin,
       assessmentNo: `ASM-VEH-2026-${u.id.slice(-4)}`,
       legalName: u.legalName,

@@ -690,12 +690,19 @@ export function lookupTaxpayerLiability(
     const legalClean = normalizeQuery(u.legalName);
     const tradeClean = u.tradeName ? normalizeQuery(u.tradeName) : "";
 
+    const queryDigits = normalized.replace(/\D/g, "");
+    const pdnDigits = pdnClean.replace(/\D/g, "");
+    const pdnMatches =
+      pdnClean === normalized ||
+      pdnClean.includes(normalized) ||
+      normalized.includes(pdnClean) ||
+      (queryDigits.length >= 4 && pdnDigits.length >= 4 && queryDigits.endsWith(pdnDigits));
+
     return (
       idClean === normalized ||
       idClean.includes(normalized) ||
       normalized.includes(idClean) ||
-      pdnClean === normalized ||
-      pdnClean.includes(normalized) ||
+      pdnMatches ||
       (uinClean
         ? uinClean === normalized || uinClean.includes(normalized) || normalized.includes(uinClean)
         : false) ||

@@ -1002,7 +1002,7 @@ export default function HomePage({
       demandUnit: {
         id: demandUnitId,
         taxpayerId: unitId,
-        permanentDemandNo: `PDN-VEH-2026-${String(units.length + 1).padStart(4, "0")}`,
+        permanentDemandNo: String(units.length + 1).padStart(4, "0"),
         createdAt: new Date().toISOString()
       },
       assessments: [assessment],
@@ -1019,7 +1019,7 @@ export default function HomePage({
       target: newUnit.legalName,
       timestamp: new Date().toISOString(),
       correlationId,
-      details: `Registered unit under Class ${rule.rule_code} (${rule.category}) with Provincial UIN ${provincialUin} at official statutory rate PKR ${rule.annual_rate_pkr.toLocaleString()}`
+      details: `Registered unit under Class ${rule.rule_code} (${rule.category}) with PIN ${provincialUin} at official statutory rate PKR ${rule.annual_rate_pkr.toLocaleString()}`
     };
 
     const updated = [newUnit, ...units];
@@ -4446,7 +4446,7 @@ export default function HomePage({
                     </p>
                     {formPFT1Data.provincialUin && (
                       <p style={{ margin: "0.25rem 0" }}>
-                        <strong>Provincial UIN:</strong>{" "}
+                        <strong>PIN (Professional Identification Number):</strong>{" "}
                         <span
                           style={{
                             fontFamily: "monospace",
@@ -4872,86 +4872,90 @@ export default function HomePage({
               <div className="challan-grid printable-document" id="pft2-challan-document">
                 {formPFT2Data.copies.map((copy, cIdx) => (
                   <div key={cIdx} className="challan-card">
-                    {/* Top Section */}
+                    {/* Top Section with Left QR Code & Copy Info */}
                     <div
                       style={{
-                        textAlign: "center",
+                        display: "flex",
+                        gap: "0.5rem",
+                        alignItems: "center",
                         borderBottom: "2px solid #0d3822",
-                        paddingBottom: "0.5rem"
+                        paddingBottom: "0.4rem"
                       }}
                     >
-                      <span
-                        style={{
-                          fontSize: "0.75rem",
-                          fontWeight: 800,
-                          color: "#166534",
-                          background: "#dcfce7",
-                          padding: "0.15rem 0.5rem",
-                          borderRadius: "4px",
-                          display: "inline-block",
-                          marginBottom: "0.35rem"
-                        }}
-                      >
-                        {copy.copyTitle}
-                      </span>
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "0.7rem",
-                          color: "#64748b",
-                          fontFamily: "sans-serif"
-                        }}
-                      >
-                        {copy.copyTitleUrdu}
-                      </span>
-                      <h4
-                        style={{ margin: "0.3rem 0 0.1rem", fontSize: "0.85rem", color: "#0d3822" }}
-                      >
-                        GOVERNMENT OF THE PUNJAB
-                      </h4>
-                      <p style={{ margin: 0, fontSize: "0.75rem", fontWeight: 700 }}>
-                        EXCISE &amp; TAXATION DEPARTMENT
-                      </p>
-                      <p style={{ margin: "0.15rem 0", fontSize: "0.7rem", fontWeight: 600 }}>
-                        PUNJAB PROFESSIONS &amp; TRADES TAX
-                      </p>
-                      <p style={{ margin: 0, fontSize: "0.65rem", color: "#64748b" }}>
-                        PAYMENT CHALLAN &bull; Rule 9
-                      </p>
-                      <div
-                        style={{
-                          fontSize: "0.7rem",
-                          fontWeight: 700,
-                          color: "#b45309",
-                          marginTop: "0.25rem"
-                        }}
-                      >
-                        Head: {copy.headOfAccount}
+                      {/* Left: QR Code */}
+                      <div style={{ flexShrink: 0 }}>
+                        <StatutoryQrCode
+                          payload={copy.qrPayload}
+                          size={66}
+                          label="Scan to Verify"
+                          subtitle={copy.bankUse.challanSerial}
+                          onScanOrClick={(payload) => {
+                            setPortalVerificationInput(payload);
+                            handleVerifyDocument(payload);
+                            setActiveTab("PUBLIC_PORTAL");
+                          }}
+                        />
+                      </div>
+                      {/* Right: Copy Title & Department Header */}
+                      <div style={{ flex: 1, textAlign: "center" }}>
+                        <span
+                          style={{
+                            fontSize: "0.75rem",
+                            fontWeight: 800,
+                            color: "#166534",
+                            background: "#dcfce7",
+                            padding: "0.15rem 0.5rem",
+                            borderRadius: "4px",
+                            display: "inline-block",
+                            marginBottom: "0.2rem"
+                          }}
+                        >
+                          {copy.copyTitle}
+                        </span>
+                        <h4
+                          style={{
+                            margin: "0.1rem 0 0.05rem",
+                            fontSize: "0.8rem",
+                            color: "#0d3822"
+                          }}
+                        >
+                          GOVERNMENT OF THE PUNJAB
+                        </h4>
+                        <p style={{ margin: 0, fontSize: "0.72rem", fontWeight: 700 }}>
+                          EXCISE &amp; TAXATION DEPARTMENT
+                        </p>
+                        <p style={{ margin: "0.1rem 0", fontSize: "0.68rem", fontWeight: 600 }}>
+                          PUNJAB PROFESSIONS &amp; TRADES TAX
+                        </p>
+                        <p style={{ margin: 0, fontSize: "0.62rem", color: "#64748b" }}>
+                          PAYMENT CHALLAN &bull; Rule 9
+                        </p>
+                        <div
+                          style={{
+                            fontSize: "0.68rem",
+                            fontWeight: 700,
+                            color: "#b45309",
+                            marginTop: "0.15rem"
+                          }}
+                        >
+                          Head: {copy.headOfAccount}
+                        </div>
                       </div>
                     </div>
 
-                    {/* Metadata Header */}
+                    {/* Unified Metadata & Assessment Header */}
                     <div
                       style={{
                         display: "grid",
                         gridTemplateColumns: "1fr 1fr",
-                        gap: "0.4rem",
-                        fontSize: "0.75rem",
+                        gap: "0.35rem 0.5rem",
+                        fontSize: "0.72rem",
                         background: "#f8fafc",
                         padding: "0.4rem",
                         borderRadius: "4px",
                         border: "1px solid #e2e8f0"
                       }}
                     >
-                      <div>
-                        <strong>District:</strong> {copy.district}
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <strong>Tax Year:</strong> {copy.taxYear}
-                      </div>
-                      <div style={{ gridColumn: "span 2", color: "#b91c1c" }}>
-                        <strong>Due Date:</strong> {copy.dueDate}
-                      </div>
                       <div
                         style={{
                           gridColumn: "span 2",
@@ -4963,7 +4967,7 @@ export default function HomePage({
                       >
                         <strong>Notice No:</strong> {copy.noticeNumber}
                       </div>
-                      <div style={{ gridColumn: "span 2" }}>
+                      <div style={{ display: "flex", alignItems: "center" }}>
                         <span
                           style={{
                             display: "inline-block",
@@ -4971,7 +4975,7 @@ export default function HomePage({
                             borderRadius: "4px",
                             fontFamily: "monospace",
                             fontWeight: 800,
-                            fontSize: "0.75rem",
+                            fontSize: "0.72rem",
                             background: "#e0f2fe",
                             color: "#0369a1",
                             border: "1px solid #bae6fd",
@@ -4981,21 +4985,24 @@ export default function HomePage({
                           🔐 PIN: {copy.pin}
                         </span>
                       </div>
-                    </div>
-
-                    {/* Taxpayer Information */}
-                    <div style={{ fontSize: "0.75rem", lineHeight: 1.4 }}>
-                      <strong
-                        style={{ color: "#0d3822", display: "block", marginBottom: "0.2rem" }}
-                      >
-                        Taxpayer&apos;s Information:
-                      </strong>
-                      <p style={{ margin: "0.1rem 0" }}>
-                        <strong>Tax No:</strong> {copy.taxpayerInfo.taxNo}
-                      </p>
+                      <div style={{ textAlign: "right" }}>
+                        <strong>Demand No:</strong>{" "}
+                        <span
+                          style={{ fontFamily: "monospace", fontWeight: 800, color: "#0d3822" }}
+                        >
+                          {copy.assessmentInfo.demandNo}
+                        </span>
+                      </div>
                       {copy.taxpayerInfo.provincialUin && (
-                        <p style={{ margin: "0.1rem 0" }}>
-                          <strong>Provincial UIN:</strong>{" "}
+                        <div
+                          style={{
+                            gridColumn: "span 2",
+                            fontSize: "0.72rem",
+                            borderTop: "1px dashed #e2e8f0",
+                            paddingTop: "0.25rem"
+                          }}
+                        >
+                          <strong>PIN (Professional Identification Number):</strong>{" "}
                           <span
                             style={{
                               fontFamily: "monospace",
@@ -5005,26 +5012,39 @@ export default function HomePage({
                           >
                             {copy.taxpayerInfo.provincialUin}
                           </span>
-                        </p>
+                        </div>
                       )}
-                      <p style={{ margin: "0.1rem 0" }}>
-                        <strong>Class:</strong> {copy.taxpayerInfo.classification}
+                      <div>
+                        <strong>Circle:</strong> {copy.assessmentInfo.circleName}
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <strong>District:</strong> {copy.district}
+                      </div>
+                      <div>
+                        <strong>Tax Year:</strong> {copy.taxYear}
+                      </div>
+                      <div style={{ textAlign: "right", color: "#b91c1c" }}>
+                        <strong>Due Date:</strong> {copy.dueDate}
+                      </div>
+                    </div>
+
+                    {/* Taxpayer Details */}
+                    <div style={{ fontSize: "0.75rem", lineHeight: 1.4 }}>
+                      <p style={{ margin: "0.15rem 0" }}>
+                        <strong>Class:</strong> {copy.taxpayerInfo.classification}{" "}
+                        <span style={{ fontWeight: 700, color: "#166534" }}>
+                          (PKR {copy.taxpayerInfo.slabRatePkr.toLocaleString()})
+                        </span>
                       </p>
-                      <p style={{ margin: "0.1rem 0" }}>
-                        <strong>Sub-Class / Slab:</strong> Class{" "}
-                        {copy.taxpayerInfo.subclassificationCode} &bull;{" "}
-                        {copy.taxpayerInfo.tertiarySlab} (PKR{" "}
-                        {copy.taxpayerInfo.slabRatePkr.toLocaleString()})
-                      </p>
-                      <p style={{ margin: "0.1rem 0" }}>
+                      <p style={{ margin: "0.15rem 0" }}>
                         <strong>Name:</strong> {copy.taxpayerInfo.legalName}
                       </p>
                       {copy.taxpayerInfo.tradeName && (
-                        <p style={{ margin: "0.1rem 0" }}>
+                        <p style={{ margin: "0.15rem 0" }}>
                           <strong>Trade:</strong> {copy.taxpayerInfo.tradeName}
                         </p>
                       )}
-                      <p style={{ margin: "0.1rem 0" }}>
+                      <p style={{ margin: "0.15rem 0" }}>
                         <strong>Address:</strong> {copy.taxpayerInfo.address}
                       </p>
                     </div>
@@ -5088,44 +5108,6 @@ export default function HomePage({
                       >
                         (in words) {copy.taxPayable.totalPayableWords}
                       </p>
-                    </div>
-
-                    {/* Tax Assessment Information */}
-                    <div
-                      style={{
-                        fontSize: "0.725rem",
-                        borderTop: "1px dashed #cbd5e1",
-                        paddingTop: "0.4rem"
-                      }}
-                    >
-                      <strong style={{ color: "#0d3822", display: "block" }}>
-                        Tax Assessment Information:
-                      </strong>
-                      <p style={{ margin: "0.1rem 0" }}>
-                        <strong>Demand No:</strong> {copy.assessmentInfo.demandNo}
-                      </p>
-                      <p style={{ margin: "0.1rem 0" }}>
-                        <strong>Circle:</strong> {copy.assessmentInfo.circleName}
-                      </p>
-                      <p style={{ margin: "0.1rem 0" }}>
-                        <strong>ETO:</strong> {copy.assessmentInfo.etoName} (
-                        {copy.assessmentInfo.etoTitle})
-                      </p>
-                    </div>
-
-                    {/* Official Statutory QR Code for Challan Copy */}
-                    <div style={{ textAlign: "center", margin: "0.5rem 0" }}>
-                      <StatutoryQrCode
-                        payload={copy.qrPayload}
-                        size={80}
-                        label="Scan to Verify Challan"
-                        subtitle={copy.bankUse.challanSerial}
-                        onScanOrClick={(payload) => {
-                          setPortalVerificationInput(payload);
-                          handleVerifyDocument(payload);
-                          setActiveTab("PUBLIC_PORTAL");
-                        }}
-                      />
                     </div>
 
                     {/* For Bank's Use Only */}
@@ -11845,7 +11827,7 @@ export default function HomePage({
               >
                 <input
                   type="text"
-                  placeholder="Enter CNIC (e.g. 36601-2948192-3), NTN (e.g. 7412983-1), or PDN (e.g. PDN-VEH-2026-0001)..."
+                  placeholder="Enter CNIC (e.g. 36601-2948192-3), NTN (e.g. 7412983-1), PIN, or Demand No (e.g. 0001)..."
                   className="form-control"
                   style={{ flex: 1, minWidth: "20rem" }}
                   value={portalSearchQuery}
@@ -12527,7 +12509,7 @@ export default function HomePage({
                       </span>
                     </div>
 
-                    {/* Provincial UIN Preview Card */}
+                    {/* PIN Preview Card */}
                     {previewUin && (
                       <div
                         style={{
@@ -12547,7 +12529,7 @@ export default function HomePage({
                           }}
                         >
                           <span style={{ fontSize: "0.725rem", color: "#64748b", fontWeight: 600 }}>
-                            PROVINCIAL UNIQUE IDENTIFICATION NUMBER (UIN):
+                            PROFESSIONAL IDENTIFICATION NUMBER (PIN):
                           </span>
                           <span style={{ fontSize: "0.68rem", color: "#0284c7", fontWeight: 600 }}>
                             PBS District 237 (Vehari)
@@ -12565,7 +12547,7 @@ export default function HomePage({
                           {previewUin}
                         </div>
                         <div style={{ fontSize: "0.68rem", color: "#94a3b8", marginTop: "0.2rem" }}>
-                          Format: District-Tehsil-Circle-Class-Subclass-Tertiary-Sequence-Version
+                          Format: [District]-[Tehsil+Circle+Classification+Sequence]-[Version]
                           (Permanent)
                         </div>
                       </div>
@@ -14026,72 +14008,148 @@ export default function HomePage({
                         <div key={copy.copyTitle} className="challan-card">
                           <div
                             style={{
-                              textAlign: "center",
+                              display: "flex",
+                              gap: "0.4rem",
+                              alignItems: "center",
                               borderBottom: "1px solid #0d3822",
-                              paddingBottom: "0.4rem"
+                              paddingBottom: "0.35rem"
                             }}
                           >
-                            <div style={{ fontSize: "0.75rem", fontWeight: 700 }}>
-                              GOVT. OF THE PUNJAB
+                            <div style={{ flexShrink: 0 }}>
+                              <StatutoryQrCode
+                                payload={copy.qrPayload}
+                                size={56}
+                                label="Verify"
+                                subtitle={copy.bankUse.challanSerial}
+                              />
                             </div>
-                            <div style={{ fontSize: "0.7rem", color: "#0d3822" }}>
-                              EXCISE &amp; TAXATION
-                            </div>
-                            <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#0d3822" }}>
-                              FORM P.F.T-2
-                            </div>
-                            <div
-                              style={{
-                                fontSize: "0.7rem",
-                                background: "#f0fdf4",
-                                padding: "0.15rem",
-                                fontWeight: 700
-                              }}
-                            >
-                              {copy.copyTitle}
-                            </div>
-                            <div style={{ fontSize: "0.65rem", color: "#64748b" }}>
-                              {copy.copyTitleUrdu}
+                            <div style={{ flex: 1, textAlign: "center" }}>
+                              <div style={{ fontSize: "0.72rem", fontWeight: 700 }}>
+                                GOVT. OF THE PUNJAB
+                              </div>
+                              <div style={{ fontSize: "0.68rem", color: "#0d3822" }}>
+                                EXCISE &amp; TAXATION
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: "0.7rem",
+                                  background: "#f0fdf4",
+                                  padding: "0.1rem",
+                                  fontWeight: 700,
+                                  color: "#166534",
+                                  borderRadius: "3px",
+                                  marginTop: "0.15rem"
+                                }}
+                              >
+                                {copy.copyTitle}
+                              </div>
                             </div>
                           </div>
 
-                          <div style={{ fontSize: "0.75rem", lineHeight: 1.4 }}>
-                            <div>
-                              <strong>Head:</strong> {copy.headOfAccount}
+                          {/* Unified Metadata Header */}
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "1fr 1fr",
+                              gap: "0.25rem 0.4rem",
+                              fontSize: "0.7rem",
+                              background: "#f8fafc",
+                              padding: "0.35rem",
+                              borderRadius: "4px",
+                              border: "1px solid #e2e8f0",
+                              marginTop: "0.3rem"
+                            }}
+                          >
+                            <div
+                              style={{
+                                gridColumn: "span 2",
+                                fontSize: "0.68rem",
+                                fontFamily: "monospace",
+                                color: "#1e3a8a",
+                                wordBreak: "break-all"
+                              }}
+                            >
+                              <strong>Notice No:</strong> {copy.noticeNumber}
                             </div>
                             <div>
-                              <strong>District:</strong> {copy.district} &bull; FY: {copy.taxYear}
+                              <span
+                                style={{
+                                  display: "inline-block",
+                                  padding: "0.05rem 0.35rem",
+                                  borderRadius: "3px",
+                                  fontFamily: "monospace",
+                                  fontWeight: 800,
+                                  fontSize: "0.68rem",
+                                  background: "#e0f2fe",
+                                  color: "#0369a1",
+                                  border: "1px solid #bae6fd"
+                                }}
+                              >
+                                🔐 PIN: {copy.pin}
+                              </span>
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <strong>Demand No:</strong>{" "}
+                              <span style={{ fontFamily: "monospace", fontWeight: 800 }}>
+                                {copy.assessmentInfo.demandNo}
+                              </span>
+                            </div>
+                            {copy.taxpayerInfo.provincialUin && (
+                              <div
+                                style={{
+                                  gridColumn: "span 2",
+                                  fontSize: "0.68rem",
+                                  borderTop: "1px dashed #e2e8f0",
+                                  paddingTop: "0.2rem"
+                                }}
+                              >
+                                <strong>PIN:</strong>{" "}
+                                <span
+                                  style={{
+                                    fontFamily: "monospace",
+                                    color: "#1d4ed8",
+                                    fontWeight: 700
+                                  }}
+                                >
+                                  {copy.taxpayerInfo.provincialUin}
+                                </span>
+                              </div>
+                            )}
+                            <div>
+                              <strong>Circle:</strong> {copy.assessmentInfo.circleName}
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <strong>District:</strong> {copy.district}
                             </div>
                             <div>
                               <strong>Due:</strong> {copy.dueDate}
                             </div>
+                            <div style={{ textAlign: "right" }}>
+                              <strong>FY:</strong> {copy.taxYear}
+                            </div>
                           </div>
 
+                          {/* Assessee Details */}
                           <div
                             style={{
                               background: "#f8fafc",
-                              padding: "0.4rem",
+                              padding: "0.35rem",
                               borderRadius: "4px",
-                              fontSize: "0.72rem"
+                              fontSize: "0.72rem",
+                              marginTop: "0.3rem"
                             }}
                           >
+                            <div>
+                              <strong>Class:</strong> {copy.taxpayerInfo.classification}{" "}
+                              <span style={{ fontWeight: 700, color: "#166534" }}>
+                                (PKR {copy.taxpayerInfo.slabRatePkr.toLocaleString()})
+                              </span>
+                            </div>
                             <div>
                               <strong>Assessee:</strong> {copy.taxpayerInfo.legalName}
                             </div>
                             <div>
-                              <strong>CNIC/NTN:</strong> {copy.taxpayerInfo.taxNo}
-                            </div>
-                            <div>
                               <strong>Address:</strong> {copy.taxpayerInfo.address}
-                            </div>
-                            <div>
-                              <strong>Entry:</strong> {copy.taxpayerInfo.classification}
-                            </div>
-                            <div>
-                              <strong>Sub-Class / Slab:</strong> Entry{" "}
-                              {copy.taxpayerInfo.subclassificationCode} &bull;{" "}
-                              {copy.taxpayerInfo.tertiarySlab} (PKR{" "}
-                              {copy.taxpayerInfo.slabRatePkr.toLocaleString()})
                             </div>
                           </div>
 
@@ -14099,8 +14157,8 @@ export default function HomePage({
                             style={{
                               borderTop: "1px dashed #cbd5e1",
                               borderBottom: "1px dashed #cbd5e1",
-                              padding: "0.4rem 0",
-                              fontSize: "0.75rem"
+                              padding: "0.35rem 0",
+                              fontSize: "0.72rem"
                             }}
                           >
                             <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -14124,18 +14182,13 @@ export default function HomePage({
                                 display: "flex",
                                 justifyContent: "space-between",
                                 fontWeight: 700,
-                                marginTop: "0.25rem",
+                                marginTop: "0.2rem",
                                 color: "#0d3822"
                               }}
                             >
                               <span>Total Payable:</span>
                               <span>PKR {copy.taxPayable.totalPayable.toLocaleString()}</span>
                             </div>
-                          </div>
-
-                          <div style={{ fontSize: "0.68rem", color: "#334155" }}>
-                            <div>Demand No: {copy.assessmentInfo.demandNo}</div>
-                            <div>Circle: {copy.assessmentInfo.circleName}</div>
                           </div>
 
                           <div
@@ -19872,90 +19925,93 @@ export default function HomePage({
                     >
                       {challanModel.copies.map((copy, cIdx) => (
                         <div key={cIdx} className="challan-card">
-                          {/* Top Section */}
+                          {/* Top Section with Left QR Code & Copy Info */}
                           <div
                             style={{
-                              textAlign: "center",
+                              display: "flex",
+                              gap: "0.5rem",
+                              alignItems: "center",
                               borderBottom: "2px solid #0d3822",
-                              paddingBottom: "0.5rem"
+                              paddingBottom: "0.4rem"
                             }}
                           >
-                            <span
-                              style={{
-                                fontSize: "0.75rem",
-                                fontWeight: 800,
-                                color: "#166534",
-                                background: "#dcfce7",
-                                padding: "0.15rem 0.5rem",
-                                borderRadius: "4px",
-                                display: "inline-block",
-                                marginBottom: "0.35rem"
-                              }}
-                            >
-                              {copy.copyTitle}
-                            </span>
-                            <span
-                              style={{
-                                display: "block",
-                                fontSize: "0.7rem",
-                                color: "#64748b",
-                                fontFamily: "sans-serif"
-                              }}
-                            >
-                              {copy.copyTitleUrdu}
-                            </span>
-                            <h4
-                              style={{
-                                margin: "0.3rem 0 0.1rem",
-                                fontSize: "0.85rem",
-                                color: "#0d3822"
-                              }}
-                            >
-                              GOVERNMENT OF THE PUNJAB
-                            </h4>
-                            <p style={{ margin: 0, fontSize: "0.75rem", fontWeight: 700 }}>
-                              EXCISE &amp; TAXATION DEPARTMENT
-                            </p>
-                            <p style={{ margin: "0.15rem 0", fontSize: "0.7rem", fontWeight: 600 }}>
-                              PUNJAB PROFESSIONS &amp; TRADES TAX
-                            </p>
-                            <p style={{ margin: 0, fontSize: "0.65rem", color: "#64748b" }}>
-                              PAYMENT CHALLAN &bull; Rule 9
-                            </p>
-                            <div
-                              style={{
-                                fontSize: "0.7rem",
-                                fontWeight: 700,
-                                color: "#b45309",
-                                marginTop: "0.25rem"
-                              }}
-                            >
-                              Head: {copy.headOfAccount}
+                            {/* Left: QR Code */}
+                            <div style={{ flexShrink: 0 }}>
+                              <StatutoryQrCode
+                                payload={copy.qrPayload}
+                                size={66}
+                                label="Scan to Verify"
+                                subtitle={copy.bankUse.challanSerial}
+                                onScanOrClick={(payload) => {
+                                  setPortalVerificationInput(payload);
+                                  handleVerifyDocument(payload);
+                                  setShowPrintChallanModal(false);
+                                  setActiveTab("PUBLIC_PORTAL");
+                                }}
+                              />
+                            </div>
+                            {/* Right: Copy Title & Department Header */}
+                            <div style={{ flex: 1, textAlign: "center" }}>
+                              <span
+                                style={{
+                                  fontSize: "0.75rem",
+                                  fontWeight: 800,
+                                  color: "#166534",
+                                  background: "#dcfce7",
+                                  padding: "0.15rem 0.5rem",
+                                  borderRadius: "4px",
+                                  display: "inline-block",
+                                  marginBottom: "0.2rem"
+                                }}
+                              >
+                                {copy.copyTitle}
+                              </span>
+                              <h4
+                                style={{
+                                  margin: "0.1rem 0 0.05rem",
+                                  fontSize: "0.8rem",
+                                  color: "#0d3822"
+                                }}
+                              >
+                                GOVERNMENT OF THE PUNJAB
+                              </h4>
+                              <p style={{ margin: 0, fontSize: "0.72rem", fontWeight: 700 }}>
+                                EXCISE &amp; TAXATION DEPARTMENT
+                              </p>
+                              <p
+                                style={{ margin: "0.1rem 0", fontSize: "0.68rem", fontWeight: 600 }}
+                              >
+                                PUNJAB PROFESSIONS &amp; TRADES TAX
+                              </p>
+                              <p style={{ margin: 0, fontSize: "0.62rem", color: "#64748b" }}>
+                                PAYMENT CHALLAN &bull; Rule 9
+                              </p>
+                              <div
+                                style={{
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  color: "#b45309",
+                                  marginTop: "0.15rem"
+                                }}
+                              >
+                                Head: {copy.headOfAccount}
+                              </div>
                             </div>
                           </div>
 
-                          {/* Metadata Header */}
+                          {/* Unified Metadata & Assessment Header */}
                           <div
                             style={{
                               display: "grid",
                               gridTemplateColumns: "1fr 1fr",
-                              gap: "0.4rem",
-                              fontSize: "0.75rem",
+                              gap: "0.35rem 0.5rem",
+                              fontSize: "0.72rem",
                               background: "#f8fafc",
                               padding: "0.4rem",
                               borderRadius: "4px",
                               border: "1px solid #e2e8f0"
                             }}
                           >
-                            <div>
-                              <strong>District:</strong> {copy.district}
-                            </div>
-                            <div style={{ textAlign: "right" }}>
-                              <strong>Tax Year:</strong> {copy.taxYear}
-                            </div>
-                            <div style={{ gridColumn: "span 2", color: "#b91c1c" }}>
-                              <strong>Due Date:</strong> {copy.dueDate}
-                            </div>
                             <div
                               style={{
                                 gridColumn: "span 2",
@@ -19967,7 +20023,7 @@ export default function HomePage({
                             >
                               <strong>Notice No:</strong> {copy.noticeNumber}
                             </div>
-                            <div style={{ gridColumn: "span 2" }}>
+                            <div style={{ display: "flex", alignItems: "center" }}>
                               <span
                                 style={{
                                   display: "inline-block",
@@ -19975,7 +20031,7 @@ export default function HomePage({
                                   borderRadius: "4px",
                                   fontFamily: "monospace",
                                   fontWeight: 800,
-                                  fontSize: "0.75rem",
+                                  fontSize: "0.72rem",
                                   background: "#e0f2fe",
                                   color: "#0369a1",
                                   border: "1px solid #bae6fd",
@@ -19985,21 +20041,28 @@ export default function HomePage({
                                 🔐 PIN: {copy.pin}
                               </span>
                             </div>
-                          </div>
-
-                          {/* Taxpayer Information */}
-                          <div style={{ fontSize: "0.75rem", lineHeight: 1.4 }}>
-                            <strong
-                              style={{ color: "#0d3822", display: "block", marginBottom: "0.2rem" }}
-                            >
-                              Taxpayer&apos;s Information:
-                            </strong>
-                            <p style={{ margin: "0.1rem 0" }}>
-                              <strong>Tax No:</strong> {copy.taxpayerInfo.taxNo}
-                            </p>
+                            <div style={{ textAlign: "right" }}>
+                              <strong>Demand No:</strong>{" "}
+                              <span
+                                style={{
+                                  fontFamily: "monospace",
+                                  fontWeight: 800,
+                                  color: "#0d3822"
+                                }}
+                              >
+                                {copy.assessmentInfo.demandNo}
+                              </span>
+                            </div>
                             {copy.taxpayerInfo.provincialUin && (
-                              <p style={{ margin: "0.1rem 0" }}>
-                                <strong>Provincial UIN:</strong>{" "}
+                              <div
+                                style={{
+                                  gridColumn: "span 2",
+                                  fontSize: "0.72rem",
+                                  borderTop: "1px dashed #e2e8f0",
+                                  paddingTop: "0.25rem"
+                                }}
+                              >
+                                <strong>PIN (Professional Identification Number):</strong>{" "}
                                 <span
                                   style={{
                                     fontFamily: "monospace",
@@ -20009,25 +20072,39 @@ export default function HomePage({
                                 >
                                   {copy.taxpayerInfo.provincialUin}
                                 </span>
-                              </p>
+                              </div>
                             )}
-                            <p style={{ margin: "0.1rem 0" }}>
-                              <strong>Class:</strong> {copy.taxpayerInfo.classification}
+                            <div>
+                              <strong>Circle:</strong> {copy.assessmentInfo.circleName}
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <strong>District:</strong> {copy.district}
+                            </div>
+                            <div>
+                              <strong>Tax Year:</strong> {copy.taxYear}
+                            </div>
+                            <div style={{ textAlign: "right", color: "#b91c1c" }}>
+                              <strong>Due Date:</strong> {copy.dueDate}
+                            </div>
+                          </div>
+
+                          {/* Taxpayer Details */}
+                          <div style={{ fontSize: "0.75rem", lineHeight: 1.4 }}>
+                            <p style={{ margin: "0.15rem 0" }}>
+                              <strong>Class:</strong> {copy.taxpayerInfo.classification}{" "}
+                              <span style={{ fontWeight: 700, color: "#166534" }}>
+                                (PKR {copy.taxpayerInfo.slabRatePkr.toLocaleString()})
+                              </span>
                             </p>
-                            <p style={{ margin: "0.1rem 0" }}>
-                              <strong>Sub-Class / Slab:</strong> Class{" "}
-                              {copy.taxpayerInfo.subclassificationCode} &bull;{" "}
-                              {copy.taxpayerInfo.tertiarySlab}
-                            </p>
-                            <p style={{ margin: "0.1rem 0" }}>
+                            <p style={{ margin: "0.15rem 0" }}>
                               <strong>Name:</strong> {copy.taxpayerInfo.legalName}
                             </p>
                             {copy.taxpayerInfo.tradeName && (
-                              <p style={{ margin: "0.1rem 0" }}>
+                              <p style={{ margin: "0.15rem 0" }}>
                                 <strong>Trade:</strong> {copy.taxpayerInfo.tradeName}
                               </p>
                             )}
-                            <p style={{ margin: "0.1rem 0" }}>
+                            <p style={{ margin: "0.15rem 0" }}>
                               <strong>Address:</strong> {copy.taxpayerInfo.address}
                             </p>
                           </div>
@@ -20121,45 +20198,6 @@ export default function HomePage({
                             >
                               (in words) {copy.taxPayable.totalPayableWords}
                             </p>
-                          </div>
-
-                          {/* Tax Assessment Information */}
-                          <div
-                            style={{
-                              fontSize: "0.725rem",
-                              borderTop: "1px dashed #cbd5e1",
-                              paddingTop: "0.4rem"
-                            }}
-                          >
-                            <strong style={{ color: "#0d3822", display: "block" }}>
-                              Tax Assessment Information:
-                            </strong>
-                            <p style={{ margin: "0.1rem 0" }}>
-                              <strong>Demand No:</strong> {copy.assessmentInfo.demandNo}
-                            </p>
-                            <p style={{ margin: "0.1rem 0" }}>
-                              <strong>Circle:</strong> {copy.assessmentInfo.circleName}
-                            </p>
-                            <p style={{ margin: "0.1rem 0" }}>
-                              <strong>ETO:</strong> {copy.assessmentInfo.etoName} (
-                              {copy.assessmentInfo.etoTitle})
-                            </p>
-                          </div>
-
-                          {/* QR Code */}
-                          <div style={{ textAlign: "center", margin: "0.5rem 0" }}>
-                            <StatutoryQrCode
-                              payload={copy.qrPayload}
-                              size={80}
-                              label="Scan to Verify Challan"
-                              subtitle={copy.bankUse.challanSerial}
-                              onScanOrClick={(payload) => {
-                                setPortalVerificationInput(payload);
-                                handleVerifyDocument(payload);
-                                setShowPrintChallanModal(false);
-                                setActiveTab("PUBLIC_PORTAL");
-                              }}
-                            />
                           </div>
 
                           {/* For Bank's Use Only */}

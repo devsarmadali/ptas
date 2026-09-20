@@ -112,8 +112,8 @@ describe("Provincial UIN (Unique Identification Number)", () => {
     });
   });
 
-  describe("UIN Generation", () => {
-    it("generates a correctly formatted UIN with dashes", () => {
+  describe("UIN / PIN Generation", () => {
+    it("generates a correctly formatted 3-group PIN with dashes", () => {
       const components: UinComponents = {
         jurisdiction: VEHARI_JURISDICTION,
         classification: { classCode: "03", subclassCode: "01", tertiaryCode: "02" },
@@ -121,10 +121,10 @@ describe("Provincial UIN (Unique Identification Number)", () => {
         version: "01"
       };
       const uin = generateUin(components);
-      expect(uin).toBe("237-001-01-03-01-02-00001-01");
+      expect(uin).toBe("237-0010103010200001-01");
     });
 
-    it("generates a compact 22-digit UIN without dashes", () => {
+    it("generates a compact 21-digit UIN without dashes", () => {
       const components: UinComponents = {
         jurisdiction: VEHARI_JURISDICTION,
         classification: { classCode: "03", subclassCode: "01", tertiaryCode: "02" },
@@ -173,19 +173,20 @@ describe("Provincial UIN (Unique Identification Number)", () => {
     });
 
     it("throws on malformed UIN strings", () => {
-      expect(() => parseUin("INVALID")).toThrow("Invalid UIN format");
-      expect(() => parseUin("237-001-01")).toThrow("Invalid UIN format");
-      expect(() => parseUin("")).toThrow("Invalid UIN format");
+      expect(() => parseUin("INVALID")).toThrow("Invalid PIN / UIN format");
+      expect(() => parseUin("237-001-01")).toThrow("Invalid PIN / UIN format");
+      expect(() => parseUin("")).toThrow("Invalid PIN / UIN format");
     });
   });
 
   describe("UIN Validation", () => {
-    it("validates well-formed formatted UINs", () => {
+    it("validates well-formed formatted PINs (both 3-group and legacy 8-group)", () => {
+      expect(validateUin("237-0010103010200001-01")).toBe(true);
       expect(validateUin("237-001-01-03-01-02-00001-01")).toBe(true);
       expect(validateUin("218-002-05-06-10-03-99999-02")).toBe(true);
     });
 
-    it("validates well-formed compact UINs (22 digits)", () => {
+    it("validates well-formed compact PINs (21 digits)", () => {
       expect(validateUin("2370010103010200001" + "01")).toBe(true);
     });
 
@@ -196,6 +197,7 @@ describe("Provincial UIN (Unique Identification Number)", () => {
     });
 
     it("validates district code against PBS registry", () => {
+      expect(validateUinDistrict("237-0010103010200001-01")).toBeNull();
       expect(validateUinDistrict("237-001-01-03-01-02-00001-01")).toBeNull();
       expect(validateUinDistrict("999-001-01-03-01-02-00001-01")).toBe(
         "Unknown district code: 999"

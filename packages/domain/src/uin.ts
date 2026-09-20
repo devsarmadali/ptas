@@ -278,20 +278,13 @@ export function generateUin(components: UinComponents): string {
     throw new Error(`Version must be 2 digits, got "${version}"`);
   }
 
-  return [
-    jurisdiction.districtCode,
-    jurisdiction.tehsilCode,
-    jurisdiction.circleCode,
-    classification.classCode,
-    classification.subclassCode,
-    classification.tertiaryCode,
-    sequence,
-    version
-  ].join("-");
+  // 3 grouped parts: DDD - TTTCCSSUURRNNNNN - VV (e.g. 237-0010106100100005-01)
+  const middleGroup = `${jurisdiction.tehsilCode}${jurisdiction.circleCode}${classification.classCode}${classification.subclassCode}${classification.tertiaryCode}${sequence}`;
+  return `${jurisdiction.districtCode}-${middleGroup}-${version}`;
 }
 
 /**
- * Generates the compact (no-dash) form of the UIN for machine processing.
+ * Generates the compact (no-dash) form of the PIN for machine processing.
  * 21-digit numeric string (3+3+2+2+2+2+5+2).
  */
 export function generateCompactUin(components: UinComponents): string {
@@ -299,27 +292,33 @@ export function generateCompactUin(components: UinComponents): string {
 }
 
 // ---------------------------------------------------------------------------
-// UIN Parsing
+// PIN Parsing
 // ---------------------------------------------------------------------------
 
-/** UIN format regex: 8 groups separated by dashes */
-const UIN_FORMAT = /^(\d{3})-(\d{3})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{5})-(\d{2})$/;
+/** 3-group PIN format regex: DDD-TTTCCSSUURRNNNNN-VV (e.g. 237-0010106100100005-01) */
+const PIN_3GROUP_FORMAT = /^(\d{3})-(\d{3})(\d{2})(\d{2})(\d{2})(\d{2})(\d{5})-(\d{2})$/;
 
-/** Compact UIN format regex: 22 contiguous digits */
+/** Legacy 8-group format regex: DDD-TTT-CC-SS-UU-RR-NNNNN-VV */
+const UIN_8GROUP_FORMAT = /^(\d{3})-(\d{3})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{5})-(\d{2})$/;
+
+/** Compact PIN format regex: 21 contiguous digits */
 const UIN_COMPACT_FORMAT = /^(\d{3})(\d{3})(\d{2})(\d{2})(\d{2})(\d{2})(\d{5})(\d{2})$/;
 
 /**
- * Parses a UIN string (formatted or compact) into its components.
+ * Parses a PIN / UIN string (3-group, 8-group, or compact) into its components.
  *
- * @throws Error if the UIN format is invalid
+ * @throws Error if the format is invalid
  */
 export function parseUin(uin: string): UinComponents {
   const trimmed = uin.trim();
-  const match = UIN_FORMAT.exec(trimmed) ?? UIN_COMPACT_FORMAT.exec(trimmed);
+  const match =
+    PIN_3GROUP_FORMAT.exec(trimmed) ??
+    UIN_8GROUP_FORMAT.exec(trimmed) ??
+    UIN_COMPACT_FORMAT.exec(trimmed);
 
   if (!match) {
     throw new Error(
-      `Invalid UIN format: "${uin}". Expected DDD-TTT-CC-SS-UU-RR-NNNNN-VV or 22-digit compact form.`
+      `Invalid PIN / UIN format: "${uin}". Expected 3-group DDD-TTTCCSSUURRNNNNN-VV or 21-digit compact form.`
     );
   }
 
@@ -340,16 +339,20 @@ export function parseUin(uin: string): UinComponents {
 }
 
 // ---------------------------------------------------------------------------
-// UIN Validation
+// PIN Validation
 // ---------------------------------------------------------------------------
 
 /**
- * Validates that a string is a well-formed UIN (formatted or compact).
+ * Validates that a string is a well-formed PIN / UIN (3-group, legacy 8-group, or compact).
  * Does NOT verify that the district/classification codes exist — only format.
  */
 export function validateUin(uin: string): boolean {
   const trimmed = uin.trim();
-  return UIN_FORMAT.test(trimmed) || UIN_COMPACT_FORMAT.test(trimmed);
+  return (
+    PIN_3GROUP_FORMAT.test(trimmed) ||
+    UIN_8GROUP_FORMAT.test(trimmed) ||
+    UIN_COMPACT_FORMAT.test(trimmed)
+  );
 }
 
 /**
@@ -416,3 +419,14 @@ export function getTehsilsByDistrict(districtCode: string): readonly TehsilEntry
   }
   return [];
 }
+
+// ---------------------------------------------------------------------------
+// PIN (Professional Identification Number) Aliases
+// ---------------------------------------------------------------------------
+
+export const generatePin = generateUin;
+export const generateCompactPin = generateCompactUin;
+export const parsePin = parseUin;
+export const validatePin = validateUin;
+export const validatePinDistrict = validateUinDistrict;
+export const generatePinForUnit = generateUinForUnit;

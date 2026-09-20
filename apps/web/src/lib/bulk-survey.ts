@@ -504,7 +504,7 @@ export function convertValidSurveyUnitsToStoredUnits(
     const unitId = `unit-survey-${Date.now()}-${idx}`;
     const demandUnitId = `du-survey-${Date.now()}-${idx}`;
     const sequenceNumber = existingUnitsCount + idx + 1;
-    const permanentDemandNo = `PDN-VEH-2026-${String(sequenceNumber).padStart(4, "0")}`;
+    const permanentDemandNo = String(sequenceNumber).padStart(4, "0");
     const provincialUin = generateUinForUnit({
       jurisdiction: VEHARI_PILOT_JURISDICTION,
       rule: item.statutoryRule,

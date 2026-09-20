@@ -370,7 +370,7 @@ export function createInitialPilotUnits(): StoredUnit[] {
   const demandUnit1: DemandUnit = {
     id: "du-01",
     taxpayerId: unit1Id,
-    permanentDemandNo: "PDN-VEH-2026-0001",
+    permanentDemandNo: "0001",
     createdAt: "2026-07-01T09:00:00.000Z"
   };
   const { assessment: u1AsmInit, version: u1VerInit } = createAssessment<StoredUnitSnapshot>(
@@ -429,7 +429,7 @@ export function createInitialPilotUnits(): StoredUnit[] {
   const demandUnit2: DemandUnit = {
     id: "du-02",
     taxpayerId: unit2Id,
-    permanentDemandNo: "PDN-VEH-2026-0002",
+    permanentDemandNo: "0002",
     createdAt: "2026-07-02T10:00:00.000Z"
   };
   const { assessment: u2AsmInit, version: u2VerInit } = createAssessment<StoredUnitSnapshot>(
@@ -477,7 +477,7 @@ export function createInitialPilotUnits(): StoredUnit[] {
   const demandUnit3: DemandUnit = {
     id: "du-03",
     taxpayerId: unit3Id,
-    permanentDemandNo: "PDN-VEH-2026-0003",
+    permanentDemandNo: "0003",
     createdAt: "2026-07-10T11:00:00.000Z"
   };
   const { assessment: u3AsmInit, version: u3VerInit } = createAssessment<StoredUnitSnapshot>(
@@ -508,7 +508,7 @@ export function createInitialPilotUnits(): StoredUnit[] {
   const demandUnit4: DemandUnit = {
     id: "du-04",
     taxpayerId: unit4Id,
-    permanentDemandNo: "PDN-VEH-2026-0004",
+    permanentDemandNo: "0004",
     createdAt: "2026-07-12T14:00:00.000Z"
   };
   const { assessment: u4AsmInit, version: u4VerInit } = createAssessment<StoredUnitSnapshot>(
@@ -906,14 +906,14 @@ export function createInitialPft2Challans(units: StoredUnit[]): Pft2ChallanRecor
 
   // Add one cancelled challan to demonstrate complete lifecycle
   const cancelledNumber = formatStandardDocNumber({ docCode: "PFT2", sequence: "00099" });
-  const cancelledNoticeNumber = "PFT2-PDN-VEH-2026-0099-07-01-04-01-01-4000";
+  const cancelledNoticeNumber = "PFT2-0099-07-01-04-01-01-4000";
   const cancelledPin = generateDocumentPin(cancelledNoticeNumber);
   challans.push({
     id: "pft2-cancelled-demo",
     challanNumber: cancelledNumber,
     noticeNumber: cancelledNoticeNumber,
     pin: cancelledPin,
-    demandNumber: "PDN-VEH-2026-0099",
+    demandNumber: "0099",
     unitId: "unit-demo-superseded",
     legalName: "Bismillah General Store (Vehari)",
     tradeName: "Bismillah Store",
@@ -937,7 +937,7 @@ export function createInitialPft2Challans(units: StoredUnit[]): Pft2ChallanRecor
     cancelledAt: "2026-07-28",
     cancelledBy: "Tariq Mahmood (ETO)",
     officialSha256: "sha256-pft2-cancelled-00099",
-    qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-2&ref=${cancelledNumber}&pdn=PDN-VEH-2026-0099&amt=4000&pin=${cancelledPin}`
+    qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-2&ref=${cancelledNumber}&pdn=0099&amt=4000&pin=${cancelledPin}`
   });
 
   return challans;
@@ -974,7 +974,7 @@ export function createInitialStatutoryReceipts(units: StoredUnit[]): StatutoryRe
       receivingOfficerTitle: "Tax Inspector, Circle-Vehari",
       officialSha256: "8e3c1a9f02b4d6e8a1c3e5f7b9d2a4c6e8f0a2b4c6d8e0f2a4b6c8e0d2f4a6b8",
       qrPayload:
-        "https://ptas.punjab.gov.pk/verify?type=PFT-REC&ref=PFT-REC-2026-0001&pdn=PDN-VEH-2026-0001&amt=10000&sha=8e3c1a9f",
+        "https://ptas.punjab.gov.pk/verify?type=PFT-REC&ref=PFT-REC-2026-0001&pdn=0001&amt=10000&sha=8e3c1a9f",
       remarks: "Full annual liability discharged via ePay Punjab electronic treasury gateway."
     }
   ];

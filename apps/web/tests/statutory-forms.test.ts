@@ -28,7 +28,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
 
   it("generates Form P.F.T-1 (Notice of Tax Demand under Rule 6)", () => {
     const pft1 = generateFormPFT1(alMadinaUnit);
-    expect(pft1.demandNumber).toBe("PDN-VEH-2026-0003");
+    expect(pft1.demandNumber).toBe("0003");
     expect(pft1.assesseeLegalName).toBe(alMadinaUnit.legalName);
     expect(pft1.taxAmount).toBe(4000);
     expect(pft1.taxAmountWords).toBe("Four Thousand Rupees Only");
@@ -40,7 +40,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     expect(pft1.rateBasis).toContain("annum");
     expect(pft1.statutoryClassificationFull).toContain("3(i)");
     expect(pft1.officialSha256).toHaveLength(64);
-    expect(pft1.serviceReceipt.demandNumber).toBe("PDN-VEH-2026-0003");
+    expect(pft1.serviceReceipt.demandNumber).toBe("0003");
     expect(pft1.serviceReceipt.serverRole).toContain("Service Officer");
   });
 
@@ -49,9 +49,9 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     expect(pft2.copies).toHaveLength(3);
 
     const [taxpayerCopy, bankCopy, deptCopy] = pft2.copies;
-    expect(taxpayerCopy.copyTitle).toBe("PART 1: TAXPAYER'S COPY");
-    expect(bankCopy.copyTitle).toBe("PART 2: BANK'S COPY");
-    expect(deptCopy.copyTitle).toBe("PART 3: DEPARTMENT'S COPY");
+    expect(taxpayerCopy.copyTitle).toBe("TAXPAYER'S COPY");
+    expect(bankCopy.copyTitle).toBe("BANK'S COPY");
+    expect(deptCopy.copyTitle).toBe("DEPARTMENT'S COPY");
 
     expect(taxpayerCopy.headOfAccount).toContain("B01601");
     expect(taxpayerCopy.district).toBe("Vehari");
@@ -86,7 +86,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
   it("generates Show Cause Notice for Imposition of Penalty (Rule 10 & Sec 3(4))", () => {
     const scn = generateShowCausePenaltyNotice(alMadinaUnit, 45);
     expect(scn.noticeNumber).toMatch(/PB\/ET\/VHR\/CIR-1\/SCN\/2026-27\/\d{5}/);
-    expect(scn.demandNumber).toBe("PDN-VEH-2026-0003");
+    expect(scn.demandNumber).toBe("0003");
     expect(scn.originalTaxAmount).toBe(4000);
     expect(scn.maximumPenaltyExposable).toBe(4000); // 100% cap
     expect(scn.daysOverdue).toBe(45);
@@ -117,7 +117,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
 
     const firstRow = register.rows[0]!;
     expect(firstRow.noticeNumber).toMatch(/PB\/ET\/VHR\/CIR-1\/PFT1\/2026-27\/\d{5}/);
-    expect(firstRow.demandNumber).toBe("PDN-VEH-2026-0001");
+    expect(firstRow.demandNumber).toBe("0001");
     expect(firstRow.serverName).toContain("Muhammad Aslam");
     expect(firstRow.serviceStatus).toBe("SERVED");
   });
@@ -154,7 +154,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
 
   it("generates statutory PFT-2 Notice Number containing numeric digit codes instead of text", () => {
     const noticeNo1 = generatePft2NoticeNumber({
-      demandNumber: "PDN-VEH-2026-0001",
+      demandNumber: "0001",
       issueDate: "2026-09-20",
       formTypeCode: "01",
       demandScope: "01",
@@ -162,10 +162,10 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
       amount: 5000
     });
     // PFT2 - Demand No. - Month - Date - FormType(01) - Scope(01) - Payment(01) - Amount
-    expect(noticeNo1).toBe("PFT2-PDN-VEH-2026-0001-09-20-01-01-01-5000");
+    expect(noticeNo1).toBe("PFT2-0001-09-20-01-01-01-5000");
 
     const noticeNo2 = generatePft2NoticeNumber({
-      demandNumber: "PDN-VEH-2026-0002",
+      demandNumber: "0002",
       issueDate: "2026-09-20",
       formTypeCode: "NOTICE_CUM_CHALLAN",
       demandScope: "COMBINED",
@@ -173,7 +173,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
       amount: 2500
     });
     // Converts text input gracefully to numeric digit codes: 02 (NCUM), 03 (COMB), 02 (PART)
-    expect(noticeNo2).toBe("PFT2-PDN-VEH-2026-0002-09-20-02-03-02-2500");
+    expect(noticeNo2).toBe("PFT2-0002-09-20-02-03-02-2500");
   });
 
   it("generates Form P.F.T-2 with custom options, partial payment, and document security PIN", () => {
@@ -186,12 +186,12 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
       customAmount: 2000,
       isPartial: true,
       remainingBalance: 2000,
-      noticeNumber: "PFT2-PDN-VEH-2026-0003-09-20-02-01-02-2000",
+      noticeNumber: "PFT2-0003-09-20-02-01-02-2000",
       pin: "654321"
     });
 
     expect(pft2.pin).toBe("654321");
-    expect(pft2.noticeNumber).toBe("PFT2-PDN-VEH-2026-0003-09-20-02-01-02-2000");
+    expect(pft2.noticeNumber).toBe("PFT2-0003-09-20-02-01-02-2000");
     expect(pft2.formType).toBe("02");
     expect(pft2.demandScope).toBe("01");
     expect(pft2.paymentScope).toBe("02");
@@ -202,7 +202,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     // Check all copies have the PIN and notice number
     for (const copy of pft2.copies) {
       expect(copy.pin).toBe("654321");
-      expect(copy.noticeNumber).toBe("PFT2-PDN-VEH-2026-0003-09-20-02-01-02-2000");
+      expect(copy.noticeNumber).toBe("PFT2-0003-09-20-02-01-02-2000");
       expect(copy.taxPayable.totalPayable).toBe(2000);
       expect(copy.dueDate).toBe("2026-09-30");
     }
@@ -214,7 +214,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
 
     const pft2 = generateFormPFT2(alMadinaUnit);
     expect(pft2.pin).toMatch(/^\d{6}$/);
-    expect(pft2.noticeNumber).toMatch(/^PFT2-PDN-VEH-2026-0003-/);
+    expect(pft2.noticeNumber).toMatch(/^PFT2-0003-/);
 
     const scn = generateShowCausePenaltyNotice(alMadinaUnit, 30);
     expect(scn.pin).toMatch(/^\d{6}$/);
