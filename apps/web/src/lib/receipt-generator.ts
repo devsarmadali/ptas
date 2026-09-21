@@ -6,7 +6,7 @@
 
 import { computeContentSha256, generateDocumentPin } from "@ptas/domain";
 import type { Pft2ChallanRecord, StatutoryReceiptRecord } from "./pilot-store";
-import { numberToWordsPkr, formatStandardDocNumber } from "./statutory-forms";
+import { numberToWordsPkr, formatStandardDocNumber, formatDemandNumber } from "./statutory-forms";
 
 export function generateStandardReceiptNumber(sequence: number | string): string {
   return formatStandardDocNumber({ docCode: "RCPT", sequence });
@@ -19,6 +19,7 @@ export function generateStandardPft2Number(sequence: number | string): string {
 export interface StatutoryReceiptDocument {
   readonly receiptNumber: string;
   readonly pin: string;
+  readonly provincialUin?: string | undefined;
   readonly challanNumber: string;
   readonly demandNumber: string;
   readonly assesseeLegalName: string;
@@ -52,6 +53,7 @@ export function buildStatutoryReceiptDocument(
   const amountWords = record.amountPaidWords || numberToWordsPkr(record.amountPaidPkr);
   const identifier = `${record.identifierType}: ${record.identifierValue}`;
   const branch = record.bankBranch ?? "Main Treasury Branch, Vehari";
+  const demandClean = formatDemandNumber(record.demandNumber);
 
   const entryLabel = record.subclassificationCode
     ? `Class ${record.subclassificationCode}`
@@ -64,7 +66,7 @@ export function buildStatutoryReceiptDocument(
     "STATUTORY PAYMENT RECEIPT / ACKNOWLEDGEMENT OF PROFESSIONAL TAX",
     `(Issued under Rule 10 of the Punjab Professions & Trades Tax Rules, 1977)`,
     `Receipt Number: ${record.receiptNumber} | Security PIN: ${pin} | Date: ${record.dateOfReceipt} ${record.timeOfReceipt}`,
-    `Associated Challan Form P.F.T-2: ${record.challanNumber} | Permanent Demand No: ${record.demandNumber}`,
+    `Associated Challan Form P.F.T-2: ${record.challanNumber} | Permanent Demand No: ${demandClean}`,
     `Assessee Legal Name: ${record.assesseeLegalName}`,
     `Trade / Business Name: ${record.assesseeTradeName ?? record.assesseeLegalName}`,
     `Registration / Tax Identifier: ${identifier}`,
@@ -79,13 +81,14 @@ export function buildStatutoryReceiptDocument(
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalReceiptText);
-  const qrPayload = `https://ptas.punjab.gov.pk/verify?type=PFT-REC&ref=${record.receiptNumber}&pdn=${record.demandNumber}&amt=${record.amountPaidPkr}&pin=${pin}&sha=${officialSha256.slice(0, 16)}`;
+  const qrPayload = `https://ptas.punjab.gov.pk/verify?type=PFT-REC&ref=${record.receiptNumber}&pdn=${demandClean}&amt=${record.amountPaidPkr}&pin=${pin}&sha=${officialSha256.slice(0, 16)}`;
 
   return {
     receiptNumber: record.receiptNumber,
     pin,
+    provincialUin: record.provincialUin,
     challanNumber: record.challanNumber,
-    demandNumber: record.demandNumber,
+    demandNumber: demandClean,
     assesseeLegalName: record.assesseeLegalName,
     assesseeTradeName: record.assesseeTradeName,
     identifier,

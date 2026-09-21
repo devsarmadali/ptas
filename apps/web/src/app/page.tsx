@@ -4355,118 +4355,23 @@ export default function HomePage({
                   fontFamily: "Georgia, serif"
                 }}
               >
-                {/* Government Header */}
+                {/* Top Section with Left QR Code & Department Header */}
                 <div
                   style={{
-                    textAlign: "center",
-                    borderBottom: "2px solid #0d3822",
-                    paddingBottom: "1.25rem",
-                    marginBottom: "1.5rem"
-                  }}
-                >
-                  <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>Schedule</p>
-                  <h3
-                    style={{
-                      margin: "0.25rem 0",
-                      color: "#0d3822",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.03em"
-                    }}
-                  >
-                    Excise &amp; Taxation Officer
-                  </h3>
-                  <h4 style={{ margin: "0.2rem 0", color: "#1e293b", fontWeight: 700 }}>
-                    (PUNJAB PROFESSIONS &amp; TRADES TAX) &bull; DISTRICT VEHARI
-                  </h4>
-                  <div
-                    style={{
-                      display: "inline-block",
-                      background: "#fef3c7",
-                      border: "1px solid #f59e0b",
-                      padding: "0.25rem 0.75rem",
-                      borderRadius: "4px",
-                      marginTop: "0.5rem",
-                      fontWeight: 800,
-                      color: "#92400e"
-                    }}
-                  >
-                    Form P.F.T-1
-                  </div>
-                  <h3
-                    style={{
-                      margin: "0.75rem 0 0.25rem",
-                      color: "#b45309",
-                      letterSpacing: "0.05em"
-                    }}
-                  >
-                    NOTICE OF TAX DEMAND
-                  </h3>
-                  <p style={{ margin: 0, fontWeight: 700, fontSize: "0.9rem" }}>
-                    (PUNJAB PROFESSIONS &amp; TRADE TAX)
-                  </p>
-                  <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", fontStyle: "italic" }}>
-                    (Section 03 of Punjab Finance Act 1977 read with rule 6 of the Punjab
-                    Professions &amp; Trades Tax Rules, 1977)
-                  </p>
-                </div>
-
-                {/* Metadata Row with Statutory QR Code */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr auto 1fr",
-                    gap: "1rem",
+                    display: "flex",
+                    gap: "0.75rem",
                     alignItems: "center",
-                    marginBottom: "1.25rem",
-                    fontSize: "0.9rem"
+                    borderBottom: "2px solid #0d3822",
+                    paddingBottom: "0.75rem",
+                    marginBottom: "1rem"
                   }}
                 >
-                  <div>
-                    <p style={{ margin: "0.25rem 0" }}>
-                      <strong>Demand No:</strong> {formPFT1Data.demandNumber}
-                    </p>
-                    <p style={{ margin: "0.25rem 0" }}>
-                      <strong>Security PIN:</strong>{" "}
-                      <span
-                        style={{
-                          display: "inline-block",
-                          padding: "0.15rem 0.5rem",
-                          borderRadius: "4px",
-                          fontFamily: "monospace",
-                          fontWeight: 800,
-                          fontSize: "0.85rem",
-                          background: "#e0f2fe",
-                          color: "#0369a1",
-                          border: "1px solid #bae6fd",
-                          letterSpacing: "1.5px"
-                        }}
-                      >
-                        🔐 {formPFT1Data.pin}
-                      </span>
-                    </p>
-                    {formPFT1Data.provincialUin && (
-                      <p style={{ margin: "0.25rem 0" }}>
-                        <strong>PIN (Professional Identification Number):</strong>{" "}
-                        <span
-                          style={{
-                            fontFamily: "monospace",
-                            color: "#1d4ed8",
-                            fontWeight: 700
-                          }}
-                        >
-                          {formPFT1Data.provincialUin}
-                        </span>
-                      </p>
-                    )}
-                    <p style={{ margin: "0.25rem 0" }}>
-                      <strong>Tax No:</strong> {formPFT1Data.taxNumber}
-                    </p>
-                  </div>
-                  <div style={{ textAlign: "center" }}>
+                  {/* Left: QR Code */}
+                  <div style={{ flexShrink: 0 }}>
                     <StatutoryQrCode
                       payload={formPFT1Data.qrPayload}
-                      size={90}
-                      label="Scan to Verify PFT-1"
+                      size={76}
+                      label="Scan to Verify"
                       subtitle={formPFT1Data.demandNumber}
                       onScanOrClick={(payload) => {
                         setPortalVerificationInput(payload);
@@ -4475,13 +4380,132 @@ export default function HomePage({
                       }}
                     />
                   </div>
+                  {/* Right: Department Header */}
+                  <div style={{ flex: 1, textAlign: "center" }}>
+                    <div
+                      style={{
+                        display: "inline-block",
+                        background: "#fef3c7",
+                        border: "1px solid #f59e0b",
+                        padding: "0.15rem 0.6rem",
+                        borderRadius: "4px",
+                        fontWeight: 800,
+                        fontSize: "0.75rem",
+                        color: "#92400e",
+                        marginBottom: "0.2rem"
+                      }}
+                    >
+                      FORM P.F.T-1 &bull; NOTICE OF TAX DEMAND
+                    </div>
+                    <h4
+                      style={{
+                        margin: "0.1rem 0",
+                        fontSize: "0.95rem",
+                        color: "#0d3822",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em"
+                      }}
+                    >
+                      GOVERNMENT OF THE PUNJAB
+                    </h4>
+                    <p style={{ margin: 0, fontWeight: 700, fontSize: "0.82rem" }}>
+                      EXCISE &amp; TAXATION DEPARTMENT &bull; DISTRICT VEHARI
+                    </p>
+                    <p
+                      style={{
+                        margin: "0.15rem 0 0",
+                        fontSize: "0.72rem",
+                        fontStyle: "italic",
+                        color: "#64748b"
+                      }}
+                    >
+                      (Section 3 of Punjab Finance Act 1977 read with Rule 6 of the Punjab
+                      Professions &amp; Trades Tax Rules, 1977)
+                    </p>
+                  </div>
+                </div>
+
+                {/* Unified Metadata & Assessment Header */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "0.35rem 0.6rem",
+                    fontSize: "0.78rem",
+                    background: "#f8fafc",
+                    padding: "0.5rem 0.75rem",
+                    borderRadius: "6px",
+                    border: "1px solid #e2e8f0",
+                    marginBottom: "1rem"
+                  }}
+                >
+                  <div
+                    style={{
+                      gridColumn: "span 2",
+                      fontSize: "0.76rem",
+                      fontFamily: "monospace",
+                      color: "#1e3a8a",
+                      wordBreak: "break-all"
+                    }}
+                  >
+                    <strong>Notice No:</strong> {formPFT1Data.noticeNumber}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "0.1rem 0.45rem",
+                        borderRadius: "4px",
+                        fontFamily: "monospace",
+                        fontWeight: 800,
+                        fontSize: "0.76rem",
+                        background: "#e0f2fe",
+                        color: "#0369a1",
+                        border: "1px solid #bae6fd",
+                        letterSpacing: "1px"
+                      }}
+                    >
+                      🔐 PIN: {formPFT1Data.pin}
+                    </span>
+                  </div>
                   <div style={{ textAlign: "right" }}>
-                    <p style={{ margin: "0.25rem 0" }}>
-                      <strong>Date:</strong> {formPFT1Data.issueDate}
-                    </p>
-                    <p style={{ margin: "0.25rem 0" }}>
-                      <strong>Circle:</strong> {formPFT1Data.circleName}
-                    </p>
+                    <strong>Demand No:</strong>{" "}
+                    <span style={{ fontFamily: "monospace", fontWeight: 800, color: "#0d3822" }}>
+                      {formPFT1Data.demandNumber}
+                    </span>
+                  </div>
+                  {formPFT1Data.provincialUin && (
+                    <div
+                      style={{
+                        gridColumn: "span 2",
+                        fontSize: "0.76rem",
+                        borderTop: "1px dashed #e2e8f0",
+                        paddingTop: "0.25rem"
+                      }}
+                    >
+                      <strong>PIN (Professional Identification Number):</strong>{" "}
+                      <span
+                        style={{
+                          fontFamily: "monospace",
+                          color: "#1d4ed8",
+                          fontWeight: 700
+                        }}
+                      >
+                        {formPFT1Data.provincialUin}
+                      </span>
+                    </div>
+                  )}
+                  <div>
+                    <strong>Circle:</strong> {formPFT1Data.circleName}
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <strong>District:</strong> {formPFT1Data.districtName}
+                  </div>
+                  <div>
+                    <strong>Date of Issue:</strong> {formPFT1Data.issueDate}
+                  </div>
+                  <div style={{ textAlign: "right", color: "#b91c1c" }}>
+                    <strong>Due Date:</strong> {formPFT1Data.dueDate}
                   </div>
                 </div>
 
@@ -13734,62 +13758,153 @@ export default function HomePage({
                 return (
                   <div key={u.id} className="batch-sheet">
                     <div className="doc-box">
+                      {/* Top Section with Left QR Code & Department Header */}
                       <div
                         style={{
-                          textAlign: "center",
+                          display: "flex",
+                          gap: "0.75rem",
+                          alignItems: "center",
                           borderBottom: "2px solid #0d3822",
-                          paddingBottom: "1rem",
-                          marginBottom: "1.5rem"
+                          paddingBottom: "0.75rem",
+                          marginBottom: "1rem"
                         }}
                       >
-                        <h3
-                          style={{
-                            margin: "0 0 0.25rem",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.05em"
-                          }}
-                        >
-                          GOVERNMENT OF THE PUNJAB
-                        </h3>
-                        <h4 style={{ margin: "0 0 0.25rem", color: "#0d3822" }}>
-                          EXCISE &amp; TAXATION DEPARTMENT
-                        </h4>
-                        <div
-                          style={{
-                            display: "inline-block",
-                            border: "1px solid #0d3822",
-                            padding: "0.25rem 0.75rem",
-                            fontWeight: 700,
-                            marginTop: "0.5rem"
-                          }}
-                        >
-                          FORM P.F.T-1 &bull; NOTICE OF TAX DEMAND (نوٹس ڈیمانڈ)
+                        {/* Left: QR Code */}
+                        <div style={{ flexShrink: 0 }}>
+                          <StatutoryQrCode
+                            payload={noticeData.qrPayload}
+                            size={65}
+                            label="Scan to Verify"
+                            subtitle={noticeData.demandNumber}
+                            onScanOrClick={(payload) => {
+                              setPortalVerificationInput(payload);
+                              handleVerifyDocument(payload);
+                              setShowBatchPft1Modal(false);
+                              setActiveTab("PUBLIC_PORTAL");
+                            }}
+                          />
                         </div>
-                        <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: "#64748b" }}>
-                          [See Rule 6 of the Punjab Professions and Trades Tax Rules, 1977]
-                        </p>
+                        {/* Right: Department Header */}
+                        <div style={{ flex: 1, textAlign: "center" }}>
+                          <div
+                            style={{
+                              display: "inline-block",
+                              border: "1px solid #0d3822",
+                              background: "#fef3c7",
+                              padding: "0.15rem 0.5rem",
+                              fontWeight: 700,
+                              fontSize: "0.72rem",
+                              color: "#92400e",
+                              marginBottom: "0.2rem"
+                            }}
+                          >
+                            FORM P.F.T-1 &bull; NOTICE OF TAX DEMAND
+                          </div>
+                          <h4
+                            style={{
+                              margin: "0 0 0.15rem",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.04em",
+                              fontSize: "0.95rem"
+                            }}
+                          >
+                            GOVERNMENT OF THE PUNJAB
+                          </h4>
+                          <p
+                            style={{
+                              margin: 0,
+                              fontWeight: 700,
+                              fontSize: "0.8rem",
+                              color: "#0d3822"
+                            }}
+                          >
+                            EXCISE &amp; TAXATION DEPARTMENT &bull; DISTRICT VEHARI
+                          </p>
+                          <p
+                            style={{ margin: "0.15rem 0 0", fontSize: "0.72rem", color: "#64748b" }}
+                          >
+                            [See Rule 6 of the Punjab Professions and Trades Tax Rules, 1977]
+                          </p>
+                        </div>
                       </div>
 
+                      {/* Unified Metadata & Assessment Header */}
                       <div
                         style={{
                           display: "grid",
                           gridTemplateColumns: "1fr 1fr",
-                          gap: "1rem",
-                          marginBottom: "1rem",
-                          fontSize: "0.9rem"
+                          gap: "0.3rem 0.6rem",
+                          marginBottom: "0.85rem",
+                          fontSize: "0.78rem",
+                          background: "#f8fafc",
+                          padding: "0.45rem 0.65rem",
+                          borderRadius: "6px",
+                          border: "1px solid #e2e8f0"
                         }}
                       >
-                        <div>
-                          <strong>Demand Notice No:</strong> {noticeData.noticeNumber}
+                        <div
+                          style={{
+                            gridColumn: "span 2",
+                            fontFamily: "monospace",
+                            color: "#1e3a8a",
+                            fontSize: "0.76rem"
+                          }}
+                        >
+                          <strong>Notice No:</strong> {noticeData.noticeNumber}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "0.1rem 0.4rem",
+                              borderRadius: "4px",
+                              fontFamily: "monospace",
+                              fontWeight: 800,
+                              fontSize: "0.74rem",
+                              background: "#e0f2fe",
+                              color: "#0369a1",
+                              border: "1px solid #bae6fd"
+                            }}
+                          >
+                            🔐 PIN: {noticeData.pin}
+                          </span>
                         </div>
                         <div style={{ textAlign: "right" }}>
+                          <strong>Demand No:</strong>{" "}
+                          <span
+                            style={{ fontFamily: "monospace", fontWeight: 800, color: "#0d3822" }}
+                          >
+                            {noticeData.demandNumber}
+                          </span>
+                        </div>
+                        {noticeData.provincialUin && (
+                          <div
+                            style={{
+                              gridColumn: "span 2",
+                              fontSize: "0.76rem",
+                              borderTop: "1px dashed #e2e8f0",
+                              paddingTop: "0.2rem"
+                            }}
+                          >
+                            <strong>PIN (Professional Identification Number):</strong>{" "}
+                            <span
+                              style={{ fontFamily: "monospace", color: "#1d4ed8", fontWeight: 700 }}
+                            >
+                              {noticeData.provincialUin}
+                            </span>
+                          </div>
+                        )}
+                        <div>
+                          <strong>Circle:</strong> {noticeData.circleName}
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <strong>District:</strong> {noticeData.districtName}
+                        </div>
+                        <div>
                           <strong>Date of Issue:</strong> {noticeData.issueDate}
                         </div>
-                        <div>
-                          <strong>Permanent Demand No:</strong> {noticeData.demandNumber}
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <strong>Tax Year:</strong> {noticeData.financialYear}
+                        <div style={{ textAlign: "right", color: "#b91c1c" }}>
+                          <strong>Due Date:</strong> {noticeData.dueDate}
                         </div>
                       </div>
 

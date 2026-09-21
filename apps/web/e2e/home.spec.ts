@@ -59,6 +59,6 @@ test("verifies statutory sub-class and tertiary slabs in Form P.F.T-1 and Form P
 
   // Navigate to Form P.F.T-2
   await page.getByRole("tab", { name: /Form P.F.T-2/i }).click();
-  await expect(page.getByText(/PART 1: TAXPAYER'S COPY/i)).toBeVisible();
-  await expect(page.getByText(/Sub-Class \/ Slab:/i).first()).toBeVisible();
+  await expect(page.getByText(/TAXPAYER'S COPY/i).first()).toBeVisible();
+  await expect(page.getByText(/BANK'S COPY/i).first()).toBeVisible();
 });

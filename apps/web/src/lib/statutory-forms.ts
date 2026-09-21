@@ -334,6 +334,7 @@ export interface ShowCausePenaltyNoticeModel {
   readonly pin: string;
   readonly noticeDate: string;
   readonly demandNumber: string;
+  readonly provincialUin?: string | undefined;
   readonly hearingDate: string;
   readonly assesseeLegalName: string;
   readonly assesseeTradeName?: string | undefined;
@@ -347,6 +348,7 @@ export interface ShowCausePenaltyNoticeModel {
   readonly assessingAuthorityTitle: string;
   readonly canonicalNoticeText: string;
   readonly officialSha256: string;
+  readonly qrPayload: string;
 }
 
 export interface LandRevenueRecoveryCertificateModel {
@@ -356,6 +358,7 @@ export interface LandRevenueRecoveryCertificateModel {
   readonly collectorDesignation: string;
   readonly collectorDistrict: string;
   readonly demandNumber: string;
+  readonly provincialUin?: string | undefined;
   readonly assesseeLegalName: string;
   readonly assesseeTradeName?: string | undefined;
   readonly address: string;
@@ -369,6 +372,7 @@ export interface LandRevenueRecoveryCertificateModel {
   readonly assessingAuthorityTitle: string;
   readonly canonicalCertificateText: string;
   readonly officialSha256: string;
+  readonly qrPayload: string;
 }
 
 export interface CircleDispatchRowModel {
@@ -408,6 +412,7 @@ export interface CircleDispatchRegisterModel {
 export interface AppellateOrderModel {
   readonly orderNumber: string;
   readonly pin: string;
+  readonly provincialUin?: string | undefined;
   readonly appealNumber: string;
   readonly courtTitle: string;
   readonly courtTitleUrdu: string;
@@ -435,6 +440,7 @@ export interface AppellateOrderModel {
   readonly appellateAuthorityDesignation: string;
   readonly canonicalOrderText: string;
   readonly officialSha256: string;
+  readonly qrPayload: string;
 }
 
 export interface GenerateAppellateOrderInput {
@@ -907,6 +913,7 @@ export function generateShowCausePenaltyNotice(
     "NOTICE TO SHOW CAUSE FOR IMPOSITION OF PENALTY",
     "(Under Section 3(4) of the Punjab Finance Act, 1977 read with Rule 10 of the Punjab Professions & Trades Tax Rules, 1977)",
     `Notice No: ${noticeNumber} | Security PIN: ${pin} | Date of Issue: ${noticeDate} | Demand Notice No: ${demandNo}`,
+    `PIN: ${unit.provincialUin ?? "N/A"}`,
     `Assessee Legal Name: ${unit.legalName} | Trade Name: ${unit.tradeName ?? unit.legalName}`,
     `Identifier: ${unit.identifierType}: ${unit.identifierValue}`,
     `Business Address: ${unit.address}`,
@@ -918,12 +925,14 @@ export function generateShowCausePenaltyNotice(
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalNoticeText);
+  const qrPayload = `PTAS-PUNJAB:SCN:${noticeNumber}:DEMAND=${demandNo}:AMOUNT=${maximumPenaltyExposable}:DUE=${hearingDate}:SHA=${officialSha256.slice(0, 16)}:PIN=${pin}`;
 
   return {
     noticeNumber,
     pin,
     noticeDate,
     demandNumber: demandNo,
+    provincialUin: unit.provincialUin,
     hearingDate,
     assesseeLegalName: unit.legalName,
     assesseeTradeName: unit.tradeName,
@@ -936,7 +945,8 @@ export function generateShowCausePenaltyNotice(
     assessingAuthorityName: "Tariq Mahmood",
     assessingAuthorityTitle: "Excise & Taxation Officer / Assessing Authority, Tehsil Vehari",
     canonicalNoticeText,
-    officialSha256
+    officialSha256,
+    qrPayload
   };
 }
 
@@ -969,32 +979,38 @@ export function generateLandRevenueRecoveryCertificate(
   const issueDate = new Date().toISOString().split("T")[0]!;
   const collectorDesignation =
     customCollectorDesignation ?? "The Collector / Tehsildar (Recovery), District Vehari";
+  const entryLabel = getScheduleEntryLabel(unit.statutoryRule);
 
   const canonicalCertificateText = [
     "OFFICE OF THE EXCISE & TAXATION OFFICER / ASSESSING AUTHORITY, VEHARI",
     "CERTIFICATE OF RECOVERY AS ARREARS OF LAND REVENUE",
     "(Under Rule 12 of Punjab Professions & Trades Tax Rules, 1977 read with Sections 80 & 81 of the Punjab Land Revenue Act, 1967)",
     `Certificate No: ${certificateNumber} | Security PIN: ${pin} | Issue Date: ${issueDate}`,
+    `PIN: ${unit.provincialUin ?? "N/A"}`,
     `To: ${collectorDesignation}`,
     `Defaulter Assessee: ${unit.legalName} | Trade Name: ${unit.tradeName ?? unit.legalName}`,
     `Identifier: ${unit.identifierType}: ${unit.identifierValue}`,
-    `Business Address: ${unit.address}`,
-    `Permanent Demand No: ${demandNo}`,
-    `Breakdown of Arrears: Principal Tax: PKR ${taxAmount} | Statutory Penalty: PKR ${penalty} | Total: PKR ${totalArrearsRecoverable}`,
-    `Total in Words: ${totalArrearsWords}`,
-    "Statutory Mandate: Recover the certified sum as Arrears of Land Revenue by distress, attachment and sale of property or warrant.",
-    "Certified By: Tariq Mahmood, Excise & Taxation Officer / Assessing Authority, Tehsil Vehari"
+    `Commercial Address: ${unit.address}`,
+    `Classification: ${entryLabel} (${unit.statutoryRule.category})`,
+    `Demand Reference No: ${demandNo}`,
+    `Assessed Tax Arrears: PKR ${taxAmount}`,
+    `Penalty Arrears (Sec 3(4)): PKR ${penalty}`,
+    `Total Arrears Recoverable: PKR ${totalArrearsRecoverable} (${totalArrearsWords})`,
+    "Requisition: You are hereby requested to recover the said sum of arrears from the defaulter assessee as arrears of land revenue under Section 80 and Section 81 of the Punjab Land Revenue Act, 1967 (Act XVII of 1967) and credit the same under provincial Head of Account B01601.",
+    "Authority: Tariq Mahmood, Excise & Taxation Officer / Assessing Authority, Tehsil Vehari"
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalCertificateText);
+  const qrPayload = `PTAS-PUNJAB:LRC:${certificateNumber}:DEMAND=${demandNo}:AMOUNT=${totalArrearsRecoverable}:DUE=${issueDate}:SHA=${officialSha256.slice(0, 16)}:PIN=${pin}`;
 
   return {
     certificateNumber,
     pin,
     issueDate,
     collectorDesignation,
-    collectorDistrict: "District Vehari",
+    collectorDistrict: "Vehari",
     demandNumber: demandNo,
+    provincialUin: unit.provincialUin,
     assesseeLegalName: unit.legalName,
     assesseeTradeName: unit.tradeName,
     address: unit.address,
@@ -1003,11 +1019,12 @@ export function generateLandRevenueRecoveryCertificate(
     penaltyAmount: penalty,
     totalArrearsRecoverable,
     totalArrearsWords,
-    recoverySection: "Rule 12 (1977 Rules) & Sec 80/81 (Punjab Land Revenue Act 1967)",
+    recoverySection: "Sections 80 & 81 of the Punjab Land Revenue Act 1967 (Act XVII of 1967)",
     assessingAuthorityName: "Tariq Mahmood",
-    assessingAuthorityTitle: "Excise & Taxation Officer / Assessing Authority, Tehsil Vehari",
+    assessingAuthorityTitle: "Excise & Taxation Officer / Assessing Authority, Vehari",
     canonicalCertificateText,
-    officialSha256
+    officialSha256,
+    qrPayload
   };
 }
 
@@ -1170,7 +1187,7 @@ export function generateAppellateOrderDocument(
   }
 
   const noticeNumber = `PFT-1/VEH/2026/${unit.id.slice(-4)}`;
-  const demandNumber = unit.demandUnit.permanentDemandNo;
+  const demandNumber = formatDemandNumber(unit.demandUnit.permanentDemandNo);
   const originalTax = unit.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
 
   const canonicalOrderText = [
@@ -1178,6 +1195,7 @@ export function generateAppellateOrderDocument(
     courtTitle,
     "ORDER PASSED UNDER SECTION 7 OF PUNJAB FINANCE ACT, 1977 READ WITH RULE 13 OF PUNJAB PROFESSIONS & TRADES TAX RULES, 1977",
     `Appeal No: ${input.appealNumber} | Order No: ${orderNumber} | Security PIN: ${pin} | Date of Order: ${orderDate}`,
+    `PIN: ${unit.provincialUin ?? "N/A"}`,
     `Appellant: ${unit.legalName} (${unit.tradeName ?? unit.legalName}) | CNIC/Identifier: ${unit.identifierType}: ${unit.identifierValue}`,
     `Address: ${unit.address}`,
     "Respondent: Assessing Authority / Excise & Taxation Officer, Vehari",
@@ -1191,10 +1209,12 @@ export function generateAppellateOrderDocument(
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalOrderText);
+  const qrPayload = `PTAS-PUNJAB:APP:${orderNumber}:DEMAND=${demandNumber}:DECISION=${input.decisionType}:SHA=${officialSha256.slice(0, 16)}:PIN=${pin}`;
 
   return {
     orderNumber,
     pin,
+    provincialUin: unit.provincialUin,
     appealNumber: input.appealNumber,
     courtTitle,
     courtTitleUrdu,
@@ -1221,7 +1241,8 @@ export function generateAppellateOrderDocument(
     appellateAuthorityDesignation:
       "Director Excise & Taxation / Appellate Authority, Multan Division",
     canonicalOrderText,
-    officialSha256
+    officialSha256,
+    qrPayload
   };
 }
 
@@ -1234,6 +1255,7 @@ export interface TaxClearanceCertificateModel {
   readonly ineligibilityReason?: string | undefined;
   readonly certificateNumber: string;
   readonly pin: string;
+  readonly provincialUin?: string | undefined;
   readonly issueDate: string;
   readonly expiryDate: string;
   readonly financialYear: string;
@@ -1271,7 +1293,7 @@ export function generateTaxClearanceCertificate(
   refDate: string = "2026-08-20"
 ): TaxClearanceCertificateModel {
   const currentBalance = computeLedgerBalance(unit.ledgerEntries);
-  const demandNo = unit.demandUnit.permanentDemandNo;
+  const demandNo = formatDemandNumber(unit.demandUnit.permanentDemandNo);
 
   if (currentBalance > 0) {
     return {
@@ -1279,6 +1301,7 @@ export function generateTaxClearanceCertificate(
       ineligibilityReason: `Cannot issue Clearance Certificate: Unit has PKR ${currentBalance.toLocaleString()} outstanding arrears. Total balance must be zero.`,
       certificateNumber: "INELIGIBLE",
       pin: "",
+      provincialUin: unit.provincialUin,
       issueDate: refDate,
       expiryDate: "2027-06-30",
       financialYear,
@@ -1326,6 +1349,7 @@ export function generateTaxClearanceCertificate(
     "OFFICE OF THE EXCISE & TAXATION OFFICER (ASSESSING AUTHORITY), TEHSIL VEHARI",
     "FORM P.F.T-5: CERTIFICATE OF PROFESSIONAL TAX CLEARANCE (عدم بقایاجات سرٹیفکیٹ)",
     `Certificate Number: ${certNumber} | Security PIN: ${pin}`,
+    `PIN: ${unit.provincialUin ?? "N/A"}`,
     `Financial Year: ${financialYear}`,
     `Issue Date: ${refDate} | Expiry Date: 30-JUN-2027`,
     `Assessee Legal Name: ${unit.legalName}`,
@@ -1348,6 +1372,7 @@ export function generateTaxClearanceCertificate(
     isEligible: true,
     certificateNumber: certNumber,
     pin,
+    provincialUin: unit.provincialUin,
     issueDate: refDate,
     expiryDate: "2027-06-30",
     financialYear,
@@ -1391,6 +1416,7 @@ export interface DiscontinuanceOrderModel {
   readonly identifier: string;
   readonly identifierValue?: string;
   readonly demandNo?: string;
+  readonly provincialUin?: string | undefined;
   readonly address: string;
   readonly discontinuanceDate: string;
   readonly reason: string;
@@ -1402,6 +1428,7 @@ export interface DiscontinuanceOrderModel {
   readonly etoTitle?: string;
   readonly canonicalOrderText: string;
   readonly officialSha256: string;
+  readonly qrPayload?: string | undefined;
 }
 
 export function generateDiscontinuanceOrder(
@@ -1418,10 +1445,12 @@ export function generateDiscontinuanceOrder(
   }
 ): DiscontinuanceOrderModel {
   const pin = generateDocumentPin(input.orderNumber);
+  const demandClean = formatDemandNumber(unit.demandUnit.permanentDemandNo);
   const canonicalOrderText = [
     "GOVERNMENT OF THE PUNJAB - EXCISE & TAXATION DEPARTMENT, TEHSIL VEHARI",
     "ORDER UNDER RULE 10 OF PUNJAB PROFESSIONS & TRADES TAX RULES, 1977 (BUSINESS DISCONTINUANCE)",
     `Order Number: ${input.orderNumber} | Security PIN: ${pin} | Order Date: ${input.orderDate}`,
+    `PIN: ${unit.provincialUin ?? "N/A"} | Demand No: ${demandClean}`,
     `Notice Reference: ${input.noticeNumber}`,
     `Assessee: ${unit.legalName} (${unit.tradeName ?? unit.legalName}) | ${unit.identifierType}: ${unit.identifierValue}`,
     `Address: ${unit.address}`,
@@ -1434,10 +1463,12 @@ export function generateDiscontinuanceOrder(
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalOrderText);
+  const qrPayload = `PTAS-PUNJAB:DSC:${input.orderNumber}:DEMAND=${demandClean}:SHA=${officialSha256.slice(0, 16)}:PIN=${pin}`;
 
   return {
     orderNumber: input.orderNumber,
     pin,
+    provincialUin: unit.provincialUin,
     orderDate: input.orderDate,
     noticeNumber: input.noticeNumber,
     unitName: unit.legalName,
@@ -1446,7 +1477,7 @@ export function generateDiscontinuanceOrder(
     assesseeTradeName: unit.tradeName,
     identifier: `${unit.identifierType}: ${unit.identifierValue}`,
     identifierValue: unit.identifierValue,
-    demandNo: unit.demandUnit.permanentDemandNo,
+    demandNo: demandClean,
     address: unit.address,
     discontinuanceDate: input.discontinuanceDate,
     reason: input.reason,
@@ -1457,7 +1488,8 @@ export function generateDiscontinuanceOrder(
     etoName: "Tariq Mahmood",
     etoTitle: "Excise & Taxation Officer",
     canonicalOrderText,
-    officialSha256
+    officialSha256,
+    qrPayload
   };
 }
 
@@ -1473,6 +1505,7 @@ export interface RefundAdjustmentOrderModel {
   readonly identifier: string;
   readonly identifierValue?: string;
   readonly demandNo?: string;
+  readonly provincialUin?: string | undefined;
   readonly address: string;
   readonly type: "CREDIT_ADJUSTMENT" | "REFUND";
   readonly reliefType?: string;
@@ -1487,6 +1520,7 @@ export interface RefundAdjustmentOrderModel {
   readonly etoTitle?: string;
   readonly canonicalOrderText: string;
   readonly officialSha256: string;
+  readonly qrPayload?: string | undefined;
 }
 
 export function generateRefundAdjustmentOrder(
@@ -1503,10 +1537,12 @@ export function generateRefundAdjustmentOrder(
 ): RefundAdjustmentOrderModel {
   const pin = generateDocumentPin(input.orderNumber);
   const amountWords = numberToWordsPkr(input.amount);
+  const demandClean = formatDemandNumber(unit.demandUnit.permanentDemandNo);
   const canonicalOrderText = [
     "GOVERNMENT OF THE PUNJAB - EXCISE & TAXATION DEPARTMENT, TEHSIL VEHARI",
     "ORDER UNDER RULE 5 OF PUNJAB PROFESSIONS & TRADES TAX RULES, 1977 (STATUTORY REFUND / CREDIT ADJUSTMENT)",
     `Order Number: ${input.orderNumber} | Security PIN: ${pin} | Order Date: ${input.orderDate}`,
+    `PIN: ${unit.provincialUin ?? "N/A"} | Demand No: ${demandClean}`,
     `Application Reference: ${input.applicationNumber}`,
     `Assessee: ${unit.legalName} (${unit.tradeName ?? unit.legalName}) | ${unit.identifierType}: ${unit.identifierValue}`,
     `Address: ${unit.address}`,
@@ -1519,10 +1555,12 @@ export function generateRefundAdjustmentOrder(
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalOrderText);
+  const qrPayload = `PTAS-PUNJAB:RFD:${input.orderNumber}:DEMAND=${demandClean}:AMOUNT=${input.amount}:SHA=${officialSha256.slice(0, 16)}:PIN=${pin}`;
 
   return {
     orderNumber: input.orderNumber,
     pin,
+    provincialUin: unit.provincialUin,
     orderDate: input.orderDate,
     applicationNumber: input.applicationNumber,
     unitName: unit.legalName,
@@ -1531,7 +1569,7 @@ export function generateRefundAdjustmentOrder(
     assesseeTradeName: unit.tradeName,
     identifier: `${unit.identifierType}: ${unit.identifierValue}`,
     identifierValue: unit.identifierValue,
-    demandNo: unit.demandUnit.permanentDemandNo,
+    demandNo: demandClean,
     address: unit.address,
     type: input.type,
     reliefType: input.type,
@@ -1545,6 +1583,7 @@ export function generateRefundAdjustmentOrder(
     etoName: "Tariq Mahmood",
     etoTitle: "Excise & Taxation Officer",
     canonicalOrderText,
-    officialSha256
+    officialSha256,
+    qrPayload
   };
 }
