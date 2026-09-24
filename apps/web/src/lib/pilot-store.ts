@@ -329,6 +329,232 @@ export interface StatutoryReceiptRecord {
   readonly officialSha256: string;
   readonly qrPayload: string;
   readonly remarks?: string | undefined;
+  // Consolidated Spec Section 11:
+  readonly paymentSource: StatutoryReceiptSource;
+  readonly issuedPft2Id?: string | undefined;
+  readonly externalDocRef?: string | undefined;
+}
+
+export type StatutoryReceiptSource = "ISSUED_PFT2" | "MANUAL" | "EPAY";
+
+export const RECEIPT_SOURCE_CONFIG: Record<
+  StatutoryReceiptSource,
+  { label: string; status: "Active" | "Disabled"; allowsManualAmount: boolean; badgeClass: string }
+> = {
+  ISSUED_PFT2: {
+    label: "Received Against Issued Form PFT2",
+    status: "Active",
+    allowsManualAmount: false,
+    badgeClass: "badge-approved"
+  },
+  MANUAL: {
+    label: "Manual Receipt",
+    status: "Active",
+    allowsManualAmount: true,
+    badgeClass: "badge-draft"
+  },
+  EPAY: {
+    label: "e-Pay Against Form PFT2",
+    status: "Disabled",
+    allowsManualAmount: false,
+    badgeClass: "badge-pending"
+  }
+};
+
+export interface UserAccount {
+  readonly id: string;
+  readonly name: string;
+  readonly email: string;
+  readonly role: MockRole;
+  readonly title: string;
+  readonly districtId: string;
+  readonly districtName: string;
+  readonly officeId: string;
+  readonly officeName: string;
+  readonly assignedCircleId: string;
+  readonly assignedCircleName: string;
+  readonly status: "ACTIVE" | "SUSPENDED" | "INACTIVE";
+  readonly mobileNumber: string;
+  readonly lastActiveAt?: string | undefined;
+}
+
+export interface UserManagementAuditRecord {
+  readonly id: string;
+  readonly performedBy: string;
+  readonly performedByRole: MockRole;
+  readonly targetUserId: string;
+  readonly targetUserName: string;
+  readonly actionType:
+    | "PASSWORD_CHANGED"
+    | "PROFILE_UPDATED"
+    | "CIRCLE_REASSIGNED"
+    | "STATUS_CHANGED"
+    | "USER_CREATED";
+  readonly oldValue: string;
+  readonly newValue: string;
+  readonly timestamp: string; // Pakistan Time UTC+05:00
+}
+
+/**
+ * Returns current date formatted as YYYY-MM-DD in Pakistan Standard Time (PKT, UTC+05:00).
+ */
+export function getPakistanCurrentDate(): string {
+  const now = new Date();
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  const pkt = new Date(utc + 5 * 3600000);
+  return pkt.toISOString().split("T")[0]!;
+}
+
+/**
+ * Returns current timestamp in Pakistan Standard Time (PKT, UTC+05:00).
+ */
+export function getPakistanCurrentTimestamp(): string {
+  const now = new Date();
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  const pkt = new Date(utc + 5 * 3600000);
+  return pkt.toISOString().replace("Z", "+05:00");
+}
+
+/**
+ * Computes calendar month bounds for Form PFT-2 Due Date validation in Pakistan Time.
+ * Section 8.2: Due date must remain within the current calendar month of issuance.
+ */
+export function getPakistanMonthBounds(dateStr?: string): {
+  currentDate: string;
+  minDueDate: string;
+  maxDueDate: string;
+} {
+  const currentDate = dateStr || getPakistanCurrentDate();
+  const parts = currentDate.split("-");
+  const year = parseInt(parts[0]!, 10);
+  const month = parseInt(parts[1]!, 10);
+  const lastDay = new Date(year, month, 0).getDate();
+  const maxDueDate = `${parts[0]}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  return {
+    currentDate,
+    minDueDate: currentDate,
+    maxDueDate
+  };
+}
+
+export interface Pft2IssuanceValidationResult {
+  readonly canIssue: boolean;
+  readonly calculatedAmount: number;
+  readonly error?: string | undefined;
+  readonly issueDate: string;
+  readonly dueDate: string;
+}
+
+/**
+ * Authoritative financial validation for Form PFT-2 Challan issuance (Sections 8 & 9).
+ * - Current-Year Demand: outstanding current-year demand only (if <= 0, rejects).
+ * - Arrear Challan: outstanding arrear balance only (if <= 0, rejects).
+ * - Combined Challan: current demand + arrear balance (negative arrear acts as adjustment). If net <= 0, rejects.
+ * - Due date: strictly bounded within the current calendar month.
+ */
+export function validatePft2IssuanceAmount(params: {
+  unit: StoredUnit;
+  demandScope: "CURRENT" | "ARREAR" | "COMBINED" | string;
+  requestedDueDate?: string;
+}): Pft2IssuanceValidationResult {
+  const { unit, demandScope, requestedDueDate } = params;
+  const issueDate = getPakistanCurrentDate();
+  const { minDueDate, maxDueDate } = getPakistanMonthBounds(issueDate);
+
+  const dueDate = requestedDueDate || maxDueDate;
+  if (dueDate < minDueDate || dueDate > maxDueDate) {
+    return {
+      canIssue: false,
+      calculatedAmount: 0,
+      issueDate,
+      dueDate,
+      error: `Due Date must belong to the current calendar month (${minDueDate} to ${maxDueDate}).`
+    };
+  }
+
+  const currentAssessed = unit.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+  let currentPaid = 0;
+  let arrearDemand = 0;
+  let arrearPaid = 0;
+
+  for (const entry of unit.ledgerEntries) {
+    if (entry.financialYearId === FINANCIAL_YEAR_2026_27) {
+      if (entry.entryType === "PAYMENT_CREDIT") {
+        currentPaid += Math.abs(entry.amount);
+      }
+    } else {
+      if (
+        entry.entryType === "ASSESSMENT_DEMAND" ||
+        entry.entryType === "PENALTY_DEMAND" ||
+        entry.entryType === "REVISION_ADJUSTMENT"
+      ) {
+        arrearDemand += entry.amount;
+      } else if (entry.entryType === "PAYMENT_CREDIT") {
+        arrearPaid += Math.abs(entry.amount);
+      }
+    }
+  }
+
+  const currentOutstanding = Math.max(0, currentAssessed - currentPaid);
+  const arrearBalance = arrearDemand - arrearPaid;
+
+  if (demandScope === "CURRENT") {
+    if (currentOutstanding <= 0) {
+      return {
+        canIssue: false,
+        calculatedAmount: 0,
+        issueDate,
+        dueDate,
+        error:
+          "No Current-Year Demand Pending: There is no outstanding current-year amount available for challan issuance."
+      };
+    }
+    return {
+      canIssue: true,
+      calculatedAmount: currentOutstanding,
+      issueDate,
+      dueDate
+    };
+  }
+
+  if (demandScope === "ARREAR") {
+    if (arrearBalance <= 0) {
+      return {
+        canIssue: false,
+        calculatedAmount: 0,
+        issueDate,
+        dueDate,
+        error:
+          "No Arrear Pending: There is currently no outstanding arrear amount available for challan issuance."
+      };
+    }
+    return {
+      canIssue: true,
+      calculatedAmount: arrearBalance,
+      issueDate,
+      dueDate
+    };
+  }
+
+  // COMBINED
+  const netPayable = currentOutstanding + arrearBalance;
+  if (netPayable <= 0) {
+    return {
+      canIssue: false,
+      calculatedAmount: 0,
+      issueDate,
+      dueDate,
+      error:
+        "No Amount Payable: After adjusting the applicable arrear balance against the current-year demand, there is no outstanding amount available for combined challan issuance."
+    };
+  }
+
+  return {
+    canIssue: true,
+    calculatedAmount: netPayable,
+    issueDate,
+    dueDate
+  };
 }
 
 export interface PilotState {
@@ -342,6 +568,8 @@ export interface PilotState {
   clearanceCertificates?: ClearanceCertificateRecord[] | undefined;
   pft2Challans?: Pft2ChallanRecord[] | undefined;
   statutoryReceipts?: StatutoryReceiptRecord[] | undefined;
+  users?: UserAccount[] | undefined;
+  userAuditLogs?: UserManagementAuditRecord[] | undefined;
 }
 
 const STORAGE_KEY = "ptas_pilot_vehari_v3";
@@ -975,7 +1203,86 @@ export function createInitialStatutoryReceipts(units: StoredUnit[]): StatutoryRe
       officialSha256: "8e3c1a9f02b4d6e8a1c3e5f7b9d2a4c6e8f0a2b4c6d8e0f2a4b6c8e0d2f4a6b8",
       qrPayload:
         "https://ptas.punjab.gov.pk/verify?type=PFT-REC&ref=PFT-REC-2026-0001&pdn=0001&amt=10000&sha=8e3c1a9f",
-      remarks: "Full annual liability discharged via ePay Punjab electronic treasury gateway."
+      remarks: "Full annual liability discharged via ePay Punjab electronic treasury gateway.",
+      paymentSource: "ISSUED_PFT2",
+      issuedPft2Id: "challan-vehari-01"
+    }
+  ];
+}
+
+export function createInitialUserAccounts(): UserAccount[] {
+  return [
+    {
+      id: "usr-eto-01",
+      name: "Tariq Mahmood",
+      email: "eto.vehari@punjab.gov.pk",
+      role: "ETO",
+      title: "Excise & Taxation Officer (Assessing Authority)",
+      districtId: VEHARI_DISTRICT_ID,
+      districtName: "Vehari",
+      officeId: TEHSIL_VEHARI_ID,
+      officeName: "Tehsil Vehari",
+      assignedCircleId: CIRCLE_VEHARI_ID,
+      assignedCircleName: "Circle-Vehari",
+      status: "ACTIVE",
+      mobileNumber: "0300-1234567"
+    },
+    {
+      id: "usr-insp-01",
+      name: "Muhammad Aslam",
+      email: "inspector.vehari@punjab.gov.pk",
+      role: "INSPECTOR",
+      title: "Tax Inspector",
+      districtId: VEHARI_DISTRICT_ID,
+      districtName: "Vehari",
+      officeId: TEHSIL_VEHARI_ID,
+      officeName: "Tehsil Vehari",
+      assignedCircleId: CIRCLE_VEHARI_ID,
+      assignedCircleName: "Circle-Vehari",
+      status: "ACTIVE",
+      mobileNumber: "0301-9876543"
+    },
+    {
+      id: "usr-dir-01",
+      name: "Shahid Nawaz",
+      email: "director.multan@punjab.gov.pk",
+      role: "DIRECTOR",
+      title: "Director Excise & Taxation",
+      districtId: VEHARI_DISTRICT_ID,
+      districtName: "Vehari",
+      officeId: TEHSIL_VEHARI_ID,
+      officeName: "Division Multan",
+      assignedCircleId: CIRCLE_VEHARI_ID,
+      assignedCircleName: "All Circles (Division)",
+      status: "ACTIVE",
+      mobileNumber: "0302-5551234"
+    }
+  ];
+}
+
+export function createInitialUserAuditLogs(): UserManagementAuditRecord[] {
+  return [
+    {
+      id: "usr-audit-01",
+      performedBy: "Shahid Nawaz",
+      performedByRole: "DIRECTOR",
+      targetUserId: "usr-eto-01",
+      targetUserName: "Tariq Mahmood",
+      actionType: "CIRCLE_REASSIGNED",
+      oldValue: "Unassigned",
+      newValue: "Circle-Vehari (Tehsil Vehari)",
+      timestamp: "2026-07-01 09:00:00+05:00"
+    },
+    {
+      id: "usr-audit-02",
+      performedBy: "Tariq Mahmood",
+      performedByRole: "ETO",
+      targetUserId: "usr-insp-01",
+      targetUserName: "Muhammad Aslam",
+      actionType: "CIRCLE_REASSIGNED",
+      oldValue: "Circle-2",
+      newValue: "Circle-Vehari",
+      timestamp: "2026-07-01 10:15:00+05:00"
     }
   ];
 }
@@ -994,7 +1301,9 @@ export function loadPilotState(): PilotState {
       refundAdjustments: createInitialRefundAdjustments(),
       clearanceCertificates: createInitialClearanceCertificates(),
       pft2Challans: createInitialPft2Challans(initialUnits),
-      statutoryReceipts: createInitialStatutoryReceipts(initialUnits)
+      statutoryReceipts: createInitialStatutoryReceipts(initialUnits),
+      users: createInitialUserAccounts(),
+      userAuditLogs: createInitialUserAuditLogs()
     };
   }
 
@@ -1011,7 +1320,9 @@ export function loadPilotState(): PilotState {
         refundAdjustments: createInitialRefundAdjustments(),
         clearanceCertificates: createInitialClearanceCertificates(),
         pft2Challans: createInitialPft2Challans(initialUnits),
-        statutoryReceipts: createInitialStatutoryReceipts(initialUnits)
+        statutoryReceipts: createInitialStatutoryReceipts(initialUnits),
+        users: createInitialUserAccounts(),
+        userAuditLogs: createInitialUserAuditLogs()
       };
       savePilotState(initial);
       return initial;
@@ -1028,6 +1339,8 @@ export function loadPilotState(): PilotState {
       pft2Challans: parsed.pft2Challans ?? createInitialPft2Challans(parsed.units || initialUnits),
       statutoryReceipts:
         parsed.statutoryReceipts ?? createInitialStatutoryReceipts(parsed.units || initialUnits),
+      users: parsed.users ?? createInitialUserAccounts(),
+      userAuditLogs: parsed.userAuditLogs ?? createInitialUserAuditLogs(),
       currentOfficer: matchingOfficer
     };
   } catch {
@@ -1041,7 +1354,9 @@ export function loadPilotState(): PilotState {
       refundAdjustments: createInitialRefundAdjustments(),
       clearanceCertificates: createInitialClearanceCertificates(),
       pft2Challans: createInitialPft2Challans(initialUnits),
-      statutoryReceipts: createInitialStatutoryReceipts(initialUnits)
+      statutoryReceipts: createInitialStatutoryReceipts(initialUnits),
+      users: createInitialUserAccounts(),
+      userAuditLogs: createInitialUserAuditLogs()
     };
   }
 }
@@ -1068,7 +1383,9 @@ export function resetPilotState(): PilotState {
     refundAdjustments: createInitialRefundAdjustments(),
     clearanceCertificates: createInitialClearanceCertificates(),
     pft2Challans: createInitialPft2Challans(initialUnits),
-    statutoryReceipts: createInitialStatutoryReceipts(initialUnits)
+    statutoryReceipts: createInitialStatutoryReceipts(initialUnits),
+    users: createInitialUserAccounts(),
+    userAuditLogs: createInitialUserAuditLogs()
   };
   savePilotState(cleanState);
   return cleanState;

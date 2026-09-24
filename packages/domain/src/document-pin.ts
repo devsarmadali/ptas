@@ -1,6 +1,6 @@
 /**
  * PTAS Document Security PIN Module
- * Generates and validates official 6-digit Document Security PINs (دستاویزی تصدیقی پن کوڈ)
+ * Generates and validates official 6-digit Document Security PINs
  * embedded on all issued notices, challans, and certificates for citizen verification.
  */
 

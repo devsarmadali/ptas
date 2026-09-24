@@ -49,7 +49,8 @@ import {
   createInitialStatutoryReceipts,
   loadPilotState,
   resetPilotState,
-  savePilotState
+  savePilotState,
+  RECEIPT_SOURCE_CONFIG
 } from "../lib/pilot-store";
 import { computeFileSha256, uploadReceiptScan } from "../lib/storage";
 import { pushPilotStateToSupabase } from "../lib/supabase-sync";
@@ -99,7 +100,8 @@ import {
 } from "../lib/mis-analytics";
 import { StatutoryQrCode } from "../components/StatutoryQrCode";
 import { QrScannerModal } from "../components/QrScannerModal";
-import { downloadDocumentPdf, printIsolatedElement } from "../lib/pdf-export";
+import { RowActionMenu } from "../components/RowActionMenu";
+import { downloadDocumentPdf } from "../lib/pdf-export";
 import {
   exportPft2ChallansCsv,
   exportStatutoryReceiptsCsv,
@@ -128,11 +130,9 @@ export type TabId =
   | "MIS_HUB"
   | "PUBLIC_PORTAL"
   | "ASSESSMENTS"
-  | "FORM_PFT1"
-  | "FORM_PFT2"
+  | "REGISTER_PFT3"
   | "PFT2"
   | "RECEIPTS"
-  | "REGISTER_PFT3"
   | "DEFAULTERS"
   | "APPEALS"
   | "CLEARANCE"
@@ -144,8 +144,7 @@ export type TabId =
 export const TAB_TO_HUB: Record<TabId, RouteHubId> = {
   UNITS: "assessment",
   ASSESSMENTS: "assessment",
-  FORM_PFT1: "assessment",
-  FORM_PFT2: "assessment",
+  REGISTER_PFT3: "assessment",
   DEFAULTERS: "enforcement",
   APPEALS: "enforcement",
   RELIEF_DESK: "enforcement",
@@ -158,7 +157,6 @@ export const TAB_TO_HUB: Record<TabId, RouteHubId> = {
   ANALYTICS: "intelligence",
   MIS_HUB: "intelligence",
   REPORTS: "intelligence",
-  REGISTER_PFT3: "intelligence",
   AUDIT: "intelligence"
 };
 
@@ -333,6 +331,7 @@ export default function HomePage({
 
   // Batch Notice Generation & Circle Dispatch Register State
   const [showBatchPft1Modal, setShowBatchPft1Modal] = useState(false);
+  const [showPft1NoticeModal, setShowPft1NoticeModal] = useState(false);
   const [showBatchPft2Modal, setShowBatchPft2Modal] = useState(false);
   const [showDispatchRegisterModal, setShowDispatchRegisterModal] = useState(false);
   const [selectedDispatchUnitIds, setSelectedDispatchUnitIds] = useState<string[]>([]);
@@ -369,6 +368,16 @@ export default function HomePage({
   const [bulkSurveyFilter, setBulkSurveyFilter] = useState<"ALL" | "VALID" | "ERROR">("ALL");
   const [bulkInputMode, setBulkInputMode] = useState<"FILE" | "PASTE">("FILE");
   const [isImportingSurvey, setIsImportingSurvey] = useState(false);
+
+  // PFT-3 Search & Filter Controls
+  const [pft3SearchQuery, setPft3SearchQuery] = useState("");
+  const [pft3DistrictFilter, setPft3DistrictFilter] = useState("ALL");
+  const [pft3CircleFilter, setPft3CircleFilter] = useState("ALL");
+  const [pft3LocalityFilter, setPft3LocalityFilter] = useState("ALL");
+  const [pft3CategoryFilter, setPft3CategoryFilter] = useState("ALL");
+
+  // Receipts Filter Controls
+  const [receiptSourceFilter, setReceiptSourceFilter] = useState("ALL");
 
   // Supabase Real Auth & Session State (Phase 5)
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -440,10 +449,6 @@ export default function HomePage({
   // Supabase Cloud Sync State
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
-
-  // Document Studio Tamper State
-  const [isTampered, setIsTampered] = useState(false);
-  const [tamperedAmount, setTamperedAmount] = useState(100);
 
   // Phase 8 State: Public Assessee Portal & Real-Time QR Verification Desk
   const [portalVerificationInput, setPortalVerificationInput] = useState("");
@@ -1039,7 +1044,7 @@ export default function HomePage({
     setSelectedUnitId(unitId);
     showToast(
       "success",
-      `Unit '${newUnit.legalName}' successfully registered under Class ${rule.rule_code} (UIN: ${provincialUin}, PKR ${rule.annual_rate_pkr})`
+      `Unit '${newUnit.legalName}' successfully registered under Class ${rule.rule_code} (PIN: ${provincialUin}, PKR ${rule.annual_rate_pkr})`
     );
   };
 
@@ -1331,37 +1336,99 @@ export default function HomePage({
     return units.find((u) => u.id === selectedUnitId) ?? units[0];
   }, [units, selectedUnitId]);
 
-  // Statutory Form P.F.T-1 (Notice of Tax Demand under Rule 6)
-  const formPFT1Data = useMemo(() => {
-    if (!activeUnit) return null;
-    return generateFormPFT1(activeUnit, isTampered, tamperedAmount);
-  }, [activeUnit, isTampered, tamperedAmount]);
-
-  // Statutory Form P.F.T-2 (3-Copy Payment Challan under Rule 9)
-  const formPFT2Data = useMemo(() => {
-    if (!activeUnit) return null;
-    const existing = pft2Challans.find((c) => c.unitId === activeUnit.id);
-    if (existing) {
-      return generateFormPFT2(activeUnit, {
-        isTampered,
-        tamperedAmount,
-        noticeNumber: existing.noticeNumber,
-        pin: existing.pin,
-        dueDate: existing.dueDate,
-        issueDate: existing.issueDate,
-        formType: existing.formType,
-        demandScope: existing.demandScope,
-        paymentScope: existing.paymentScope,
-        customAmount: existing.amountPayable
-      });
-    }
-    return generateFormPFT2(activeUnit, isTampered, tamperedAmount);
-  }, [activeUnit, isTampered, tamperedAmount, pft2Challans]);
+  // NOTE: formPFT1Data and formPFT2Data are generated on-demand inside their
+  // respective modals (showPft1NoticeModal / showIssuePft2Modal) using the
+  // selected unit at the time of issuance; no top-level memo needed.
 
   // Statutory Form P.F.T-3 (Assessment & Demand Register under Rule 11)
+  const pft3Districts = useMemo(() => {
+    return ["Vehari"];
+  }, []);
+
+  const pft3Circles = useMemo(() => {
+    return ["Circle-Vehari"];
+  }, []);
+
+  const pft3Localities = useMemo(() => {
+    return Array.from(
+      new Set(
+        units
+          .map((u) => u.address.split(",")[0]?.trim())
+          .filter((loc): loc is string => Boolean(loc))
+      )
+    );
+  }, [units]);
+
   const formPFT3Rows = useMemo(() => {
     return generateFormPFT3Rows(units);
   }, [units]);
+
+  const filteredFormPFT3Rows = useMemo(() => {
+    return formPFT3Rows.filter((row) => {
+      const targetUnit = units.find(
+        (u) => u.demandUnit.permanentDemandNo === row.permanentDemandNo
+      );
+      if (!targetUnit) return false;
+
+      if (pft3DistrictFilter !== "ALL" && pft3DistrictFilter !== "Vehari") {
+        return false;
+      }
+      if (
+        pft3CircleFilter !== "ALL" &&
+        pft3CircleFilter !== "Circle-Vehari" &&
+        targetUnit.circleId !== pft3CircleFilter
+      ) {
+        return false;
+      }
+      if (pft3LocalityFilter !== "ALL") {
+        const loc = targetUnit.address.split(",")[0]?.trim();
+        if (loc !== pft3LocalityFilter) {
+          return false;
+        }
+      }
+      if (pft3CategoryFilter !== "ALL") {
+        const cat = targetUnit.assessmentVersions[0]?.snapshot.ruleCategory ?? row.categoryName;
+        if (
+          cat !== pft3CategoryFilter &&
+          row.categoryName !== pft3CategoryFilter &&
+          row.scheduleEntry !== pft3CategoryFilter
+        ) {
+          return false;
+        }
+      }
+
+      if (pft3SearchQuery.trim()) {
+        const q = pft3SearchQuery.trim().toLowerCase();
+        const matchesDemand = row.permanentDemandNo.toLowerCase().includes(q);
+        const matchesPin = (row.provincialUin ?? "").toLowerCase().includes(q);
+        const matchesLegalName = row.legalName.toLowerCase().includes(q);
+        const matchesTradeName = (row.tradeName ?? "").toLowerCase().includes(q);
+        const matchesCategory =
+          row.categoryName.toLowerCase().includes(q) || row.scheduleEntry.toLowerCase().includes(q);
+        const matchesIdentifier = row.identifier.toLowerCase().includes(q);
+        if (
+          !matchesDemand &&
+          !matchesPin &&
+          !matchesLegalName &&
+          !matchesTradeName &&
+          !matchesCategory &&
+          !matchesIdentifier
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [
+    formPFT3Rows,
+    units,
+    pft3SearchQuery,
+    pft3DistrictFilter,
+    pft3CircleFilter,
+    pft3LocalityFilter,
+    pft3CategoryFilter
+  ]);
 
   // Defaulter Units Filter
   const defaulterUnits = useMemo(() => {
@@ -2600,6 +2667,7 @@ export default function HomePage({
     const newReceipt: StatutoryReceiptRecord = {
       id: `rec-${Date.now()}`,
       receiptNumber,
+      paymentSource: "ISSUED_PFT2",
       challanNumber: receivingChallan.challanNumber,
       demandNumber: receivingChallan.demandNumber,
       unitId: receivingChallan.unitId,
@@ -2994,204 +3062,135 @@ export default function HomePage({
   };
 
   const renderUnitActionsDropdown = (targetUnit: StoredUnit) => {
-    const isOpen = activeActionDropdownUnitId === targetUnit.id;
     return (
-      <div className="unit-actions-menu">
-        <button
-          type="button"
-          className="unit-actions-btn"
-          onClick={(e) => {
-            e.stopPropagation();
-            setActiveActionDropdownUnitId(isOpen ? null : targetUnit.id);
-          }}
-          title="Statutory Documents & Enforcement Actions"
-        >
-          <span>⚡ Actions</span>
-          <span style={{ fontSize: "0.7rem" }}>▾</span>
-        </button>
-
-        {isOpen && (
-          <div className="unit-actions-dropdown" onClick={(e) => e.stopPropagation()}>
-            <div className="unit-actions-dropdown-header">
-              {targetUnit.demandUnit.permanentDemandNo} &bull; Statutory Actions
-            </div>
-
-            {/* Assessment Hub */}
-            <button
-              type="button"
-              className="unit-actions-dropdown-item"
-              onClick={() => {
-                setSelectedUnitId(targetUnit.id);
-                switchTab("FORM_PFT1");
-                setActiveActionDropdownUnitId(null);
-              }}
-            >
-              <span className="action-icon">📄</span>
-              <span>View Form P.F.T-1 (Assessment Notice)</span>
-            </button>
-
-            <button
-              type="button"
-              className="unit-actions-dropdown-item"
-              onClick={() => {
-                setSelectedUnitId(targetUnit.id);
-                switchTab("FORM_PFT2");
-                setActiveActionDropdownUnitId(null);
-              }}
-            >
-              <span className="action-icon">💳</span>
-              <span>View Form P.F.T-2 (Payment Challan)</span>
-            </button>
-
-            <div className="unit-actions-dropdown-divider" />
-
-            {/* Revenue Hub */}
-            <button
-              type="button"
-              className="unit-actions-dropdown-item"
-              onClick={() => {
-                setSelectedUnitId(targetUnit.id);
-                switchTab("PFT2");
-                const ch = pft2Challans.find(
-                  (c) => c.unitId === targetUnit.id && c.status === "ISSUED"
-                );
-                if (ch) {
-                  handleOpenReceivePft2(ch);
-                } else {
-                  setPft2SearchQuery(targetUnit.demandUnit.permanentDemandNo);
-                }
-                setActiveActionDropdownUnitId(null);
-              }}
-            >
-              <span className="action-icon">📥</span>
-              <span>Receive Bank Payment &bull; Convert to Receipt</span>
-            </button>
-
-            <button
-              type="button"
-              className="unit-actions-dropdown-item"
-              onClick={() => {
-                setSelectedUnitId(targetUnit.id);
-                switchTab("RECEIPTS");
-                setReceiptSearchQuery(targetUnit.demandUnit.permanentDemandNo);
-                setActiveActionDropdownUnitId(null);
-              }}
-            >
-              <span className="action-icon">🧾</span>
-              <span>View Statutory Receipts (Rule 10)</span>
-            </button>
-
-            <button
-              type="button"
-              className="unit-actions-dropdown-item"
-              onClick={() => {
-                setSelectedUnitId(targetUnit.id);
-                setPaymentUnitId(targetUnit.id);
-                switchTab("LEDGER");
-                setActiveActionDropdownUnitId(null);
-              }}
-            >
-              <span className="action-icon">📒</span>
-              <span>Inspect Demand &amp; Payment Ledger</span>
-            </button>
-
-            <div className="unit-actions-dropdown-divider" />
-
-            {/* Enforcement Hub */}
-            <button
-              type="button"
-              className="unit-actions-dropdown-item"
-              onClick={() => {
-                setSelectedUnitId(targetUnit.id);
-                setNoticeTargetUnitId(targetUnit.id);
-                switchTab("DEFAULTERS");
-                setShowNoticeModal(true);
-                setActiveActionDropdownUnitId(null);
-              }}
-            >
-              <span className="action-icon">📜</span>
-              <span>Issue Show Cause Notice (Penalty)</span>
-            </button>
-
-            <button
-              type="button"
-              className="unit-actions-dropdown-item"
-              onClick={() => {
-                setSelectedUnitId(targetUnit.id);
-                setRecoveryTargetUnitId(targetUnit.id);
-                switchTab("DEFAULTERS");
-                setShowRecoveryModal(true);
-                setActiveActionDropdownUnitId(null);
-              }}
-            >
-              <span className="action-icon">🏛️</span>
-              <span>Issue Land Revenue Arrears Certificate (Rule 12)</span>
-            </button>
-
-            <button
-              type="button"
-              className="unit-actions-dropdown-item"
-              onClick={() => {
-                setSelectedUnitId(targetUnit.id);
-                switchTab("CLEARANCE");
-                handleOpenClearanceCertificate(targetUnit);
-                setActiveActionDropdownUnitId(null);
-              }}
-            >
-              <span className="action-icon">🛡️</span>
-              <span>Tax Clearance Certificate (Form P.F.T-5)</span>
-            </button>
-
-            <div className="unit-actions-dropdown-divider" />
-
-            {/* Statutory Relief & Tribunal */}
-            <button
-              type="button"
-              className="unit-actions-dropdown-item"
-              onClick={() => {
-                setSelectedUnitId(targetUnit.id);
-                setAppealUnitId(targetUnit.id);
-                switchTab("APPEALS");
-                setShowFileAppealModal(true);
-                setActiveActionDropdownUnitId(null);
-              }}
-            >
-              <span className="action-icon">⚖️</span>
-              <span>Lodge Appellate Memorandum (Rule 14)</span>
-            </button>
-
-            <button
-              type="button"
-              className="unit-actions-dropdown-item"
-              onClick={() => {
-                setSelectedUnitId(targetUnit.id);
-                setDiscUnitId(targetUnit.id);
-                switchTab("RELIEF_DESK");
-                setShowFileDiscontinuanceModal(true);
-                setActiveActionDropdownUnitId(null);
-              }}
-            >
-              <span className="action-icon">🛑</span>
-              <span>File Rule 10 Discontinuance Notice</span>
-            </button>
-
-            <button
-              type="button"
-              className="unit-actions-dropdown-item"
-              onClick={() => {
-                setSelectedUnitId(targetUnit.id);
-                setRefUnitId(targetUnit.id);
-                switchTab("RELIEF_DESK");
-                setShowRefundModal(true);
-                setActiveActionDropdownUnitId(null);
-              }}
-            >
-              <span className="action-icon">💸</span>
-              <span>Lodge Refund / Credit Adjustment (Sec 3(5))</span>
-            </button>
-          </div>
-        )}
-      </div>
+      <RowActionMenu
+        align="right"
+        actions={[
+          {
+            id: "view-details",
+            label: "View Unit Dossier",
+            icon: "📋",
+            onClick: () => window.open(`/units/${targetUnit.id}/details`, "_blank")
+          },
+          {
+            id: "issue-pft2",
+            label: "Issue Form PFT-2 (New Tab)",
+            icon: "💳",
+            onClick: () => window.open(`/documents/pf2/new?unit=${targetUnit.id}`, "_blank")
+          },
+          {
+            id: "view-pft1",
+            label: "View Form P.F.T-1 (Assessment Notice)",
+            icon: "📄",
+            onClick: () => {
+              setSelectedUnitId(targetUnit.id);
+              setShowPft1NoticeModal(true);
+            }
+          },
+          {
+            id: "receive-payment",
+            label: "Receive Bank Payment",
+            icon: "📥",
+            onClick: () => {
+              setSelectedUnitId(targetUnit.id);
+              switchTab("PFT2");
+              const ch = pft2Challans.find(
+                (c) => c.unitId === targetUnit.id && c.status === "ISSUED"
+              );
+              if (ch) {
+                handleOpenReceivePft2(ch);
+              } else {
+                setPft2SearchQuery(targetUnit.demandUnit.permanentDemandNo);
+              }
+            }
+          },
+          {
+            id: "view-receipts",
+            label: "View Statutory Receipts (Rule 10)",
+            icon: "🧾",
+            onClick: () => {
+              setSelectedUnitId(targetUnit.id);
+              switchTab("RECEIPTS");
+              setReceiptSearchQuery(targetUnit.demandUnit.permanentDemandNo);
+            }
+          },
+          {
+            id: "inspect-ledger",
+            label: "Inspect Demand & Payment Ledger",
+            icon: "📒",
+            onClick: () => {
+              setSelectedUnitId(targetUnit.id);
+              setPaymentUnitId(targetUnit.id);
+              switchTab("LEDGER");
+            }
+          },
+          {
+            id: "show-cause-notice",
+            label: "Issue Show Cause Notice (Penalty)",
+            icon: "📜",
+            onClick: () => {
+              setSelectedUnitId(targetUnit.id);
+              setNoticeTargetUnitId(targetUnit.id);
+              switchTab("DEFAULTERS");
+              setShowNoticeModal(true);
+            }
+          },
+          {
+            id: "land-revenue-recovery",
+            label: "Issue Land Revenue Arrears Certificate (Rule 12)",
+            icon: "🏛️",
+            onClick: () => {
+              setSelectedUnitId(targetUnit.id);
+              setRecoveryTargetUnitId(targetUnit.id);
+              switchTab("DEFAULTERS");
+              setShowRecoveryModal(true);
+            }
+          },
+          {
+            id: "tax-clearance",
+            label: "Tax Clearance Certificate (Form P.F.T-5)",
+            icon: "🛡️",
+            onClick: () => {
+              setSelectedUnitId(targetUnit.id);
+              switchTab("CLEARANCE");
+              handleOpenClearanceCertificate(targetUnit);
+            }
+          },
+          {
+            id: "appellate-memo",
+            label: "Lodge Appellate Memorandum (Rule 14)",
+            icon: "⚖️",
+            onClick: () => {
+              setSelectedUnitId(targetUnit.id);
+              setAppealUnitId(targetUnit.id);
+              switchTab("APPEALS");
+              setShowFileAppealModal(true);
+            }
+          },
+          {
+            id: "discontinuance-notice",
+            label: "File Rule 10 Discontinuance Notice",
+            icon: "🛑",
+            onClick: () => {
+              setSelectedUnitId(targetUnit.id);
+              setDiscUnitId(targetUnit.id);
+              switchTab("RELIEF_DESK");
+              setShowFileDiscontinuanceModal(true);
+            }
+          },
+          {
+            id: "refund-adjustment",
+            label: "Lodge Refund / Credit Adjustment (Sec 3(5))",
+            icon: "💸",
+            onClick: () => {
+              setSelectedUnitId(targetUnit.id);
+              setRefUnitId(targetUnit.id);
+              switchTab("RELIEF_DESK");
+              setShowRefundModal(true);
+            }
+          }
+        ]}
+      />
     );
   };
 
@@ -3420,7 +3419,7 @@ export default function HomePage({
           <div className="metric-card success">
             <p className="metric-label">Total Recoveries</p>
             <p className="metric-value">PKR {metrics.totalPayments.toLocaleString()}</p>
-            <p className="metric-subtext">Challan 32-A &amp; ePay Credits</p>
+            <p className="metric-subtext">Form PFT-2 &amp; ePay Credits</p>
           </div>
           <div className="metric-card warning">
             <p className="metric-label">Outstanding Balance</p>
@@ -3530,19 +3529,11 @@ export default function HomePage({
               </button>
               <button
                 role="tab"
-                aria-selected={activeTab === "FORM_PFT1"}
-                onClick={() => switchTab("FORM_PFT1")}
-                className={`subtab-btn ${activeTab === "FORM_PFT1" ? "active" : ""}`}
+                aria-selected={activeTab === "REGISTER_PFT3"}
+                onClick={() => switchTab("REGISTER_PFT3")}
+                className={`subtab-btn ${activeTab === "REGISTER_PFT3" ? "active" : ""}`}
               >
-                📜 Form P.F.T-1 (Notice of Demand)
-              </button>
-              <button
-                role="tab"
-                aria-selected={activeTab === "FORM_PFT2"}
-                onClick={() => switchTab("FORM_PFT2")}
-                className={`subtab-btn ${activeTab === "FORM_PFT2" ? "active" : ""}`}
-              >
-                💳 Form P.F.T-2 (Payment Challan)
+                📋 Form P.F.T-3 Assessment Register ({units.length})
               </button>
             </>
           )}
@@ -3681,14 +3672,7 @@ export default function HomePage({
               >
                 📑 Statutory Reports Studio
               </button>
-              <button
-                role="tab"
-                aria-selected={activeTab === "REGISTER_PFT3"}
-                onClick={() => switchTab("REGISTER_PFT3")}
-                className={`subtab-btn ${activeTab === "REGISTER_PFT3" ? "active" : ""}`}
-              >
-                📋 Form P.F.T-3 Assessment Register ({units.length})
-              </button>
+
               <button
                 role="tab"
                 aria-selected={activeTab === "AUDIT"}
@@ -3768,9 +3752,9 @@ export default function HomePage({
                                 fontWeight: 600,
                                 marginTop: "2px"
                               }}
-                              title="Provincial Unique Identification Number"
+                              title="PIN (Professional Identification Number)"
                             >
-                              UIN: {u.provincialUin}
+                              PIN: {u.provincialUin}
                             </span>
                           )}
                         </td>
@@ -3890,7 +3874,7 @@ export default function HomePage({
                           <strong>{u.legalName}</strong>
                           <span style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}>
                             {u.demandUnit.permanentDemandNo}
-                            {u.provincialUin ? ` • UIN: ${u.provincialUin}` : ""} &bull; {u.address}
+                            {u.provincialUin ? ` • PIN: ${u.provincialUin}` : ""} &bull; {u.address}
                           </span>
                         </td>
                         <td>{FINANCIAL_YEAR_2026_27}</td>
@@ -4012,7 +3996,7 @@ export default function HomePage({
                     setShowPaymentModal(true);
                   }}
                   className="btn-primary"
-                  title="Record a payment receipt (Challan 32-A or ePay)"
+                  title="Record a payment receipt (Form PFT-2 or ePay)"
                 >
                   + Add a Payment Receipt
                 </button>
@@ -4196,992 +4180,14 @@ export default function HomePage({
           </section>
         )}
 
-        {/* TAB 3: FORM P.F.T-1 (NOTICE OF TAX DEMAND UNDER RULE 6) */}
-        {activeTab === "FORM_PFT1" && formPFT1Data && activeUnit && (
-          <section className="content-panel">
-            <div className="panel-header">
-              <div>
-                <h2>Form P.F.T-1: Notice of Tax Demand (نوٹس ڈیمانڈ)</h2>
-                <p>
-                  Statutory Notice of Demand issued under Section 03 of the Punjab Finance Act 1977
-                  read with Rule 6 of the Punjab Professions &amp; Trades Tax Rules, 1977.
-                </p>
-              </div>
-
-              <div
-                className="panel-actions"
-                style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
-              >
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowDispatchRegisterModal(true)}
-                  title="View Circle Dispatch & Service Register"
-                >
-                  📋 Dispatch Register
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowBatchPft1Modal(true)}
-                  title="Batch print all approved Form PFT-1 notices"
-                >
-                  📚 Batch Print Notices ({approvedUnits.length})
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() =>
-                    downloadDocumentPdf(
-                      "pft1-document-card",
-                      `Form_PFT1_Notice_${activeUnit?.demandUnit.permanentDemandNo || "Notice"}.pdf`
-                    )
-                  }
-                  title="Download standalone Form PFT-1 notice as PDF"
-                >
-                  📥 Download PDF
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => printIsolatedElement("pft1-document-card")}
-                  title="Print active Form PFT-1 notice"
-                >
-                  🖨️ Print Single Notice
-                </button>
-                <select
-                  aria-label="Select Unit for Notice"
-                  className="form-control"
-                  style={{ maxWidth: "16rem" }}
-                  value={selectedUnitId}
-                  onChange={(e) => setSelectedUnitId(e.target.value)}
-                >
-                  {units.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.demandUnit.permanentDemandNo} &bull; {u.legalName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Tamper Simulation Lab Box */}
-            <div className="tamper-box">
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "1rem"
-                }}
-              >
-                <div>
-                  <strong>
-                    🔬 Form P.F.T-1 Document Integrity &amp; SHA-256 Cryptographic Verification Lab
-                  </strong>
-                  <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
-                    Cryptographic non-repudiation standard. Any alteration in demand or assessee
-                    details invalidates this SHA-256 digest.
-                  </p>
-                </div>
-                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                  <button
-                    onClick={() => {
-                      setIsTampered(!isTampered);
-                      if (!isTampered) {
-                        setTamperedAmount(100);
-                        showToast(
-                          "error",
-                          "Simulated unauthorized tampering: Demand altered to PKR 100!"
-                        );
-                      } else {
-                        showToast("success", "Restored official authentic document content.");
-                      }
-                    }}
-                    className={`btn-secondary btn-sm ${isTampered ? "btn-danger" : ""}`}
-                  >
-                    {isTampered ? "⚠️ Revert Tampering" : "⚡ Simulate Document Tampering"}
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ marginTop: "0.75rem" }}>
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569" }}>
-                  Computed SHA-256 Document Verification Hash:
-                </span>
-                <div className="doc-hash-badge" style={{ marginTop: "0.25rem" }}>
-                  {formPFT1Data.officialSha256}
-                </div>
-                {isTampered && (
-                  <div
-                    style={{
-                      background: "#fee2e2",
-                      border: "1px solid #ef4444",
-                      color: "#991b1b",
-                      padding: "0.5rem 0.75rem",
-                      borderRadius: "6px",
-                      marginTop: "0.5rem",
-                      fontWeight: 700,
-                      fontSize: "0.85rem"
-                    }}
-                  >
-                    ❌ CRITICAL WARNING: HASH MISMATCH! Document content has been tampered or
-                    altered in transit!
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Official Gazetted Notice Canvas */}
-            <div
-              className="doc-box printable-document"
-              id="pft1-document-card"
-              style={{ marginTop: "1.5rem" }}
-            >
-              {!formPFT1Data.isApproved && (
-                <div className="doc-watermark">
-                  ⚠️ PROVISIONAL NOTICE &bull; NOT A LEGALLY OPERATIVE ORDER &bull; PENDING
-                  STATUTORY APPROVAL BY ETO
-                </div>
-              )}
-
-              <div
-                style={{
-                  border: "2px solid #0d3822",
-                  padding: "2rem",
-                  borderRadius: "6px",
-                  background: "#ffffff",
-                  fontFamily: "Georgia, serif"
-                }}
-              >
-                {/* Top Section with Left QR Code & Department Header */}
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "0.75rem",
-                    alignItems: "center",
-                    borderBottom: "2px solid #0d3822",
-                    paddingBottom: "0.75rem",
-                    marginBottom: "1rem"
-                  }}
-                >
-                  {/* Left: QR Code */}
-                  <div style={{ flexShrink: 0 }}>
-                    <StatutoryQrCode
-                      payload={formPFT1Data.qrPayload}
-                      size={76}
-                      label="Scan to Verify"
-                      subtitle={formPFT1Data.demandNumber}
-                      onScanOrClick={(payload) => {
-                        setPortalVerificationInput(payload);
-                        handleVerifyDocument(payload);
-                        setActiveTab("PUBLIC_PORTAL");
-                      }}
-                    />
-                  </div>
-                  {/* Right: Department Header */}
-                  <div style={{ flex: 1, textAlign: "center" }}>
-                    <div
-                      style={{
-                        display: "inline-block",
-                        background: "#fef3c7",
-                        border: "1px solid #f59e0b",
-                        padding: "0.15rem 0.6rem",
-                        borderRadius: "4px",
-                        fontWeight: 800,
-                        fontSize: "0.75rem",
-                        color: "#92400e",
-                        marginBottom: "0.2rem"
-                      }}
-                    >
-                      FORM P.F.T-1 &bull; NOTICE OF TAX DEMAND
-                    </div>
-                    <h4
-                      style={{
-                        margin: "0.1rem 0",
-                        fontSize: "0.95rem",
-                        color: "#0d3822",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.04em"
-                      }}
-                    >
-                      GOVERNMENT OF THE PUNJAB
-                    </h4>
-                    <p style={{ margin: 0, fontWeight: 700, fontSize: "0.82rem" }}>
-                      EXCISE &amp; TAXATION DEPARTMENT &bull; DISTRICT VEHARI
-                    </p>
-                    <p
-                      style={{
-                        margin: "0.15rem 0 0",
-                        fontSize: "0.72rem",
-                        fontStyle: "italic",
-                        color: "#64748b"
-                      }}
-                    >
-                      (Section 3 of Punjab Finance Act 1977 read with Rule 6 of the Punjab
-                      Professions &amp; Trades Tax Rules, 1977)
-                    </p>
-                  </div>
-                </div>
-
-                {/* Unified Metadata & Assessment Header */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: "0.35rem 0.6rem",
-                    fontSize: "0.78rem",
-                    background: "#f8fafc",
-                    padding: "0.5rem 0.75rem",
-                    borderRadius: "6px",
-                    border: "1px solid #e2e8f0",
-                    marginBottom: "1rem"
-                  }}
-                >
-                  <div
-                    style={{
-                      gridColumn: "span 2",
-                      fontSize: "0.76rem",
-                      fontFamily: "monospace",
-                      color: "#1e3a8a",
-                      wordBreak: "break-all"
-                    }}
-                  >
-                    <strong>Notice No:</strong> {formPFT1Data.noticeNumber}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        padding: "0.1rem 0.45rem",
-                        borderRadius: "4px",
-                        fontFamily: "monospace",
-                        fontWeight: 800,
-                        fontSize: "0.76rem",
-                        background: "#e0f2fe",
-                        color: "#0369a1",
-                        border: "1px solid #bae6fd",
-                        letterSpacing: "1px"
-                      }}
-                    >
-                      🔐 PIN: {formPFT1Data.pin}
-                    </span>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <strong>Demand No:</strong>{" "}
-                    <span style={{ fontFamily: "monospace", fontWeight: 800, color: "#0d3822" }}>
-                      {formPFT1Data.demandNumber}
-                    </span>
-                  </div>
-                  {formPFT1Data.provincialUin && (
-                    <div
-                      style={{
-                        gridColumn: "span 2",
-                        fontSize: "0.76rem",
-                        borderTop: "1px dashed #e2e8f0",
-                        paddingTop: "0.25rem"
-                      }}
-                    >
-                      <strong>PIN (Professional Identification Number):</strong>{" "}
-                      <span
-                        style={{
-                          fontFamily: "monospace",
-                          color: "#1d4ed8",
-                          fontWeight: 700
-                        }}
-                      >
-                        {formPFT1Data.provincialUin}
-                      </span>
-                    </div>
-                  )}
-                  <div>
-                    <strong>Circle:</strong> {formPFT1Data.circleName}
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <strong>District:</strong> {formPFT1Data.districtName}
-                  </div>
-                  <div>
-                    <strong>Date of Issue:</strong> {formPFT1Data.issueDate}
-                  </div>
-                  <div style={{ textAlign: "right", color: "#b91c1c" }}>
-                    <strong>Due Date:</strong> {formPFT1Data.dueDate}
-                  </div>
-                </div>
-
-                {/* Addressee */}
-                <div style={{ marginBottom: "1.25rem", fontSize: "0.95rem" }}>
-                  <p style={{ margin: 0 }}>To,</p>
-                  <p style={{ margin: "0.25rem 0 0.1rem", fontWeight: 700 }}>
-                    Name of assessee: {formPFT1Data.assesseeLegalName}
-                    {formPFT1Data.assesseeTradeName && ` (${formPFT1Data.assesseeTradeName})`}
-                  </p>
-                  <p style={{ margin: 0 }}>Address: {formPFT1Data.address}</p>
-                </div>
-
-                {/* 3-Tier Statutory Schedule Breakdown Banner */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
-                    gap: "0.75rem",
-                    padding: "0.85rem 1rem",
-                    background: "#f0fdf4",
-                    border: "1px solid #bbf7d0",
-                    borderRadius: "6px",
-                    marginBottom: "1.25rem",
-                    fontSize: "0.85rem"
-                  }}
-                >
-                  <div>
-                    <span
-                      style={{
-                        fontSize: "0.72rem",
-                        color: "#166534",
-                        fontWeight: 700,
-                        textTransform: "uppercase"
-                      }}
-                    >
-                      Schedule Category (Class)
-                    </span>
-                    <p style={{ margin: "0.2rem 0 0", fontWeight: 700, color: "#0f172a" }}>
-                      {formPFT1Data.statutoryCategoryText}
-                    </p>
-                  </div>
-                  <div>
-                    <span
-                      style={{
-                        fontSize: "0.72rem",
-                        color: "#166534",
-                        fontWeight: 700,
-                        textTransform: "uppercase"
-                      }}
-                    >
-                      Statutory Sub-Class
-                    </span>
-                    <p style={{ margin: "0.2rem 0 0", fontWeight: 700, color: "#0f172a" }}>
-                      Class {formPFT1Data.subclassificationCode}
-                    </p>
-                  </div>
-                  <div>
-                    <span
-                      style={{
-                        fontSize: "0.72rem",
-                        color: "#166534",
-                        fontWeight: 700,
-                        textTransform: "uppercase"
-                      }}
-                    >
-                      Tertiary Slab / Criteria
-                    </span>
-                    <p style={{ margin: "0.2rem 0 0", fontWeight: 600, color: "#0f172a" }}>
-                      {formPFT1Data.tertiarySlab}
-                    </p>
-                  </div>
-                  <div>
-                    <span
-                      style={{
-                        fontSize: "0.72rem",
-                        color: "#166534",
-                        fontWeight: 700,
-                        textTransform: "uppercase"
-                      }}
-                    >
-                      Prescribed Statutory Rate
-                    </span>
-                    <p style={{ margin: "0.2rem 0 0", fontWeight: 800, color: "#166534" }}>
-                      PKR {formPFT1Data.slabRatePkr.toLocaleString()} ({formPFT1Data.rateBasis})
-                    </p>
-                  </div>
-                </div>
-
-                {/* Gazetted Notice Body */}
-                <div style={{ fontSize: "0.95rem", lineHeight: 1.7, marginBottom: "1.75rem" }}>
-                  <p style={{ margin: "0 0 0.75rem" }}>Dear Sir (s),</p>
-                  <p style={{ margin: "0 0 0.75rem", textIndent: "1.5rem" }}>
-                    According to Section 03 of Punjab Finance Act, 1977 you are liable to pay Tax on
-                    Professions, Trades, Employment or Callings amounting to{" "}
-                    <strong>Rs. {formPFT1Data.taxAmount.toLocaleString()}</strong> (in words){" "}
-                    <strong>{formPFT1Data.taxAmountWords}</strong> under{" "}
-                    <strong>
-                      {formPFT1Data.scheduleEntry} ({formPFT1Data.statutoryCategoryText}) &bull;
-                      Slab: {formPFT1Data.tertiarySlab}
-                    </strong>{" "}
-                    for the year <strong>{formPFT1Data.financialYear}</strong>. You are directed to
-                    make the payment in the National Bank of Pakistan or State Bank of Pakistan
-                    within one month of the service of this Notice through Payment Challan Form
-                    P.F.T-2 attached herewith and furnish a copy of paid Challan to the undersigned.
-                  </p>
-                  <p
-                    style={{
-                      margin: "0 0 0.75rem",
-                      textIndent: "1.5rem",
-                      color: "#991b1b",
-                      fontWeight: 600
-                    }}
-                  >
-                    In case of default, a penalty, not exceeding the amount of tax, shall be imposed
-                    and unpaid dues shall be recovered as arrears of Land Revenue.
-                  </p>
-                </div>
-
-                {/* Signature Block */}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-end",
-                    marginBottom: "2rem"
-                  }}
-                >
-                  <div
-                    style={{
-                      border: "2px dashed #0d3822",
-                      padding: "0.75rem 1.25rem",
-                      borderRadius: "6px",
-                      textAlign: "center"
-                    }}
-                  >
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", display: "block" }}>
-                      Official Seal
-                    </span>
-                    <strong style={{ fontSize: "0.85rem", color: "#0d3822" }}>
-                      ASSESSING AUTHORITY
-                      <br />
-                      TEHSIL VEHARI
-                    </strong>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <p style={{ margin: 0, fontWeight: 700, fontSize: "1rem" }}>
-                      {formPFT1Data.assessingAuthorityName}
-                    </p>
-                    <p style={{ margin: "0.15rem 0", fontWeight: 600, fontSize: "0.85rem" }}>
-                      EXCISE &amp; TAXATION OFFICER
-                    </p>
-                    <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
-                      PROFESSIONAL TAX &bull; TEHSIL VEHARI
-                    </p>
-                    <p style={{ margin: "0.15rem 0 0", fontSize: "0.75rem", color: "#64748b" }}>
-                      Club Road, Vehari &bull; Tel: 067-9201122
-                    </p>
-                  </div>
-                </div>
-
-                {/* Lower Section: Gazetted Service Counterfoil Receipt */}
-                <div className="counterfoil-box">
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      marginBottom: "1rem"
-                    }}
-                  >
-                    <h4 style={{ margin: 0, color: "#0d3822", letterSpacing: "0.05em" }}>
-                      RECEIPT (Counterfoil for service of notice / رسید وصولی نوٹس)
-                    </h4>
-                    <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                      Rule 6 Counterfoil
-                    </span>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(14rem, 1fr))",
-                      gap: "0.75rem",
-                      fontSize: "0.85rem",
-                      background: "#f8fafc",
-                      padding: "1rem",
-                      borderRadius: "6px",
-                      border: "1px solid #e2e8f0"
-                    }}
-                  >
-                    <p style={{ margin: 0 }}>
-                      <strong>Demand No.:</strong> {formPFT1Data.serviceReceipt.demandNumber}
-                    </p>
-                    <p style={{ margin: 0 }}>
-                      <strong>Tax Payable:</strong> Rs.{" "}
-                      {formPFT1Data.serviceReceipt.taxPayable.toLocaleString()}
-                    </p>
-                    <p style={{ margin: 0 }}>
-                      <strong>Due Date:</strong> {formPFT1Data.serviceReceipt.dueDate}
-                    </p>
-                    <p style={{ margin: 0 }}>
-                      <strong>Name of Assessee:</strong> {formPFT1Data.serviceReceipt.assesseeName}
-                    </p>
-                    <p style={{ margin: 0 }}>
-                      <strong>Class of Assessee:</strong>{" "}
-                      {formPFT1Data.serviceReceipt.assesseeClass}
-                    </p>
-                    <p style={{ margin: 0 }}>
-                      <strong>Tax No.:</strong> {formPFT1Data.serviceReceipt.taxNumber}
-                    </p>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "2rem",
-                      marginTop: "1.25rem",
-                      fontSize: "0.85rem"
-                    }}
-                  >
-                    <div style={{ borderTop: "1px solid #cbd5e1", paddingTop: "0.5rem" }}>
-                      <p style={{ margin: 0, fontWeight: 700 }}>
-                        Received by (Assessee Signature):
-                      </p>
-                      <p style={{ margin: "0.25rem 0 0", fontSize: "0.75rem", color: "#64748b" }}>
-                        Signature / Thumb Impression &amp; Date
-                      </p>
-                    </div>
-                    <div
-                      style={{
-                        borderTop: "1px solid #cbd5e1",
-                        paddingTop: "0.5rem",
-                        textAlign: "right"
-                      }}
-                    >
-                      <p style={{ margin: 0, fontWeight: 700 }}>
-                        Delivered by: {formPFT1Data.serviceReceipt.serverName}
-                      </p>
-                      <p style={{ margin: "0.25rem 0 0", fontSize: "0.75rem", color: "#64748b" }}>
-                        {formPFT1Data.serviceReceipt.serverRole}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* TAB 4: FORM P.F.T-2 (3-COPY PAYMENT CHALLAN UNDER RULE 9) */}
-        {activeTab === "FORM_PFT2" && formPFT2Data && activeUnit && (
-          <section className="content-panel">
-            <div className="panel-header">
-              <div>
-                <h2>Form P.F.T-2: Punjab Professions &amp; Trades Tax Payment Challan</h2>
-                <p>
-                  Official 3-Copy Payment Instrument under Section 3 read with Rule 9 (Punjab Weekly
-                  Gazette Jan 21, 2009). Comprises Taxpayer Copy, Bank Copy, and Department Copy.
-                </p>
-              </div>
-
-              <div
-                className="panel-actions"
-                style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
-              >
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowBatchPft2Modal(true)}
-                  title="Batch print all approved Form PFT-2 challans"
-                >
-                  📚 Batch Print Challans ({approvedUnits.length})
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() =>
-                    downloadDocumentPdf(
-                      "pft2-challan-document",
-                      `Form_PFT2_Challan_${activeUnit?.demandUnit.permanentDemandNo || "Challan"}.pdf`,
-                      { orientation: "landscape" }
-                    )
-                  }
-                  title="Download 3-copy Form PFT-2 challan as PDF"
-                >
-                  📥 Download PDF
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => printIsolatedElement("pft2-challan-document")}
-                  title="Print active Form PFT-2 challan"
-                >
-                  🖨️ Print Single Challan
-                </button>
-                <select
-                  aria-label="Select Unit for Challan"
-                  className="form-control"
-                  style={{ maxWidth: "16rem" }}
-                  value={selectedUnitId}
-                  onChange={(e) => setSelectedUnitId(e.target.value)}
-                >
-                  {units.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.demandUnit.permanentDemandNo} &bull; {u.legalName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Tamper Simulation Lab Box */}
-            <div className="tamper-box">
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "1rem"
-                }}
-              >
-                <div>
-                  <strong>
-                    🔬 Form P.F.T-2 Challan Cryptographic Verification &amp; Non-Repudiation Lab
-                  </strong>
-                  <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
-                    SHA-256 seal binds all 3 copies. Modifying amounts or classifications triggers
-                    instant hash invalidation.
-                  </p>
-                </div>
-                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                  <button
-                    onClick={() => {
-                      setIsTampered(!isTampered);
-                      if (!isTampered) {
-                        setTamperedAmount(100);
-                        showToast("error", "Simulated unauthorized tampering: Demand changed!");
-                      } else {
-                        showToast("success", "Restored official authentic document content.");
-                      }
-                    }}
-                    className={`btn-secondary btn-sm ${isTampered ? "btn-danger" : ""}`}
-                  >
-                    {isTampered ? "⚠️ Revert Tampering" : "⚡ Simulate Challan Tampering"}
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ marginTop: "0.75rem" }}>
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569" }}>
-                  Computed SHA-256 Challan Verification Hash:
-                </span>
-                <div className="doc-hash-badge" style={{ marginTop: "0.25rem" }}>
-                  {formPFT2Data.officialSha256}
-                </div>
-                {isTampered && (
-                  <div
-                    style={{
-                      background: "#fee2e2",
-                      border: "1px solid #ef4444",
-                      color: "#991b1b",
-                      padding: "0.5rem 0.75rem",
-                      borderRadius: "6px",
-                      marginTop: "0.5rem",
-                      fontWeight: 700,
-                      fontSize: "0.85rem"
-                    }}
-                  >
-                    ❌ CRITICAL WARNING: HASH MISMATCH! Challan details have been tampered in
-                    transit!
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* 3-COPY SIDE-BY-SIDE CHALLAN RENDER CANVAS */}
-            <div style={{ marginTop: "1.5rem" }}>
-              {!formPFT2Data.isApproved && (
-                <div className="doc-watermark" style={{ marginBottom: "1rem" }}>
-                  ⚠️ PROVISIONAL PAYMENT INSTRUMENT &bull; REQUIRES ETO STATUTORY APPROVAL BEFORE
-                  BANK DEPOSIT
-                </div>
-              )}
-
-              <div className="challan-grid printable-document" id="pft2-challan-document">
-                {formPFT2Data.copies.map((copy, cIdx) => (
-                  <div key={cIdx} className="challan-card">
-                    {/* Top Section with Left QR Code & Copy Info */}
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "0.5rem",
-                        alignItems: "center",
-                        borderBottom: "2px solid #0d3822",
-                        paddingBottom: "0.4rem"
-                      }}
-                    >
-                      {/* Left: QR Code */}
-                      <div style={{ flexShrink: 0 }}>
-                        <StatutoryQrCode
-                          payload={copy.qrPayload}
-                          size={66}
-                          label="Scan to Verify"
-                          subtitle={copy.bankUse.challanSerial}
-                          onScanOrClick={(payload) => {
-                            setPortalVerificationInput(payload);
-                            handleVerifyDocument(payload);
-                            setActiveTab("PUBLIC_PORTAL");
-                          }}
-                        />
-                      </div>
-                      {/* Right: Copy Title & Department Header */}
-                      <div style={{ flex: 1, textAlign: "center" }}>
-                        <span
-                          style={{
-                            fontSize: "0.75rem",
-                            fontWeight: 800,
-                            color: "#166534",
-                            background: "#dcfce7",
-                            padding: "0.15rem 0.5rem",
-                            borderRadius: "4px",
-                            display: "inline-block",
-                            marginBottom: "0.2rem"
-                          }}
-                        >
-                          {copy.copyTitle}
-                        </span>
-                        <h4
-                          style={{
-                            margin: "0.1rem 0 0.05rem",
-                            fontSize: "0.8rem",
-                            color: "#0d3822"
-                          }}
-                        >
-                          GOVERNMENT OF THE PUNJAB
-                        </h4>
-                        <p style={{ margin: 0, fontSize: "0.72rem", fontWeight: 700 }}>
-                          EXCISE &amp; TAXATION DEPARTMENT
-                        </p>
-                        <p style={{ margin: "0.1rem 0", fontSize: "0.68rem", fontWeight: 600 }}>
-                          PUNJAB PROFESSIONS &amp; TRADES TAX
-                        </p>
-                        <p style={{ margin: 0, fontSize: "0.62rem", color: "#64748b" }}>
-                          PAYMENT CHALLAN &bull; Rule 9
-                        </p>
-                        <div
-                          style={{
-                            fontSize: "0.68rem",
-                            fontWeight: 700,
-                            color: "#b45309",
-                            marginTop: "0.15rem"
-                          }}
-                        >
-                          Head: {copy.headOfAccount}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Unified Metadata & Assessment Header */}
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "0.35rem 0.5rem",
-                        fontSize: "0.72rem",
-                        background: "#f8fafc",
-                        padding: "0.4rem",
-                        borderRadius: "4px",
-                        border: "1px solid #e2e8f0"
-                      }}
-                    >
-                      <div
-                        style={{
-                          gridColumn: "span 2",
-                          fontSize: "0.7rem",
-                          fontFamily: "monospace",
-                          color: "#1e3a8a",
-                          wordBreak: "break-all"
-                        }}
-                      >
-                        <strong>Notice No:</strong> {copy.noticeNumber}
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center" }}>
-                        <span
-                          style={{
-                            display: "inline-block",
-                            padding: "0.1rem 0.4rem",
-                            borderRadius: "4px",
-                            fontFamily: "monospace",
-                            fontWeight: 800,
-                            fontSize: "0.72rem",
-                            background: "#e0f2fe",
-                            color: "#0369a1",
-                            border: "1px solid #bae6fd",
-                            letterSpacing: "1px"
-                          }}
-                        >
-                          🔐 PIN: {copy.pin}
-                        </span>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <strong>Demand No:</strong>{" "}
-                        <span
-                          style={{ fontFamily: "monospace", fontWeight: 800, color: "#0d3822" }}
-                        >
-                          {copy.assessmentInfo.demandNo}
-                        </span>
-                      </div>
-                      {copy.taxpayerInfo.provincialUin && (
-                        <div
-                          style={{
-                            gridColumn: "span 2",
-                            fontSize: "0.72rem",
-                            borderTop: "1px dashed #e2e8f0",
-                            paddingTop: "0.25rem"
-                          }}
-                        >
-                          <strong>PIN (Professional Identification Number):</strong>{" "}
-                          <span
-                            style={{
-                              fontFamily: "monospace",
-                              color: "#1d4ed8",
-                              fontWeight: 700
-                            }}
-                          >
-                            {copy.taxpayerInfo.provincialUin}
-                          </span>
-                        </div>
-                      )}
-                      <div>
-                        <strong>Circle:</strong> {copy.assessmentInfo.circleName}
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <strong>District:</strong> {copy.district}
-                      </div>
-                      <div>
-                        <strong>Tax Year:</strong> {copy.taxYear}
-                      </div>
-                      <div style={{ textAlign: "right", color: "#b91c1c" }}>
-                        <strong>Due Date:</strong> {copy.dueDate}
-                      </div>
-                    </div>
-
-                    {/* Taxpayer Details */}
-                    <div style={{ fontSize: "0.75rem", lineHeight: 1.4 }}>
-                      <p style={{ margin: "0.15rem 0" }}>
-                        <strong>Class:</strong> {copy.taxpayerInfo.classification}{" "}
-                        <span style={{ fontWeight: 700, color: "#166534" }}>
-                          (PKR {copy.taxpayerInfo.slabRatePkr.toLocaleString()})
-                        </span>
-                      </p>
-                      <p style={{ margin: "0.15rem 0" }}>
-                        <strong>Name:</strong> {copy.taxpayerInfo.legalName}
-                      </p>
-                      {copy.taxpayerInfo.tradeName && (
-                        <p style={{ margin: "0.15rem 0" }}>
-                          <strong>Trade:</strong> {copy.taxpayerInfo.tradeName}
-                        </p>
-                      )}
-                      <p style={{ margin: "0.15rem 0" }}>
-                        <strong>Address:</strong> {copy.taxpayerInfo.address}
-                      </p>
-                    </div>
-
-                    {/* Detail of Tax Payable Table */}
-                    <div>
-                      <strong
-                        style={{
-                          fontSize: "0.75rem",
-                          color: "#0d3822",
-                          display: "block",
-                          marginBottom: "0.2rem"
-                        }}
-                      >
-                        Detail of Tax Payable:
-                      </strong>
-                      <table
-                        style={{
-                          width: "100%",
-                          fontSize: "0.75rem",
-                          borderCollapse: "collapse",
-                          border: "1px solid #cbd5e1"
-                        }}
-                      >
-                        <tbody>
-                          <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                            <td style={{ padding: "0.25rem 0.4rem" }}>Current Tax</td>
-                            <td style={{ padding: "0.25rem 0.4rem", textAlign: "right" }}>
-                              Rs. {copy.taxPayable.currentTax.toLocaleString()}
-                            </td>
-                          </tr>
-                          <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                            <td style={{ padding: "0.25rem 0.4rem" }}>Arrears</td>
-                            <td style={{ padding: "0.25rem 0.4rem", textAlign: "right" }}>Rs. 0</td>
-                          </tr>
-                          <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                            <td style={{ padding: "0.25rem 0.4rem" }}>Penalty</td>
-                            <td style={{ padding: "0.25rem 0.4rem", textAlign: "right" }}>Rs. 0</td>
-                          </tr>
-                          <tr style={{ fontWeight: 800, background: "#f0fdf4" }}>
-                            <td style={{ padding: "0.3rem 0.4rem", color: "#166534" }}>Total</td>
-                            <td
-                              style={{
-                                padding: "0.3rem 0.4rem",
-                                textAlign: "right",
-                                color: "#166534"
-                              }}
-                            >
-                              Rs. {copy.taxPayable.totalPayable.toLocaleString()}
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                      <p
-                        style={{
-                          margin: "0.3rem 0 0",
-                          fontSize: "0.7rem",
-                          color: "#475569",
-                          fontStyle: "italic"
-                        }}
-                      >
-                        (in words) {copy.taxPayable.totalPayableWords}
-                      </p>
-                    </div>
-
-                    {/* For Bank's Use Only */}
-                    <div
-                      style={{
-                        marginTop: "auto",
-                        borderTop: "2px solid #0d3822",
-                        paddingTop: "0.5rem",
-                        fontSize: "0.7rem",
-                        background: "#fafaf9",
-                        padding: "0.5rem",
-                        borderRadius: "4px"
-                      }}
-                    >
-                      <strong style={{ display: "block", color: "#78350f" }}>
-                        For Bank&apos;s Use Only:
-                      </strong>
-                      <p style={{ margin: "0.1rem 0" }}>Challan No: ______________________</p>
-                      <p style={{ margin: "0.1rem 0" }}>Date: _____________________________</p>
-                      <p style={{ margin: "0.1rem 0" }}>
-                        Amount (in figures): Rs. {copy.taxPayable.totalPayable.toLocaleString()}
-                      </p>
-                      <div
-                        style={{
-                          marginTop: "0.4rem",
-                          border: "1px dashed #a8a29e",
-                          height: "2.5rem",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "#78716c",
-                          fontSize: "0.65rem"
-                        }}
-                      >
-                        Bank Officer&apos;s Signature &amp; Bank Stamp
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
+        {/* TAB 5: FORM P.F.T-3 (ASSESSMENT & DEMAND REGISTER UNDER RULE 11) */}
 
         {/* TAB 5: FORM P.F.T-3 (ASSESSMENT & DEMAND REGISTER UNDER RULE 11) */}
         {activeTab === "REGISTER_PFT3" && (
           <section className="content-panel">
             <div className="panel-header">
               <div>
-                <h2>Form P.F.T-3: Assessment &amp; Demand Register (رجسٹر تشخیص)</h2>
+                <h2>Form P.F.T-3: Assessment &amp; Demand Register</h2>
                 <p>
                   Official statutory register of assessed persons maintained under Rule 11 of the
                   Punjab Professions and Trades Tax Rules, 1977 for Circle-Vehari.
@@ -5191,20 +4197,7 @@ export default function HomePage({
               <div className="panel-actions" style={{ display: "flex", gap: "0.5rem" }}>
                 <button
                   type="button"
-                  className="btn-secondary"
-                  style={{
-                    backgroundColor: "#065f46",
-                    color: "#ffffff",
-                    borderColor: "#047857"
-                  }}
-                  onClick={() => setShowBulkSurveyModal(true)}
-                  title="Batch upload field survey records via CSV into Form P.F.T-3 Register"
-                >
-                  📥 Bulk Import Survey (CSV)
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
+                  className="btn-primary"
                   onClick={() =>
                     downloadDocumentPdf("pft3-register-document", "Form_PFT3_Register.pdf", {
                       orientation: "landscape"
@@ -5213,14 +4206,6 @@ export default function HomePage({
                   title="Download official Rule 11 Register as PDF"
                 >
                   📥 Download PDF
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => printIsolatedElement("pft3-register-document")}
-                  title="Print official Rule 11 register"
-                >
-                  🖨️ Print Register
                 </button>
               </div>
             </div>
@@ -5327,6 +4312,178 @@ export default function HomePage({
               </div>
             </div>
 
+            {/* Structured Search & Filters */}
+            <div
+              style={{
+                background: "#f8fafc",
+                border: "1px solid #cbd5e1",
+                borderRadius: "8px",
+                padding: "1rem",
+                marginBottom: "1.25rem",
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
+                gap: "0.75rem",
+                alignItems: "flex-end"
+              }}
+            >
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    color: "#475569",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  Multi-Field Search:
+                </label>
+                <input
+                  type="text"
+                  placeholder="Demand #, PIN, Name, Class..."
+                  className="form-control"
+                  style={{ width: "100%", fontSize: "0.85rem" }}
+                  value={pft3SearchQuery}
+                  onChange={(e) => setPft3SearchQuery(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    color: "#475569",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  District:
+                </label>
+                <select
+                  aria-label="Filter by District"
+                  className="form-control"
+                  style={{ width: "100%", fontSize: "0.85rem" }}
+                  value={pft3DistrictFilter}
+                  onChange={(e) => setPft3DistrictFilter(e.target.value)}
+                >
+                  <option value="ALL">All Districts</option>
+                  {pft3Districts.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    color: "#475569",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  Circle:
+                </label>
+                <select
+                  aria-label="Filter by Circle"
+                  className="form-control"
+                  style={{ width: "100%", fontSize: "0.85rem" }}
+                  value={pft3CircleFilter}
+                  onChange={(e) => setPft3CircleFilter(e.target.value)}
+                >
+                  <option value="ALL">All Circles</option>
+                  {pft3Circles.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    color: "#475569",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  Locality:
+                </label>
+                <select
+                  aria-label="Filter by Locality"
+                  className="form-control"
+                  style={{ width: "100%", fontSize: "0.85rem" }}
+                  value={pft3LocalityFilter}
+                  onChange={(e) => setPft3LocalityFilter(e.target.value)}
+                >
+                  <option value="ALL">All Localities</option>
+                  {pft3Localities.map((loc) => (
+                    <option key={loc} value={loc}>
+                      {loc}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    color: "#475569",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  Statutory Classification:
+                </label>
+                <select
+                  aria-label="Filter by Statutory Classification"
+                  className="form-control"
+                  style={{ width: "100%", fontSize: "0.85rem" }}
+                  value={pft3CategoryFilter}
+                  onChange={(e) => setPft3CategoryFilter(e.target.value)}
+                >
+                  <option value="ALL">All Statutory Classifications</option>
+                  {getStatutoryCategories().map((cat) => (
+                    <option key={cat.category_code} value={cat.category_name}>
+                      {cat.category_code} - {cat.category_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {(pft3SearchQuery ||
+                pft3DistrictFilter !== "ALL" ||
+                pft3CircleFilter !== "ALL" ||
+                pft3LocalityFilter !== "ALL" ||
+                pft3CategoryFilter !== "ALL") && (
+                <div>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ width: "100%", fontSize: "0.825rem" }}
+                    onClick={() => {
+                      setPft3SearchQuery("");
+                      setPft3DistrictFilter("ALL");
+                      setPft3CircleFilter("ALL");
+                      setPft3LocalityFilter("ALL");
+                      setPft3CategoryFilter("ALL");
+                    }}
+                  >
+                    Reset Filters
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Statutory Register Table */}
             <div className="table-container printable-document" id="pft3-register-document">
               <table className="gov-table">
@@ -5346,94 +4503,109 @@ export default function HomePage({
                   </tr>
                 </thead>
                 <tbody>
-                  {formPFT3Rows.map((row) => (
-                    <tr key={row.permanentDemandNo}>
-                      <td>{row.serialNumber}</td>
-                      <td>
-                        <strong>{row.permanentDemandNo}</strong>
-                        {row.provincialUin && (
+                  {filteredFormPFT3Rows.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={11}
+                        style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
+                      >
+                        No assessed units match the selected search or filter criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredFormPFT3Rows.map((row) => (
+                      <tr key={row.permanentDemandNo}>
+                        <td>{row.serialNumber}</td>
+                        <td>
+                          <strong>{row.permanentDemandNo}</strong>
+                          {row.provincialUin && (
+                            <span
+                              style={{
+                                display: "block",
+                                fontFamily: "monospace",
+                                fontSize: "0.7rem",
+                                color: "#1d4ed8",
+                                fontWeight: 600,
+                                marginTop: "2px"
+                              }}
+                              title="PIN (Professional Identification Number)"
+                            >
+                              PIN: {row.provincialUin}
+                            </span>
+                          )}
+                        </td>
+                        <td
+                          style={{ fontFamily: "monospace", fontSize: "0.8rem", color: "#64748b" }}
+                        >
+                          {row.assessmentNo}
+                        </td>
+                        <td>
+                          <strong>{row.legalName}</strong>
+                          {row.tradeName && (
+                            <span
+                              style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                            >
+                              Trade: {row.tradeName}
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ fontSize: "0.85rem" }}>{row.identifier}</td>
+                        <td>
+                          <span className="badge badge-draft" style={{ fontSize: "0.7rem" }}>
+                            {row.scheduleEntry}
+                          </span>
                           <span
                             style={{
                               display: "block",
-                              fontFamily: "monospace",
-                              fontSize: "0.7rem",
-                              color: "#1d4ed8",
-                              fontWeight: 600,
-                              marginTop: "2px"
+                              fontSize: "0.725rem",
+                              color: "#64748b",
+                              marginTop: "0.15rem"
                             }}
-                            title="Provincial Unique Identification Number"
                           >
-                            UIN: {row.provincialUin}
+                            {row.categoryName}
                           </span>
-                        )}
-                      </td>
-                      <td style={{ fontFamily: "monospace", fontSize: "0.8rem", color: "#64748b" }}>
-                        {row.assessmentNo}
-                      </td>
-                      <td>
-                        <strong>{row.legalName}</strong>
-                        {row.tradeName && (
-                          <span style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}>
-                            Trade: {row.tradeName}
+                        </td>
+                        <td>
+                          <strong>PKR {row.assessedCurrentTax.toLocaleString()}</strong>
+                        </td>
+                        <td>
+                          <strong style={{ color: "#166534" }}>
+                            PKR {row.totalPaid.toLocaleString()}
+                          </strong>
+                        </td>
+                        <td>
+                          <strong
+                            style={{
+                              color: row.outstandingBalance > 0 ? "#b91c1c" : "#166534"
+                            }}
+                          >
+                            PKR {row.outstandingBalance.toLocaleString()}
+                          </strong>
+                        </td>
+                        <td>
+                          <span
+                            className={`badge ${
+                              row.assessmentStatus === "APPROVED"
+                                ? "badge-approved"
+                                : row.assessmentStatus === "SUBMITTED"
+                                  ? "badge-pending"
+                                  : "badge-draft"
+                            }`}
+                          >
+                            {row.assessmentStatus}
                           </span>
-                        )}
-                      </td>
-                      <td style={{ fontSize: "0.85rem" }}>{row.identifier}</td>
-                      <td>
-                        <span className="badge badge-draft" style={{ fontSize: "0.7rem" }}>
-                          {row.scheduleEntry}
-                        </span>
-                        <span
-                          style={{
-                            display: "block",
-                            fontSize: "0.725rem",
-                            color: "#64748b",
-                            marginTop: "0.15rem"
-                          }}
-                        >
-                          {row.categoryName}
-                        </span>
-                      </td>
-                      <td>
-                        <strong>PKR {row.assessedCurrentTax.toLocaleString()}</strong>
-                      </td>
-                      <td>
-                        <strong style={{ color: "#166534" }}>
-                          PKR {row.totalPaid.toLocaleString()}
-                        </strong>
-                      </td>
-                      <td>
-                        <strong
-                          style={{
-                            color: row.outstandingBalance > 0 ? "#b91c1c" : "#166534"
-                          }}
-                        >
-                          PKR {row.outstandingBalance.toLocaleString()}
-                        </strong>
-                      </td>
-                      <td>
-                        <span
-                          className={`badge ${
-                            row.assessmentStatus === "APPROVED"
-                              ? "badge-approved"
-                              : row.assessmentStatus === "SUBMITTED"
-                                ? "badge-pending"
-                                : "badge-draft"
-                          }`}
-                        >
-                          {row.assessmentStatus}
-                        </span>
-                      </td>
-                      <td>
-                        {(() => {
-                          const targetUnit = units.find(
-                            (u) => u.demandUnit.permanentDemandNo === row.permanentDemandNo
-                          );
-                          return targetUnit ? renderUnitActionsDropdown(targetUnit) : null;
-                        })()}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td>
+                          {(() => {
+                            const targetUnit = units.find(
+                              (u) => u.demandUnit.permanentDemandNo === row.permanentDemandNo
+                            );
+                            return targetUnit ? renderUnitActionsDropdown(targetUnit) : null;
+                          })()}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -5445,10 +4617,7 @@ export default function HomePage({
           <section className="content-panel">
             <div className="panel-header">
               <div>
-                <h2>
-                  ⚠️ Defaulter Tracking, Statutory Penalties &amp; Recovery (بقایا جات و ریکوری زیر
-                  دفعہ 3(4))
-                </h2>
+                <h2>⚠️ Defaulter Tracking, Statutory Penalties &amp; Recovery (Section 3(4))</h2>
                 <p>
                   Statutory arrears enforcement under Section 3(4) of Punjab Finance Act, 1977 and
                   Rules 10 &amp; 12 of Punjab Professions &amp; Trades Tax Rules, 1977. Tracks
@@ -5471,14 +4640,6 @@ export default function HomePage({
                   title="Download Defaulters Roster PDF"
                 >
                   📥 Download PDF
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => printIsolatedElement("defaulters-roster-printable")}
-                  title="Print Defaulters Roster"
-                >
-                  🖨️ Print Defaulter Roster
                 </button>
               </div>
             </div>
@@ -5850,7 +5011,7 @@ export default function HomePage({
                                 style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
                                 onClick={() => {
                                   setSelectedUnitId(u.id);
-                                  setActiveTab("FORM_PFT2");
+                                  setShowIssuePft2Modal(true);
                                 }}
                                 title="View updated 3-copy payment challan with penalty"
                               >
@@ -5873,7 +5034,7 @@ export default function HomePage({
           <section className="content-panel">
             <div className="panel-header">
               <div>
-                <h2>⚖️ Statutory Appeals &amp; Revisions (اپیل و نگرانی زیر سیکشن 7 و رول 13)</h2>
+                <h2>⚖️ Statutory Appeals &amp; Revisions (Section 7 &amp; Rule 13)</h2>
                 <p>
                   Appellate proceedings under Section 7 of Punjab Finance Act, 1977 read with Rule
                   13 of Punjab Professions &amp; Trades Tax Rules, 1977. Appellate Authority:{" "}
@@ -5903,14 +5064,6 @@ export default function HomePage({
                   title="Download Appeals Cause List PDF"
                 >
                   📥 Download PDF
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => printIsolatedElement("appeals-cause-list-printable")}
-                  title="Print Appeals Cause List"
-                >
-                  🖨️ Print Cause List
                 </button>
               </div>
             </div>
@@ -6093,11 +5246,11 @@ export default function HomePage({
                       if (appeal.status === "FILED") {
                         statusBadgeBg = "#fef3c7";
                         statusBadgeColor = "#92400e";
-                        statusText = "FILED (دائر شدہ)";
+                        statusText = "FILED";
                       } else if (appeal.status === "HEARING_SCHEDULED") {
                         statusBadgeBg = "#dbeafe";
                         statusBadgeColor = "#1e40af";
-                        statusText = "HEARING FIXED (تاریخ سماعت مقرر)";
+                        statusText = "HEARING FIXED";
                       } else if (appeal.status === "DECIDED_REDUCED") {
                         statusBadgeBg = "#dcfce7";
                         statusBadgeColor = "#166534";
@@ -6105,19 +5258,19 @@ export default function HomePage({
                       } else if (appeal.status === "DECIDED_ANNULLED") {
                         statusBadgeBg = "#fae8ff";
                         statusBadgeColor = "#86198f";
-                        statusText = "ANNULLED (کالعدم)";
+                        statusText = "ANNULLED";
                       } else if (appeal.status === "DECIDED_CONFIRMED") {
                         statusBadgeBg = "#f1f5f9";
                         statusBadgeColor = "#475569";
-                        statusText = "CONFIRMED (برقرار)";
+                        statusText = "CONFIRMED";
                       } else if (appeal.status === "DECIDED_REMANDED") {
                         statusBadgeBg = "#ffedd5";
                         statusBadgeColor = "#9a3412";
-                        statusText = "REMANDED (ریمانڈ شدہ)";
+                        statusText = "REMANDED";
                       } else if (appeal.status === "DECIDED_PENALTY_REMITTED") {
                         statusBadgeBg = "#ccfbf1";
                         statusBadgeColor = "#115e59";
-                        statusText = "PENALTY REMITTED (معاف)";
+                        statusText = "PENALTY REMITTED";
                       }
 
                       return (
@@ -6254,7 +5407,7 @@ export default function HomePage({
           <section className="content-panel">
             <div className="panel-header">
               <div>
-                <h2>Form P.F.T-5: Certificate of Clearance (عدم بقایاجات سرٹیفکیٹ)</h2>
+                <h2>Form P.F.T-5: Certificate of Clearance</h2>
                 <p>
                   Official statutory certificate issued under Rule 11 of the Punjab Professions and
                   Trades Tax Rules, 1977. Strictly conditioned upon zero outstanding balance across
@@ -6384,9 +5537,9 @@ export default function HomePage({
                                 fontWeight: 600,
                                 marginTop: "2px"
                               }}
-                              title="Provincial Unique Identification Number"
+                              title="PIN (Professional Identification Number)"
                             >
-                              UIN: {u.provincialUin}
+                              PIN: {u.provincialUin}
                             </span>
                           )}
                           <span style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}>
@@ -6562,7 +5715,7 @@ export default function HomePage({
                 }}
               >
                 <h3 style={{ margin: 0, color: "#0d3822", fontSize: "1.15rem" }}>
-                  🛑 Rule 10: Trade Cessation &amp; Discontinuance (کاروبار کی بندش کا نوٹس)
+                  🛑 Rule 10: Trade Cessation &amp; Discontinuance
                 </h3>
                 <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
                   Statutory 30-Day Notice &bull; On-Site Physical Inspection &bull; ETO Closure
@@ -6792,7 +5945,7 @@ export default function HomePage({
                 }}
               >
                 <h3 style={{ margin: 0, color: "#0d3822", fontSize: "1.15rem" }}>
-                  💰 Rule 5: Excess Tax Refunds &amp; Credit Adjustments (واپسی و ایڈجسٹمنٹ ٹیکس)
+                  💰 Rule 5: Excess Tax Refunds &amp; Credit Adjustments
                 </h3>
                 <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
                   Application Scrutiny &bull; ETO Statutory Decree &bull; Double-Entry Demand Ledger
@@ -7010,6 +6163,28 @@ export default function HomePage({
                   Automated settlement and exception desk. Simulates 1Link / ePay Punjab webhooks,
                   enforces replay window idempotency, and logs mismatched amounts.
                 </p>
+              </div>
+            </div>
+
+            {/* Live Gateway Status Notice */}
+            <div
+              style={{
+                background: "#fef3c7",
+                border: "1px solid #fde68a",
+                borderRadius: "8px",
+                padding: "0.85rem 1.25rem",
+                marginBottom: "1.25rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                color: "#92400e"
+              }}
+            >
+              <span style={{ fontSize: "1.5rem" }}>ℹ️</span>
+              <div style={{ fontSize: "0.85rem" }}>
+                <strong>Automated Reconciliation Status:</strong> ePay Punjab Automated
+                Reconciliation is planned for Phase 2 integration with State Bank / 1Link. Currently
+                simulated in pilot sandbox.
               </div>
             </div>
 
@@ -7374,7 +6549,7 @@ export default function HomePage({
                 <thead>
                   <tr>
                     <th>Challan &amp; Notice Ref</th>
-                    <th>Security PIN</th>
+                    <th>🔒 Security Code</th>
                     <th>Taxpayer Details</th>
                     <th>Classification &amp; Type</th>
                     <th style={{ textAlign: "right" }}>Amount Payable</th>
@@ -7476,7 +6651,7 @@ export default function HomePage({
                                 border: "1px solid #bae6fd",
                                 letterSpacing: "1.5px"
                               }}
-                              title="Official 6-digit Document Security PIN (دستاویزی تصدیقی پن کوڈ)"
+                              title="Official 6-digit Document Security PIN"
                             >
                               🔐{" "}
                               {challan.pin ??
@@ -7492,7 +6667,7 @@ export default function HomePage({
                                 marginTop: "0.15rem"
                               }}
                             >
-                              تصدیقی پن کوڈ
+                              Security PIN
                             </span>
                           </td>
                           <td>
@@ -7642,62 +6817,52 @@ export default function HomePage({
                             )}
                           </td>
                           <td style={{ textAlign: "right" }}>
-                            <div
-                              style={{
-                                display: "inline-flex",
-                                gap: "0.4rem",
-                                flexWrap: "wrap",
-                                justifyContent: "flex-end"
-                              }}
-                            >
-                              <button
-                                type="button"
-                                className="btn-primary btn-sm"
-                                style={{
-                                  backgroundColor: "#1e3a8a",
-                                  borderColor: "#1e40af",
-                                  color: "#ffffff",
-                                  fontWeight: 700
-                                }}
-                                onClick={() => handlePrintPft2Challan(challan)}
-                                title="Print or download authentic 3-copy Form P.F.T-2 Challan anytime"
-                              >
-                                🖨️ Print / Download
-                              </button>
-
-                              {isIssued && (
-                                <>
-                                  <button
-                                    type="button"
-                                    className="btn-primary btn-sm"
-                                    style={{ backgroundColor: "#047857", borderColor: "#065f46" }}
-                                    onClick={() => handleOpenReceivePft2(challan)}
-                                    title="Acknowledge bank scroll deposit and convert to official Statutory Receipt"
-                                  >
-                                    📥 Receive PFT-2 Form
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="btn-secondary btn-sm"
-                                    style={{ color: "#b91c1c", borderColor: "#fecaca" }}
-                                    onClick={() => handleOpenCancelPft2(challan)}
-                                    title="Cancel this challan (e.g. for reassessment or error)"
-                                  >
-                                    ✕ Cancel
-                                  </button>
-                                </>
-                              )}
-
-                              {isReceived && challan.receiptNumber && (
-                                <button
-                                  type="button"
-                                  className="btn-secondary btn-sm"
-                                  style={{
-                                    color: "#166534",
-                                    borderColor: "#86efac",
-                                    fontWeight: 700
-                                  }}
-                                  onClick={() => {
+                            <RowActionMenu
+                              align="right"
+                              actions={[
+                                {
+                                  id: "view-challan",
+                                  label: "View Challan",
+                                  icon: "👁️",
+                                  onClick: () => {
+                                    setSelectedUnitId(challan.unitId);
+                                    setShowIssuePft2Modal(true);
+                                  }
+                                },
+                                {
+                                  id: "download-pdf",
+                                  label: "Download Challan PDF",
+                                  icon: "📥",
+                                  onClick: () => handlePrintPft2Challan(challan)
+                                },
+                                {
+                                  id: "view-dossier",
+                                  label: "View Unit Dossier",
+                                  icon: "📋",
+                                  onClick: () =>
+                                    window.open(`/units/${challan.unitId}/details`, "_blank")
+                                },
+                                {
+                                  id: "receive-pft2",
+                                  label: "Receive Bank Payment",
+                                  icon: "📥",
+                                  disabled: !isIssued,
+                                  onClick: () => handleOpenReceivePft2(challan)
+                                },
+                                {
+                                  id: "cancel-pft2",
+                                  label: "Cancel Challan",
+                                  icon: "✕",
+                                  variant: "danger",
+                                  disabled: !isIssued,
+                                  onClick: () => handleOpenCancelPft2(challan)
+                                },
+                                {
+                                  id: "view-receipt",
+                                  label: "View Statutory Receipt",
+                                  icon: "🧾",
+                                  disabled: !isReceived || !challan.receiptNumber,
+                                  onClick: () => {
                                     const rec = statutoryReceipts.find(
                                       (r) => r.receiptNumber === challan.receiptNumber
                                     );
@@ -7709,25 +6874,10 @@ export default function HomePage({
                                         `Receipt ${challan.receiptNumber} recorded in ledger.`
                                       );
                                     }
-                                  }}
-                                  title="View official statutory payment receipt"
-                                >
-                                  🧾 View Receipt
-                                </button>
-                              )}
-
-                              <button
-                                type="button"
-                                className="btn-secondary btn-sm"
-                                onClick={() => {
-                                  setSelectedUnitId(challan.unitId);
-                                  switchTab("FORM_PFT2");
-                                }}
-                                title="Inspect Form P.F.T-2 3-copy layout"
-                              >
-                                👁️ View Challan
-                              </button>
-                            </div>
+                                  }
+                                }
+                              ]}
+                            />
                           </td>
                         </tr>
                       );
@@ -7965,11 +7115,38 @@ export default function HomePage({
                 </select>
               </div>
 
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    color: "#475569",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  Payment Source:
+                </label>
+                <select
+                  aria-label="Filter by Payment Source"
+                  className="form-control"
+                  style={{ width: "100%", fontSize: "0.85rem" }}
+                  value={receiptSourceFilter}
+                  onChange={(e) => setReceiptSourceFilter(e.target.value)}
+                >
+                  <option value="ALL">All Payment Sources</option>
+                  <option value="ISSUED_PFT2">Issued Form PFT-2</option>
+                  <option value="MANUAL">Manual Direct Deposit</option>
+                  <option value="EPAY">ePay Punjab Gateway</option>
+                </select>
+              </div>
+
               {(receiptSearchQuery ||
                 receiptDateFrom ||
                 receiptDateTo ||
                 receiptCategoryFilter !== "ALL" ||
-                receiptChannelFilter !== "ALL") && (
+                receiptChannelFilter !== "ALL" ||
+                receiptSourceFilter !== "ALL") && (
                 <div>
                   <button
                     type="button"
@@ -7981,6 +7158,7 @@ export default function HomePage({
                       setReceiptDateTo("");
                       setReceiptCategoryFilter("ALL");
                       setReceiptChannelFilter("ALL");
+                      setReceiptSourceFilter("ALL");
                     }}
                   >
                     Reset Filters
@@ -8000,6 +7178,7 @@ export default function HomePage({
                     <th>Classification &amp; Slab</th>
                     <th style={{ textAlign: "right" }}>Amount Discharged</th>
                     <th>Treasury Channel &amp; CPR</th>
+                    <th>Payment Source</th>
                     <th>Receiving Officer</th>
                     <th style={{ textAlign: "right" }}>Statutory Actions</th>
                   </tr>
@@ -8007,6 +7186,11 @@ export default function HomePage({
                 <tbody>
                   {(() => {
                     const filtered = statutoryReceipts.filter((r) => {
+                      if (
+                        receiptSourceFilter !== "ALL" &&
+                        (r.paymentSource ?? "ISSUED_PFT2") !== receiptSourceFilter
+                      )
+                        return false;
                       if (
                         receiptChannelFilter !== "ALL" &&
                         !r.paymentChannel.toLowerCase().includes(receiptChannelFilter.toLowerCase())
@@ -8040,7 +7224,7 @@ export default function HomePage({
                       return (
                         <tr>
                           <td
-                            colSpan={8}
+                            colSpan={9}
                             style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
                           >
                             No statutory payment receipts match the active query.
@@ -8136,6 +7320,26 @@ export default function HomePage({
                           )}
                         </td>
                         <td>
+                          {(() => {
+                            const srcKey = rec.paymentSource ?? "ISSUED_PFT2";
+                            const cfg =
+                              RECEIPT_SOURCE_CONFIG[srcKey as keyof typeof RECEIPT_SOURCE_CONFIG] ??
+                              RECEIPT_SOURCE_CONFIG.ISSUED_PFT2;
+                            return (
+                              <span
+                                className={`badge ${cfg.badgeClass}`}
+                                style={{
+                                  fontSize: "0.7rem",
+                                  padding: "0.2rem 0.45rem",
+                                  whiteSpace: "nowrap"
+                                }}
+                              >
+                                {cfg.label}
+                              </span>
+                            );
+                          })()}
+                        </td>
+                        <td>
                           <span style={{ fontSize: "0.825rem", fontWeight: 600 }}>
                             {rec.receivingOfficerName}
                           </span>
@@ -8146,32 +7350,42 @@ export default function HomePage({
                           </span>
                         </td>
                         <td style={{ textAlign: "right" }}>
-                          <div style={{ display: "inline-flex", gap: "0.35rem" }}>
-                            <button
-                              type="button"
-                              className="btn-primary btn-sm"
-                              onClick={() => handleOpenReceiptDocument(rec)}
-                              title="View official statutory receipt document"
-                            >
-                              👁️ View
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-secondary btn-sm"
-                              onClick={() => {
-                                handleOpenReceiptDocument(rec);
-                                setTimeout(() => {
-                                  downloadDocumentPdf(
-                                    "receipt-document-card",
-                                    `Statutory_Receipt_${rec.receiptNumber}.pdf`
-                                  );
-                                }, 300);
-                              }}
-                              title="Download statutory receipt as PDF"
-                            >
-                              📥 PDF
-                            </button>
-                          </div>
+                          <RowActionMenu
+                            align="right"
+                            actions={[
+                              {
+                                id: "view-receipt",
+                                label: "View Receipt Document",
+                                icon: "👁️",
+                                onClick: () => handleOpenReceiptDocument(rec)
+                              },
+                              {
+                                id: "download-pdf",
+                                label: "Download Receipt PDF",
+                                icon: "📥",
+                                onClick: () => {
+                                  handleOpenReceiptDocument(rec);
+                                  setTimeout(() => {
+                                    downloadDocumentPdf(
+                                      "receipt-document-card",
+                                      `Statutory_Receipt_${rec.receiptNumber}.pdf`
+                                    );
+                                  }, 300);
+                                }
+                              },
+                              ...(rec.unitId
+                                ? [
+                                    {
+                                      id: "view-dossier",
+                                      label: "View Assessee Dossier",
+                                      icon: "📋",
+                                      onClick: () =>
+                                        window.open(`/units/${rec.unitId}/details`, "_blank")
+                                    }
+                                  ]
+                                : [])
+                            ]}
+                          />
                         </td>
                       </tr>
                     ));
@@ -9341,7 +8555,7 @@ export default function HomePage({
                   PKR {misMetrics.kpis.totalRealizedRecovery.toLocaleString()}
                 </div>
                 <span style={{ fontSize: "0.72rem", color: "#166534" }}>
-                  Challan 32-A &amp; 1Link ePay Deposited
+                  Form PFT-2 &amp; 1Link ePay Deposited
                 </span>
               </div>
 
@@ -9434,7 +8648,29 @@ export default function HomePage({
                     Assessed
                   </p>
                 </div>
-                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                <div
+                  style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}
+                >
+                  <a
+                    href="/intelligence/statutory-category-yield"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-primary"
+                    style={{
+                      backgroundColor: "#0d3822",
+                      borderColor: "#062415",
+                      color: "#ffffff",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      textDecoration: "none",
+                      padding: "0.3rem 0.65rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.35rem"
+                    }}
+                  >
+                    📊 Dedicated Category Yield Desk ↗
+                  </a>
                   <span
                     style={{
                       background: "#f0fdf4",
@@ -9889,7 +9125,7 @@ export default function HomePage({
                       PKR {misMetrics.defaulterFunnel.current.amount.toLocaleString()}
                     </div>
                     <span style={{ fontSize: "0.7rem", color: "#64748b", display: "block" }}>
-                      Action: Standard Challan 32-A Active
+                      Action: Standard Form PFT-2 Active
                     </span>
                   </div>
 
@@ -10389,7 +9625,7 @@ export default function HomePage({
                         <th style={{ padding: "0.6rem", textAlign: "right" }}>Realized</th>
                         <th style={{ padding: "0.6rem", textAlign: "right" }}>Balance Arrears</th>
                         <th style={{ padding: "0.6rem", textAlign: "center" }}>Status</th>
-                        <th style={{ padding: "0.6rem", textAlign: "center" }}>Action</th>
+                        <th style={{ padding: "0.6rem", textAlign: "center" }}>Dossier</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -10493,7 +9729,20 @@ export default function HomePage({
                                 </span>
                               </td>
                               <td style={{ padding: "0.6rem", textAlign: "center" }}>
-                                {renderUnitActionsDropdown(u)}
+                                <a
+                                  href={`/units/${u.id}/details`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    color: "#0d3822",
+                                    fontWeight: 700,
+                                    textDecoration: "underline"
+                                  }}
+                                  title="View audit-locked unit dossier"
+                                >
+                                  Dossier ↗
+                                </a>
                               </td>
                             </tr>
                           );
@@ -11451,7 +10700,28 @@ export default function HomePage({
                   categories, and simulate instant digital settlements via ePay Punjab / 1Link.
                 </p>
               </div>
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <div
+                style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}
+              >
+                <a
+                  href="/verify"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary"
+                  style={{
+                    backgroundColor: "#0d3822",
+                    borderColor: "#062415",
+                    color: "#ffffff",
+                    fontWeight: 700,
+                    textDecoration: "none",
+                    padding: "0.55rem 1rem",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem"
+                  }}
+                >
+                  🔍 Open Citizen Portal (/verify) ↗
+                </a>
                 <button
                   type="button"
                   onClick={() => handleOpenCitizenPaymentModal()}
@@ -12072,7 +11342,7 @@ export default function HomePage({
                       className="btn-secondary"
                       onClick={() => {
                         setSelectedUnitId(portalSearchResult.unit.id);
-                        setActiveTab("FORM_PFT1");
+                        setShowPft1NoticeModal(true);
                       }}
                     >
                       📜 View Demand Notice ({portalSearchResult.noticeNumber})
@@ -12082,7 +11352,7 @@ export default function HomePage({
                       className="btn-secondary"
                       onClick={() => {
                         setSelectedUnitId(portalSearchResult.unit.id);
-                        setActiveTab("FORM_PFT2");
+                        setShowIssuePft2Modal(true);
                       }}
                     >
                       💳 View Bank Challan ({portalSearchResult.challanNumber})
@@ -12962,13 +12232,13 @@ export default function HomePage({
                 {previewScanFileName.toLowerCase().endsWith(".pdf") ? (
                   <iframe
                     src={previewScanModalUrl}
-                    title="Challan 32-A PDF Viewer"
+                    title="Form PFT-2 / Treasury Receipt PDF Viewer"
                     style={{ width: "100%", height: "28rem", border: "none" }}
                   />
                 ) : (
                   <img
                     src={previewScanModalUrl}
-                    alt={`Challan 32-A Slip for ${previewScanTitle}`}
+                    alt={`Form PFT-2 / Treasury Slip for ${previewScanTitle}`}
                     style={{
                       maxWidth: "100%",
                       maxHeight: "28rem",
@@ -13014,7 +12284,7 @@ export default function HomePage({
         <div className="modal-overlay">
           <div className="modal-card" style={{ maxWidth: "48rem" }}>
             <div className="modal-header">
-              <h3>📜 Notice to Show Cause for Imposition of Penalty (زیر رول 10)</h3>
+              <h3>📜 Notice to Show Cause for Imposition of Penalty (Rule 10)</h3>
               <button type="button" className="close-btn" onClick={() => setShowNoticeModal(false)}>
                 &times;
               </button>
@@ -13230,14 +12500,6 @@ export default function HomePage({
                   title="Download Official PDF"
                 >
                   📥 Download PDF
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => printIsolatedElement("show-cause-notice-printable")}
-                  title="Print official notice document"
-                >
-                  🖨️ Print Notice
                 </button>
               </div>
               <button
@@ -13704,13 +12966,6 @@ export default function HomePage({
                 >
                   📥 Download PDF
                 </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => printIsolatedElement("recovery-certificate-printable")}
-                >
-                  🖨️ Print Recovery Certificate
-                </button>
               </div>
               <button
                 type="button"
@@ -13724,6 +12979,314 @@ export default function HomePage({
           </div>
         </div>
       )}
+
+      {/* MODAL: VIEW / PRINT SINGLE FORM P.F.T-1 NOTICE OF DEMAND (RULE 6) */}
+      {showPft1NoticeModal &&
+        (() => {
+          const pft1Unit = units.find((u) => u.id === selectedUnitId) ?? activeUnit;
+          const pft1Data = pft1Unit ? generateFormPFT1(pft1Unit) : null;
+          if (!pft1Data) return null;
+          return (
+            <div
+              className="modal-overlay"
+              style={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: "rgba(15, 23, 42, 0.75)",
+                backdropFilter: "blur(4px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 9999,
+                padding: "1rem"
+              }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Form P.F.T-1 Notice of Tax Demand"
+            >
+              <div
+                className="modal-card"
+                style={{
+                  background: "#ffffff",
+                  borderRadius: "10px",
+                  maxWidth: "52rem",
+                  width: "100%",
+                  maxHeight: "92vh",
+                  overflowY: "auto",
+                  boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
+                  border: "1px solid #cbd5e1"
+                }}
+              >
+                {/* Header */}
+                <div
+                  style={{
+                    background: "linear-gradient(135deg, #4c1d0c 0%, #92400e 100%)",
+                    color: "#ffffff",
+                    padding: "1.1rem 1.35rem",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center"
+                  }}
+                >
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700 }}>
+                      📜 Form P.F.T-1 — Notice of Tax Demand
+                    </h3>
+                    <span style={{ fontSize: "0.78rem", color: "#fde68a" }}>
+                      Statutory Notice under Section 3 of Punjab Finance Act 1977, Rule 6 •
+                      Circle-Vehari
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPft1NoticeModal(false)}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "#ffffff",
+                      fontSize: "1.25rem",
+                      cursor: "pointer"
+                    }}
+                    aria-label="Close"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Printable Notice Body */}
+                <div id="single-pft1-notice-printable" style={{ padding: "1.5rem" }}>
+                  <div className="doc-box">
+                    {/* Header Row */}
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "0.75rem",
+                        alignItems: "center",
+                        borderBottom: "2px solid #0d3822",
+                        paddingBottom: "0.75rem",
+                        marginBottom: "1rem"
+                      }}
+                    >
+                      <div style={{ flexShrink: 0 }}>
+                        <StatutoryQrCode
+                          payload={pft1Data.qrPayload}
+                          size={65}
+                          label="Scan to Verify"
+                          subtitle={pft1Data.demandNumber}
+                          onScanOrClick={(payload) => {
+                            setPortalVerificationInput(payload);
+                            handleVerifyDocument(payload);
+                            setShowPft1NoticeModal(false);
+                            switchTab("PUBLIC_PORTAL");
+                          }}
+                        />
+                      </div>
+                      <div style={{ flex: 1, textAlign: "center" }}>
+                        <div
+                          style={{
+                            display: "inline-block",
+                            border: "1px solid #0d3822",
+                            background: "#fef3c7",
+                            padding: "0.15rem 0.5rem",
+                            fontWeight: 700,
+                            fontSize: "0.72rem",
+                            color: "#92400e",
+                            marginBottom: "0.2rem"
+                          }}
+                        >
+                          FORM P.F.T-1 &bull; NOTICE OF TAX DEMAND
+                        </div>
+                        <h4
+                          style={{
+                            margin: "0 0 0.15rem",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.04em",
+                            fontSize: "0.95rem"
+                          }}
+                        >
+                          GOVERNMENT OF THE PUNJAB
+                        </h4>
+                        <p style={{ margin: 0, fontWeight: 700, fontSize: "0.8rem" }}>
+                          Excise, Taxation &amp; Narcotics Control Department
+                        </p>
+                        <p style={{ margin: 0, fontSize: "0.75rem", color: "#475569" }}>
+                          Professional Tax — Circle Vehari &bull; {pft1Data.financialYear}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Demand Details Grid */}
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "0.5rem 1.5rem",
+                        fontSize: "0.8rem",
+                        marginBottom: "1rem"
+                      }}
+                    >
+                      <div>
+                        <strong>Demand No.:</strong> {pft1Data.demandNumber}
+                      </div>
+                      <div>
+                        <strong>Notice Date:</strong> {pft1Data.issueDate}
+                      </div>
+                      <div>
+                        <strong>Assessee:</strong> {pft1Data.assesseeLegalName}
+                      </div>
+                      <div>
+                        <strong>Business:</strong>{" "}
+                        {pft1Data.assesseeTradeName ?? pft1Data.assesseeLegalName}
+                      </div>
+                      <div>
+                        <strong>Address:</strong> {pft1Data.address}
+                      </div>
+                      <div>
+                        <strong>PIN (Professional Identification No.):</strong>{" "}
+                        {pft1Data.provincialUin ?? pft1Data.taxNumber}
+                      </div>
+                      <div>
+                        <strong>Classification:</strong> {pft1Data.statutoryClassificationFull}
+                      </div>
+                      <div>
+                        <strong>Annual Tax Demand:</strong> PKR{" "}
+                        {pft1Data.taxAmount?.toLocaleString()}
+                      </div>
+                      <div>
+                        <strong>Financial Year:</strong> {pft1Data.financialYear}
+                      </div>
+                      <div>
+                        <strong>Due Date:</strong> {pft1Data.dueDate}
+                      </div>
+                    </div>
+
+                    {/* Body Text */}
+                    <div
+                      style={{
+                        border: "1px solid #cbd5e1",
+                        borderRadius: "6px",
+                        padding: "0.85rem 1rem",
+                        fontSize: "0.78rem",
+                        lineHeight: 1.65,
+                        color: "#1e293b",
+                        marginBottom: "1rem"
+                      }}
+                    >
+                      <p style={{ margin: "0 0 0.5rem" }}>
+                        <strong>To:</strong> {pft1Data.assesseeLegalName}, {pft1Data.address}
+                      </p>
+                      <p style={{ margin: "0 0 0.5rem" }}>
+                        It is hereby notified under Rule 6 of the Punjab Professions &amp; Trades
+                        Tax Rules, 1977 that a demand of{" "}
+                        <strong>PKR {pft1Data.taxAmount?.toLocaleString()}</strong> has been
+                        assessed and raised against your establishment{" "}
+                        <strong>{pft1Data.assesseeTradeName ?? pft1Data.assesseeLegalName}</strong>{" "}
+                        for the financial year <strong>{pft1Data.financialYear}</strong> on account
+                        of Professional Tax under the Punjab Finance Act, 1977.
+                      </p>
+                      <p style={{ margin: 0 }}>
+                        You are hereby directed to deposit the above amount into the designated
+                        government treasury account within <strong>30 days</strong> of the receipt
+                        of this notice. Failure to comply shall render you liable to penal action
+                        under the applicable provisions of law.
+                      </p>
+                    </div>
+
+                    {/* Signatures */}
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "1rem",
+                        fontSize: "0.75rem",
+                        borderTop: "1px solid #e2e8f0",
+                        paddingTop: "0.75rem"
+                      }}
+                    >
+                      <div>
+                        <div
+                          style={{
+                            borderBottom: "1px solid #000",
+                            marginBottom: "0.25rem",
+                            height: "1.5rem"
+                          }}
+                        />
+                        <strong>Signature of Assessee / Recipient</strong>
+                        <div style={{ color: "#64748b" }}>Date: ___________</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div
+                          style={{
+                            borderBottom: "1px solid #000",
+                            marginBottom: "0.25rem",
+                            height: "1.5rem"
+                          }}
+                        />
+                        <strong>Excise &amp; Taxation Officer (ETO)</strong>
+                        <div style={{ color: "#64748b" }}>Circle-Vehari</div>
+                      </div>
+                    </div>
+
+                    {/* Security PIN row */}
+                    <div
+                      style={{
+                        background: "#f0fdf4",
+                        border: "1px solid #bbf7d0",
+                        borderRadius: "6px",
+                        padding: "0.5rem 0.85rem",
+                        marginTop: "0.75rem",
+                        fontSize: "0.75rem",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center"
+                      }}
+                    >
+                      <span>
+                        🔒 Security Code: <strong>{pft1Data.pin ?? "—"}</strong>
+                      </span>
+                      <span style={{ color: "#64748b" }}>Verify at public portal or scan QR</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer Actions */}
+                <div
+                  style={{
+                    borderTop: "1px solid #e2e8f0",
+                    padding: "1rem 1.35rem",
+                    display: "flex",
+                    gap: "0.75rem",
+                    justifyContent: "flex-end",
+                    background: "#f8fafc"
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() =>
+                      downloadDocumentPdf(
+                        "single-pft1-notice-printable",
+                        `Form_PFT1_Notice_${pft1Data.demandNumber?.replace(/\//g, "_") ?? "notice"}.pdf`
+                      )
+                    }
+                  >
+                    📥 Download PDF
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setShowPft1NoticeModal(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
       {/* MODAL 8: BATCH PRINT FORM P.F.T-1 NOTICES BOOK (RULE 6) */}
       {showBatchPft1Modal && (
@@ -13990,8 +13553,7 @@ export default function HomePage({
                             marginBottom: "0.5rem"
                           }}
                         >
-                          رسید نوٹس تعمیل (SERVICE RECEIPT COUNTERFOIL - TO BE RETURNED BY PROCESS
-                          SERVER)
+                          SERVICE RECEIPT COUNTERFOIL - TO BE RETURNED BY PROCESS SERVER
                         </div>
                         <div
                           style={{
@@ -14060,13 +13622,6 @@ export default function HomePage({
                   }
                 >
                   📥 Download PDF
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => printIsolatedElement("batch-pft1-notices-printable")}
-                >
-                  🖨️ Print Batch Book ({approvedUnits.length} Notices)
                 </button>
               </div>
               <button
@@ -14365,13 +13920,6 @@ export default function HomePage({
                 >
                   📥 Download PDF
                 </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => printIsolatedElement("batch-pft2-challans-printable")}
-                >
-                  🖨️ Print Batch Challans ({approvedUnits.length} Sheets)
-                </button>
               </div>
               <button
                 type="button"
@@ -14394,9 +13942,7 @@ export default function HomePage({
           >
             <div className="modal-header">
               <div>
-                <h3 style={{ margin: 0 }}>
-                  📋 Circle Notice Dispatch &amp; Service Register (فہرست ترسیل و تعمیل نوٹس جات)
-                </h3>
+                <h3 style={{ margin: 0 }}>📋 Circle Notice Dispatch &amp; Service Register</h3>
                 <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
                   Official statutory register maintained under Rule 6 of the Punjab Professions and
                   Trades Tax Rules, 1977 for Circle-Vehari.
@@ -14442,9 +13988,7 @@ export default function HomePage({
                     border: "1px solid #bbf7d0"
                   }}
                 >
-                  <div style={{ fontSize: "0.75rem", color: "#166534" }}>
-                    Total Served (تعمیل شدہ)
-                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "#166534" }}>Total Served</div>
                   <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "#166534" }}>
                     {circleDispatchRegisterData.totalServed}
                   </div>
@@ -14457,9 +14001,7 @@ export default function HomePage({
                     border: "1px solid #fde68a"
                   }}
                 >
-                  <div style={{ fontSize: "0.75rem", color: "#92400e" }}>
-                    Pending Service (زیر تعمیل)
-                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "#92400e" }}>Pending Service</div>
                   <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "#b45309" }}>
                     {circleDispatchRegisterData.totalPending}
                   </div>
@@ -14533,14 +14075,6 @@ export default function HomePage({
                     }
                   >
                     📥 PDF
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    style={{ fontSize: "0.8rem", padding: "0.35rem 0.75rem" }}
-                    onClick={() => printIsolatedElement("dispatch-register-printable")}
-                  >
-                    🖨️ Print Dispatch Register
                   </button>
                 </div>
               </div>
@@ -14629,10 +14163,10 @@ export default function HomePage({
                               }`}
                             >
                               {r.serviceStatus === "SERVED"
-                                ? "تعمیل شدہ"
+                                ? "SERVED"
                                 : r.serviceStatus === "REFUSED"
-                                  ? "انکاری"
-                                  : "زیر تعمیل (PENDING)"}
+                                  ? "REFUSED"
+                                  : "PENDING"}
                             </span>
                           </td>
                           <td>
@@ -14691,7 +14225,7 @@ export default function HomePage({
         <div className="modal-overlay">
           <div className="modal-card" style={{ maxWidth: "32rem" }}>
             <div className="modal-header">
-              <h3>✍️ Record Batch Notice Service (تعمیل نوٹس جات)</h3>
+              <h3>✍️ Record Batch Notice Service</h3>
               <button
                 type="button"
                 className="close-btn"
@@ -14751,15 +14285,9 @@ export default function HomePage({
                     className="form-control"
                     style={{ width: "100%" }}
                   >
-                    <option value="SERVED">
-                      SERVED (تعمیل شدہ - Delivered to Assessee or Adult Member)
-                    </option>
-                    <option value="REFUSED">
-                      REFUSED (انکاری - Refused to Accept Service / Witnessed)
-                    </option>
-                    <option value="UNTRACEABLE">
-                      UNTRACEABLE (پتہ نامعلوم / Untraceable at Premises)
-                    </option>
+                    <option value="SERVED">SERVED (Delivered to Assessee or Adult Member)</option>
+                    <option value="REFUSED">REFUSED (Refused to Accept Service / Witnessed)</option>
+                    <option value="UNTRACEABLE">UNTRACEABLE (Untraceable at Premises)</option>
                   </select>
                 </div>
 
@@ -14798,7 +14326,7 @@ export default function HomePage({
         <div className="modal-overlay">
           <div className="modal-card" style={{ maxWidth: "650px", width: "95%" }}>
             <div className="modal-header">
-              <h3>⚖️ File Statutory Appeal (اپیل زیر سیکشن 7 و رول 13)</h3>
+              <h3>⚖️ File Statutory Appeal (Section 7 &amp; Rule 13)</h3>
               <button
                 type="button"
                 className="close-btn"
@@ -14855,7 +14383,7 @@ export default function HomePage({
                 </div>
 
                 <div className="form-group">
-                  <label>Primary Ground of Appeal (بنیاد اپیل):</label>
+                  <label>Primary Ground of Appeal:</label>
                   <select
                     value={appealGroundCategory}
                     onChange={(e) => setAppealGroundCategory(e.target.value)}
@@ -14883,7 +14411,7 @@ export default function HomePage({
                 </div>
 
                 <div className="form-group">
-                  <label>Ground Details &amp; Averments (تفصیلات و بیان مؤقف):</label>
+                  <label>Ground Details &amp; Averments:</label>
                   <textarea
                     rows={3}
                     placeholder="State specific facts, employee payroll details, or reasons why the assessment is erroneous..."
@@ -14895,9 +14423,7 @@ export default function HomePage({
                 </div>
 
                 <div className="form-group">
-                  <label>
-                    Undisputed Tax Deposited into Treasury (PKR) (رقم غیر متنازعہ ٹیکس):
-                  </label>
+                  <label>Undisputed Tax Deposited into Treasury (PKR):</label>
                   <input
                     type="number"
                     min={0}
@@ -14979,7 +14505,7 @@ export default function HomePage({
         <div className="modal-overlay">
           <div className="modal-card" style={{ maxWidth: "550px", width: "95%" }}>
             <div className="modal-header">
-              <h3>📅 Schedule Appellate Court Hearing (مقرر تاریخ سماعت)</h3>
+              <h3>📅 Schedule Appellate Court Hearing</h3>
               <button
                 type="button"
                 className="close-btn"
@@ -15007,7 +14533,7 @@ export default function HomePage({
                 </div>
 
                 <div className="form-group">
-                  <label>Date of Appellate Hearing (تاریخ سماعت):</label>
+                  <label>Date of Appellate Hearing:</label>
                   <input
                     type="date"
                     required
@@ -15052,7 +14578,7 @@ export default function HomePage({
         <div className="modal-overlay">
           <div className="modal-card" style={{ maxWidth: "700px", width: "95%" }}>
             <div className="modal-header">
-              <h3>👨‍⚖️ Appellate Court Adjudication (فیصلہ اپیل و عدالتی حکم)</h3>
+              <h3>👨‍⚖️ Appellate Court Adjudication</h3>
               <button
                 type="button"
                 className="close-btn"
@@ -15130,7 +14656,7 @@ export default function HomePage({
                       </div>
 
                       <div className="form-group">
-                        <label>Appellate Decision (نوعیت فیصلہ):</label>
+                        <label>Appellate Decision:</label>
                         <select
                           value={decisionType}
                           onChange={(e) =>
@@ -15148,29 +14674,29 @@ export default function HomePage({
                           style={{ width: "100%", fontWeight: "600" }}
                         >
                           <option value="REDUCE">
-                            REDUCE (جزوی منظوری - Reduce assessment to lower statutory rate)
+                            REDUCE (Reduce assessment to lower statutory rate)
                           </option>
                           <option value="CONFIRM">
-                            CONFIRM (خارج - Dismiss appeal and uphold assessment in full)
+                            CONFIRM (Dismiss appeal and uphold assessment in full)
                           </option>
                           <option value="ANNUL">
-                            ANNUL (مکمل کالعدم - Set aside &amp; annul assessment in toto)
+                            ANNUL (Set aside &amp; annul assessment in toto)
                           </option>
                           <option value="REMAND">
-                            REMAND (ریمانڈ - Remand to ETO Vehari for re-survey &amp; inquiry)
+                            REMAND (Remand to ETO Vehari for re-survey &amp; inquiry)
                           </option>
                           <option value="PENALTY_REMISSION">
-                            PENALTY REMISSION (معافی جرمانہ - Waive Section 3(4) default penalty)
+                            PENALTY REMISSION (Waive Section 3(4) default penalty)
                           </option>
                           <option value="ENHANCE">
-                            ENHANCE (اضافہ - Increase assessment based on detected turnover)
+                            ENHANCE (Increase assessment based on detected turnover)
                           </option>
                         </select>
                       </div>
 
                       {(decisionType === "REDUCE" || decisionType === "ENHANCE") && (
                         <div className="form-group">
-                          <label>Revised Assessed Tax Amount (PKR) (نئی شرح ٹیکس):</label>
+                          <label>Revised Assessed Tax Amount (PKR):</label>
                           <input
                             type="number"
                             min={0}
@@ -15204,9 +14730,7 @@ export default function HomePage({
                       </div>
 
                       <div className="form-group">
-                        <label>
-                          Judicial Findings &amp; Operative Reasoning (فیصلہ کی وجوہات):
-                        </label>
+                        <label>Judicial Findings &amp; Operative Reasoning:</label>
                         <textarea
                           rows={4}
                           required
@@ -15246,7 +14770,7 @@ export default function HomePage({
             style={{ maxWidth: "800px", width: "95%", maxHeight: "90vh", overflowY: "auto" }}
           >
             <div className="modal-header no-print">
-              <h3>📜 Statutory Appellate Order (عدالتی حکم نامہ اپیل)</h3>
+              <h3>📜 Statutory Appellate Order</h3>
               <button
                 type="button"
                 className="close-btn"
@@ -15282,9 +14806,6 @@ export default function HomePage({
                   </h4>
                   <p style={{ margin: "0.25rem 0", fontWeight: "bold" }}>
                     {activeAppellateOrder.courtTitle}
-                  </p>
-                  <p style={{ margin: "0.25rem 0", fontSize: "1rem", fontFamily: "serif" }}>
-                    {activeAppellateOrder.courtTitleUrdu}
                   </p>
                   <p style={{ margin: "0.25rem 0", fontSize: "0.85rem" }}>
                     ORDER PASSED UNDER SECTION 7 OF PUNJAB FINANCE ACT, 1977 READ WITH RULE 13 OF
@@ -15375,7 +14896,7 @@ export default function HomePage({
                       borderLeft: "4px solid #3b82f6"
                     }}
                   >
-                    <strong>5. OPERATIVE ORDER (حکم):</strong>
+                    <strong>5. OPERATIVE ORDER:</strong>
                     <br />
                     <span
                       style={{
@@ -15453,13 +14974,6 @@ export default function HomePage({
                 >
                   📥 Download PDF
                 </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => printIsolatedElement("appellate-order-printable")}
-                >
-                  🖨️ Print Appellate Order
-                </button>
               </div>
               <button
                 type="button"
@@ -15498,7 +15012,7 @@ export default function HomePage({
                   }}
                 >
                   <span>📋</span>
-                  <span>فیلڈ سروے و اندراج نوٹس جات برائے رجسٹر پی ایف ٹی-3</span>
+                  <span>Field Survey Ingestion &bull; Register Form PFT-3</span>
                 </h3>
                 <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#d1fae5" }}>
                   Bulk Field Survey Ingestion Studio &bull; Circle-Vehari (Rules 4, 5 &amp; 11)
@@ -15541,7 +15055,7 @@ export default function HomePage({
                 >
                   <div>
                     <h4 style={{ margin: "0 0 0.35rem 0", color: "#0f172a", fontSize: "0.95rem" }}>
-                      1. ڈاؤن لوڈ آفیشل سروے فارمیٹ (Download Template)
+                      1. Download Official Survey Template
                     </h4>
                     <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b", lineHeight: 1.4 }}>
                       Standard RFC-4180 CSV pre-configured with Punjab Finance Act Second Schedule
@@ -15576,7 +15090,7 @@ export default function HomePage({
                     }}
                   >
                     <h4 style={{ margin: 0, color: "#0f172a", fontSize: "0.95rem" }}>
-                      2. سروے فائل اپ لوڈ کریں (Upload or Paste Data)
+                      2. Upload or Paste Survey Data
                     </h4>
                     <div style={{ display: "flex", gap: "0.25rem", fontSize: "0.75rem" }}>
                       <button
@@ -16036,7 +15550,7 @@ export default function HomePage({
                   }}
                 >
                   <span>🏛️</span>
-                  <span>سرکاری پورٹل لاگ اِن و سیشن کنٹرول</span>
+                  <span>Official Portal Sign In &amp; Session Control</span>
                 </h3>
                 <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#d1fae5" }}>
                   Official Officer Authentication &amp; Multi-Role Jurisdiction Studio (Supabase
@@ -16074,7 +15588,7 @@ export default function HomePage({
                     fontWeight: 600
                   }}
                 >
-                  ⚡ Quick Switch Official Officer (سریع سرکاری سیشن)
+                  ⚡ Quick Switch Official Officer
                 </button>
                 <button
                   type="button"
@@ -16087,7 +15601,7 @@ export default function HomePage({
                     fontWeight: 600
                   }}
                 >
-                  🔐 Email &amp; Password Sign In (پاس ورڈ لاگ اِن)
+                  🔐 Email &amp; Password Sign In
                 </button>
               </div>
 
@@ -16293,7 +15807,7 @@ export default function HomePage({
                     style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
                   >
                     <div className="form-group">
-                      <label htmlFor="authEmail">Email Address (ای میل):</label>
+                      <label htmlFor="authEmail">Email Address:</label>
                       <input
                         type="email"
                         id="authEmail"
@@ -16306,7 +15820,7 @@ export default function HomePage({
                     </div>
 
                     <div className="form-group">
-                      <label htmlFor="authPassword">Password (پاس ورڈ):</label>
+                      <label htmlFor="authPassword">Password:</label>
                       <input
                         type="password"
                         id="authPassword"
@@ -16359,8 +15873,7 @@ export default function HomePage({
                   }}
                 >
                   <strong style={{ fontSize: "0.85rem", color: "#0f172a" }}>
-                    📜 قانونی اختیارات کا چارٹ (Server-Enforced Statutory Authority Matrix —
-                    AGENTS.md)
+                    📜 Server-Enforced Statutory Authority Matrix (AGENTS.md)
                   </strong>
                   <span style={{ fontSize: "0.7rem", color: "#64748b" }}>
                     Enforced at Domain Layer
@@ -16524,12 +16037,12 @@ export default function HomePage({
                   <h5
                     style={{
                       margin: "0 0 0.25rem",
-                      fontSize: "1.05rem",
+                      fontSize: "0.95rem",
                       color: "#166534",
-                      fontFamily: "'Noto Nastaliq Urdu', 'Urdu Typesetting', serif"
+                      fontWeight: 700
                     }}
                   >
-                    حکومت پنجاب &bull; محکمہ ایکسائز، ٹیکسیشن و نارکوٹکس کنٹرول
+                    EXCISE, TAXATION &amp; NARCOTICS CONTROL DEPARTMENT
                   </h5>
                   <p style={{ margin: "0.2rem 0", fontSize: "0.85rem", color: "#475569" }}>
                     OFFICE OF THE EXCISE &amp; TAXATION OFFICER / ASSESSING AUTHORITY &bull;
@@ -16548,10 +16061,10 @@ export default function HomePage({
                       letterSpacing: "0.06em"
                     }}
                   >
-                    FORM P.F.T-5 &bull; فارم پی ایف ٹی-۵
+                    FORM P.F.T-5
                   </div>
                   <h3 style={{ margin: "0.6rem 0 0", fontSize: "1.25rem", color: "#0d3822" }}>
-                    TAX CLEARANCE CERTIFICATE (سرٹیفکیٹ عدم بقایاجات)
+                    TAX CLEARANCE CERTIFICATE
                   </h3>
                   <span style={{ fontSize: "0.8rem", color: "#64748b", fontStyle: "italic" }}>
                     (Issued under Rule 11 of the Punjab Professions and Trades Tax Rules, 1977)
@@ -16665,27 +16178,13 @@ export default function HomePage({
                     lineHeight: 1.7
                   }}
                 >
-                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.92rem", color: "#14532d" }}>
+                  <p style={{ margin: 0, fontSize: "0.92rem", color: "#14532d" }}>
                     <strong>STATUTORY CERTIFICATION:</strong> This is to formally certify that the
                     above-named assessee has fully satisfied, settled, and discharged all
                     professional tax liabilities, assessments, penalties, and arrears levied under
                     Section 3 of the Punjab Finance Act, 1977 (Act XV of 1977) for the financial
-                    year <strong>{activeClearanceCert.financialYear}</strong>.
-                  </p>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: "0.95rem",
-                      color: "#064e3b",
-                      fontFamily: "'Noto Nastaliq Urdu', 'Urdu Typesetting', serif",
-                      direction: "rtl",
-                      textAlign: "right"
-                    }}
-                  >
-                    تصدیق کی جاتی ہے کہ مذکورہ بالا ٹیکس گزار / کاروباری ادارے نے پنجاب فنانس ایکٹ
-                    ۱۹۷۷ء کے تحت مالی سال <strong>{activeClearanceCert.financialYear}</strong> کے
-                    جملہ پیشہ وارانہ ٹیکس، بقایاجات اور قانونی جرمانوں کی مکمل ادائیگی کر دی ہے۔
-                    سرکاری رجسٹر و لیجر کے مطابق مذکورہ یونٹ کے ذمہ کوئی رقم واجب الادا نہیں ہے۔
+                    year <strong>{activeClearanceCert.financialYear}</strong>. According to official
+                    records and demand ledger, no outstanding tax liability remains due.
                   </p>
                 </div>
 
@@ -16747,9 +16246,7 @@ export default function HomePage({
                     >
                       Arrears / Balance
                     </span>
-                    <strong style={{ fontSize: "1.1rem", color: "#065f46" }}>
-                      PKR 0 (NIL / کچھ نہیں)
-                    </strong>
+                    <strong style={{ fontSize: "1.1rem", color: "#065f46" }}>PKR 0 (NIL)</strong>
                   </div>
                 </div>
 
@@ -16864,13 +16361,6 @@ export default function HomePage({
                   }
                 >
                   📥 Download PDF
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => printIsolatedElement("clearance-certificate-printable")}
-                >
-                  🖨️ Print Form P.F.T-5 Certificate
                 </button>
               </div>
               <button
@@ -17447,13 +16937,6 @@ export default function HomePage({
                   >
                     📥 Download PDF
                   </button>
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={() => printIsolatedElement("discontinuance-order-printable")}
-                  >
-                    🖨️ Print Order Document
-                  </button>
                 </div>
               ) : (
                 <button
@@ -17815,13 +17298,6 @@ export default function HomePage({
                   }
                 >
                   📥 Download PDF
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => printIsolatedElement("refund-order-printable")}
-                >
-                  🖨️ Print Statutory Order
                 </button>
               </div>
             </div>
@@ -18786,9 +18262,13 @@ export default function HomePage({
                 <button
                   type="button"
                   className="btn-secondary"
-                  onClick={() => printIsolatedElement("executive-report-printable")}
+                  onClick={() => {
+                    handleExportActiveReportCsv();
+                    showToast("success", "Aggregated gazetted summary exported as CSV.");
+                  }}
+                  title="Export aggregated statistics as CSV"
                 >
-                  🖨️ Print Gazetted Report
+                  📊 Export Aggregated CSV
                 </button>
               </div>
             </div>
@@ -18862,7 +18342,7 @@ export default function HomePage({
                       <strong>Payment Channel:</strong>{" "}
                       {citizenPaymentSuccess.paymentChannel === "EPAY_PUNJAB"
                         ? "ePay Punjab / 1Link (Mobile / ATM)"
-                        : "National Bank of Pakistan (Challan 32-A)"}
+                        : "National Bank of Pakistan (Form PFT-2 / Challan 32-A)"}
                     </p>
                     <p style={{ margin: "0.25rem 0" }}>
                       <strong>Assessee:</strong> {citizenPaymentSuccess.unitName}
@@ -18967,7 +18447,7 @@ export default function HomePage({
                         ePay Punjab (1Link Mobile Banking / ATM / OTC)
                       </option>
                       <option value="CHALLAN_32A">
-                        Challan 32-A (National Bank of Pakistan Branch)
+                        Form PFT-2 / Challan 32-A (National Bank Branch)
                       </option>
                     </select>
                   </div>
@@ -19414,7 +18894,7 @@ export default function HomePage({
             >
               <div>
                 <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>
-                  ➕ Issue Form P.F.T-2 Payment Challan (اجراء چالان فارم پی ایف ٹی-2)
+                  ➕ Issue Form P.F.T-2 Payment Challan
                 </h3>
                 <span style={{ fontSize: "0.8rem", color: "#bbf7d0" }}>
                   Official Statutory 3-Copy Payment Instrument under Rule 9 &bull; Circle-Vehari
@@ -19557,9 +19037,7 @@ export default function HomePage({
                       </div>
 
                       <div className="form-group">
-                        <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                          Due Date (تاریخ ادائیگی):
-                        </label>
+                        <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>Due Date:</label>
                         <input
                           type="date"
                           className="form-control"
@@ -19587,24 +19065,18 @@ export default function HomePage({
                           }
                           required
                         >
-                          <option value="STANDARD">
-                            01 - Standard Payment Challan (عام چالان)
-                          </option>
-                          <option value="NOTICE_CUM_CHALLAN">
-                            02 - Notice-cum-Challan (نوٹس مع چالان)
-                          </option>
-                          <option value="ARREARS_DEMAND">
-                            03 - Arrears Recovery Demand (بقایاجات چالان)
-                          </option>
+                          <option value="STANDARD">01 - Standard Payment Challan</option>
+                          <option value="NOTICE_CUM_CHALLAN">02 - Notice-cum-Challan</option>
+                          <option value="ARREARS_DEMAND">03 - Arrears Recovery Demand</option>
                           <option value="REVISED_ASSESSMENT">
-                            04 - Revised Assessment / Relief (نظرثانی شدہ چالان)
+                            04 - Revised Assessment / Relief
                           </option>
                         </select>
                       </div>
 
                       <div className="form-group">
                         <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                          Demand Scope Code (دائرہ کار کوڈ):
+                          Demand Scope Code:
                         </label>
                         <select
                           className="form-control"
@@ -19616,15 +19088,9 @@ export default function HomePage({
                           }
                           required
                         >
-                          <option value="CURRENT">
-                            01 - Current Year Demand (موجودہ سالانہ ٹیکس)
-                          </option>
-                          <option value="ARREAR">
-                            02 - Arrears / Prior Outstanding (بقایاجات)
-                          </option>
-                          <option value="COMBINED">
-                            03 - Combined Current &amp; Arrears (مشترکہ ڈیمانڈ)
-                          </option>
+                          <option value="CURRENT">01 - Current Year Demand</option>
+                          <option value="ARREAR">02 - Arrears / Prior Outstanding</option>
+                          <option value="COMBINED">03 - Combined Current &amp; Arrears</option>
                         </select>
                       </div>
                     </div>
@@ -19685,7 +19151,7 @@ export default function HomePage({
                             onChange={() => setIssuePft2PaymentScope("PARTIAL")}
                           />
                           <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>
-                            Partial / Installment Amount (قسط / جزوی ادائیگی)
+                            Partial / Installment Amount
                           </span>
                         </label>
                       </div>
@@ -19943,15 +19409,6 @@ export default function HomePage({
                   title="Download 3-copy Form PFT-2 challan as PDF"
                 >
                   📥 Download PDF
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary btn-sm"
-                  style={{ backgroundColor: "#ffffff", color: "#0d3822", fontWeight: 700 }}
-                  onClick={() => printIsolatedElement("pft2-single-printable-document")}
-                  title="Print all 3 copies of this Form PFT-2 challan"
-                >
-                  🖨️ Print Challan (3 Copies)
                 </button>
                 <button
                   type="button"
@@ -20540,15 +19997,6 @@ export default function HomePage({
                 </button>
                 <button
                   type="button"
-                  className="btn-secondary btn-sm"
-                  onClick={() => printIsolatedElement("receipt-document-card")}
-                  style={{ background: "rgba(255,255,255,0.2)", color: "#ffffff" }}
-                  title="Print official document"
-                >
-                  🖨️ Print Receipt
-                </button>
-                <button
-                  type="button"
                   onClick={() => {
                     setShowReceiptDocumentModal(false);
                     setActiveReceiptRecord(null);
@@ -20945,13 +20393,6 @@ export default function HomePage({
                   }
                 >
                   📥 Download PDF
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => printIsolatedElement("receipt-document-card")}
-                >
-                  🖨️ Print Receipt
                 </button>
                 <button
                   type="button"

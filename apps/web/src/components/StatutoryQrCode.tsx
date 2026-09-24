@@ -1,78 +1,62 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import QRCode from "qrcode";
 
-interface StatutoryQrCodeProps {
+export interface StatutoryQrCodeProps {
   readonly payload: string;
-  readonly size?: number;
-  readonly label?: string;
-  readonly subtitle?: string;
+  readonly size?: number | undefined;
+  readonly securityCode?: string | undefined;
+  readonly label?: string | undefined;
+  readonly subtitle?: string | undefined;
   readonly onScanOrClick?: ((payload: string) => void) | undefined;
 }
 
 /**
- * Renders an authentic, standards-compliant ISO/IEC 18004 QR code using
- * Reed-Solomon Error Correction (Level 'M') and official quiet zone margin.
- * Fully compatible with all standard smartphone camera scanners and barcode decoders.
+ * Renders an authentic, standards-compliant ISO/IEC 18004 QR code for statutory documents.
+ * Generates a crisp raster data URL (PNG) embedded directly in the DOM, guaranteeing
+ * 100% fidelity and scannability in downloaded PDFs (avoiding html2canvas SVG black-box artifacts).
+ *
+ * Implements Section 1.3 & 1.4 of the Consolidated Implementation Specification:
+ * - Emits the scannable QR image itself without redundant text labels ("Scan to verify", etc.).
+ * - Renders security code cleanly directly below the QR with lock icon (🔒 68XXXXXX).
  */
 export function StatutoryQrCode({
   payload,
   size = 120,
-  label = "Scan to Verify",
+  securityCode,
+  label,
   subtitle,
   onScanOrClick
 }: StatutoryQrCodeProps) {
-  const qrSvgData = useMemo(() => {
-    try {
-      const qr = QRCode.create(payload || "PTAS-PUNJAB:BLANK", {
-        errorCorrectionLevel: "M"
-      });
-      const numModules = qr.modules.size;
-      const margin = 3;
-      const totalSize = numModules + margin * 2;
+  const [dataUrl, setDataUrl] = useState<string>("");
 
-      let path = "";
-      for (let r = 0; r < numModules; r++) {
-        for (let c = 0; c < numModules; c++) {
-          if (qr.modules.get(r, c)) {
-            path += `M${c + margin},${r + margin}h1v1h-1z `;
-          }
-        }
+  useEffect(() => {
+    let isCurrent = true;
+    const effectivePayload = payload || "PTAS-PUNJAB:BLANK";
+
+    QRCode.toDataURL(effectivePayload, {
+      margin: 1,
+      errorCorrectionLevel: "M",
+      width: Math.max(size * 2, 240),
+      color: {
+        dark: "#0d3822",
+        light: "#ffffff"
       }
+    })
+      .then((url) => {
+        if (isCurrent) {
+          setDataUrl(url);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to generate statutory QR DataURL:", err);
+      });
 
-      return {
-        totalSize,
-        path
-      };
-    } catch (err) {
-      console.error("Failed to generate statutory QR code:", err);
-      return null;
-    }
-  }, [payload]);
-
-  if (!qrSvgData) {
-    return (
-      <div
-        className="statutory-qr-container"
-        style={{
-          display: "inline-flex",
-          flexDirection: "column",
-          alignItems: "center",
-          padding: "0.5rem",
-          background: "#ffffff",
-          border: "1px dashed #ef4444",
-          borderRadius: "6px",
-          color: "#991b1b",
-          fontSize: "0.75rem"
-        }}
-      >
-        QR Error
-      </div>
-    );
-  }
-
-  const { totalSize, path } = qrSvgData;
+    return () => {
+      isCurrent = false;
+    };
+  }, [payload, size]);
 
   return (
     <div
@@ -81,20 +65,18 @@ export function StatutoryQrCode({
         display: "inline-flex",
         flexDirection: "column",
         alignItems: "center",
-        padding: "0.5rem",
+        justifyContent: "center",
+        padding: "0.35rem",
         background: "#ffffff",
         border: "1px solid #cbd5e1",
         borderRadius: "6px",
         cursor: onScanOrClick ? "pointer" : "default",
         boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-        transition: "transform 0.15s ease, box-shadow 0.15s ease"
+        transition: "transform 0.15s ease, box-shadow 0.15s ease",
+        textAlign: "center"
       }}
       onClick={() => onScanOrClick?.(payload)}
-      title={
-        onScanOrClick
-          ? "Click or point smartphone camera to verify this official Punjab Government document"
-          : payload
-      }
+      title={onScanOrClick ? "Click to verify this official Punjab Government document" : payload}
       role={onScanOrClick ? "button" : undefined}
       tabIndex={onScanOrClick ? 0 : undefined}
       onKeyDown={(e) => {
@@ -104,17 +86,57 @@ export function StatutoryQrCode({
         }
       }}
     >
-      <svg
-        width={size}
-        height={size}
-        viewBox={`0 0 ${totalSize} ${totalSize}`}
-        style={{ display: "block" }}
-        shapeRendering="crispEdges"
-        aria-label={`Official Statutory QR Code for ${payload}`}
-      >
-        <rect width={totalSize} height={totalSize} fill="#ffffff" />
-        <path d={path} fill="#0d3822" />
-      </svg>
+      {dataUrl ? (
+        <img
+          src={dataUrl}
+          alt={`Official Statutory QR Code for ${payload}`}
+          width={size}
+          height={size}
+          style={{
+            display: "block",
+            imageRendering: "pixelated",
+            width: `${size}px`,
+            height: `${size}px`
+          }}
+        />
+      ) : (
+        <div
+          style={{
+            width: `${size}px`,
+            height: `${size}px`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "#f8fafc",
+            color: "#64748b",
+            fontSize: "0.75rem"
+          }}
+        >
+          Generating QR...
+        </div>
+      )}
+
+      {/* Security Code display: Lock icon + actual code directly below QR */}
+      {securityCode && (
+        <div
+          style={{
+            marginTop: "0.3rem",
+            fontSize: "0.75rem",
+            fontWeight: 800,
+            fontFamily: "monospace",
+            color: "#0f172a",
+            letterSpacing: "1px",
+            background: "#f1f5f9",
+            padding: "0.15rem 0.45rem",
+            borderRadius: "4px",
+            border: "1px solid #e2e8f0"
+          }}
+        >
+          🔒 {securityCode}
+        </div>
+      )}
+
+      {/* Optional legacy labels if explicitly passed */}
       {label && (
         <span
           style={{

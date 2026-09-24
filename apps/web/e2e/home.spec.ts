@@ -52,13 +52,23 @@ test("verifies statutory sub-class and tertiary slabs in Form P.F.T-1 and Form P
     })
   ).toBeVisible({ timeout: 20000 });
 
-  // Navigate to Form P.F.T-1
-  await page.getByRole("tab", { name: /Form P.F.T-1/i }).click();
-  await expect(page.getByText("Schedule Category (Class)")).toBeVisible();
-  await expect(page.getByText("Tertiary Slab / Criteria")).toBeVisible();
+  // Open Form P.F.T-1 via the first unit row action menu in Form PFT-3 register
+  await page.locator(".action-menu-trigger").first().click();
+  await page.getByRole("menuitem", { name: /View Form P\.F\.T-1/i }).click();
+  await expect(page.getByText(/FORM P\.F\.T-1/i).first()).toBeVisible();
+  await expect(page.getByText(/NOTICE OF TAX DEMAND/i).first()).toBeVisible();
 
-  // Navigate to Form P.F.T-2
-  await page.getByRole("tab", { name: /Form P.F.T-2/i }).click();
+  // Close modal
+  await page.getByLabel("Close").click();
+
+  // Navigate to Revenue Hub -> Form PFT-2 Challans
+  await page.getByRole("button", { name: /Revenue & Citizen Desk/i }).click();
+  await expect(page.getByRole("tab", { name: /Form PFT-2 Challans/i })).toBeVisible();
+  await page.getByRole("tab", { name: /Form PFT-2 Challans/i }).click();
+
+  // Open single Form PFT-2 Challan modal
+  await page.locator(".action-menu-trigger").first().click();
+  await page.getByRole("menuitem", { name: /Download Challan PDF/i }).click();
   await expect(page.getByText(/TAXPAYER'S COPY/i).first()).toBeVisible();
   await expect(page.getByText(/BANK'S COPY/i).first()).toBeVisible();
 });

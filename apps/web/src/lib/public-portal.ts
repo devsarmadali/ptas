@@ -215,7 +215,7 @@ export function verifyStatutoryDocument(
     };
   }
 
-  // 0. Check for 6-Digit Document Security PIN Verification (دستاویزی تصدیقی پن کوڈ)
+  // 0. Check for 6-Digit Document Security PIN Verification
   const cleanPin = normalizeDocumentPin(trimmed);
   if (validateDocumentPin(cleanPin)) {
     // Check issued PFT-2 Challans by PIN

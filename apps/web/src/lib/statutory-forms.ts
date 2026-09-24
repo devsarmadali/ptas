@@ -1075,7 +1075,7 @@ export function generateFormPFT3Rows(units: readonly StoredUnit[]): readonly For
 
 /**
  * Generates the official Circle Notice Dispatch & Service Register
- * (فہرست ترسیل و تعمیل نوٹس جات زیر رول 6) for field tracking by Circle Inspector.
+ * Maintained under Rule 6 of 1977 Rules for field tracking by Circle Inspector.
  */
 export function generateCircleDispatchRegister(
   units: readonly StoredUnit[],
@@ -1119,7 +1119,7 @@ export function generateCircleDispatchRegister(
 
   const canonicalRegisterText = [
     "GOVERNMENT OF THE PUNJAB - EXCISE & TAXATION DEPARTMENT",
-    "CIRCLE DISPATCH & NOTICE SERVICE REGISTER (فہرست ترسیل و تعمیل نوٹس جات)",
+    "CIRCLE DISPATCH & NOTICE SERVICE REGISTER",
     "(Maintained under Rule 6 of Punjab Professions and Trades Tax Rules, 1977)",
     `District: Vehari | Circle: Circle-Vehari | Financial Year: 2026-2027 | Dispatch Date: ${customDispatchDate}`,
     `Total Dispatched Notices: ${rows.length} | Gross Assessed Sum: PKR ${totalAssessedSum} | Total Served: ${totalServed} | Pending: ${totalPending}`,
@@ -1133,7 +1133,7 @@ export function generateCircleDispatchRegister(
 
   return {
     registerTitle: "Circle Notice Dispatch & Service Register (Rule 6)",
-    registerTitleUrdu: "فہرست ترسیل و تعمیل نوٹس جات زیر رول 6",
+    registerTitleUrdu: "Circle Dispatch & Notice Service Register (Rule 6)",
     circleName: "Circle-Vehari",
     district: "Vehari",
     financialYear: "2026-2027",
@@ -1161,28 +1161,29 @@ export function generateAppellateOrderDocument(
   const orderDate = input.orderDate ?? new Date().toISOString().split("T")[0] ?? "2026-08-05";
   const courtTitle =
     "IN THE COURT OF THE APPELLATE AUTHORITY / DIRECTOR EXCISE & TAXATION, MULTAN DIVISION";
-  const courtTitleUrdu = "عدالت اپیلٹ اتھارٹی / ڈائریکٹر ایکسائز اینڈ ٹیکسیشن، ملتان ڈویژن";
+  const courtTitleUrdu =
+    "Court of the Appellate Authority / Director Excise & Taxation, Multan Division";
 
   let operativeUrdu = "";
   switch (input.decisionType) {
     case "CONFIRM":
-      operativeUrdu = "اپیل خارج کی جاتی ہے اور ابتدائی تشخیصی نوٹس بحال رکھا جاتا ہے۔";
+      operativeUrdu = "The appeal is dismissed and the original assessment notice is upheld.";
       break;
     case "REDUCE":
-      operativeUrdu = `اپیل جزوی منظور کی جاتی ہے اور تشخیص مبلغ ${unit.assessmentVersions[0]?.snapshot.taxAmount ?? 0} روپے سے کم کر کے مبلغ ${input.revisedTaxAmount} روپے مقرر کی جاتی ہے۔`;
+      operativeUrdu = `The appeal is partially allowed and assessment is reduced from PKR ${unit.assessmentVersions[0]?.snapshot.taxAmount ?? 0} to PKR ${input.revisedTaxAmount}.`;
       break;
     case "ANNUL":
-      operativeUrdu = "اپیل منظور کی جاتی ہے اور متنازعہ تشخیص مکمل طور پر کالعدم قرار دی جاتی ہے۔";
+      operativeUrdu = "The appeal is allowed and the impugned assessment is annulled in toto.";
       break;
     case "REMAND":
       operativeUrdu =
-        "مقدمہ ریمانڈ کر کے ایکسائز اینڈ ٹیکسیشن آفیسر وہاڑی کو ازسرنو موقع معائنہ اور انکوائری کی ہدایت کی جاتی ہے۔";
+        "The case is remanded to Excise & Taxation Officer Vehari for fresh inquiry and verification.";
       break;
     case "PENALTY_REMISSION":
-      operativeUrdu = "سیکشن 3(4) کے تحت عائد کردہ جرمانہ معاف / معطل کیا جاتا ہے۔";
+      operativeUrdu = "The default penalty under Section 3(4) is remitted.";
       break;
     case "ENHANCE":
-      operativeUrdu = `اپیل کی سماعت کے دوران مزید حقائق کی روشنی میں تشخیص بڑھا کر مبلغ ${input.revisedTaxAmount} روپے کی جاتی ہے۔`;
+      operativeUrdu = `The assessment is enhanced to PKR ${input.revisedTaxAmount} following appellate inquiry.`;
       break;
   }
 
@@ -1347,7 +1348,7 @@ export function generateTaxClearanceCertificate(
   const canonicalCertificateText = [
     "GOVERNMENT OF THE PUNJAB - EXCISE, TAXATION & NARCOTICS CONTROL DEPARTMENT",
     "OFFICE OF THE EXCISE & TAXATION OFFICER (ASSESSING AUTHORITY), TEHSIL VEHARI",
-    "FORM P.F.T-5: CERTIFICATE OF PROFESSIONAL TAX CLEARANCE (عدم بقایاجات سرٹیفکیٹ)",
+    "FORM P.F.T-5: CERTIFICATE OF PROFESSIONAL TAX CLEARANCE",
     `Certificate Number: ${certNumber} | Security PIN: ${pin}`,
     `PIN: ${unit.provincialUin ?? "N/A"}`,
     `Financial Year: ${financialYear}`,

@@ -148,7 +148,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     expect(order.revisedTaxAmount).toBe(2000);
     expect(order.appellateAuthorityName).toBe("Shahid Nawaz");
     expect(order.officialSha256).toHaveLength(64);
-    expect(order.operativeOrderUrdu).toContain("اپیل جزوی منظور کی جاتی ہے");
+    expect(order.operativeOrderUrdu).toContain("The appeal is partially allowed");
     expect(order.pin).toMatch(/^\d{6}$/);
   });
 

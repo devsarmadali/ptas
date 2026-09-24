@@ -13,6 +13,10 @@ export interface PdfExportOptions {
  * Downloads a targeted DOM element as an authentic, high-resolution standalone PDF file.
  * Captures only the targeted container, rendering with crisp vector/raster quality
  * without browser headers, navigation bars, or tab chrome.
+ *
+ * Implements Section 1.1 of the Consolidated Implementation Specification:
+ * - Download PDF remains available and fully functional everywhere statutory documents are issued.
+ * - Browser Print functionality is completely eliminated in favor of direct PDF output.
  */
 export async function downloadDocumentPdf(
   elementId: string,
@@ -82,101 +86,13 @@ export async function downloadDocumentPdf(
 }
 
 /**
- * Prints ONLY the targeted document element in an isolated, dedicated print view.
- * Guarantees that browser tab chrome, application navigation, officer status bars,
- * and background tabs are completely excluded from the printed output.
+ * @deprecated Section 1.1: Browser print functionality has been completely removed
+ * throughout the application. Use downloadDocumentPdf() for all official outputs.
  */
 export function printIsolatedElement(elementId: string): boolean {
-  if (typeof window === "undefined") return false;
-
-  const element = document.getElementById(elementId);
-  if (!element) {
-    console.error(`printIsolatedElement: Element with id "${elementId}" not found.`);
-    return false;
-  }
-
-  try {
-    // Create an invisible iframe for isolated printing
-    const iframe = document.createElement("iframe");
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
-    iframe.style.border = "0";
-    document.body.appendChild(iframe);
-
-    const doc = iframe.contentWindow?.document;
-    if (!doc) {
-      document.body.removeChild(iframe);
-      window.print();
-      return true;
-    }
-
-    // Collect all stylesheets from active document
-    const styleSheets = Array.from(document.querySelectorAll("link[rel='stylesheet'], style"))
-      .map((node) => node.outerHTML)
-      .join("\n");
-
-    const isolatedContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <title>Government of the Punjab — Statutory Document</title>
-          ${styleSheets}
-          <style>
-            @page {
-              size: A4;
-              margin: 8mm;
-            }
-            body {
-              background: #ffffff !important;
-              color: #000000 !important;
-              margin: 0 !important;
-              padding: 0 !important;
-              font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            }
-            .printable-target {
-              width: 100% !important;
-              max-width: 100% !important;
-              margin: 0 auto !important;
-              box-shadow: none !important;
-              border: 1px solid #1e293b !important;
-              page-break-inside: avoid;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="printable-target">
-            ${element.outerHTML}
-          </div>
-        </body>
-      </html>
-    `;
-
-    doc.open();
-    doc.write(isolatedContent);
-    doc.close();
-
-    // Trigger print after iframe renders
-    setTimeout(() => {
-      try {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-      } catch (err) {
-        console.error("Iframe print error:", err);
-      } finally {
-        setTimeout(() => {
-          document.body.removeChild(iframe);
-        }, 1000);
-      }
-    }, 400);
-
-    return true;
-  } catch (error) {
-    console.error("Failed to execute isolated print, falling back to window.print():", error);
-    window.print();
-    return false;
-  }
+  console.warn(
+    `printIsolatedElement called for "${elementId}". Browser print is removed per Consolidated Implementation Specification Section 1.1. Triggering downloadDocumentPdf instead.`
+  );
+  downloadDocumentPdf(elementId);
+  return false;
 }
