@@ -64,18 +64,17 @@ export function RowActionMenu({
     };
   }, [isOpen]);
 
-  const activeActions = actions.filter((a) => !a.disabled);
-
-  if (activeActions.length === 0) {
+  if (actions.length === 0) {
     return null;
   }
 
   // Single-action exception: render directly if only 1 action
-  if (activeActions.length === 1) {
-    const action = activeActions[0]!;
+  if (actions.length === 1) {
+    const action = actions[0]!;
     return (
       <button
         type="button"
+        disabled={action.disabled}
         className={`btn-sm ${
           action.variant === "primary"
             ? "btn-primary"
@@ -83,6 +82,7 @@ export function RowActionMenu({
               ? "btn-secondary text-danger"
               : "btn-secondary"
         }`}
+        style={action.disabled ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
         onClick={action.onClick}
         title={action.title ?? action.label}
         aria-label={action.label}
@@ -138,10 +138,11 @@ export function RowActionMenu({
           onClick={(e) => e.stopPropagation()}
           role="menu"
         >
-          {activeActions.map((action) => (
+          {actions.map((action) => (
             <button
               key={action.id}
               type="button"
+              disabled={action.disabled}
               className="row-action-menu-item"
               style={{
                 display: "flex",
@@ -150,8 +151,9 @@ export function RowActionMenu({
                 width: "100%",
                 padding: "0.5rem 0.85rem",
                 fontSize: "0.8rem",
-                color:
-                  action.variant === "danger"
+                color: action.disabled
+                  ? "#94a3b8"
+                  : action.variant === "danger"
                     ? "#b91c1c"
                     : action.variant === "primary"
                       ? "#0d3822"
@@ -161,11 +163,13 @@ export function RowActionMenu({
                 background: "none",
                 border: "none",
                 textAlign: "left",
-                cursor: "pointer",
+                cursor: action.disabled ? "not-allowed" : "pointer",
+                opacity: action.disabled ? 0.6 : 1,
                 fontWeight: action.variant === "primary" ? 600 : 500,
                 transition: "background-color 0.12s ease"
               }}
               onClick={() => {
+                if (action.disabled) return;
                 setIsOpen(false);
                 action.onClick();
               }}

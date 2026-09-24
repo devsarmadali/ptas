@@ -9,6 +9,7 @@ import {
   savePilotState,
   getPakistanCurrentTimestamp
 } from "../../../lib/pilot-store";
+import { RowActionMenu } from "../../../components/RowActionMenu";
 
 export default function UserManagementPage() {
   const [currentOfficer, setCurrentOfficer] = useState<MockOfficer | null>(null);
@@ -340,27 +341,28 @@ export default function UserManagementPage() {
                     </span>
                   </td>
                   <td style={{ textAlign: "right" }}>
-                    <div style={{ display: "inline-flex", gap: "0.4rem" }}>
-                      <button
-                        type="button"
-                        className="btn-secondary btn-sm"
-                        onClick={() => {
-                          setEditingUser(u);
-                          setNewCircleName(u.assignedCircleName);
-                          setNewMobile(u.mobileNumber);
-                          setNewStatus(u.status);
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-secondary btn-sm"
-                        onClick={() => setPasswordChangeUser(u)}
-                      >
-                        Password
-                      </button>
-                    </div>
+                    <RowActionMenu
+                      align="right"
+                      actions={[
+                        {
+                          id: "edit-eto",
+                          label: "Edit Officer Details & Circle",
+                          icon: "✏️",
+                          onClick: () => {
+                            setEditingUser(u);
+                            setNewCircleName(u.assignedCircleName);
+                            setNewMobile(u.mobileNumber);
+                            setNewStatus(u.status);
+                          }
+                        },
+                        {
+                          id: "password-eto",
+                          label: "Reset Officer Password",
+                          icon: "🔑",
+                          onClick: () => setPasswordChangeUser(u)
+                        }
+                      ]}
+                    />
                   </td>
                 </tr>
               ))}
@@ -431,27 +433,28 @@ export default function UserManagementPage() {
                     </span>
                   </td>
                   <td style={{ textAlign: "right" }}>
-                    <div style={{ display: "inline-flex", gap: "0.4rem" }}>
-                      <button
-                        type="button"
-                        className="btn-secondary btn-sm"
-                        onClick={() => {
-                          setEditingUser(u);
-                          setNewCircleName(u.assignedCircleName);
-                          setNewMobile(u.mobileNumber);
-                          setNewStatus(u.status);
-                        }}
-                      >
-                        Reassign Circle
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-secondary btn-sm"
-                        onClick={() => setPasswordChangeUser(u)}
-                      >
-                        Password
-                      </button>
-                    </div>
+                    <RowActionMenu
+                      align="right"
+                      actions={[
+                        {
+                          id: "reassign-inspector",
+                          label: "Reassign Circle & Edit Details",
+                          icon: "🔄",
+                          onClick: () => {
+                            setEditingUser(u);
+                            setNewCircleName(u.assignedCircleName);
+                            setNewMobile(u.mobileNumber);
+                            setNewStatus(u.status);
+                          }
+                        },
+                        {
+                          id: "password-inspector",
+                          label: "Reset Inspector Password",
+                          icon: "🔑",
+                          onClick: () => setPasswordChangeUser(u)
+                        }
+                      ]}
+                    />
                   </td>
                 </tr>
               ))}

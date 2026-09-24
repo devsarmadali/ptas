@@ -4945,79 +4945,64 @@ export default function HomePage({
                             </span>
                           </td>
                           <td style={{ textAlign: "right" }}>
-                            <div
-                              style={{
-                                display: "inline-flex",
-                                gap: "0.35rem",
-                                flexWrap: "wrap",
-                                justifyContent: "flex-end"
-                              }}
-                            >
-                              <button
-                                type="button"
-                                className="btn-secondary"
-                                style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
-                                onClick={() => handleOpenNoticeModal(u.id)}
-                                title="Generate Rule 10 Notice to Show Cause"
-                              >
-                                📜 Show Cause
-                              </button>
-
-                              <button
-                                type="button"
-                                className="btn-secondary"
-                                style={{
-                                  fontSize: "0.75rem",
-                                  padding: "0.25rem 0.5rem",
-                                  borderColor: "#dc2626",
-                                  color: "#dc2626",
-                                  opacity: officer.role === "ETO" ? 1 : 0.5
-                                }}
-                                disabled={officer.role !== "ETO"}
-                                onClick={() => handleOpenPenaltyModal(u.id)}
-                                title={
-                                  officer.role === "ETO"
-                                    ? "Impose Statutory Penalty (Section 3(4))"
-                                    : "ETO Role Required to Impose Penalty"
+                            <RowActionMenu
+                              align="right"
+                              actions={[
+                                {
+                                  id: "show-cause",
+                                  label: "Issue Show Cause Notice (Rule 10)",
+                                  icon: "📜",
+                                  onClick: () => handleOpenNoticeModal(u.id)
+                                },
+                                {
+                                  id: "impose-penalty",
+                                  label: "Impose Statutory Penalty (Section 3(4))",
+                                  icon: "⚠️",
+                                  disabled: officer.role !== "ETO" && officer.role !== "DIRECTOR",
+                                  title:
+                                    officer.role === "ETO" || officer.role === "DIRECTOR"
+                                      ? "Impose Statutory Penalty under Section 3(4)"
+                                      : "ETO Role Required to Impose Penalty",
+                                  onClick: () => handleOpenPenaltyModal(u.id)
+                                },
+                                {
+                                  id: "land-revenue",
+                                  label: "Certify Arrears (Punjab Land Revenue Act, Rule 12)",
+                                  icon: "🏛️",
+                                  disabled: officer.role !== "ETO" && officer.role !== "DIRECTOR",
+                                  title:
+                                    officer.role === "ETO" || officer.role === "DIRECTOR"
+                                      ? "Certify Arrears under Punjab Land Revenue Act (Rule 12)"
+                                      : "ETO Role Required to Certify Recovery",
+                                  onClick: () => handleOpenRecoveryModal(u.id)
+                                },
+                                {
+                                  id: "issue-pft2",
+                                  label: "Issue / View Form PFT-2 Challan",
+                                  icon: "💳",
+                                  onClick: () => {
+                                    setSelectedUnitId(u.id);
+                                    setShowIssuePft2Modal(true);
+                                  }
+                                },
+                                {
+                                  id: "view-dossier",
+                                  label: "View Unit Dossier (New Tab)",
+                                  icon: "📋",
+                                  onClick: () => window.open(`/units/${u.id}/details`, "_blank")
+                                },
+                                {
+                                  id: "inspect-ledger",
+                                  label: "Inspect Demand & Payment Ledger",
+                                  icon: "📒",
+                                  onClick: () => {
+                                    setSelectedUnitId(u.id);
+                                    setPaymentUnitId(u.id);
+                                    switchTab("LEDGER");
+                                  }
                                 }
-                              >
-                                ⚠️ Impose Penalty
-                              </button>
-
-                              <button
-                                type="button"
-                                className="btn-secondary"
-                                style={{
-                                  fontSize: "0.75rem",
-                                  padding: "0.25rem 0.5rem",
-                                  borderColor: "#2563eb",
-                                  color: "#2563eb",
-                                  opacity: officer.role === "ETO" ? 1 : 0.5
-                                }}
-                                disabled={officer.role !== "ETO"}
-                                onClick={() => handleOpenRecoveryModal(u.id)}
-                                title={
-                                  officer.role === "ETO"
-                                    ? "Certify Arrears under Punjab Land Revenue Act (Rule 12)"
-                                    : "ETO Role Required to Certify Recovery"
-                                }
-                              >
-                                🏛️ Land Revenue
-                              </button>
-
-                              <button
-                                type="button"
-                                className="btn-secondary"
-                                style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
-                                onClick={() => {
-                                  setSelectedUnitId(u.id);
-                                  setShowIssuePft2Modal(true);
-                                }}
-                                title="View updated 3-copy payment challan with penalty"
-                              >
-                                💳 Challan PFT-2
-                              </button>
-                            </div>
+                              ]}
+                            />
                           </td>
                         </tr>
                       );
@@ -5223,7 +5208,7 @@ export default function HomePage({
                     <th>Undisputed Paid</th>
                     <th>Hearing Date</th>
                     <th>Status</th>
-                    <th>Actions</th>
+                    <th style={{ textAlign: "right" }}>Statutory Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -5345,52 +5330,71 @@ export default function HomePage({
                               {statusText}
                             </span>
                           </td>
-                          <td>
-                            <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-                              {appeal.status === "FILED" && officer.role === "DIRECTOR" && (
-                                <button
-                                  type="button"
-                                  className="btn-secondary"
-                                  style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                                  onClick={() => {
-                                    setHearingTargetAppealId(appeal.id);
-                                    setShowScheduleHearingModal(true);
-                                  }}
-                                >
-                                  📅 Fix Hearing
-                                </button>
-                              )}
-
-                              {(appeal.status === "FILED" ||
-                                appeal.status === "HEARING_SCHEDULED") &&
-                                officer.role === "DIRECTOR" && (
-                                  <button
-                                    type="button"
-                                    className="btn-primary"
-                                    style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                                    onClick={() => {
-                                      setAdjudicateTargetAppealId(appeal.id);
-                                      setRevisedAmountInput(
-                                        Math.max(1000, Math.floor(originalTax / 2))
-                                      );
-                                      setShowAdjudicateAppealModal(true);
-                                    }}
-                                  >
-                                    👨‍⚖️ Adjudicate
-                                  </button>
-                                )}
-
-                              {appeal.status.startsWith("DECIDED") && (
-                                <button
-                                  type="button"
-                                  className="btn-secondary"
-                                  style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                                  onClick={() => handleViewAppellateOrder(appeal)}
-                                >
-                                  📄 View Order
-                                </button>
-                              )}
-                            </div>
+                          <td style={{ textAlign: "right" }}>
+                            <RowActionMenu
+                              align="right"
+                              actions={[
+                                ...(appeal.status === "FILED" && officer.role === "DIRECTOR"
+                                  ? [
+                                      {
+                                        id: "fix-hearing",
+                                        label: "Fix Hearing Date (Rule 13)",
+                                        icon: "📅",
+                                        onClick: () => {
+                                          setHearingTargetAppealId(appeal.id);
+                                          setShowScheduleHearingModal(true);
+                                        }
+                                      }
+                                    ]
+                                  : []),
+                                ...((appeal.status === "FILED" ||
+                                  appeal.status === "HEARING_SCHEDULED") &&
+                                officer.role === "DIRECTOR"
+                                  ? [
+                                      {
+                                        id: "adjudicate-appeal",
+                                        label: "Adjudicate Appeal (Section 7)",
+                                        icon: "👨‍⚖️",
+                                        variant: "primary" as const,
+                                        onClick: () => {
+                                          setAdjudicateTargetAppealId(appeal.id);
+                                          setRevisedAmountInput(
+                                            Math.max(1000, Math.floor(originalTax / 2))
+                                          );
+                                          setShowAdjudicateAppealModal(true);
+                                        }
+                                      }
+                                    ]
+                                  : []),
+                                ...(appeal.status.startsWith("DECIDED")
+                                  ? [
+                                      {
+                                        id: "view-order",
+                                        label: "View Appellate Order",
+                                        icon: "📄",
+                                        onClick: () => handleViewAppellateOrder(appeal)
+                                      }
+                                    ]
+                                  : []),
+                                {
+                                  id: "view-dossier",
+                                  label: "View Unit Dossier (New Tab)",
+                                  icon: "📋",
+                                  onClick: () =>
+                                    window.open(`/units/${appeal.unitId}/details`, "_blank")
+                                },
+                                {
+                                  id: "inspect-ledger",
+                                  label: "Inspect Demand Ledger",
+                                  icon: "📒",
+                                  onClick: () => {
+                                    setSelectedUnitId(appeal.unitId);
+                                    setPaymentUnitId(appeal.unitId);
+                                    switchTab("LEDGER");
+                                  }
+                                }
+                              ]}
+                            />
                           </td>
                         </tr>
                       );
@@ -5514,7 +5518,7 @@ export default function HomePage({
                     <th>Category &amp; Rule</th>
                     <th>Ledger Outstanding Balance</th>
                     <th>Statutory Clearance Status</th>
-                    <th>Certificate Action</th>
+                    <th style={{ textAlign: "right" }}>Statutory Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -5629,37 +5633,47 @@ export default function HomePage({
                             </span>
                           )}
                         </td>
-                        <td>
-                          {isZeroBalance ? (
-                            <button
-                              type="button"
-                              className="btn-primary"
-                              style={{
-                                fontSize: "0.75rem",
-                                padding: "0.3rem 0.6rem",
-                                backgroundColor: "#065f46",
-                                borderColor: "#047857"
-                              }}
-                              onClick={() => handleOpenClearanceCertificate(u)}
-                            >
-                              📜 {certRecord ? "View Certificate" : "Issue Form P.F.T-5"}
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className="btn-secondary"
-                              disabled
-                              style={{
-                                fontSize: "0.75rem",
-                                padding: "0.3rem 0.6rem",
-                                opacity: 0.5,
-                                cursor: "not-allowed"
-                              }}
-                              title="Cannot issue clearance certificate: Outstanding arrears must be fully cleared first."
-                            >
-                              🔒 Clearance Locked
-                            </button>
-                          )}
+                        <td style={{ textAlign: "right" }}>
+                          <RowActionMenu
+                            align="right"
+                            actions={[
+                              isZeroBalance
+                                ? {
+                                    id: "clearance-cert",
+                                    label: certRecord
+                                      ? "View Form P.F.T-5 Clearance Certificate"
+                                      : "Issue Form P.F.T-5 Clearance Certificate",
+                                    icon: "📜",
+                                    variant: "success",
+                                    onClick: () => handleOpenClearanceCertificate(u)
+                                  }
+                                : {
+                                    id: "clearance-locked",
+                                    label: "Clearance Locked (Arrears Outstanding)",
+                                    icon: "🔒",
+                                    disabled: true,
+                                    title:
+                                      "Cannot issue clearance certificate: Outstanding arrears must be fully cleared first.",
+                                    onClick: () => {}
+                                  },
+                              {
+                                id: "view-dossier",
+                                label: "View Unit Dossier (New Tab)",
+                                icon: "📋",
+                                onClick: () => window.open(`/units/${u.id}/details`, "_blank")
+                              },
+                              {
+                                id: "inspect-ledger",
+                                label: "Inspect Demand Ledger",
+                                icon: "📒",
+                                onClick: () => {
+                                  setSelectedUnitId(u.id);
+                                  setPaymentUnitId(u.id);
+                                  switchTab("LEDGER");
+                                }
+                              }
+                            ]}
+                          />
                         </td>
                       </tr>
                     );
@@ -5755,7 +5769,7 @@ export default function HomePage({
                       <th>Discontinuance Date &amp; Reason</th>
                       <th>Inspector Field Inspection</th>
                       <th>Status</th>
-                      <th>Statutory Actions</th>
+                      <th style={{ textAlign: "right" }}>Statutory Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -5865,63 +5879,84 @@ export default function HomePage({
                                 </span>
                               )}
                             </td>
-                            <td>
-                              <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-                                {isPendingInsp && (
-                                  <button
-                                    type="button"
-                                    className="btn-secondary"
-                                    style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                                    onClick={() => handleOpenDiscontinuanceInspection(disc)}
-                                  >
-                                    🔍 Field Inspection
-                                  </button>
-                                )}
-
-                                {isInspected &&
-                                  (officer.role === "ETO" || officer.role === "DIRECTOR") && (
-                                    <button
-                                      type="button"
-                                      className="btn-primary"
-                                      style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                                      onClick={() => handleOpenDiscontinuanceOrder(disc)}
-                                    >
-                                      ⚖️ Issue Closure Order
-                                    </button>
-                                  )}
-
-                                {(isClosed || isRejected) && (
-                                  <button
-                                    type="button"
-                                    className="btn-secondary"
-                                    style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                                    onClick={() => {
-                                      const u = units.find((unit) => unit.id === disc.unitId);
-                                      if (u) {
-                                        const doc = generateDiscontinuanceOrder(u, {
-                                          orderNumber: disc.etoOrderNumber || "DISC-ORD-2026",
-                                          orderDate:
-                                            disc.etoOrderDate ||
-                                            new Date().toISOString().split("T")[0]!,
-                                          noticeNumber: disc.noticeNumber,
-                                          discontinuanceDate: disc.discontinuanceDate,
-                                          reason: disc.reason,
-                                          inspectorFindings:
-                                            disc.inspectorReport || "Premises verified closed.",
-                                          etoDecision:
-                                            (disc.etoDecision as "APPROVED" | "REJECTED") ||
-                                            "APPROVED",
-                                          etoReason: disc.etoReason || "Statutory closure verified."
-                                        });
-                                        setActiveDiscontinuanceOrder(doc);
-                                        setShowDiscontinuanceOrderModal(true);
-                                      }
-                                    }}
-                                  >
-                                    📄 View Order
-                                  </button>
-                                )}
-                              </div>
+                            <td style={{ textAlign: "right" }}>
+                              <RowActionMenu
+                                align="right"
+                                actions={[
+                                  ...(isPendingInsp
+                                    ? [
+                                        {
+                                          id: "field-inspection",
+                                          label: "Record Field Inspection (Inspector)",
+                                          icon: "🔍",
+                                          onClick: () => handleOpenDiscontinuanceInspection(disc)
+                                        }
+                                      ]
+                                    : []),
+                                  ...(isInspected &&
+                                  (officer.role === "ETO" || officer.role === "DIRECTOR")
+                                    ? [
+                                        {
+                                          id: "issue-closure-order",
+                                          label: "Issue Statutory Closure Order (Rule 10)",
+                                          icon: "⚖️",
+                                          variant: "primary" as const,
+                                          onClick: () => handleOpenDiscontinuanceOrder(disc)
+                                        }
+                                      ]
+                                    : []),
+                                  ...(isClosed || isRejected
+                                    ? [
+                                        {
+                                          id: "view-closure-order",
+                                          label: "View Statutory Closure Order",
+                                          icon: "📄",
+                                          onClick: () => {
+                                            const u = units.find((unit) => unit.id === disc.unitId);
+                                            if (u) {
+                                              const doc = generateDiscontinuanceOrder(u, {
+                                                orderNumber: disc.etoOrderNumber || "DISC-ORD-2026",
+                                                orderDate:
+                                                  disc.etoOrderDate ||
+                                                  new Date().toISOString().split("T")[0]!,
+                                                noticeNumber: disc.noticeNumber,
+                                                discontinuanceDate: disc.discontinuanceDate,
+                                                reason: disc.reason,
+                                                inspectorFindings:
+                                                  disc.inspectorReport ||
+                                                  "Premises verified closed.",
+                                                etoDecision:
+                                                  (disc.etoDecision as "APPROVED" | "REJECTED") ||
+                                                  "APPROVED",
+                                                etoReason:
+                                                  disc.etoReason || "Statutory closure verified."
+                                              });
+                                              setActiveDiscontinuanceOrder(doc);
+                                              setShowDiscontinuanceOrderModal(true);
+                                            }
+                                          }
+                                        }
+                                      ]
+                                    : []),
+                                  {
+                                    id: "view-dossier",
+                                    label: "View Unit Dossier (New Tab)",
+                                    icon: "📋",
+                                    onClick: () =>
+                                      window.open(`/units/${disc.unitId}/details`, "_blank")
+                                  },
+                                  {
+                                    id: "inspect-ledger",
+                                    label: "Inspect Demand Ledger",
+                                    icon: "📒",
+                                    onClick: () => {
+                                      setSelectedUnitId(disc.unitId);
+                                      setPaymentUnitId(disc.unitId);
+                                      switchTab("LEDGER");
+                                    }
+                                  }
+                                ]}
+                              />
                             </td>
                           </tr>
                         );
@@ -5985,7 +6020,7 @@ export default function HomePage({
                       <th>Relief Type &amp; Amount</th>
                       <th>Legal Grounds &amp; Evidence</th>
                       <th>Status &amp; Ledger Posting</th>
-                      <th>Statutory Actions</th>
+                      <th style={{ textAlign: "right" }}>Statutory Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -6081,68 +6116,86 @@ export default function HomePage({
                                 </span>
                               )}
                             </td>
-                            <td>
-                              <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-                                {isPending &&
-                                  (officer.role === "ETO" || officer.role === "DIRECTOR") && (
-                                    <>
-                                      <button
-                                        type="button"
-                                        className="btn-primary"
-                                        style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                                        onClick={() => handleAdjudicateRefund(ref, "APPROVED")}
-                                      >
-                                        ⚖️ Approve &amp; Post Credit
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="btn-secondary"
-                                        style={{
-                                          padding: "0.25rem 0.5rem",
-                                          fontSize: "0.75rem",
-                                          color: "#dc2626"
-                                        }}
-                                        onClick={() => handleAdjudicateRefund(ref, "REJECTED")}
-                                      >
-                                        Reject
-                                      </button>
-                                    </>
-                                  )}
-
-                                {isPending && officer.role === "INSPECTOR" && (
-                                  <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                                    Awaiting ETO Scrutiny
-                                  </span>
-                                )}
-
-                                {isApproved && (
-                                  <button
-                                    type="button"
-                                    className="btn-secondary"
-                                    style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                                    onClick={() => {
-                                      const u = units.find((unit) => unit.id === ref.unitId);
-                                      if (u) {
-                                        const doc = generateRefundAdjustmentOrder(u, {
-                                          orderNumber: ref.orderNumber || "ADJ-ORD-2026",
-                                          orderDate:
-                                            ref.orderDate ||
-                                            new Date().toISOString().split("T")[0]!,
-                                          applicationNumber: ref.applicationNumber,
-                                          type: ref.type,
-                                          amount: ref.amount,
-                                          grounds: ref.grounds,
-                                          evidenceRef: ref.evidenceReference
-                                        });
-                                        setActiveRefundOrder(doc);
-                                        setShowRefundOrderModal(true);
-                                      }
-                                    }}
-                                  >
-                                    📄 View Order
-                                  </button>
-                                )}
-                              </div>
+                            <td style={{ textAlign: "right" }}>
+                              <RowActionMenu
+                                align="right"
+                                actions={[
+                                  ...(isPending &&
+                                  (officer.role === "ETO" || officer.role === "DIRECTOR")
+                                    ? [
+                                        {
+                                          id: "approve-refund",
+                                          label: "Approve & Post Ledger Credit (Rule 5)",
+                                          icon: "⚖️",
+                                          variant: "success" as const,
+                                          onClick: () => handleAdjudicateRefund(ref, "APPROVED")
+                                        },
+                                        {
+                                          id: "reject-refund",
+                                          label: "Reject Refund Application",
+                                          icon: "✕",
+                                          variant: "danger" as const,
+                                          onClick: () => handleAdjudicateRefund(ref, "REJECTED")
+                                        }
+                                      ]
+                                    : []),
+                                  ...(isPending && officer.role === "INSPECTOR"
+                                    ? [
+                                        {
+                                          id: "pending-scrutiny",
+                                          label: "Awaiting ETO Scrutiny",
+                                          icon: "⏳",
+                                          disabled: true,
+                                          onClick: () => {}
+                                        }
+                                      ]
+                                    : []),
+                                  ...(isApproved
+                                    ? [
+                                        {
+                                          id: "view-refund-order",
+                                          label: "View Statutory Refund Decree",
+                                          icon: "📄",
+                                          onClick: () => {
+                                            const u = units.find((unit) => unit.id === ref.unitId);
+                                            if (u) {
+                                              const doc = generateRefundAdjustmentOrder(u, {
+                                                orderNumber: ref.orderNumber || "ADJ-ORD-2026",
+                                                orderDate:
+                                                  ref.orderDate ||
+                                                  new Date().toISOString().split("T")[0]!,
+                                                applicationNumber: ref.applicationNumber,
+                                                type: ref.type,
+                                                amount: ref.amount,
+                                                grounds: ref.grounds,
+                                                evidenceRef: ref.evidenceReference
+                                              });
+                                              setActiveRefundOrder(doc);
+                                              setShowRefundOrderModal(true);
+                                            }
+                                          }
+                                        }
+                                      ]
+                                    : []),
+                                  {
+                                    id: "view-dossier",
+                                    label: "View Unit Dossier (New Tab)",
+                                    icon: "📋",
+                                    onClick: () =>
+                                      window.open(`/units/${ref.unitId}/details`, "_blank")
+                                  },
+                                  {
+                                    id: "inspect-ledger",
+                                    label: "Inspect Demand Ledger",
+                                    icon: "📒",
+                                    onClick: () => {
+                                      setSelectedUnitId(ref.unitId);
+                                      setPaymentUnitId(ref.unitId);
+                                      switchTab("LEDGER");
+                                    }
+                                  }
+                                ]}
+                              />
                             </td>
                           </tr>
                         );
@@ -12285,7 +12338,12 @@ export default function HomePage({
           <div className="modal-card" style={{ maxWidth: "48rem" }}>
             <div className="modal-header">
               <h3>📜 Notice to Show Cause for Imposition of Penalty (Rule 10)</h3>
-              <button type="button" className="close-btn" onClick={() => setShowNoticeModal(false)}>
+              <button
+                type="button"
+                className="close-btn"
+                aria-label="Close"
+                onClick={() => setShowNoticeModal(false)}
+              >
                 &times;
               </button>
             </div>

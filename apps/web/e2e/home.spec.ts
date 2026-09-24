@@ -2,7 +2,11 @@ import { expect, test } from "@playwright/test";
 
 test("renders official PTAS header and unified route hubs", async ({ page }) => {
   page.on("pageerror", (err) => console.error("CLIENT_PAGE_ERROR:", err.stack || err.message));
-  page.on("console", (msg) => console.log("CLIENT_PAGE_LOG:", msg.text()));
+  page.on("console", (msg) => {
+    if (msg.type() === "error") {
+      console.error("CLIENT_PAGE_LOG:", msg.text());
+    }
+  });
   await page.goto("/");
   await expect(
     page.getByRole("heading", {
@@ -71,4 +75,40 @@ test("verifies statutory sub-class and tertiary slabs in Form P.F.T-1 and Form P
   await page.getByRole("menuitem", { name: /Download Challan PDF/i }).click();
   await expect(page.getByText(/TAXPAYER'S COPY/i).first()).toBeVisible();
   await expect(page.getByText(/BANK'S COPY/i).first()).toBeVisible();
+});
+
+test("verifies RowActionMenu popover interactions in Compliance & Recovery Hub", async ({
+  page
+}) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", {
+      name: /Government of the Punjab — Professional Tax Administration/i
+    })
+  ).toBeVisible({ timeout: 20000 });
+
+  // Navigate to Compliance & Recovery Route Hub
+  await page.getByRole("button", { name: /Compliance & Recovery/i }).click();
+  await expect(page.getByRole("tab", { name: /Defaulter & Arrears Roll/i })).toBeVisible();
+
+  // Open Defaulter row action menu
+  await page.locator(".action-menu-trigger").first().click();
+  await expect(page.getByRole("menuitem", { name: /Issue Show Cause Notice/i })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /Impose Statutory Penalty/i })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /Certify Arrears/i })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /Form PFT-2 Challan/i })).toBeVisible();
+
+  // Open Show Cause modal
+  await page.getByRole("menuitem", { name: /Issue Show Cause Notice/i }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: /Notice to Show Cause for Imposition of Penalty/i
+    })
+  ).toBeVisible();
+  await page.getByLabel("Close").click();
+
+  // Navigate to Clearance subtab
+  await page.getByRole("tab", { name: /Clearance Certificates/i }).click();
+  await page.locator(".action-menu-trigger").first().click();
+  await expect(page.getByRole("menuitem", { name: /Clearance/i })).toBeVisible();
 });
