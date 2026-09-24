@@ -5,6 +5,7 @@ import {
   type MockOfficer,
   type UserAccount,
   type UserManagementAuditRecord,
+  MOCK_OFFICERS,
   loadPilotState,
   savePilotState,
   getPakistanCurrentTimestamp
@@ -72,14 +73,55 @@ export default function UserManagementPage() {
           Jurisdiction Administration Desk is strictly restricted to{" "}
           <strong>Excise &amp; Taxation Officers (ETO)</strong> and <strong>Directors</strong>.
         </p>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => (window.location.href = "/")}
-          style={{ marginTop: "1rem" }}
+        <div
+          style={{
+            display: "flex",
+            gap: "0.75rem",
+            justifyContent: "center",
+            marginTop: "1.5rem",
+            flexWrap: "wrap"
+          }}
         >
-          Return to Dashboard
-        </button>
+          <button
+            type="button"
+            className="btn-primary"
+            style={{ backgroundColor: "#065f46", borderColor: "#047857" }}
+            onClick={() => {
+              const eto = MOCK_OFFICERS.find((o) => o.role === "ETO");
+              if (eto) {
+                const state = loadPilotState();
+                state.currentOfficer = eto;
+                savePilotState(state);
+                setCurrentOfficer(eto);
+              }
+            }}
+          >
+            ⚖️ Switch to ETO Tariq Mahmood
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            style={{ backgroundColor: "#4338ca", borderColor: "#3730a3" }}
+            onClick={() => {
+              const director = MOCK_OFFICERS.find((o) => o.role === "DIRECTOR");
+              if (director) {
+                const state = loadPilotState();
+                state.currentOfficer = director;
+                savePilotState(state);
+                setCurrentOfficer(director);
+              }
+            }}
+          >
+            📊 Switch to Director Tahir Raza
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => (window.location.href = "/")}
+          >
+            ← Return to Dashboard
+          </button>
+        </div>
       </div>
     );
   }
@@ -179,7 +221,97 @@ export default function UserManagementPage() {
   };
 
   return (
-    <div style={{ maxWidth: "72rem", margin: "2rem auto", padding: "1.5rem" }}>
+    <div style={{ maxWidth: "76rem", margin: "1.5rem auto", padding: "1rem" }}>
+      {/* Top Decoupled Navigation Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "1rem",
+          background: "#ffffff",
+          padding: "0.75rem 1.25rem",
+          borderRadius: "8px",
+          border: "1px solid #e2e8f0",
+          boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+          flexWrap: "wrap",
+          gap: "0.5rem"
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span style={{ fontSize: "1.2rem" }}>👥</span>
+          <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#0d3822" }}>
+            PTAS Punjab &bull; Administrative User Desk
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+          <a
+            href="/"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#0d3822",
+              color: "#ffffff",
+              textDecoration: "none"
+            }}
+          >
+            ← Main Dashboard
+          </a>
+          <a
+            href="/documents/pf2/new"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#047857",
+              color: "#ffffff",
+              textDecoration: "none"
+            }}
+          >
+            💳 Issue Form PFT-2 ↗
+          </a>
+          <a
+            href="/verify"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#f1f5f9",
+              color: "#1e293b",
+              border: "1px solid #cbd5e1",
+              textDecoration: "none"
+            }}
+          >
+            🔍 Citizen Verify ↗
+          </a>
+          <a
+            href="/intelligence/statutory-category-yield"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#f1f5f9",
+              color: "#1e293b",
+              border: "1px solid #cbd5e1",
+              textDecoration: "none"
+            }}
+          >
+            📊 Category Yield ↗
+          </a>
+        </div>
+      </div>
+
       {/* Top Header */}
       <div
         style={{
@@ -190,7 +322,9 @@ export default function UserManagementPage() {
           marginBottom: "1.5rem",
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center"
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "1rem"
         }}
       >
         <div>
@@ -212,7 +346,40 @@ export default function UserManagementPage() {
             &bull; Tier: <strong>{currentOfficer.jurisdictionTier}</strong>
           </span>
         </div>
-        <div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "0.25rem" }}>
+            {MOCK_OFFICERS.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                className={`role-switch-btn ${currentOfficer.email === o.email ? "active" : ""}`}
+                onClick={() => {
+                  const state = loadPilotState();
+                  state.currentOfficer = o;
+                  savePilotState(state);
+                  setCurrentOfficer(o);
+                }}
+                style={{
+                  fontSize: "0.75rem",
+                  padding: "0.25rem 0.5rem",
+                  background:
+                    currentOfficer.email === o.email ? "#ffffff" : "rgba(255, 255, 255, 0.2)",
+                  color: currentOfficer.email === o.email ? "#0d3822" : "#ffffff",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: 600
+                }}
+                title={`Switch to ${o.name} (${o.role})`}
+              >
+                {o.role === "INSPECTOR"
+                  ? "👤 Inspector"
+                  : o.role === "ETO"
+                    ? "⚖️ ETO"
+                    : "📊 Director"}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             className="btn-secondary"

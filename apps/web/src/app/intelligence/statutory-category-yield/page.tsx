@@ -45,7 +45,97 @@ export default function StatutoryCategoryYieldPage() {
   };
 
   return (
-    <div style={{ maxWidth: "76rem", margin: "2rem auto", padding: "1.5rem" }}>
+    <div style={{ maxWidth: "76rem", margin: "1.5rem auto", padding: "1rem" }}>
+      {/* Top Decoupled Navigation Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "1rem",
+          background: "#ffffff",
+          padding: "0.75rem 1.25rem",
+          borderRadius: "8px",
+          border: "1px solid #e2e8f0",
+          boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+          flexWrap: "wrap",
+          gap: "0.5rem"
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span style={{ fontSize: "1.2rem" }}>📊</span>
+          <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#0d3822" }}>
+            PTAS Punjab &bull; Statutory Intelligence &amp; Slabs Desk
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+          <a
+            href="/"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#0d3822",
+              color: "#ffffff",
+              textDecoration: "none"
+            }}
+          >
+            ← Main Dashboard
+          </a>
+          <a
+            href="/documents/pf2/new"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#047857",
+              color: "#ffffff",
+              textDecoration: "none"
+            }}
+          >
+            💳 Issue Form PFT-2 ↗
+          </a>
+          <a
+            href="/verify"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#f1f5f9",
+              color: "#1e293b",
+              border: "1px solid #cbd5e1",
+              textDecoration: "none"
+            }}
+          >
+            🔍 Citizen Verify ↗
+          </a>
+          <a
+            href="/admin/user-management"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#f1f5f9",
+              color: "#1e293b",
+              border: "1px solid #cbd5e1",
+              textDecoration: "none"
+            }}
+          >
+            👥 User Management ↗
+          </a>
+        </div>
+      </div>
+
       {/* Header */}
       <div
         style={{

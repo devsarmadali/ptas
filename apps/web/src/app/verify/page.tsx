@@ -47,7 +47,63 @@ export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: str
   };
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f8fafc", padding: "2rem 1rem" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: "#f8fafc", padding: "1.5rem 1rem" }}>
+      {/* Return to Dashboard and Related Portals Link Bar */}
+      <div
+        style={{
+          maxWidth: "48rem",
+          margin: "0 auto 1.5rem auto",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "0.5rem"
+        }}
+      >
+        <a
+          href="/"
+          style={{
+            fontSize: "0.85rem",
+            color: "#0d3822",
+            textDecoration: "none",
+            fontWeight: 600,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.35rem"
+          }}
+        >
+          ← Return to Main PTAS System
+        </a>
+        <div style={{ display: "flex", gap: "0.75rem" }}>
+          <a
+            href="/documents/pf2/new"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: "0.82rem",
+              color: "#047857",
+              textDecoration: "none",
+              fontWeight: 600
+            }}
+          >
+            💳 Issue Form PFT-2 ↗
+          </a>
+          <a
+            href="/admin/user-management"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: "0.82rem",
+              color: "#475569",
+              textDecoration: "none",
+              fontWeight: 600
+            }}
+          >
+            👥 User Desk ↗
+          </a>
+        </div>
+      </div>
+
       {/* Clean Public Citizen Header (No staff navigation or editing controls) */}
       <div
         style={{ maxWidth: "48rem", margin: "0 auto", textAlign: "center", marginBottom: "2rem" }}

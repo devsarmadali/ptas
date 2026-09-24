@@ -18,8 +18,9 @@ import { downloadDocumentPdf } from "../../../../lib/pdf-export";
 
 function DocumentIssuanceContent() {
   const searchParams = useSearchParams();
-  const unitId = searchParams.get("unit") || "";
+  const unitParam = searchParams.get("unit") || "";
 
+  const [allUnits, setAllUnits] = useState<StoredUnit[]>([]);
   const [unit, setUnit] = useState<StoredUnit | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -43,14 +44,52 @@ function DocumentIssuanceContent() {
 
   useEffect(() => {
     const state = loadPilotState();
-    const found = state.units.find((u) => u.id === unitId);
+    const available = state.units && state.units.length > 0 ? state.units : [];
+    setAllUnits(available);
+
+    const found =
+      available.find(
+        (u) =>
+          u.id === unitParam ||
+          u.demandUnit?.permanentDemandNo === unitParam ||
+          u.provincialUin === unitParam ||
+          (unitParam && u.legalName.toLowerCase().includes(unitParam.toLowerCase()))
+      ) ??
+      // Default to a unit with pending demand or first available unit
+      available.find((u) => {
+        const assessed = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+        let paid = 0;
+        for (const e of u.ledgerEntries) {
+          if (e.entryType === "PAYMENT_CREDIT") paid += Math.abs(e.amount);
+        }
+        return assessed - paid > 0;
+      }) ??
+      available[0] ??
+      null;
+
     if (found) {
       setUnit(found);
       const assessed = found.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
       setPartialAmount(Math.round(assessed / 2));
     }
     setIsLoaded(true);
-  }, [unitId]);
+  }, [unitParam]);
+
+  const handleSelectUnit = (newUnitId: string) => {
+    const selected = allUnits.find((u) => u.id === newUnitId);
+    if (selected) {
+      setUnit(selected);
+      const assessed = selected.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+      setPartialAmount(Math.round(assessed / 2));
+      setIssuedChallan(null);
+      setErrorMessage("");
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.set("unit", selected.id);
+        window.history.replaceState(null, "", url.toString());
+      }
+    }
+  };
 
   if (!isLoaded) {
     return (
@@ -73,19 +112,19 @@ function DocumentIssuanceContent() {
           textAlign: "center"
         }}
       >
-        <h2 style={{ color: "#991b1b", margin: "0 0 0.5rem" }}>Unit Context Not Found</h2>
+        <h2 style={{ color: "#991b1b", margin: "0 0 0.5rem" }}>
+          No Registered Taxpayer Units Found
+        </h2>
         <p style={{ color: "#475569" }}>
-          The requested unit identifier <code>{unitId || "BLANK"}</code> could not be validated or
-          you do not have jurisdiction to issue statutory documents for this unit.
+          Please initialize pilot data from the main PTAS dashboard to issue Form PFT-2 documents.
         </p>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => window.close()}
-          style={{ marginTop: "1rem" }}
+        <a
+          href="/"
+          className="btn-primary"
+          style={{ display: "inline-block", marginTop: "1rem", textDecoration: "none" }}
         >
-          Close Tab
-        </button>
+          Return to Dashboard
+        </a>
       </div>
     );
   }
@@ -240,6 +279,22 @@ function DocumentIssuanceContent() {
             >
               📥 Download PDF
             </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                setIssuedChallan(null);
+              }}
+            >
+              ➕ Issue Another
+            </button>
+            <a
+              href="/"
+              className="btn-secondary"
+              style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}
+            >
+              ← Main Dashboard
+            </a>
             <button type="button" className="btn-secondary" onClick={() => window.close()}>
               Done &amp; Close Tab
             </button>
@@ -368,7 +423,98 @@ function DocumentIssuanceContent() {
   }
 
   return (
-    <div style={{ maxWidth: "48rem", margin: "2rem auto", padding: "1.5rem" }}>
+    <div style={{ maxWidth: "52rem", margin: "1.5rem auto", padding: "1rem" }}>
+      {/* Top Decoupled Navigation Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "1rem",
+          background: "#ffffff",
+          padding: "0.75rem 1.25rem",
+          borderRadius: "8px",
+          border: "1px solid #e2e8f0",
+          boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+          flexWrap: "wrap",
+          gap: "0.5rem"
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span style={{ fontSize: "1.2rem" }}>🏛️</span>
+          <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#0d3822" }}>
+            PTAS Punjab &bull; Circle-Vehari
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+          <a
+            href="/"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#0d3822",
+              color: "#ffffff",
+              textDecoration: "none"
+            }}
+          >
+            ← Main Dashboard
+          </a>
+          <a
+            href="/verify"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#f1f5f9",
+              color: "#1e293b",
+              border: "1px solid #cbd5e1",
+              textDecoration: "none"
+            }}
+          >
+            🔍 Citizen Verify ↗
+          </a>
+          <a
+            href="/admin/user-management"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#f1f5f9",
+              color: "#1e293b",
+              border: "1px solid #cbd5e1",
+              textDecoration: "none"
+            }}
+          >
+            👥 User Management ↗
+          </a>
+          <a
+            href="/intelligence/statutory-category-yield"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#f1f5f9",
+              color: "#1e293b",
+              border: "1px solid #cbd5e1",
+              textDecoration: "none"
+            }}
+          >
+            📊 Category Yield ↗
+          </a>
+        </div>
+      </div>
+
       <div
         style={{
           background: "linear-gradient(135deg, #0d3822 0%, #166534 100%)",
@@ -394,6 +540,55 @@ function DocumentIssuanceContent() {
           padding: "1.5rem"
         }}
       >
+        {/* Establishment Switcher for Issuance Desk */}
+        <div
+          style={{
+            background: "#f0fdf4",
+            border: "1px solid #bbf7d0",
+            borderRadius: "6px",
+            padding: "0.85rem 1rem",
+            marginBottom: "1.25rem"
+          }}
+        >
+          <label
+            htmlFor="establishment-selector"
+            style={{
+              display: "block",
+              fontSize: "0.8rem",
+              fontWeight: 700,
+              color: "#166534",
+              marginBottom: "0.35rem"
+            }}
+          >
+            Select Taxpayer Establishment for Issuance:
+          </label>
+          <select
+            id="establishment-selector"
+            value={unit.id}
+            onChange={(e) => handleSelectUnit(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "0.5rem 0.75rem",
+              borderRadius: "6px",
+              border: "1px solid #86efac",
+              fontSize: "0.88rem",
+              fontWeight: 600,
+              backgroundColor: "#ffffff",
+              color: "#0f172a"
+            }}
+          >
+            {allUnits.map((u) => {
+              const assessed = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+              return (
+                <option key={u.id} value={u.id}>
+                  PDN: {u.demandUnit.permanentDemandNo} &bull; {u.legalName} &bull;{" "}
+                  {u.statutoryRule.category} (Assessed: PKR {assessed.toLocaleString()})
+                </option>
+              );
+            })}
+          </select>
+        </div>
+
         {/* Fixed Read-Only Entity Information (Section 1.6: no dropdowns allowed) */}
         <div
           style={{

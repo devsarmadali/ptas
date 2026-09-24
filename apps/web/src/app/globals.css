@@ -246,6 +246,100 @@ textarea {
   margin: 0.25rem 0 0;
 }
 
+/* Decoupled Operational Desks & Standalone Portals Navigation */
+.decoupled-desks-bar {
+  background: #ffffff;
+  border-bottom: 2px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  margin-bottom: 1.25rem;
+}
+
+.decoupled-desks-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0.6rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.decoupled-desks-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.decoupled-badge {
+  background: #0d3822;
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+}
+
+.decoupled-subtitle {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.decoupled-desks-links {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.decoupled-desk-link,
+.decoupled-desk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #1e293b;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.decoupled-desk-link:hover,
+.decoupled-desk-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.decoupled-desk-link.highlight {
+  background: #0d3822;
+  color: #ffffff;
+  border-color: #0d3822;
+}
+
+.decoupled-desk-link.highlight:hover {
+  background: #166534;
+  border-color: #166534;
+}
+
+.decoupled-desk-btn.active {
+  background: #0d3822;
+  color: #ffffff;
+  border-color: #0d3822;
+}
+
+.desk-ext {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
 /* Unified Route Hubs Navigation (Tier 1) */
 .route-hubs-bar {
   display: grid;

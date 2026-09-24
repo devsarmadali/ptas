@@ -18,6 +18,7 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
   const resolvedParams = use(params);
   const unitId = resolvedParams.unitId;
 
+  const [allUnits, setAllUnits] = useState<StoredUnit[]>([]);
   const [unit, setUnit] = useState<StoredUnit | null>(null);
   const [challans, setChallans] = useState<Pft2ChallanRecord[]>([]);
   const [receipts, setReceipts] = useState<StatutoryReceiptRecord[]>([]);
@@ -25,7 +26,20 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
 
   useEffect(() => {
     const state = loadPilotState();
-    const found = state.units.find((u) => u.id === unitId);
+    const available = state.units && state.units.length > 0 ? state.units : [];
+    setAllUnits(available);
+
+    const found =
+      available.find(
+        (u) =>
+          u.id === unitId ||
+          u.demandUnit?.permanentDemandNo === unitId ||
+          u.provincialUin === unitId ||
+          (unitId && u.legalName.toLowerCase().includes(unitId.toLowerCase()))
+      ) ??
+      available[0] ??
+      null;
+
     if (found) {
       setUnit(found);
       const unitChallans = (state.pft2Challans ?? []).filter((c) => c.unitId === found.id);
@@ -35,6 +49,21 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
     }
     setIsLoaded(true);
   }, [unitId]);
+
+  const handleSelectUnit = (newUnitId: string) => {
+    const state = loadPilotState();
+    const selected = allUnits.find((u) => u.id === newUnitId);
+    if (selected) {
+      setUnit(selected);
+      const unitChallans = (state.pft2Challans ?? []).filter((c) => c.unitId === selected.id);
+      const unitReceipts = (state.statutoryReceipts ?? []).filter((r) => r.unitId === selected.id);
+      setChallans(unitChallans);
+      setReceipts(unitReceipts);
+      if (typeof window !== "undefined") {
+        window.history.replaceState(null, "", `/units/${selected.id}/details`);
+      }
+    }
+  };
 
   if (!isLoaded) {
     return (
@@ -57,19 +86,19 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
           textAlign: "center"
         }}
       >
-        <h2 style={{ color: "#991b1b", margin: "0 0 0.5rem" }}>Unit Not Found or Unauthorized</h2>
+        <h2 style={{ color: "#991b1b", margin: "0 0 0.5rem" }}>
+          No Registered Taxpayer Units Found
+        </h2>
         <p style={{ color: "#475569" }}>
-          Unit identifier <code>{unitId}</code> does not exist or you do not have authorized
-          jurisdiction to view this taxpayer record.
+          Please initialize pilot data from the main PTAS dashboard to view unit dossiers.
         </p>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => window.close()}
-          style={{ marginTop: "1rem" }}
+        <a
+          href="/"
+          className="btn-primary"
+          style={{ display: "inline-block", marginTop: "1rem", textDecoration: "none" }}
         >
-          Close Tab
-        </button>
+          Return to Dashboard
+        </a>
       </div>
     );
   }
@@ -78,7 +107,143 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
   const assessedTax = unit.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
 
   return (
-    <div style={{ maxWidth: "68rem", margin: "2rem auto", padding: "1.5rem" }}>
+    <div style={{ maxWidth: "72rem", margin: "1.5rem auto", padding: "1rem" }}>
+      {/* Top Decoupled Navigation Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "1rem",
+          background: "#ffffff",
+          padding: "0.75rem 1.25rem",
+          borderRadius: "8px",
+          border: "1px solid #e2e8f0",
+          boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+          flexWrap: "wrap",
+          gap: "0.5rem"
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span style={{ fontSize: "1.2rem" }}>🏛️</span>
+          <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#0d3822" }}>
+            PTAS Punjab &bull; Unit Dossier Archive
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+          <a
+            href="/"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#0d3822",
+              color: "#ffffff",
+              textDecoration: "none"
+            }}
+          >
+            ← Main Dashboard
+          </a>
+          <a
+            href={`/documents/pf2/new?unit=${unit.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#047857",
+              color: "#ffffff",
+              textDecoration: "none"
+            }}
+          >
+            💳 Issue Form PFT-2 ↗
+          </a>
+          <a
+            href={`/verify?ref=${unit.provincialUin}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#f1f5f9",
+              color: "#1e293b",
+              border: "1px solid #cbd5e1",
+              textDecoration: "none"
+            }}
+          >
+            🔍 Citizen Verify ↗
+          </a>
+          <a
+            href="/admin/user-management"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#f1f5f9",
+              color: "#1e293b",
+              border: "1px solid #cbd5e1",
+              textDecoration: "none"
+            }}
+          >
+            👥 User Management ↗
+          </a>
+        </div>
+      </div>
+
+      {/* Taxpayer Establishment Selector */}
+      <div
+        style={{
+          background: "#f0fdf4",
+          border: "1px solid #bbf7d0",
+          borderRadius: "8px",
+          padding: "0.75rem 1rem",
+          marginBottom: "1rem"
+        }}
+      >
+        <label
+          htmlFor="dossier-unit-selector"
+          style={{
+            display: "block",
+            fontSize: "0.8rem",
+            fontWeight: 700,
+            color: "#166534",
+            marginBottom: "0.35rem"
+          }}
+        >
+          Select Taxpayer Establishment Dossier:
+        </label>
+        <select
+          id="dossier-unit-selector"
+          value={unit.id}
+          onChange={(e) => handleSelectUnit(e.target.value)}
+          style={{
+            width: "100%",
+            padding: "0.5rem 0.75rem",
+            borderRadius: "6px",
+            border: "1px solid #86efac",
+            fontSize: "0.88rem",
+            fontWeight: 600,
+            backgroundColor: "#ffffff",
+            color: "#0f172a"
+          }}
+        >
+          {allUnits.map((u) => (
+            <option key={u.id} value={u.id}>
+              PDN: {u.demandUnit.permanentDemandNo} &bull; {u.legalName} &bull;{" "}
+              {u.statutoryRule.category}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* Top Header */}
       <div
         style={{

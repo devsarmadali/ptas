@@ -571,6 +571,20 @@ export default function HomePage({
       setDiscUnitId(firstId);
       setRefUnitId(firstId);
     }
+    // Check URL search parameters on mount for decoupled tab links
+    if (typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search);
+      const urlTab = sp.get("tab") as TabId | null;
+      const urlRoute = sp.get("route") as RouteHubId | null;
+      if (urlTab && TAB_TO_HUB[urlTab]) {
+        setActiveTabState(urlTab);
+        setActiveRouteHub(TAB_TO_HUB[urlTab]);
+      } else if (urlRoute && HUB_DEFAULT_TABS[urlRoute]) {
+        setActiveRouteHub(urlRoute);
+        setActiveTabState(HUB_DEFAULT_TABS[urlRoute]);
+      }
+    }
+
     setIsLoaded(true);
 
     // Subscribe to real Supabase Auth session updates
@@ -3397,6 +3411,108 @@ export default function HomePage({
               title="Sign out of current officer session"
             >
               🚪 Sign Out
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      {/* Decoupled Operational Desks & Standalone Portals Navigation */}
+      <nav
+        className="decoupled-desks-bar"
+        aria-label="Decoupled Government Desks and Standalone Portals"
+      >
+        <div className="decoupled-desks-inner">
+          <div className="decoupled-desks-label">
+            <span className="decoupled-badge">DECOUPLED DESKS</span>
+            <span className="decoupled-subtitle">Dedicated Standalone Portals</span>
+          </div>
+          <div className="decoupled-desks-links">
+            <a
+              href="/documents/pf2/new"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="decoupled-desk-link highlight"
+              title="Issue Form PFT-2 Challan in a dedicated new tab"
+            >
+              <span className="desk-icon">💳</span>
+              <span className="desk-name">Issue Form PFT-2</span>
+              <span className="desk-ext">↗</span>
+            </a>
+
+            <a
+              href="/verify"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="decoupled-desk-link"
+              title="Open Citizen Document Verification Portal in a new tab"
+            >
+              <span className="desk-icon">🔍</span>
+              <span className="desk-name">Citizen Verification</span>
+              <span className="desk-ext">↗</span>
+            </a>
+
+            <a
+              href="/admin/user-management"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="decoupled-desk-link"
+              title="Open User Management & Jurisdiction Desk in a new tab"
+            >
+              <span className="desk-icon">👥</span>
+              <span className="desk-name">User Management</span>
+              <span className="desk-ext">↗</span>
+            </a>
+
+            <a
+              href="/intelligence/statutory-category-yield"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="decoupled-desk-link"
+              title="Open Statutory Category & Slab Yield Desk in a new tab"
+            >
+              <span className="desk-icon">📊</span>
+              <span className="desk-name">Category Yield</span>
+              <span className="desk-ext">↗</span>
+            </a>
+
+            <button
+              type="button"
+              onClick={() => switchTab("EPAY")}
+              className={`decoupled-desk-btn ${activeTab === "EPAY" ? "active" : ""}`}
+              title="Switch to ePay Punjab Gateway & Reconciliation Desk"
+            >
+              <span className="desk-icon">🔄</span>
+              <span className="desk-name">ePay Punjab</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => switchTab("PUBLIC_PORTAL")}
+              className={`decoupled-desk-btn ${activeTab === "PUBLIC_PORTAL" ? "active" : ""}`}
+              title="Switch to Public Facilitation & Self-Assessment Desk"
+            >
+              <span className="desk-icon">🌐</span>
+              <span className="desk-name">Public Facilitation</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => switchTab("PFT2")}
+              className={`decoupled-desk-btn ${activeTab === "PFT2" ? "active" : ""}`}
+              title="Switch to Form PFT-2 Revenue Challans Register"
+            >
+              <span className="desk-icon">📑</span>
+              <span className="desk-name">Revenue Challans</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => switchTab("LEDGER")}
+              className={`decoupled-desk-btn ${activeTab === "LEDGER" ? "active" : ""}`}
+              title="Switch to Demand & Payment Ledger Desk"
+            >
+              <span className="desk-icon">📒</span>
+              <span className="desk-name">Demand Ledger</span>
             </button>
           </div>
         </div>
@@ -6411,6 +6527,24 @@ export default function HomePage({
                 className="panel-actions"
                 style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
               >
+                <a
+                  href="/documents/pf2/new"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary"
+                  style={{
+                    backgroundColor: "#065f46",
+                    borderColor: "#047857",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    fontWeight: 700,
+                    textDecoration: "none"
+                  }}
+                  title="Open Form PFT-2 Challan Issuance Desk in a dedicated new tab"
+                >
+                  💳 Issue PFT-2 (New Tab ↗)
+                </a>
                 <button
                   type="button"
                   className="btn-primary"
@@ -6423,9 +6557,9 @@ export default function HomePage({
                     fontWeight: 700
                   }}
                   onClick={() => handleOpenIssuePft2Modal()}
-                  title="Issue new Form P.F.T-2 Challan with custom scope, due date, or partial amount"
+                  title="Issue new Form P.F.T-2 Challan with custom scope, due date, or partial amount in quick modal"
                 >
-                  ➕ Issue Form PFT-2 Challan
+                  ➕ Quick Issue Modal
                 </button>
                 <button
                   type="button"
