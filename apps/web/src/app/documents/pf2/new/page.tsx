@@ -464,7 +464,7 @@ function DocumentIssuanceContent() {
             style={{
               fontSize: "0.8rem",
               fontWeight: 600,
-              padding: "0.3rem 0.65rem",
+              padding: "0.35rem 0.75rem",
               borderRadius: "4px",
               background: "#0d3822",
               color: "#ffffff",
@@ -474,13 +474,11 @@ function DocumentIssuanceContent() {
             ← Main Dashboard
           </a>
           <a
-            href="/verify"
-            target="_blank"
-            rel="noopener noreferrer"
+            href={`/units/${unit.provincialUin}/details`}
             style={{
               fontSize: "0.8rem",
               fontWeight: 600,
-              padding: "0.3rem 0.65rem",
+              padding: "0.35rem 0.75rem",
               borderRadius: "4px",
               background: "#f1f5f9",
               color: "#1e293b",
@@ -488,41 +486,7 @@ function DocumentIssuanceContent() {
               textDecoration: "none"
             }}
           >
-            🔍 Citizen Verify ↗
-          </a>
-          <a
-            href="/admin/user-management"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              fontSize: "0.8rem",
-              fontWeight: 600,
-              padding: "0.3rem 0.65rem",
-              borderRadius: "4px",
-              background: "#f1f5f9",
-              color: "#1e293b",
-              border: "1px solid #cbd5e1",
-              textDecoration: "none"
-            }}
-          >
-            👥 User Management ↗
-          </a>
-          <a
-            href="/intelligence/statutory-category-yield"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              fontSize: "0.8rem",
-              fontWeight: 600,
-              padding: "0.3rem 0.65rem",
-              borderRadius: "4px",
-              background: "#f1f5f9",
-              color: "#1e293b",
-              border: "1px solid #cbd5e1",
-              textDecoration: "none"
-            }}
-          >
-            📊 Category Yield ↗
+            📋 View Assessee Dossier
           </a>
         </div>
       </div>
