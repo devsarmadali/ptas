@@ -211,6 +211,17 @@ export default function HomePage({
     switchTab(tab);
   };
 
+  // Standardized Statutory Taxpayer PIN Helper (Privacy & Security Standard: never expose entity names in URLs)
+  const getUnitPin = (unitIdentifier: string): string => {
+    const u = units.find(
+      (x) =>
+        x.id === unitIdentifier ||
+        x.provincialUin === unitIdentifier ||
+        x.demandUnit?.permanentDemandNo === unitIdentifier
+    );
+    return u?.provincialUin || unitIdentifier;
+  };
+
   // Selected Unit for Ledger & Form PFT-2 inspection
   const [selectedUnitId, setSelectedUnitId] = useState<string>("");
 
@@ -3084,13 +3095,14 @@ export default function HomePage({
             id: "view-details",
             label: "View Unit Dossier",
             icon: "📋",
-            onClick: () => window.open(`/units/${targetUnit.id}/details`, "_blank")
+            onClick: () => window.open(`/units/${targetUnit.provincialUin}/details`, "_blank")
           },
           {
             id: "issue-pft2",
             label: "Issue Form PFT-2 (New Tab)",
             icon: "💳",
-            onClick: () => window.open(`/documents/pf2/new?unit=${targetUnit.id}`, "_blank")
+            onClick: () =>
+              window.open(`/documents/pf2/new?pin=${targetUnit.provincialUin}`, "_blank")
           },
           {
             id: "view-pft1",
@@ -5105,7 +5117,8 @@ export default function HomePage({
                                   id: "view-dossier",
                                   label: "View Unit Dossier (New Tab)",
                                   icon: "📋",
-                                  onClick: () => window.open(`/units/${u.id}/details`, "_blank")
+                                  onClick: () =>
+                                    window.open(`/units/${u.provincialUin}/details`, "_blank")
                                 },
                                 {
                                   id: "inspect-ledger",
@@ -5497,7 +5510,10 @@ export default function HomePage({
                                   label: "View Unit Dossier (New Tab)",
                                   icon: "📋",
                                   onClick: () =>
-                                    window.open(`/units/${appeal.unitId}/details`, "_blank")
+                                    window.open(
+                                      `/units/${getUnitPin(appeal.unitId)}/details`,
+                                      "_blank"
+                                    )
                                 },
                                 {
                                   id: "inspect-ledger",
@@ -5776,7 +5792,8 @@ export default function HomePage({
                                 id: "view-dossier",
                                 label: "View Unit Dossier (New Tab)",
                                 icon: "📋",
-                                onClick: () => window.open(`/units/${u.id}/details`, "_blank")
+                                onClick: () =>
+                                  window.open(`/units/${u.provincialUin}/details`, "_blank")
                               },
                               {
                                 id: "inspect-ledger",
@@ -6059,7 +6076,10 @@ export default function HomePage({
                                     label: "View Unit Dossier (New Tab)",
                                     icon: "📋",
                                     onClick: () =>
-                                      window.open(`/units/${disc.unitId}/details`, "_blank")
+                                      window.open(
+                                        `/units/${getUnitPin(disc.unitId)}/details`,
+                                        "_blank"
+                                      )
                                   },
                                   {
                                     id: "inspect-ledger",
@@ -6298,7 +6318,10 @@ export default function HomePage({
                                     label: "View Unit Dossier (New Tab)",
                                     icon: "📋",
                                     onClick: () =>
-                                      window.open(`/units/${ref.unitId}/details`, "_blank")
+                                      window.open(
+                                        `/units/${getUnitPin(ref.unitId)}/details`,
+                                        "_blank"
+                                      )
                                   },
                                   {
                                     id: "inspect-ledger",
@@ -7027,7 +7050,10 @@ export default function HomePage({
                                   label: "View Unit Dossier",
                                   icon: "📋",
                                   onClick: () =>
-                                    window.open(`/units/${challan.unitId}/details`, "_blank")
+                                    window.open(
+                                      `/units/${getUnitPin(challan.unitId)}/details`,
+                                      "_blank"
+                                    )
                                 },
                                 {
                                   id: "receive-pft2",
@@ -7567,7 +7593,10 @@ export default function HomePage({
                                       label: "View Assessee Dossier",
                                       icon: "📋",
                                       onClick: () =>
-                                        window.open(`/units/${rec.unitId}/details`, "_blank")
+                                        window.open(
+                                          `/units/${getUnitPin(rec.unitId)}/details`,
+                                          "_blank"
+                                        )
                                     }
                                   ]
                                 : [])
@@ -9917,7 +9946,7 @@ export default function HomePage({
                               </td>
                               <td style={{ padding: "0.6rem", textAlign: "center" }}>
                                 <a
-                                  href={`/units/${u.id}/details`}
+                                  href={`/units/${u.provincialUin}/details`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   style={{

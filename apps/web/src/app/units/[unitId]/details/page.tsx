@@ -32,9 +32,9 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
     const found =
       available.find(
         (u) =>
-          u.id === unitId ||
-          u.demandUnit?.permanentDemandNo === unitId ||
           u.provincialUin === unitId ||
+          u.demandUnit?.permanentDemandNo === unitId ||
+          u.id === unitId ||
           (unitId && u.legalName.toLowerCase().includes(unitId.toLowerCase()))
       ) ??
       available[0] ??
@@ -46,13 +46,20 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
       const unitReceipts = (state.statutoryReceipts ?? []).filter((r) => r.unitId === found.id);
       setChallans(unitChallans);
       setReceipts(unitReceipts);
+      // Automatically sanitize and standardize URL using the statutory PIN
+      if (typeof window !== "undefined" && unitId !== found.provincialUin) {
+        window.history.replaceState(null, "", `/units/${found.provincialUin}/details`);
+      }
     }
     setIsLoaded(true);
   }, [unitId]);
 
-  const handleSelectUnit = (newUnitId: string) => {
+  const handleSelectUnit = (newPin: string) => {
     const state = loadPilotState();
-    const selected = allUnits.find((u) => u.id === newUnitId);
+    const selected = allUnits.find(
+      (u) =>
+        u.provincialUin === newPin || u.id === newPin || u.demandUnit?.permanentDemandNo === newPin
+    );
     if (selected) {
       setUnit(selected);
       const unitChallans = (state.pft2Challans ?? []).filter((c) => c.unitId === selected.id);
@@ -60,7 +67,7 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
       setChallans(unitChallans);
       setReceipts(unitReceipts);
       if (typeof window !== "undefined") {
-        window.history.replaceState(null, "", `/units/${selected.id}/details`);
+        window.history.replaceState(null, "", `/units/${selected.provincialUin}/details`);
       }
     }
   };
@@ -146,7 +153,7 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
             ← Main Dashboard
           </a>
           <a
-            href={`/documents/pf2/new?unit=${unit.id}`}
+            href={`/documents/pf2/new?pin=${unit.provincialUin}`}
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -222,7 +229,7 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
         </label>
         <select
           id="dossier-unit-selector"
-          value={unit.id}
+          value={unit.provincialUin}
           onChange={(e) => handleSelectUnit(e.target.value)}
           style={{
             width: "100%",
@@ -236,8 +243,8 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
           }}
         >
           {allUnits.map((u) => (
-            <option key={u.id} value={u.id}>
-              PDN: {u.demandUnit.permanentDemandNo} &bull; {u.legalName} &bull;{" "}
+            <option key={u.id} value={u.provincialUin}>
+              PIN: {u.provincialUin} &bull; PDN: {u.demandUnit.permanentDemandNo} &bull;{" "}
               {u.statutoryRule.category}
             </option>
           ))}

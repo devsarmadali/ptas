@@ -18,7 +18,8 @@ import { downloadDocumentPdf } from "../../../../lib/pdf-export";
 
 function DocumentIssuanceContent() {
   const searchParams = useSearchParams();
-  const unitParam = searchParams.get("unit") || "";
+  const unitParam =
+    searchParams.get("pin") || searchParams.get("pdn") || searchParams.get("unit") || "";
 
   const [allUnits, setAllUnits] = useState<StoredUnit[]>([]);
   const [unit, setUnit] = useState<StoredUnit | null>(null);
@@ -50,9 +51,9 @@ function DocumentIssuanceContent() {
     const found =
       available.find(
         (u) =>
-          u.id === unitParam ||
-          u.demandUnit?.permanentDemandNo === unitParam ||
           u.provincialUin === unitParam ||
+          u.demandUnit?.permanentDemandNo === unitParam ||
+          u.id === unitParam ||
           (unitParam && u.legalName.toLowerCase().includes(unitParam.toLowerCase()))
       ) ??
       // Default to a unit with pending demand or first available unit
@@ -71,12 +72,22 @@ function DocumentIssuanceContent() {
       setUnit(found);
       const assessed = found.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
       setPartialAmount(Math.round(assessed / 2));
+      // Standardize the URL on the statutory PIN (never entity names)
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("unit");
+        url.searchParams.set("pin", found.provincialUin);
+        window.history.replaceState(null, "", url.toString());
+      }
     }
     setIsLoaded(true);
   }, [unitParam]);
 
-  const handleSelectUnit = (newUnitId: string) => {
-    const selected = allUnits.find((u) => u.id === newUnitId);
+  const handleSelectUnit = (newPin: string) => {
+    const selected = allUnits.find(
+      (u) =>
+        u.provincialUin === newPin || u.id === newPin || u.demandUnit?.permanentDemandNo === newPin
+    );
     if (selected) {
       setUnit(selected);
       const assessed = selected.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
@@ -85,7 +96,8 @@ function DocumentIssuanceContent() {
       setErrorMessage("");
       if (typeof window !== "undefined") {
         const url = new URL(window.location.href);
-        url.searchParams.set("unit", selected.id);
+        url.searchParams.delete("unit");
+        url.searchParams.set("pin", selected.provincialUin);
         window.history.replaceState(null, "", url.toString());
       }
     }
@@ -564,7 +576,7 @@ function DocumentIssuanceContent() {
           </label>
           <select
             id="establishment-selector"
-            value={unit.id}
+            value={unit.provincialUin}
             onChange={(e) => handleSelectUnit(e.target.value)}
             style={{
               width: "100%",
@@ -580,8 +592,8 @@ function DocumentIssuanceContent() {
             {allUnits.map((u) => {
               const assessed = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
               return (
-                <option key={u.id} value={u.id}>
-                  PDN: {u.demandUnit.permanentDemandNo} &bull; {u.legalName} &bull;{" "}
+                <option key={u.id} value={u.provincialUin}>
+                  PIN: {u.provincialUin} &bull; PDN: {u.demandUnit.permanentDemandNo} &bull;{" "}
                   {u.statutoryRule.category} (Assessed: PKR {assessed.toLocaleString()})
                 </option>
               );
