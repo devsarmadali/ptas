@@ -56,7 +56,8 @@ test("verifies statutory sub-class and tertiary slabs in Form P.F.T-1 and Form P
     })
   ).toBeVisible({ timeout: 20000 });
 
-  // Open Form P.F.T-1 via the first unit row action menu in Form PFT-3 register
+  // Open Form P.F.T-1 via the Form PFT-3 Register where approved assessees reside
+  await page.getByRole("tab", { name: /Form P\.F\.T-3 Assessment Register/i }).click();
   await page.locator(".action-menu-trigger").first().click();
   await page.getByRole("menuitem", { name: /View Form P\.F\.T-1/i }).click();
   await expect(page.getByText(/FORM P\.F\.T-1/i).first()).toBeVisible();
@@ -96,7 +97,6 @@ test("verifies RowActionMenu popover interactions in Compliance & Recovery Hub",
   await expect(page.getByRole("menuitem", { name: /Issue Show Cause Notice/i })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: /Impose Statutory Penalty/i })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: /Certify Arrears/i })).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: /Form PFT-2 Challan/i })).toBeVisible();
 
   // Open Show Cause modal
   await page.getByRole("menuitem", { name: /Issue Show Cause Notice/i }).click();

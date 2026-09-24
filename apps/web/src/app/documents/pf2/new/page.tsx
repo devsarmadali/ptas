@@ -27,9 +27,7 @@ function DocumentIssuanceContent() {
 
   // Form Controls
   const [demandScope, setDemandScope] = useState<"CURRENT" | "ARREAR" | "COMBINED">("CURRENT");
-  const [formType, setFormType] = useState<
-    "STANDARD" | "NOTICE_CUM_CHALLAN" | "ARREARS_DEMAND" | "REVISED_ASSESSMENT"
-  >("STANDARD");
+  const formType = "STANDARD";
   const [paymentScope, setPaymentScope] = useState<"FULL" | "PARTIAL">("FULL");
   const [partialAmount, setPartialAmount] = useState<number>(0);
 
@@ -46,7 +44,9 @@ function DocumentIssuanceContent() {
 
   useEffect(() => {
     const state = loadPilotState();
-    const available = state.units && state.units.length > 0 ? state.units : [];
+    const available = (state.units && state.units.length > 0 ? state.units : []).filter(
+      (u) => u.assessments[0]?.status === "APPROVED"
+    );
     setAllUnits(available);
 
     const found =
@@ -238,11 +238,7 @@ function DocumentIssuanceContent() {
     }
   };
 
-  // Derive active challan metadata (issued or live preview)
-  const activeChallanNumber =
-    issuedChallan?.challanNumber ??
-    `PFT2-VHR-2026-${String((loadPilotState().pft2Challans?.length ?? 0) + 1).padStart(5, "0")}`;
-
+  // Derive active challan notice metadata (issued or live preview)
   const activeNoticeNumber =
     issuedChallan?.noticeNumber ??
     generatePft2NoticeNumber({
@@ -458,133 +454,224 @@ function DocumentIssuanceContent() {
           </div>
         </div>
 
-        {/* Collapsible Issuance Options */}
+        {/* Streamlined Issuance Controls (Form Type removed, Radio check buttons for Scope) */}
         {showConfigPanel && !issuedChallan && (
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
-              gap: "0.75rem",
-              paddingTop: "0.75rem",
-              borderTop: "1px solid #f1f5f9",
-              fontSize: "0.82rem"
+              display: "flex",
+              flexDirection: "column",
+              gap: "1rem",
+              paddingTop: "0.85rem",
+              borderTop: "1px solid #e2e8f0",
+              fontSize: "0.85rem"
             }}
           >
+            {/* Challan Scope Radio Group */}
             <div>
-              <label
+              <span
                 style={{
                   display: "block",
-                  fontWeight: 600,
-                  color: "#475569",
-                  marginBottom: "0.2rem"
+                  fontWeight: 700,
+                  color: "#1e293b",
+                  marginBottom: "0.35rem"
                 }}
               >
                 Challan Scope:
-              </label>
-              <select
-                className="form-control"
-                style={{ fontSize: "0.8rem", padding: "0.35rem 0.5rem" }}
-                value={demandScope}
-                onChange={(e) => {
-                  setDemandScope(e.target.value as "CURRENT" | "ARREAR" | "COMBINED");
-                  setErrorMessage("");
-                }}
+              </span>
+              <div
+                style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", alignItems: "center" }}
               >
-                <option value="CURRENT">Current Year Demand</option>
-                <option value="ARREAR">Arrear Challan</option>
-                <option value="COMBINED">Combined Current + Arrear</option>
-              </select>
+                <label
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                    color: demandScope === "CURRENT" ? "#065f46" : "#475569"
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="pf2DemandScopeRadio"
+                    value="CURRENT"
+                    checked={demandScope === "CURRENT"}
+                    onChange={() => {
+                      setDemandScope("CURRENT");
+                      setErrorMessage("");
+                    }}
+                  />
+                  <span>01 - Current Year Demand</span>
+                </label>
+
+                <label
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                    color: demandScope === "ARREAR" ? "#065f46" : "#475569"
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="pf2DemandScopeRadio"
+                    value="ARREAR"
+                    checked={demandScope === "ARREAR"}
+                    onChange={() => {
+                      setDemandScope("ARREAR");
+                      setErrorMessage("");
+                    }}
+                  />
+                  <span>02 - Arrears Demand</span>
+                </label>
+
+                <label
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                    color: demandScope === "COMBINED" ? "#065f46" : "#475569"
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="pf2DemandScopeRadio"
+                    value="COMBINED"
+                    checked={demandScope === "COMBINED"}
+                    onChange={() => {
+                      setDemandScope("COMBINED");
+                      setErrorMessage("");
+                    }}
+                  />
+                  <span>03 - Combined (Current + Arrear)</span>
+                </label>
+              </div>
             </div>
 
-            <div>
-              <label
-                style={{
-                  display: "block",
-                  fontWeight: 600,
-                  color: "#475569",
-                  marginBottom: "0.2rem"
-                }}
-              >
-                Form Type:
-              </label>
-              <select
-                className="form-control"
-                style={{ fontSize: "0.8rem", padding: "0.35rem 0.5rem" }}
-                value={formType}
-                onChange={(e) =>
-                  setFormType(
-                    e.target.value as
-                      "STANDARD" | "NOTICE_CUM_CHALLAN" | "ARREARS_DEMAND" | "REVISED_ASSESSMENT"
-                  )
-                }
-              >
-                <option value="STANDARD">01 - Standard Payment Challan</option>
-                <option value="NOTICE_CUM_CHALLAN">02 - Notice-cum-Challan</option>
-                <option value="ARREARS_DEMAND">03 - Arrears Demand Challan</option>
-                <option value="REVISED_ASSESSMENT">04 - Revised Assessment Challan</option>
-              </select>
-            </div>
+            {/* Payment Scope Radio Group & Due Date Grid */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))",
+                gap: "1rem",
+                alignItems: "flex-start"
+              }}
+            >
+              <div>
+                <span
+                  style={{
+                    display: "block",
+                    fontWeight: 700,
+                    color: "#1e293b",
+                    marginBottom: "0.35rem"
+                  }}
+                >
+                  Payment Scope:
+                </span>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "1.25rem",
+                    flexWrap: "wrap",
+                    alignItems: "center"
+                  }}
+                >
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      color: paymentScope === "FULL" ? "#065f46" : "#475569"
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="pf2PaymentScopeRadio"
+                      value="FULL"
+                      checked={paymentScope === "FULL"}
+                      onChange={() => setPaymentScope("FULL")}
+                    />
+                    <span>Full Assessed (PKR {validation.calculatedAmount.toLocaleString()})</span>
+                  </label>
 
-            <div>
-              <label
-                style={{
-                  display: "block",
-                  fontWeight: 600,
-                  color: "#475569",
-                  marginBottom: "0.2rem"
-                }}
-              >
-                Due Date (Calendar Month):
-              </label>
-              <input
-                type="date"
-                className="form-control"
-                style={{ fontSize: "0.8rem", padding: "0.35rem 0.5rem" }}
-                value={dueDate}
-                min={minDueDate}
-                max={maxDueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-              />
-            </div>
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      color: paymentScope === "PARTIAL" ? "#065f46" : "#475569"
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="pf2PaymentScopeRadio"
+                      value="PARTIAL"
+                      checked={paymentScope === "PARTIAL"}
+                      onChange={() => setPaymentScope("PARTIAL")}
+                    />
+                    <span>Partial / Installment</span>
+                  </label>
+                </div>
+              </div>
 
-            <div>
-              <label
-                style={{
-                  display: "block",
-                  fontWeight: 600,
-                  color: "#475569",
-                  marginBottom: "0.2rem"
-                }}
-              >
-                Payment Scope:
-              </label>
-              <select
-                className="form-control"
-                style={{ fontSize: "0.8rem", padding: "0.35rem 0.5rem" }}
-                value={paymentScope}
-                onChange={(e) => setPaymentScope(e.target.value as "FULL" | "PARTIAL")}
-              >
-                <option value="FULL">Full Assessed Amount</option>
-                <option value="PARTIAL">Partial Payment</option>
-              </select>
+              <div>
+                <label
+                  htmlFor="pf2-due-date-input"
+                  style={{
+                    display: "block",
+                    fontWeight: 700,
+                    color: "#1e293b",
+                    marginBottom: "0.35rem"
+                  }}
+                >
+                  Statutory Due Date (Calendar Month):
+                </label>
+                <input
+                  id="pf2-due-date-input"
+                  type="date"
+                  className="form-control"
+                  style={{ fontSize: "0.85rem", padding: "0.35rem 0.6rem", maxWidth: "16rem" }}
+                  value={dueDate}
+                  min={minDueDate}
+                  max={maxDueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                />
+              </div>
             </div>
 
             {paymentScope === "PARTIAL" && (
-              <div>
+              <div
+                style={{
+                  background: "#fffbeb",
+                  border: "1px solid #fde68a",
+                  borderRadius: "6px",
+                  padding: "0.6rem 0.85rem",
+                  maxWidth: "24rem"
+                }}
+              >
                 <label
                   style={{
                     display: "block",
-                    fontWeight: 600,
-                    color: "#475569",
-                    marginBottom: "0.2rem"
+                    fontWeight: 700,
+                    color: "#92400e",
+                    marginBottom: "0.25rem",
+                    fontSize: "0.8rem"
                   }}
                 >
-                  Partial Amount (PKR):
+                  Enter Partial Amount to Demand (PKR):
                 </label>
                 <input
                   type="number"
                   className="form-control"
-                  style={{ fontSize: "0.8rem", padding: "0.35rem 0.5rem" }}
+                  style={{ fontSize: "0.85rem", padding: "0.35rem 0.6rem" }}
                   value={partialAmount}
                   min={100}
                   max={validation.calculatedAmount}

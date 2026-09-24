@@ -84,22 +84,6 @@ export default function StatutoryCategoryYieldPage() {
             ← Main Dashboard
           </a>
           <a
-            href="/documents/pf2/new"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              fontSize: "0.8rem",
-              fontWeight: 600,
-              padding: "0.3rem 0.65rem",
-              borderRadius: "4px",
-              background: "#047857",
-              color: "#ffffff",
-              textDecoration: "none"
-            }}
-          >
-            💳 Issue Form PFT-2 ↗
-          </a>
-          <a
             href="/verify"
             target="_blank"
             rel="noopener noreferrer"

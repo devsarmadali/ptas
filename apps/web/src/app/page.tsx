@@ -100,7 +100,7 @@ import {
 } from "../lib/mis-analytics";
 import { StatutoryQrCode } from "../components/StatutoryQrCode";
 import { QrScannerModal } from "../components/QrScannerModal";
-import { RowActionMenu } from "../components/RowActionMenu";
+import { RowActionMenu, type RowAction } from "../components/RowActionMenu";
 import { downloadDocumentPdf } from "../lib/pdf-export";
 import {
   exportPft2ChallansCsv,
@@ -317,6 +317,7 @@ export default function HomePage({
 
   // Modal States
   const [showAddUnitModal, setShowAddUnitModal] = useState(false);
+  const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [returnTargetUnitId, setReturnTargetUnitId] = useState("");
@@ -978,6 +979,41 @@ export default function HomePage({
       return;
     }
 
+    if (editingUnitId) {
+      const target = units.find((u) => u.id === editingUnitId);
+      if (!target) return;
+      const updatedUnit: StoredUnit = {
+        ...target,
+        legalName: newLegalName.trim(),
+        tradeName: newTradeName.trim() || undefined,
+        identifierValue: newIdentifierValue.trim(),
+        address: newAddress.trim(),
+        statutoryRuleId: rule.rule_id,
+        statutoryRule: rule,
+        categoryCode: rule.category_code,
+        subclassificationCode: rule.subclassification_code,
+        statutoryTertiaryCode: rule.statutory_tertiary_code
+      };
+      const auditItem: PilotAuditItem = {
+        id: `audit-${Date.now()}`,
+        eventType: "TAX_UNIT_REGISTERED",
+        actorName: officer.name,
+        actorRole: officer.role,
+        target: updatedUnit.legalName,
+        timestamp: new Date().toISOString(),
+        correlationId: `corr-edit-${Date.now()}`,
+        details: `Updated draft survey data for unit under Class ${rule.rule_code} (${rule.category})`
+      };
+      syncState(
+        units.map((u) => (u.id === editingUnitId ? updatedUnit : u)),
+        [auditItem, ...auditLogs]
+      );
+      setEditingUnitId(null);
+      setShowAddUnitModal(false);
+      showToast("success", `Draft survey data for '${updatedUnit.legalName}' updated.`);
+      return;
+    }
+
     const unitId = `unit-${Date.now()}`;
     const demandUnitId = `du-${Date.now()}`;
     const correlationId = `corr-unit-${Date.now()}`;
@@ -1385,7 +1421,7 @@ export default function HomePage({
   }, [units]);
 
   const formPFT3Rows = useMemo(() => {
-    return generateFormPFT3Rows(units);
+    return generateFormPFT3Rows(units.filter((u) => u.assessments[0]?.status === "APPROVED"));
   }, [units]);
 
   const filteredFormPFT3Rows = useMemo(() => {
@@ -3086,21 +3122,135 @@ export default function HomePage({
     }
   };
 
-  const renderUnitActionsDropdown = (targetUnit: StoredUnit) => {
+  const handleOpenEditSurveyUnit = (u: StoredUnit) => {
+    setNewLegalName(u.legalName);
+    setNewTradeName(u.tradeName || "");
+    setNewIdentifierValue(u.identifierValue);
+    setNewAddress(u.address);
+    setNewCategoryCode(u.statutoryRule.category_code);
+    setNewSubclassCode(u.statutoryRule.subclassification_code || "");
+    setNewTertiaryCode(u.statutoryRule.statutory_tertiary_code || "");
+    setNewRuleId(u.statutoryRule.rule_id);
+    setEditingUnitId(u.id);
+    setShowAddUnitModal(true);
+  };
+
+  const handleCloseDraftSurvey = (unitId: string) => {
+    const target = units.find((u) => u.id === unitId);
+    showToast("info", `Draft survey record for '${target?.legalName ?? unitId}' closed.`);
+  };
+
+  // Row actions for Survey Register (UNITS tab) - strictly draft mode only
+  const renderSurveyUnitActions = (targetUnit: StoredUnit) => {
+    const latestAsm = targetUnit.assessments[0];
+    const status = latestAsm?.status ?? "DRAFT";
+    const isEto = officer.role === "ETO" || officer.role === "DIRECTOR";
+
+    const actions: RowAction[] = [
+      {
+        id: "view-details",
+        label: "View Unit Dossier",
+        icon: "📋",
+        onClick: () => window.open(`/units/${targetUnit.provincialUin}/details`, "_blank")
+      }
+    ];
+
+    if (status === "DRAFT") {
+      actions.push({
+        id: "submit-survey",
+        label: "Submit Survey to ETO",
+        icon: "📤",
+        onClick: () => handleSubmitAssessment(targetUnit.id)
+      });
+      actions.push({
+        id: "edit-survey",
+        label: "Edit Survey Data",
+        icon: "✏️",
+        onClick: () => handleOpenEditSurveyUnit(targetUnit)
+      });
+      actions.push({
+        id: "close-draft",
+        label: "Close / Archive Draft",
+        icon: "✖️",
+        onClick: () => handleCloseDraftSurvey(targetUnit.id)
+      });
+    } else if (status === "SUBMITTED") {
+      if (isEto) {
+        actions.push({
+          id: "approve-survey",
+          label: "Statutory Approval (ETO)",
+          icon: "✓",
+          onClick: () => handleApproveAssessment(targetUnit.id)
+        });
+        actions.push({
+          id: "return-survey",
+          label: "Return for Correction",
+          icon: "↩️",
+          onClick: () => handleOpenReturnModal(targetUnit.id)
+        });
+      }
+      actions.push({
+        id: "edit-survey",
+        label: "Edit Survey Data",
+        icon: "✏️",
+        onClick: () => handleOpenEditSurveyUnit(targetUnit)
+      });
+      actions.push({
+        id: "close-draft",
+        label: "Close Draft",
+        icon: "✖️",
+        onClick: () => handleCloseDraftSurvey(targetUnit.id)
+      });
+    } else if (status === "RETURNED") {
+      actions.push({
+        id: "resubmit-survey",
+        label: "Resubmit to ETO",
+        icon: "📤",
+        onClick: () => handleSubmitAssessment(targetUnit.id)
+      });
+      actions.push({
+        id: "edit-survey",
+        label: "Edit Survey Data",
+        icon: "✏️",
+        onClick: () => handleOpenEditSurveyUnit(targetUnit)
+      });
+      actions.push({
+        id: "close-draft",
+        label: "Close Draft",
+        icon: "✖️",
+        onClick: () => handleCloseDraftSurvey(targetUnit.id)
+      });
+    } else if (status === "APPROVED") {
+      actions.push({
+        id: "view-in-pft3",
+        label: "Enrolled in Form PFT-3 Register ↗",
+        icon: "📑",
+        onClick: () => {
+          setPft3SearchQuery(targetUnit.demandUnit.permanentDemandNo);
+          switchTab("REGISTER_PFT3");
+        }
+      });
+    }
+
+    return <RowActionMenu align="right" actions={actions} />;
+  };
+
+  // Row actions strictly for Form P.F.T-3 Assessment & Demand Register (REGISTER_PFT3)
+  const renderPft3UnitActions = (targetUnit: StoredUnit) => {
     return (
       <RowActionMenu
         align="right"
         actions={[
           {
-            id: "view-details",
-            label: "View Unit Dossier",
-            icon: "📋",
-            onClick: () => window.open(`/units/${targetUnit.provincialUin}/details`, "_blank")
+            id: "issue-pft2-modal",
+            label: "Issue Form PFT-2 (Challan)",
+            icon: "💳",
+            onClick: () => handleOpenIssuePft2Modal(targetUnit.id)
           },
           {
-            id: "issue-pft2",
-            label: "Issue Form PFT-2 (New Tab)",
-            icon: "💳",
+            id: "issue-pft2-tab",
+            label: "Issue Form PFT-2 (New Tab ↗)",
+            icon: "🖨️",
             onClick: () =>
               window.open(`/documents/pf2/new?pin=${targetUnit.provincialUin}`, "_blank")
           },
@@ -3112,6 +3262,12 @@ export default function HomePage({
               setSelectedUnitId(targetUnit.id);
               setShowPft1NoticeModal(true);
             }
+          },
+          {
+            id: "view-details",
+            label: "View Assessee Dossier",
+            icon: "📋",
+            onClick: () => window.open(`/units/${targetUnit.provincialUin}/details`, "_blank")
           },
           {
             id: "receive-payment",
@@ -3148,17 +3304,6 @@ export default function HomePage({
               setSelectedUnitId(targetUnit.id);
               setPaymentUnitId(targetUnit.id);
               switchTab("LEDGER");
-            }
-          },
-          {
-            id: "show-cause-notice",
-            label: "Issue Show Cause Notice (Penalty)",
-            icon: "📜",
-            onClick: () => {
-              setSelectedUnitId(targetUnit.id);
-              setNoticeTargetUnitId(targetUnit.id);
-              switchTab("DEFAULTERS");
-              setShowNoticeModal(true);
             }
           },
           {
@@ -3439,18 +3584,6 @@ export default function HomePage({
             <span className="decoupled-subtitle">Dedicated Standalone Portals</span>
           </div>
           <div className="decoupled-desks-links">
-            <a
-              href="/documents/pf2/new"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="decoupled-desk-link highlight"
-              title="Issue Form PFT-2 Challan in a dedicated new tab"
-            >
-              <span className="desk-icon">💳</span>
-              <span className="desk-name">Issue Form PFT-2</span>
-              <span className="desk-ext">↗</span>
-            </a>
-
             <a
               href="/verify"
               target="_blank"
@@ -3952,7 +4085,7 @@ export default function HomePage({
                             PKR {balance.toLocaleString()}
                           </strong>
                         </td>
-                        <td>{renderUnitActionsDropdown(u)}</td>
+                        <td>{renderSurveyUnitActions(u)}</td>
                       </tr>
                     );
                   })}
@@ -4728,7 +4861,7 @@ export default function HomePage({
                             const targetUnit = units.find(
                               (u) => u.demandUnit.permanentDemandNo === row.permanentDemandNo
                             );
-                            return targetUnit ? renderUnitActionsDropdown(targetUnit) : null;
+                            return targetUnit ? renderPft3UnitActions(targetUnit) : null;
                           })()}
                         </td>
                       </tr>
@@ -5103,15 +5236,6 @@ export default function HomePage({
                                       ? "Certify Arrears under Punjab Land Revenue Act (Rule 12)"
                                       : "ETO Role Required to Certify Recovery",
                                   onClick: () => handleOpenRecoveryModal(u.id)
-                                },
-                                {
-                                  id: "issue-pft2",
-                                  label: "Issue / View Form PFT-2 Challan",
-                                  icon: "💳",
-                                  onClick: () => {
-                                    setSelectedUnitId(u.id);
-                                    setShowIssuePft2Modal(true);
-                                  }
                                 },
                                 {
                                   id: "view-dossier",
@@ -6550,40 +6674,6 @@ export default function HomePage({
                 className="panel-actions"
                 style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
               >
-                <a
-                  href="/documents/pf2/new"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-primary"
-                  style={{
-                    backgroundColor: "#065f46",
-                    borderColor: "#047857",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.4rem",
-                    fontWeight: 700,
-                    textDecoration: "none"
-                  }}
-                  title="Open Form PFT-2 Challan Issuance Desk in a dedicated new tab"
-                >
-                  💳 Issue PFT-2 (New Tab ↗)
-                </a>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  style={{
-                    backgroundColor: "#0d3822",
-                    borderColor: "#062415",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.4rem",
-                    fontWeight: 700
-                  }}
-                  onClick={() => handleOpenIssuePft2Modal()}
-                  title="Issue new Form P.F.T-2 Challan with custom scope, due date, or partial amount in quick modal"
-                >
-                  ➕ Quick Issue Modal
-                </button>
                 <button
                   type="button"
                   className="btn-secondary"
@@ -11833,9 +11923,16 @@ export default function HomePage({
         >
           <div className="modal-card">
             <div className="modal-header">
-              <h3 id="add-unit-title">Register New Tax Unit — Circle-Vehari</h3>
+              <h3 id="add-unit-title">
+                {editingUnitId
+                  ? "Edit Survey Unit Data — Circle-Vehari"
+                  : "Register New Tax Unit — Circle-Vehari"}
+              </h3>
               <button
-                onClick={() => setShowAddUnitModal(false)}
+                onClick={() => {
+                  setShowAddUnitModal(false);
+                  setEditingUnitId(null);
+                }}
                 className="modal-close-btn"
                 aria-label="Close modal"
               >
@@ -12093,13 +12190,16 @@ export default function HomePage({
               <div className="modal-footer">
                 <button
                   type="button"
-                  onClick={() => setShowAddUnitModal(false)}
+                  onClick={() => {
+                    setShowAddUnitModal(false);
+                    setEditingUnitId(null);
+                  }}
                   className="btn-secondary"
                 >
                   Cancel
                 </button>
                 <button type="submit" className="btn-primary">
-                  Save &amp; Create Draft Assessment
+                  {editingUnitId ? "✓ Save Survey Changes" : "Save & Create Draft Assessment"}
                 </button>
               </div>
             </form>
@@ -19193,15 +19293,17 @@ export default function HomePage({
                         }}
                         required
                       >
-                        {units.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.demandUnit.permanentDemandNo} &bull; {u.legalName} (
-                            {u.statutoryRule.subclassification_code ??
-                              u.statutoryRule.category_code}{" "}
-                            - PKR{" "}
-                            {u.assessmentVersions[0]?.snapshot.taxAmount?.toLocaleString() ?? 0})
-                          </option>
-                        ))}
+                        {units
+                          .filter((u) => u.assessments[0]?.status === "APPROVED")
+                          .map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.demandUnit.permanentDemandNo} &bull; {u.legalName} (
+                              {u.statutoryRule.subclassification_code ??
+                                u.statutoryRule.category_code}{" "}
+                              - PKR{" "}
+                              {u.assessmentVersions[0]?.snapshot.taxAmount?.toLocaleString() ?? 0})
+                            </option>
+                          ))}
                       </select>
                     </div>
 
@@ -19237,83 +19339,111 @@ export default function HomePage({
                       </div>
                     )}
 
-                    {/* Form Controls Grid */}
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "1rem",
-                        marginBottom: "1rem"
-                      }}
-                    >
-                      <div className="form-group">
-                        <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>Issue Date:</label>
-                        <input
-                          type="date"
-                          className="form-control"
-                          value={issuePft2IssueDate}
-                          onChange={(e) => setIssuePft2IssueDate(e.target.value)}
-                          required
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>Due Date:</label>
-                        <input
-                          type="date"
-                          className="form-control"
-                          value={issuePft2DueDate}
-                          onChange={(e) => setIssuePft2DueDate(e.target.value)}
-                          required
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                          Form Type Selection:
-                        </label>
-                        <select
-                          className="form-control"
-                          value={issuePft2FormType}
-                          onChange={(e) =>
-                            setIssuePft2FormType(
-                              e.target.value as
-                                | "STANDARD"
-                                | "NOTICE_CUM_CHALLAN"
-                                | "ARREARS_DEMAND"
-                                | "REVISED_ASSESSMENT"
-                            )
-                          }
-                          required
+                    {/* Streamlined Scope Radio Check Buttons & Due Date */}
+                    <div style={{ marginBottom: "1rem" }}>
+                      <label
+                        style={{
+                          fontWeight: 700,
+                          fontSize: "0.85rem",
+                          color: "#0d3822",
+                          display: "block",
+                          marginBottom: "0.35rem"
+                        }}
+                      >
+                        Challan Scope:
+                      </label>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "1.25rem",
+                          flexWrap: "wrap",
+                          alignItems: "center"
+                        }}
+                      >
+                        <label
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.4rem",
+                            cursor: "pointer",
+                            fontSize: "0.85rem",
+                            fontWeight: 600,
+                            color: issuePft2DemandScope === "CURRENT" ? "#065f46" : "#475569"
+                          }}
                         >
-                          <option value="STANDARD">01 - Standard Payment Challan</option>
-                          <option value="NOTICE_CUM_CHALLAN">02 - Notice-cum-Challan</option>
-                          <option value="ARREARS_DEMAND">03 - Arrears Recovery Demand</option>
-                          <option value="REVISED_ASSESSMENT">
-                            04 - Revised Assessment / Relief
-                          </option>
-                        </select>
-                      </div>
-
-                      <div className="form-group">
-                        <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                          Demand Scope Code:
+                          <input
+                            type="radio"
+                            name="issuePft2DemandScopeRadio"
+                            value="CURRENT"
+                            checked={issuePft2DemandScope === "CURRENT"}
+                            onChange={() => setIssuePft2DemandScope("CURRENT")}
+                          />
+                          <span>01 - Current Year Demand</span>
                         </label>
-                        <select
-                          className="form-control"
-                          value={issuePft2DemandScope}
-                          onChange={(e) =>
-                            setIssuePft2DemandScope(
-                              e.target.value as "CURRENT" | "ARREAR" | "COMBINED"
-                            )
-                          }
-                          required
+
+                        <label
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.4rem",
+                            cursor: "pointer",
+                            fontSize: "0.85rem",
+                            fontWeight: 600,
+                            color: issuePft2DemandScope === "ARREAR" ? "#065f46" : "#475569"
+                          }}
                         >
-                          <option value="CURRENT">01 - Current Year Demand</option>
-                          <option value="ARREAR">02 - Arrears / Prior Outstanding</option>
-                          <option value="COMBINED">03 - Combined Current &amp; Arrears</option>
-                        </select>
+                          <input
+                            type="radio"
+                            name="issuePft2DemandScopeRadio"
+                            value="ARREAR"
+                            checked={issuePft2DemandScope === "ARREAR"}
+                            onChange={() => setIssuePft2DemandScope("ARREAR")}
+                          />
+                          <span>02 - Arrears Demand</span>
+                        </label>
+
+                        <label
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.4rem",
+                            cursor: "pointer",
+                            fontSize: "0.85rem",
+                            fontWeight: 600,
+                            color: issuePft2DemandScope === "COMBINED" ? "#065f46" : "#475569"
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name="issuePft2DemandScopeRadio"
+                            value="COMBINED"
+                            checked={issuePft2DemandScope === "COMBINED"}
+                            onChange={() => setIssuePft2DemandScope("COMBINED")}
+                          />
+                          <span>03 - Combined Current &amp; Arrears</span>
+                        </label>
                       </div>
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: "1rem" }}>
+                      <label
+                        style={{
+                          fontWeight: 700,
+                          fontSize: "0.85rem",
+                          display: "block",
+                          marginBottom: "0.35rem"
+                        }}
+                      >
+                        Statutory Due Date (Calendar Month):
+                      </label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        style={{ maxWidth: "16rem" }}
+                        value={issuePft2DueDate}
+                        onChange={(e) => setIssuePft2DueDate(e.target.value)}
+                        required
+                      />
                     </div>
 
                     {/* Payment Mode Selection */}
@@ -19532,6 +19662,22 @@ export default function HomePage({
                         gap: "0.5rem"
                       }}
                     >
+                      {selectedUnit && (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => {
+                            setShowIssuePft2Modal(false);
+                            window.open(
+                              `/documents/pf2/new?pin=${selectedUnit.provincialUin}`,
+                              "_blank"
+                            );
+                          }}
+                          title="Open dedicated standalone issuance desk for this unit in a new tab"
+                        >
+                          ↗ Dedicated Tab
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="btn-secondary"

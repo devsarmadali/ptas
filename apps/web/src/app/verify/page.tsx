@@ -76,19 +76,6 @@ export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: str
         </a>
         <div style={{ display: "flex", gap: "0.75rem" }}>
           <a
-            href="/documents/pf2/new"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              fontSize: "0.82rem",
-              color: "#047857",
-              textDecoration: "none",
-              fontWeight: 600
-            }}
-          >
-            💳 Issue Form PFT-2 ↗
-          </a>
-          <a
             href="/admin/user-management"
             target="_blank"
             rel="noopener noreferrer"

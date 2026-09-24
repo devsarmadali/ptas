@@ -152,20 +152,6 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
           >
             ← Main Dashboard
           </a>
-          <a
-            href={`/documents/pf2/new?pin=${unit.provincialUin}`}
-            style={{
-              fontSize: "0.8rem",
-              fontWeight: 600,
-              padding: "0.35rem 0.75rem",
-              borderRadius: "4px",
-              background: "#047857",
-              color: "#ffffff",
-              textDecoration: "none"
-            }}
-          >
-            💳 Issue Form PFT-2
-          </a>
         </div>
       </div>
 
