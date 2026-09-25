@@ -3168,7 +3168,8 @@ export default function HomePage({
         id: "view-details",
         label: "View Unit Dossier",
         icon: "📋",
-        onClick: () => window.open(`/units/${targetUnit.provincialUin}/details`, "_blank")
+        href: `/units/${targetUnit.provincialUin}/details`,
+        target: "_blank"
       }
     ];
 
@@ -3227,6 +3228,20 @@ export default function HomePage({
       });
     } else if (status === "APPROVED") {
       actions.push({
+        id: "view-pft1",
+        label: "View Form P.F.T-1 (Assessment Notice ↗)",
+        icon: "📄",
+        href: `/documents/pft1?pin=${targetUnit.provincialUin}`,
+        target: "_blank"
+      });
+      actions.push({
+        id: "issue-pft2-tab",
+        label: "Issue Form PFT-2 (New Tab ↗)",
+        icon: "🖨️",
+        href: `/documents/pf2/new?pin=${targetUnit.provincialUin}`,
+        target: "_blank"
+      });
+      actions.push({
         id: "view-in-pft3",
         label: "Enrolled in Form PFT-3 Register ↗",
         icon: "📑",
@@ -3250,20 +3265,22 @@ export default function HomePage({
             id: "issue-pft2-tab",
             label: "Issue Form PFT-2 (New Tab ↗)",
             icon: "🖨️",
-            onClick: () =>
-              window.open(`/documents/pf2/new?pin=${targetUnit.provincialUin}`, "_blank")
+            href: `/documents/pf2/new?pin=${targetUnit.provincialUin}`,
+            target: "_blank"
           },
           {
             id: "view-pft1",
             label: "View Form P.F.T-1 (Assessment Notice ↗)",
             icon: "📄",
-            onClick: () => window.open(`/documents/pft1?pin=${targetUnit.provincialUin}`, "_blank")
+            href: `/documents/pft1?pin=${targetUnit.provincialUin}`,
+            target: "_blank"
           },
           {
             id: "view-details",
             label: "View Assessee Dossier",
             icon: "📋",
-            onClick: () => window.open(`/units/${targetUnit.provincialUin}/details`, "_blank")
+            href: `/units/${targetUnit.provincialUin}/details`,
+            target: "_blank"
           },
           {
             id: "payment-details",
@@ -3279,11 +3296,8 @@ export default function HomePage({
             id: "land-revenue-recovery",
             label: "Issue Land Revenue Arrears Certificate (Rule 12 ↗)",
             icon: "🏛️",
-            onClick: () =>
-              window.open(
-                `/documents/land-revenue-recovery?pin=${targetUnit.provincialUin}`,
-                "_blank"
-              )
+            href: `/documents/land-revenue-recovery?pin=${targetUnit.provincialUin}`,
+            target: "_blank"
           },
           {
             id: "tax-clearance",
@@ -5159,6 +5173,27 @@ export default function HomePage({
                               align="right"
                               actions={[
                                 {
+                                  id: "view-details",
+                                  label: "View Assessee Dossier",
+                                  icon: "📋",
+                                  href: `/units/${u.provincialUin}/details`,
+                                  target: "_blank"
+                                },
+                                {
+                                  id: "issue-pft2-tab",
+                                  label: "Issue Form PFT-2 (New Tab ↗)",
+                                  icon: "🖨️",
+                                  href: `/documents/pf2/new?pin=${u.provincialUin}`,
+                                  target: "_blank"
+                                },
+                                {
+                                  id: "view-pft1",
+                                  label: "View Form P.F.T-1 (Assessment Notice ↗)",
+                                  icon: "📄",
+                                  href: `/documents/pft1?pin=${u.provincialUin}`,
+                                  target: "_blank"
+                                },
+                                {
                                   id: "show-cause",
                                   label: "Issue Show Cause Notice (Rule 10)",
                                   icon: "📜",
@@ -5575,11 +5610,22 @@ export default function HomePage({
                                   id: "view-dossier",
                                   label: "View Unit Dossier (New Tab)",
                                   icon: "📋",
-                                  onClick: () =>
-                                    window.open(
-                                      `/units/${getUnitPin(appeal.unitId)}/details`,
-                                      "_blank"
-                                    )
+                                  href: `/units/${getUnitPin(appeal.unitId)}/details`,
+                                  target: "_blank"
+                                },
+                                {
+                                  id: "view-pft1",
+                                  label: "View Form P.F.T-1 (Assessment Notice ↗)",
+                                  icon: "📄",
+                                  href: `/documents/pft1?pin=${getUnitPin(appeal.unitId)}`,
+                                  target: "_blank"
+                                },
+                                {
+                                  id: "issue-pft2-tab",
+                                  label: "Issue Form PFT-2 (New Tab ↗)",
+                                  icon: "🖨️",
+                                  href: `/documents/pf2/new?pin=${getUnitPin(appeal.unitId)}`,
+                                  target: "_blank"
                                 },
                                 {
                                   id: "payment-details",
@@ -5858,8 +5904,22 @@ export default function HomePage({
                                 id: "view-dossier",
                                 label: "View Unit Dossier (New Tab)",
                                 icon: "📋",
-                                onClick: () =>
-                                  window.open(`/units/${u.provincialUin}/details`, "_blank")
+                                href: `/units/${u.provincialUin}/details`,
+                                target: "_blank"
+                              },
+                              {
+                                id: "view-pft1",
+                                label: "View Form P.F.T-1 (Assessment Notice ↗)",
+                                icon: "📄",
+                                href: `/documents/pft1?pin=${u.provincialUin}`,
+                                target: "_blank"
+                              },
+                              {
+                                id: "issue-pft2-tab",
+                                label: "Issue Form PFT-2 (New Tab ↗)",
+                                icon: "🖨️",
+                                href: `/documents/pf2/new?pin=${u.provincialUin}`,
+                                target: "_blank"
                               },
                               {
                                 id: "payment-details",
@@ -6141,11 +6201,22 @@ export default function HomePage({
                                     id: "view-dossier",
                                     label: "View Unit Dossier (New Tab)",
                                     icon: "📋",
-                                    onClick: () =>
-                                      window.open(
-                                        `/units/${getUnitPin(disc.unitId)}/details`,
-                                        "_blank"
-                                      )
+                                    href: `/units/${getUnitPin(disc.unitId)}/details`,
+                                    target: "_blank"
+                                  },
+                                  {
+                                    id: "view-pft1",
+                                    label: "View Form P.F.T-1 (Assessment Notice ↗)",
+                                    icon: "📄",
+                                    href: `/documents/pft1?pin=${getUnitPin(disc.unitId)}`,
+                                    target: "_blank"
+                                  },
+                                  {
+                                    id: "issue-pft2-tab",
+                                    label: "Issue Form PFT-2 (New Tab ↗)",
+                                    icon: "🖨️",
+                                    href: `/documents/pf2/new?pin=${getUnitPin(disc.unitId)}`,
+                                    target: "_blank"
                                   },
                                   {
                                     id: "payment-details",
@@ -6383,11 +6454,22 @@ export default function HomePage({
                                     id: "view-dossier",
                                     label: "View Unit Dossier (New Tab)",
                                     icon: "📋",
-                                    onClick: () =>
-                                      window.open(
-                                        `/units/${getUnitPin(ref.unitId)}/details`,
-                                        "_blank"
-                                      )
+                                    href: `/units/${getUnitPin(ref.unitId)}/details`,
+                                    target: "_blank"
+                                  },
+                                  {
+                                    id: "view-pft1",
+                                    label: "View Form P.F.T-1 (Assessment Notice ↗)",
+                                    icon: "📄",
+                                    href: `/documents/pft1?pin=${getUnitPin(ref.unitId)}`,
+                                    target: "_blank"
+                                  },
+                                  {
+                                    id: "issue-pft2-tab",
+                                    label: "Issue Form PFT-2 (New Tab ↗)",
+                                    icon: "🖨️",
+                                    href: `/documents/pf2/new?pin=${getUnitPin(ref.unitId)}`,
+                                    target: "_blank"
                                   },
                                   {
                                     id: "payment-details",
@@ -7048,6 +7130,48 @@ export default function HomePage({
                                   isReceived
                                     ? [
                                         {
+                                          id: "view-details",
+                                          label: "View Assessee Dossier",
+                                          icon: "📋",
+                                          href: `/units/${getUnitPin(challan.unitId)}/details`,
+                                          target: "_blank"
+                                        },
+                                        {
+                                          id: "view-pft1",
+                                          label: "View Form P.F.T-1 (Assessment Notice ↗)",
+                                          icon: "📄",
+                                          href: `/documents/pft1?pin=${getUnitPin(challan.unitId)}`,
+                                          target: "_blank"
+                                        },
+                                        {
+                                          id: "issue-pft2-desk",
+                                          label: "Open Form PFT-2 Issuance Desk ↗",
+                                          icon: "🖨️",
+                                          href: `/documents/pf2/new?pin=${getUnitPin(challan.unitId)}`,
+                                          target: "_blank"
+                                        },
+                                        {
+                                          id: "view-details",
+                                          label: "View Assessee Dossier",
+                                          icon: "📋",
+                                          href: `/units/${getUnitPin(challan.unitId)}/details`,
+                                          target: "_blank"
+                                        },
+                                        {
+                                          id: "view-pft1",
+                                          label: "View Form P.F.T-1 (Assessment Notice ↗)",
+                                          icon: "📄",
+                                          href: `/documents/pft1?pin=${getUnitPin(challan.unitId)}`,
+                                          target: "_blank"
+                                        },
+                                        {
+                                          id: "issue-pft2-desk",
+                                          label: "Open Form PFT-2 Issuance Desk ↗",
+                                          icon: "🖨️",
+                                          href: `/documents/pf2/new?pin=${getUnitPin(challan.unitId)}`,
+                                          target: "_blank"
+                                        },
+                                        {
                                           id: "download-pdf",
                                           label: "Download Challan PDF",
                                           icon: "📥",
@@ -7611,11 +7735,22 @@ export default function HomePage({
                                       id: "view-dossier",
                                       label: "View Assessee Dossier",
                                       icon: "📋",
-                                      onClick: () =>
-                                        window.open(
-                                          `/units/${getUnitPin(rec.unitId)}/details`,
-                                          "_blank"
-                                        )
+                                      href: `/units/${getUnitPin(rec.unitId)}/details`,
+                                      target: "_blank"
+                                    },
+                                    {
+                                      id: "view-pft1",
+                                      label: "View Form P.F.T-1 (Assessment Notice ↗)",
+                                      icon: "📄",
+                                      href: `/documents/pft1?pin=${getUnitPin(rec.unitId)}`,
+                                      target: "_blank"
+                                    },
+                                    {
+                                      id: "issue-pft2-tab",
+                                      label: "Issue Form PFT-2 (New Tab ↗)",
+                                      icon: "🖨️",
+                                      href: `/documents/pf2/new?pin=${getUnitPin(rec.unitId)}`,
+                                      target: "_blank"
                                     }
                                   ]
                                 : [])
@@ -11202,30 +11337,32 @@ export default function HomePage({
                     >
                       💳 Pay Now via ePay Punjab / 1Link
                     </button>
-                    <button
-                      type="button"
+                    <a
+                      href={`/documents/pft1?pin=${portalSearchResult.unit.provincialUin}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="btn-secondary"
-                      onClick={() => {
-                        window.open(
-                          `/documents/pft1?pin=${portalSearchResult.unit.provincialUin}`,
-                          "_blank"
-                        );
+                      style={{
+                        textDecoration: "none",
+                        display: "inline-flex",
+                        alignItems: "center"
                       }}
                     >
                       📜 View Demand Notice ({portalSearchResult.noticeNumber})
-                    </button>
-                    <button
-                      type="button"
+                    </a>
+                    <a
+                      href={`/documents/pf2/new?pin=${portalSearchResult.unit.provincialUin}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="btn-secondary"
-                      onClick={() => {
-                        window.open(
-                          `/documents/pf2/new?pin=${portalSearchResult.unit.provincialUin}`,
-                          "_blank"
-                        );
+                      style={{
+                        textDecoration: "none",
+                        display: "inline-flex",
+                        alignItems: "center"
                       }}
                     >
                       💳 View Bank Challan ({portalSearchResult.challanNumber})
-                    </button>
+                    </a>
                     {portalSearchResult.isClearanceEligible && (
                       <span
                         className="badge badge-approved"
@@ -18333,20 +18470,21 @@ export default function HomePage({
                       }}
                     >
                       {selectedUnit && (
-                        <button
-                          type="button"
+                        <a
+                          href={`/documents/pf2/new?pin=${selectedUnit.provincialUin}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="btn-secondary"
-                          onClick={() => {
-                            setShowIssuePft2Modal(false);
-                            window.open(
-                              `/documents/pf2/new?pin=${selectedUnit.provincialUin}`,
-                              "_blank"
-                            );
+                          onClick={() => setShowIssuePft2Modal(false)}
+                          style={{
+                            textDecoration: "none",
+                            display: "inline-flex",
+                            alignItems: "center"
                           }}
                           title="Open dedicated standalone issuance desk for this unit in a new tab"
                         >
                           ↗ Dedicated Tab
-                        </button>
+                        </a>
                       )}
                       <button
                         type="button"

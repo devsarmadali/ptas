@@ -152,6 +152,40 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
           >
             ← Main Dashboard
           </a>
+          <a
+            href={`/documents/pft1?pin=${unit.provincialUin}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#f0fdf4",
+              border: "1px solid #86efac",
+              color: "#166534",
+              textDecoration: "none"
+            }}
+          >
+            📄 Form P.F.T-1 Notice ↗
+          </a>
+          <a
+            href={`/documents/pf2/new?pin=${unit.provincialUin}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#f0fdf4",
+              border: "1px solid #86efac",
+              color: "#166534",
+              textDecoration: "none"
+            }}
+          >
+            🖨️ Issue Form PFT-2 ↗
+          </a>
         </div>
       </div>
 
@@ -233,7 +267,39 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
             <strong style={{ fontFamily: "monospace" }}>{unit.provincialUin}</strong>
           </span>
         </div>
-        <div style={{ display: "flex", gap: "0.75rem" }}>
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+          <a
+            href={`/documents/pft1?pin=${unit.provincialUin}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-secondary"
+            style={{
+              backgroundColor: "#ffffff",
+              color: "#0d3822",
+              fontWeight: 700,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center"
+            }}
+          >
+            📄 Form P.F.T-1 ↗
+          </a>
+          <a
+            href={`/documents/pf2/new?pin=${unit.provincialUin}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-secondary"
+            style={{
+              backgroundColor: "#ffffff",
+              color: "#0d3822",
+              fontWeight: 700,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center"
+            }}
+          >
+            🖨️ Form PFT-2 ↗
+          </a>
           <button
             type="button"
             className="btn-secondary"

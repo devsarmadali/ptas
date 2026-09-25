@@ -6,7 +6,9 @@ export interface RowAction {
   readonly id: string;
   readonly label: string;
   readonly icon?: React.ReactNode;
-  readonly onClick: () => void;
+  readonly onClick?: () => void;
+  readonly href?: string;
+  readonly target?: string;
   readonly variant?: "default" | "primary" | "danger" | "success";
   readonly disabled?: boolean;
   readonly title?: string;
@@ -71,6 +73,34 @@ export function RowActionMenu({
   // Single-action exception: render directly if only 1 action
   if (actions.length === 1) {
     const action = actions[0]!;
+    if (action.href) {
+      return (
+        <a
+          href={action.href}
+          target={action.target ?? "_blank"}
+          rel="noopener noreferrer"
+          className={`btn-sm ${
+            action.variant === "primary"
+              ? "btn-primary"
+              : action.variant === "danger"
+                ? "btn-secondary text-danger"
+                : "btn-secondary"
+          }`}
+          style={{
+            textDecoration: "none",
+            display: "inline-flex",
+            alignItems: "center",
+            ...(action.disabled ? { opacity: 0.5, pointerEvents: "none" } : {})
+          }}
+          title={action.title ?? action.label}
+          aria-label={action.label}
+          onClick={action.onClick}
+        >
+          {action.icon && <span style={{ marginRight: "0.3rem" }}>{action.icon}</span>}
+          <span>{action.label}</span>
+        </a>
+      );
+    }
     return (
       <button
         type="button"
@@ -138,59 +168,118 @@ export function RowActionMenu({
           onClick={(e) => e.stopPropagation()}
           role="menu"
         >
-          {actions.map((action) => (
-            <button
-              key={action.id}
-              type="button"
-              disabled={action.disabled}
-              className="row-action-menu-item"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                width: "100%",
-                padding: "0.5rem 0.85rem",
-                fontSize: "0.8rem",
-                color: action.disabled
-                  ? "#94a3b8"
-                  : action.variant === "danger"
-                    ? "#b91c1c"
-                    : action.variant === "primary"
-                      ? "#0d3822"
-                      : action.variant === "success"
-                        ? "#15803d"
-                        : "#1e293b",
-                background: "none",
-                border: "none",
-                textAlign: "left",
-                cursor: action.disabled ? "not-allowed" : "pointer",
-                opacity: action.disabled ? 0.6 : 1,
-                fontWeight: action.variant === "primary" ? 600 : 500,
-                transition: "background-color 0.12s ease"
-              }}
-              onClick={() => {
-                if (action.disabled) return;
-                setIsOpen(false);
-                action.onClick();
-              }}
-              title={action.title}
-              role="menuitem"
-            >
-              {action.icon && (
-                <span
-                  style={{
-                    fontSize: "0.95rem",
-                    width: "1.25rem",
-                    textAlign: "center",
-                    flexShrink: 0
-                  }}
-                >
-                  {action.icon}
-                </span>
-              )}
-              <span style={{ flex: 1, whiteSpace: "nowrap" }}>{action.label}</span>
-            </button>
-          ))}
+          {actions.map((action) =>
+            action.href ? (
+              <a
+                key={action.id}
+                href={action.href}
+                target={action.target ?? "_blank"}
+                rel="noopener noreferrer"
+                className={`row-action-menu-item ${action.variant === "danger" ? "danger" : ""}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  width: "100%",
+                  padding: "0.5rem 0.85rem",
+                  fontSize: "0.8rem",
+                  color: action.disabled
+                    ? "#94a3b8"
+                    : action.variant === "danger"
+                      ? "#b91c1c"
+                      : action.variant === "primary"
+                        ? "#0d3822"
+                        : action.variant === "success"
+                          ? "#15803d"
+                          : "#1e293b",
+                  background: "none",
+                  border: "none",
+                  textAlign: "left",
+                  textDecoration: "none",
+                  cursor: action.disabled ? "not-allowed" : "pointer",
+                  opacity: action.disabled ? 0.6 : 1,
+                  fontWeight: action.variant === "primary" ? 600 : 500,
+                  transition: "background-color 0.12s ease"
+                }}
+                onClick={(e) => {
+                  if (action.disabled) {
+                    e.preventDefault();
+                    return;
+                  }
+                  setTimeout(() => setIsOpen(false), 80);
+                  action.onClick?.();
+                }}
+                title={action.title}
+                role="menuitem"
+              >
+                {action.icon && (
+                  <span
+                    style={{
+                      fontSize: "0.95rem",
+                      width: "1.25rem",
+                      textAlign: "center",
+                      flexShrink: 0
+                    }}
+                  >
+                    {action.icon}
+                  </span>
+                )}
+                <span style={{ flex: 1, whiteSpace: "nowrap" }}>{action.label}</span>
+              </a>
+            ) : (
+              <button
+                key={action.id}
+                type="button"
+                disabled={action.disabled}
+                className={`row-action-menu-item ${action.variant === "danger" ? "danger" : ""}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  width: "100%",
+                  padding: "0.5rem 0.85rem",
+                  fontSize: "0.8rem",
+                  color: action.disabled
+                    ? "#94a3b8"
+                    : action.variant === "danger"
+                      ? "#b91c1c"
+                      : action.variant === "primary"
+                        ? "#0d3822"
+                        : action.variant === "success"
+                          ? "#15803d"
+                          : "#1e293b",
+                  background: "none",
+                  border: "none",
+                  textAlign: "left",
+                  cursor: action.disabled ? "not-allowed" : "pointer",
+                  opacity: action.disabled ? 0.6 : 1,
+                  fontWeight: action.variant === "primary" ? 600 : 500,
+                  transition: "background-color 0.12s ease"
+                }}
+                onClick={() => {
+                  if (action.disabled) return;
+                  setIsOpen(false);
+                  action.onClick?.();
+                }}
+                title={action.title}
+                role="menuitem"
+              >
+                {action.icon && (
+                  <span
+                    style={{
+                      fontSize: "0.95rem",
+                      width: "1.25rem",
+                      textAlign: "center",
+                      flexShrink: 0
+                    }}
+                  >
+                    {action.icon}
+                  </span>
+                )}
+                <span style={{ flex: 1, whiteSpace: "nowrap" }}>{action.label}</span>
+              </button>
+            )
+          )}
         </div>
       )}
     </div>
