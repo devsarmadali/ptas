@@ -4062,7 +4062,7 @@ export default function HomePage({
                                 <span
                                   style={{
                                     fontFamily: "monospace",
-                                    fontSize: "0.78rem",
+                                    fontSize: "0.75rem",
                                     color: "#0f766e",
                                     fontWeight: 600
                                   }}
@@ -4072,18 +4072,18 @@ export default function HomePage({
                               </td>
                               <td style={{ whiteSpace: "nowrap" }}>
                                 {isApproved || u.demandNumber ? (
-                                  <strong>
+                                  <strong style={{ fontSize: "0.78rem" }}>
                                     {u.demandNumber || u.demandUnit.permanentDemandNo}
                                   </strong>
                                 ) : (
                                   <span
                                     style={{
                                       color: "#94a3b8",
-                                      fontSize: "0.75rem",
+                                      fontSize: "0.72rem",
                                       fontStyle: "italic"
                                     }}
                                   >
-                                    — Pending Approval
+                                    — Pending
                                   </span>
                                 )}
                               </td>
@@ -4092,7 +4092,7 @@ export default function HomePage({
                                   <span
                                     style={{
                                       fontFamily: "monospace",
-                                      fontSize: "0.78rem",
+                                      fontSize: "0.75rem",
                                       color: "#1d4ed8",
                                       fontWeight: 600
                                     }}
@@ -4103,96 +4103,76 @@ export default function HomePage({
                                   <span
                                     style={{
                                       color: "#94a3b8",
-                                      fontSize: "0.75rem",
+                                      fontSize: "0.72rem",
                                       fontStyle: "italic"
                                     }}
                                   >
-                                    — Pending Approval
+                                    — Pending
                                   </span>
                                 )}
                               </td>
-                              <td style={{ maxWidth: "13rem" }}>
-                                <strong>{u.legalName}</strong>
+                              <td style={{ maxWidth: "12rem" }}>
+                                <strong style={{ fontSize: "0.78rem" }}>{u.legalName}</strong>
                                 {u.tradeName && u.tradeName !== u.legalName && (
                                   <span
                                     style={{
                                       display: "block",
-                                      fontSize: "0.725rem",
+                                      fontSize: "0.7rem",
                                       color: "#64748b"
                                     }}
                                   >
-                                    {u.tradeName}
+                                    Trade: {u.tradeName}
                                   </span>
                                 )}
                                 {u.locality && (
                                   <span
                                     style={{
                                       display: "inline-block",
-                                      fontSize: "0.68rem",
+                                      fontSize: "0.65rem",
                                       backgroundColor: "#f0fdf4",
                                       color: "#166534",
                                       border: "1px solid #bbf7d0",
-                                      borderRadius: "4px",
-                                      padding: "1px 5px",
-                                      marginTop: "2px"
+                                      borderRadius: "3px",
+                                      padding: "0px 3px",
+                                      marginTop: "1px"
                                     }}
                                   >
                                     📍 {u.locality}
                                   </span>
                                 )}
-                                <span
-                                  style={{
-                                    display: "block",
-                                    fontSize: "0.7rem",
-                                    color: "#94a3b8",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    whiteSpace: "nowrap"
-                                  }}
-                                  title={u.address}
-                                >
-                                  {u.address}
-                                </span>
                               </td>
                               <td style={{ whiteSpace: "nowrap" }}>
-                                <span style={{ fontFamily: "monospace", fontSize: "0.78rem" }}>
-                                  {u.identifierType}: {u.identifierValue}
+                                <span
+                                  style={{
+                                    fontFamily: "monospace",
+                                    fontSize: "0.72rem",
+                                    display: "block"
+                                  }}
+                                >
+                                  {u.identifierValue}
+                                </span>
+                                <span style={{ fontSize: "0.65rem", color: "#64748b" }}>
+                                  {u.identifierType}
                                 </span>
                               </td>
-                              <td style={{ maxWidth: "15rem" }}>
-                                <span className="badge badge-draft" style={{ fontSize: "0.7rem" }}>
+                              <td style={{ maxWidth: "14rem" }}>
+                                <span className="badge badge-draft" style={{ fontSize: "0.68rem" }}>
                                   Class {u.statutoryRule.rule_code}
                                 </span>
                                 <span
                                   style={{
                                     display: "block",
-                                    fontSize: "0.725rem",
+                                    fontSize: "0.7rem",
                                     color: "#475569",
-                                    marginTop: "0.15rem",
+                                    marginTop: "0.1rem",
                                     lineHeight: 1.25
                                   }}
                                 >
                                   {u.statutoryRule.category}
                                 </span>
-                                <span
-                                  style={{
-                                    display: "block",
-                                    fontSize: "0.68rem",
-                                    color: "#64748b",
-                                    marginTop: "0.1rem",
-                                    lineHeight: 1.2
-                                  }}
-                                >
-                                  {u.statutoryRule.statutory_tertiary_classification
-                                    ? `${u.statutoryRule.subclassification_label ?? u.statutoryRule.subcategory} (${u.statutoryRule.statutory_tertiary_classification})`
-                                    : (u.statutoryRule.subclassification_label ??
-                                      (u.statutoryRule.subclassification_code
-                                        ? u.statutoryRule.subcategory
-                                        : "Direct Category Rate"))}
-                                </span>
                               </td>
                               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                                <strong style={{ color: "#0d3822", fontSize: "0.82rem" }}>
+                                <strong style={{ color: "#0d3822", fontSize: "0.8rem" }}>
                                   PKR {u.statutoryRule.annual_rate_pkr.toLocaleString()}
                                 </strong>
                               </td>
@@ -4207,7 +4187,7 @@ export default function HomePage({
                                           ? "returned"
                                           : "draft"
                                   }`}
-                                  style={{ fontSize: "0.72rem" }}
+                                  style={{ fontSize: "0.68rem" }}
                                 >
                                   {rawStatus === "DRAFT" ? "FEEDED" : rawStatus}
                                 </span>
@@ -4216,7 +4196,7 @@ export default function HomePage({
                                 <strong
                                   style={{
                                     color: balance > 0 ? "#b91c1c" : "#15803d",
-                                    fontSize: "0.82rem"
+                                    fontSize: "0.8rem"
                                   }}
                                 >
                                   PKR {balance.toLocaleString()}
@@ -7588,50 +7568,28 @@ export default function HomePage({
                           <strong
                             style={{
                               color: "#065f46",
-                              fontSize: "0.78rem",
+                              fontSize: "0.75rem",
                               fontFamily: "monospace",
-                              letterSpacing: "-0.01em"
+                              display: "block"
                             }}
                           >
-                            {rec.receiptNumber}
+                            {rec.receiptNumber.replace(/^PB\/ET\/VHR\/CIR-1\//, "")}
                           </strong>
-                          {rec.pin && (
-                            <div style={{ marginTop: "0.15rem" }}>
-                              <span
-                                style={{
-                                  display: "inline-block",
-                                  fontSize: "0.68rem",
-                                  fontFamily: "monospace",
-                                  fontWeight: 700,
-                                  background: "#e0f2fe",
-                                  color: "#0369a1",
-                                  padding: "0.05rem 0.35rem",
-                                  borderRadius: "3px"
-                                }}
-                              >
-                                🔐 PIN: {rec.pin}
-                              </span>
-                            </div>
-                          )}
-                          <span
-                            style={{ display: "block", fontSize: "0.725rem", color: "#475569" }}
-                          >
-                            {rec.dateOfReceipt} &bull; {rec.timeOfReceipt}
+                          <span style={{ display: "block", fontSize: "0.68rem", color: "#64748b" }}>
+                            PB/ET/VHR &bull; {rec.dateOfReceipt}
                           </span>
                         </td>
                         <td style={{ whiteSpace: "nowrap" }}>
                           <strong
                             style={{
-                              fontSize: "0.78rem",
+                              fontSize: "0.75rem",
                               fontFamily: "monospace",
-                              letterSpacing: "-0.01em"
+                              display: "block"
                             }}
                           >
-                            {rec.challanNumber}
+                            {rec.challanNumber.replace(/^PB\/ET\/VHR\/CIR-1\//, "")}
                           </strong>
-                          <span
-                            style={{ display: "block", fontSize: "0.725rem", color: "#64748b" }}
-                          >
+                          <span style={{ display: "block", fontSize: "0.68rem", color: "#64748b" }}>
                             PDN: {rec.demandNumber}
                           </span>
                         </td>
@@ -7662,45 +7620,33 @@ export default function HomePage({
                           <span
                             style={{
                               display: "block",
-                              fontSize: "0.725rem",
+                              fontSize: "0.7rem",
                               color: "#475569",
-                              marginTop: "0.15rem",
-                              lineHeight: 1.25
+                              marginTop: "0.1rem",
+                              lineHeight: 1.2
                             }}
                           >
                             {rec.statutoryCategory}
                           </span>
-                          {rec.tertiarySlab && (
-                            <span
-                              style={{
-                                display: "block",
-                                fontSize: "0.68rem",
-                                color: "#64748b",
-                                marginTop: "0.1rem",
-                                lineHeight: 1.2
-                              }}
-                            >
-                              {rec.tertiarySlab}
-                            </span>
-                          )}
                         </td>
                         <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                          <strong style={{ fontSize: "0.95rem", color: "#15803d" }}>
+                          <strong style={{ fontSize: "0.9rem", color: "#15803d" }}>
                             PKR {rec.amountPaidPkr.toLocaleString()}
                           </strong>
-                          <span style={{ display: "block", fontSize: "0.68rem", color: "#166534" }}>
+                          <span style={{ display: "block", fontSize: "0.65rem", color: "#166534" }}>
                             ✓ FULLY CREDITED
                           </span>
                         </td>
-                        <td style={{ maxWidth: "11rem" }}>
-                          <strong style={{ fontSize: "0.78rem" }}>{rec.paymentChannel}</strong>
+                        <td style={{ maxWidth: "10rem" }}>
+                          <strong style={{ fontSize: "0.75rem" }}>
+                            {rec.paymentChannel.replace(/ \(Digital Bank Transfer\)/, "")}
+                          </strong>
                           <span
                             style={{
                               display: "block",
-                              fontSize: "0.7rem",
+                              fontSize: "0.68rem",
                               fontFamily: "monospace",
                               color: "#1e3a8a",
-                              marginTop: "0.1rem",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap"
@@ -7709,13 +7655,6 @@ export default function HomePage({
                           >
                             Ref: {rec.bankScrollRef}
                           </span>
-                          {rec.bankBranch && (
-                            <span
-                              style={{ display: "block", fontSize: "0.68rem", color: "#64748b" }}
-                            >
-                              {rec.bankBranch}
-                            </span>
-                          )}
                         </td>
                         <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
                           {(() => {
@@ -7728,16 +7667,21 @@ export default function HomePage({
                                 className={`badge ${cfg.badgeClass}`}
                                 style={{
                                   fontSize: "0.68rem",
-                                  padding: "0.15rem 0.4rem",
+                                  padding: "0.15rem 0.35rem",
                                   whiteSpace: "nowrap"
                                 }}
+                                title={cfg.label}
                               >
-                                {cfg.label}
+                                {srcKey === "ISSUED_PFT2"
+                                  ? "Form PFT-2"
+                                  : srcKey === "MANUAL"
+                                    ? "Manual"
+                                    : "e-Pay"}
                               </span>
                             );
                           })()}
                         </td>
-                        <td style={{ maxWidth: "10rem" }}>
+                        <td style={{ maxWidth: "9rem", whiteSpace: "nowrap" }}>
                           <span style={{ fontSize: "0.8rem", fontWeight: 600, display: "block" }}>
                             {rec.receivingOfficerName}
                           </span>

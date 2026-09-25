@@ -648,9 +648,9 @@ textarea {
 .gov-table th,
 .data-table th {
   background: #f8fafc;
-  padding: 0.5rem 0.65rem;
+  padding: 0.4rem 0.55rem;
   font-weight: 700;
-  font-size: 0.775rem;
+  font-size: 0.75rem;
   color: #475569;
   border-bottom: 2px solid #cbd5e1;
   white-space: nowrap;
@@ -659,11 +659,11 @@ textarea {
 
 .gov-table td,
 .data-table td {
-  padding: 0.5rem 0.65rem;
+  padding: 0.4rem 0.55rem;
   border-bottom: 1px solid #f1f5f9;
   color: #1e293b;
   vertical-align: middle;
-  font-size: 0.8125rem;
+  font-size: 0.78rem;
 }
 
 .gov-table tr:hover td,
