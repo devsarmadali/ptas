@@ -145,3 +145,35 @@ test("verifies RowActionMenu popover interactions in Compliance & Recovery Hub",
   await page.locator(".action-menu-trigger").first().click();
   await expect(page.getByRole("menuitem", { name: /Clearance/i })).toBeVisible();
 });
+
+test("verifies sign out leads to sign-in page and role pre-filled sign-in works", async ({
+  page
+}) => {
+  await page.goto("/assessment");
+  await expect(
+    page.getByRole("heading", {
+      name: /Government of the Punjab — Professional Tax Administration/i
+    })
+  ).toBeVisible({ timeout: 20000 });
+
+  // Click Sign Out
+  await page.getByRole("button", { name: /Sign Out/i }).click();
+
+  // Expect navigation to /sign-in page
+  await expect(page).toHaveURL(/.*sign-in/);
+  await expect(
+    page.getByRole("heading", { name: /Statutory Role Sign In & Access Control/i })
+  ).toBeVisible();
+
+  // Verify all 3 pre-filled roles exist
+  await expect(page.getByRole("heading", { name: "Muhammad Aslam" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tariq Mahmood" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Shahid Nawaz" })).toBeVisible();
+
+  // Click one-click sign in as ETO
+  await page.getByRole("button", { name: /One-Click Sign In as ETO/i }).click();
+
+  // Expect redirection back to dashboard with ETO session active
+  await expect(page).toHaveURL(/.*assessment/);
+  await expect(page.getByText(/Tariq Mahmood/i).first()).toBeVisible();
+});

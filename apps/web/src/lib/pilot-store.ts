@@ -1441,7 +1441,13 @@ export function loadPilotState(): PilotState {
     }
     const parsed = JSON.parse(raw) as PilotState;
     const matchingOfficer =
-      MOCK_OFFICERS.find((o) => o.id === parsed.currentOfficer?.id) ?? MOCK_OFFICERS[0];
+      MOCK_OFFICERS.find(
+        (o) =>
+          o.id === parsed.currentOfficer?.id ||
+          o.email.toLowerCase() === parsed.currentOfficer?.email?.toLowerCase()
+      ) ??
+      parsed.currentOfficer ??
+      MOCK_OFFICERS[0];
     const rawUnits = parsed.units && parsed.units.length > 0 ? parsed.units : initialUnits;
     const safeUnits: StoredUnit[] = rawUnits.map((u, idx) => ({
       ...u,
@@ -1510,4 +1516,16 @@ export function resetPilotState(): PilotState {
   };
   savePilotState(cleanState);
   return cleanState;
+}
+
+export function setCurrentOfficerInStore(officer: MockOfficer): void {
+  if (typeof window !== "undefined") {
+    try {
+      const state = loadPilotState();
+      state.currentOfficer = officer;
+      savePilotState(state);
+    } catch (e) {
+      console.error("Failed to update current officer in pilot state", e);
+    }
+  }
 }

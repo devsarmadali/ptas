@@ -783,6 +783,7 @@ export default function HomePage({
     };
     syncState(units, [auditItem, ...auditLogs]);
     showToast("info", `Signed out of ${officer.name}'s session.`);
+    router.push(asRoute("/sign-in"));
   };
 
   // All categories and rules
