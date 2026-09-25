@@ -3700,26 +3700,6 @@ export default function HomePage({
                   <span className="subtab-badge">{metrics.pendingApprovals}</span>
                 )}
               </Link>
-              <Link
-                href={asRoute("/documents/pft1")}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="subtab-btn"
-                style={{ textDecoration: "none" }}
-                title="Open Form P.F.T-1 Notice Studio (/documents/pft1)"
-              >
-                📜 Form P.F.T-1 Notices ↗
-              </Link>
-              <Link
-                href={asRoute("/documents/pf2/new")}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="subtab-btn"
-                style={{ textDecoration: "none" }}
-                title="Issue New Form PFT-2 Challan (/documents/pf2/new)"
-              >
-                📄 Issue Form PFT-2 ↗
-              </Link>
             </>
           )}
 
@@ -3822,16 +3802,6 @@ export default function HomePage({
                 style={{ textDecoration: "none" }}
               >
                 💳 ePay Punjab Reconciliation
-              </Link>
-              <Link
-                href={asRoute("/documents/pf2/new")}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="subtab-btn"
-                style={{ textDecoration: "none" }}
-                title="Issue New Form PFT-2 Challan (/documents/pf2/new)"
-              >
-                📄 Issue Form PFT-2 ↗
               </Link>
             </>
           )}
@@ -4058,16 +4028,16 @@ export default function HomePage({
                   <table className="gov-table">
                     <thead>
                       <tr>
-                        <th>Assessment No.</th>
-                        <th>Demand No.</th>
-                        <th>PIN Number</th>
-                        <th>Legal &amp; Trade Name</th>
-                        <th>CNIC / NTN</th>
-                        <th>Second Schedule Classification</th>
-                        <th>Statutory Rate</th>
-                        <th>Assessment Status</th>
-                        <th>Ledger Balance</th>
-                        <th>Actions</th>
+                        <th style={{ whiteSpace: "nowrap" }}>Assessment No.</th>
+                        <th style={{ whiteSpace: "nowrap" }}>Demand No.</th>
+                        <th style={{ whiteSpace: "nowrap" }}>PIN Number</th>
+                        <th style={{ maxWidth: "14rem" }}>Legal &amp; Trade Name</th>
+                        <th style={{ whiteSpace: "nowrap" }}>CNIC / NTN</th>
+                        <th style={{ maxWidth: "16rem" }}>Second Schedule Classification</th>
+                        <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Statutory Rate</th>
+                        <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Status</th>
+                        <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Ledger Balance</th>
+                        <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4723,16 +4693,16 @@ export default function HomePage({
               <table className="gov-table">
                 <thead>
                   <tr>
-                    <th>S.No</th>
-                    <th>Demand Number</th>
-                    <th>PIN Number</th>
-                    <th>Taxpayer Legal Name</th>
-                    <th>Statutory Class</th>
-                    <th>Assessed Tax (PKR)</th>
-                    <th>Paid (PKR)</th>
-                    <th>Balance (PKR)</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th style={{ width: "2.5rem", textAlign: "center" }}>S.No</th>
+                    <th style={{ whiteSpace: "nowrap" }}>Demand No.</th>
+                    <th style={{ whiteSpace: "nowrap" }}>PIN Number</th>
+                    <th style={{ maxWidth: "14rem" }}>Taxpayer Legal Name</th>
+                    <th style={{ maxWidth: "16rem" }}>Statutory Class</th>
+                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Assessed (PKR)</th>
+                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Paid (PKR)</th>
+                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Balance (PKR)</th>
+                    <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Status</th>
+                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -4748,15 +4718,17 @@ export default function HomePage({
                   ) : (
                     filteredFormPFT3Rows.map((row) => (
                       <tr key={row.permanentDemandNo}>
-                        <td>{row.serialNumber}</td>
-                        <td>
+                        <td style={{ textAlign: "center", color: "#64748b" }}>
+                          {row.serialNumber}
+                        </td>
+                        <td style={{ whiteSpace: "nowrap" }}>
                           <strong>{row.permanentDemandNo}</strong>
                         </td>
-                        <td>
+                        <td style={{ whiteSpace: "nowrap" }}>
                           <span
                             style={{
                               fontFamily: "monospace",
-                              fontSize: "0.8rem",
+                              fontSize: "0.78rem",
                               color: "#1d4ed8",
                               fontWeight: 600
                             }}
@@ -4764,7 +4736,7 @@ export default function HomePage({
                             {row.provincialUin}
                           </span>
                         </td>
-                        <td>
+                        <td style={{ maxWidth: "14rem" }}>
                           <strong>{row.legalName}</strong>
                           {row.tradeName && (
                             <span
@@ -4774,7 +4746,7 @@ export default function HomePage({
                             </span>
                           )}
                         </td>
-                        <td>
+                        <td style={{ maxWidth: "16rem" }}>
                           <span className="badge badge-draft" style={{ fontSize: "0.7rem" }}>
                             {row.scheduleEntry}
                           </span>
@@ -4783,21 +4755,22 @@ export default function HomePage({
                               display: "block",
                               fontSize: "0.725rem",
                               color: "#64748b",
-                              marginTop: "0.15rem"
+                              marginTop: "0.15rem",
+                              lineHeight: 1.3
                             }}
                           >
                             {row.categoryName}
                           </span>
                         </td>
-                        <td>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                           <strong>PKR {row.assessedCurrentTax.toLocaleString()}</strong>
                         </td>
-                        <td>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                           <strong style={{ color: "#166534" }}>
                             PKR {row.totalPaid.toLocaleString()}
                           </strong>
                         </td>
-                        <td>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                           <strong
                             style={{
                               color: row.outstandingBalance > 0 ? "#b91c1c" : "#166534"
@@ -4806,7 +4779,7 @@ export default function HomePage({
                             PKR {row.outstandingBalance.toLocaleString()}
                           </strong>
                         </td>
-                        <td>
+                        <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
                           <span
                             className={`badge ${
                               row.assessmentStatus === "APPROVED"
@@ -4819,7 +4792,7 @@ export default function HomePage({
                             {row.assessmentStatus}
                           </span>
                         </td>
-                        <td>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                           {(() => {
                             const targetUnit = units.find(
                               (u) => u.demandUnit.permanentDemandNo === row.permanentDemandNo
@@ -5021,18 +4994,18 @@ export default function HomePage({
             </div>
 
             {/* Defaulters Table */}
-            <div id="defaulters-roster-printable" className="table-responsive">
-              <table className="data-table">
+            <div id="defaulters-roster-printable" className="table-container">
+              <table className="gov-table" style={{ width: "100%" }}>
                 <thead>
                   <tr>
                     <th>Demand No &amp; Assessee</th>
                     <th>Category &amp; Rule</th>
-                    <th>Assessed Tax</th>
-                    <th>Penalty</th>
-                    <th>Total Outstanding</th>
-                    <th>Days Overdue</th>
-                    <th>Statutory Status</th>
-                    <th style={{ textAlign: "right" }}>Statutory Actions</th>
+                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Assessed Tax</th>
+                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Penalty</th>
+                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Total Outstanding</th>
+                    <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Days Overdue</th>
+                    <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Statutory Status</th>
+                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Statutory Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -5427,18 +5400,18 @@ export default function HomePage({
             </div>
 
             {/* Appeals Register & Cause-List Table */}
-            <div id="appeals-cause-list-printable" className="table-responsive">
-              <table className="data-table">
+            <div id="appeals-cause-list-printable" className="table-container">
+              <table className="gov-table" style={{ width: "100%" }}>
                 <thead>
                   <tr>
                     <th>Appeal No &amp; Filing Date</th>
                     <th>Appellant &amp; Trade Name</th>
                     <th>Impugned Demand &amp; Notice</th>
                     <th>Ground of Appeal</th>
-                    <th>Undisputed Paid</th>
+                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Undisputed Paid</th>
                     <th>Hearing Date</th>
-                    <th>Status</th>
-                    <th style={{ textAlign: "right" }}>Statutory Actions</th>
+                    <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Status</th>
+                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Statutory Actions</th>
                   </tr>
                 </thead>
                 <tbody>

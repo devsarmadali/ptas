@@ -145,7 +145,7 @@ export function PageShell({
         style={{
           flex: 1,
           padding: tokens.spacing[6],
-          maxWidth: "1280px",
+          maxWidth: "1720px",
           width: "100%",
           margin: "0 auto",
           boxSizing: "border-box",

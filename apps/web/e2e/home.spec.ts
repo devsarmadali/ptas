@@ -22,8 +22,11 @@ test("renders official PTAS header and unified route hubs", async ({ page }) => 
   await expect(page.getByRole("link", { name: /Administration & Access/i })).toBeVisible();
 
   // Verify contextual subtabs in Assessment Hub
-  await expect(page.getByRole("link", { name: /Form P\.F\.T-1 Notices/i })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Issue Form PFT-2/i })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /Form P\.F\.T-3 Assessment Register/i })
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: /Tax Units & Survey/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Assessment Queue/i })).toBeVisible();
 });
 
 test("navigates across unified route hubs and contextual sub-tabs", async ({ page }) => {

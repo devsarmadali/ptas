@@ -114,7 +114,15 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
   const assessedTax = unit.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
 
   return (
-    <div style={{ maxWidth: "72rem", margin: "1.5rem auto", padding: "1rem" }}>
+    <div
+      style={{
+        maxWidth: "1720px",
+        width: "100%",
+        margin: "1.25rem auto",
+        padding: "1rem 1.5rem",
+        boxSizing: "border-box"
+      }}
+    >
       {/* Top Decoupled Navigation Header */}
       <div
         style={{
@@ -151,40 +159,6 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
             }}
           >
             ← Main Dashboard
-          </a>
-          <a
-            href={`/documents/pft1?pin=${unit.provincialUin}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              fontSize: "0.8rem",
-              fontWeight: 600,
-              padding: "0.3rem 0.65rem",
-              borderRadius: "4px",
-              background: "#f0fdf4",
-              border: "1px solid #86efac",
-              color: "#166534",
-              textDecoration: "none"
-            }}
-          >
-            📄 Form P.F.T-1 Notice ↗
-          </a>
-          <a
-            href={`/documents/pf2/new?pin=${unit.provincialUin}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              fontSize: "0.8rem",
-              fontWeight: 600,
-              padding: "0.3rem 0.65rem",
-              borderRadius: "4px",
-              background: "#f0fdf4",
-              border: "1px solid #86efac",
-              color: "#166534",
-              textDecoration: "none"
-            }}
-          >
-            🖨️ Issue Form PFT-2 ↗
           </a>
         </div>
       </div>
@@ -398,57 +372,59 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
           <h3 style={{ margin: "0 0 0.75rem", fontSize: "1rem", color: "#0d3822" }}>
             Demand &amp; Payment Ledger (Rule 11)
           </h3>
-          <table className="gov-table" style={{ width: "100%" }}>
-            <thead>
-              <tr>
-                <th>Entry ID</th>
-                <th>Type</th>
-                <th>Financial Year</th>
-                <th>Effective Date</th>
-                <th>Amount (PKR)</th>
-                <th>Balance After</th>
-                <th>Description</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(() => {
-                let runningBalance = 0;
-                return unit.ledgerEntries.map((entry) => {
-                  runningBalance += entry.amount;
-                  return (
-                    <tr key={entry.id}>
-                      <td style={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{entry.id}</td>
-                      <td>
-                        <span className="badge badge-draft" style={{ fontSize: "0.7rem" }}>
-                          {entry.entryType}
-                        </span>
-                      </td>
-                      <td>{entry.financialYearId}</td>
-                      <td>{entry.postedAt ? entry.postedAt.split("T")[0] : "-"}</td>
-                      <td>
-                        <strong>PKR {Math.abs(entry.amount).toLocaleString()}</strong>
-                        {entry.amount < 0 && (
-                          <span
-                            style={{ color: "#166534", fontSize: "0.75rem", marginLeft: "4px" }}
-                          >
-                            (CR)
+          <div className="table-container">
+            <table className="gov-table" style={{ width: "100%" }}>
+              <thead>
+                <tr>
+                  <th>Entry ID</th>
+                  <th>Type</th>
+                  <th>Financial Year</th>
+                  <th>Effective Date</th>
+                  <th>Amount (PKR)</th>
+                  <th>Balance After</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  let runningBalance = 0;
+                  return unit.ledgerEntries.map((entry) => {
+                    runningBalance += entry.amount;
+                    return (
+                      <tr key={entry.id}>
+                        <td style={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{entry.id}</td>
+                        <td>
+                          <span className="badge badge-draft" style={{ fontSize: "0.7rem" }}>
+                            {entry.entryType}
                           </span>
-                        )}
-                      </td>
-                      <td>
-                        <strong style={{ color: runningBalance > 0 ? "#b91c1c" : "#166534" }}>
-                          PKR {runningBalance.toLocaleString()}
-                        </strong>
-                      </td>
-                      <td style={{ fontSize: "0.8rem", color: "#475569" }}>
-                        {String(entry.metadata?.description || entry.sourceType || "-")}
-                      </td>
-                    </tr>
-                  );
-                });
-              })()}
-            </tbody>
-          </table>
+                        </td>
+                        <td>{entry.financialYearId}</td>
+                        <td>{entry.postedAt ? entry.postedAt.split("T")[0] : "-"}</td>
+                        <td>
+                          <strong>PKR {Math.abs(entry.amount).toLocaleString()}</strong>
+                          {entry.amount < 0 && (
+                            <span
+                              style={{ color: "#166534", fontSize: "0.75rem", marginLeft: "4px" }}
+                            >
+                              (CR)
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          <strong style={{ color: runningBalance > 0 ? "#b91c1c" : "#166534" }}>
+                            PKR {runningBalance.toLocaleString()}
+                          </strong>
+                        </td>
+                        <td style={{ fontSize: "0.8rem", color: "#475569" }}>
+                          {String(entry.metadata?.description || entry.sourceType || "-")}
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Issued Form PFT-2 Challans */}
@@ -469,52 +445,54 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
               No Form PFT-2 payment challans have been issued for this unit yet.
             </p>
           ) : (
-            <table className="gov-table" style={{ width: "100%" }}>
-              <thead>
-                <tr>
-                  <th>Challan / Notice #</th>
-                  <th>Security PIN</th>
-                  <th>Scope</th>
-                  <th>Amount (PKR)</th>
-                  <th>Issue Date</th>
-                  <th>Due Date</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {challans.map((c) => (
-                  <tr key={c.id}>
-                    <td>
-                      <strong>{c.challanNumber}</strong>
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "0.7rem",
-                          color: "#1e3a8a",
-                          fontFamily: "monospace"
-                        }}
-                      >
-                        {c.noticeNumber}
-                      </span>
-                    </td>
-                    <td style={{ fontFamily: "monospace", fontWeight: 700 }}>🔒 {c.pin}</td>
-                    <td>{c.demandScope ?? "CURRENT"}</td>
-                    <td>
-                      <strong>PKR {c.amountPayable.toLocaleString()}</strong>
-                    </td>
-                    <td>{c.issueDate}</td>
-                    <td>{c.dueDate}</td>
-                    <td>
-                      <span
-                        className={`badge ${c.status === "RECEIVED" ? "badge-approved" : c.status === "CANCELLED" ? "badge-returned" : "badge-pending"}`}
-                      >
-                        {c.status}
-                      </span>
-                    </td>
+            <div className="table-container">
+              <table className="gov-table" style={{ width: "100%" }}>
+                <thead>
+                  <tr>
+                    <th>Challan / Notice #</th>
+                    <th>Security PIN</th>
+                    <th>Scope</th>
+                    <th>Amount (PKR)</th>
+                    <th>Issue Date</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {challans.map((c) => (
+                    <tr key={c.id}>
+                      <td>
+                        <strong>{c.challanNumber}</strong>
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "0.7rem",
+                            color: "#1e3a8a",
+                            fontFamily: "monospace"
+                          }}
+                        >
+                          {c.noticeNumber}
+                        </span>
+                      </td>
+                      <td style={{ fontFamily: "monospace", fontWeight: 700 }}>🔒 {c.pin}</td>
+                      <td>{c.demandScope ?? "CURRENT"}</td>
+                      <td>
+                        <strong>PKR {c.amountPayable.toLocaleString()}</strong>
+                      </td>
+                      <td>{c.issueDate}</td>
+                      <td>{c.dueDate}</td>
+                      <td>
+                        <span
+                          className={`badge ${c.status === "RECEIVED" ? "badge-approved" : c.status === "CANCELLED" ? "badge-returned" : "badge-pending"}`}
+                        >
+                          {c.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
@@ -535,52 +513,54 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
               No payments have been acknowledged or recorded for this unit yet.
             </p>
           ) : (
-            <table className="gov-table" style={{ width: "100%" }}>
-              <thead>
-                <tr>
-                  <th>Receipt #</th>
-                  <th>Payment Source</th>
-                  <th>Amount (PKR)</th>
-                  <th>Receipt Date</th>
-                  <th>Channel &amp; Scroll Ref</th>
-                  <th>Receiving Officer</th>
-                </tr>
-              </thead>
-              <tbody>
-                {receipts.map((r) => (
-                  <tr key={r.id}>
-                    <td>
-                      <strong style={{ color: "#166534" }}>{r.receiptNumber}</strong>
-                    </td>
-                    <td>
-                      <span className="badge badge-approved" style={{ fontSize: "0.7rem" }}>
-                        {r.paymentSource ?? "ISSUED_PFT2"}
-                      </span>
-                    </td>
-                    <td>
-                      <strong style={{ color: "#166534" }}>
-                        PKR {r.amountPaidPkr.toLocaleString()}
-                      </strong>
-                    </td>
-                    <td>{r.dateOfReceipt}</td>
-                    <td>
-                      <span>{r.paymentChannel}</span>
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: "0.7rem",
-                          fontFamily: "monospace",
-                          color: "#1e3a8a"
-                        }}
-                      >
-                        {r.bankScrollRef}
-                      </span>
-                    </td>
-                    <td>{r.receivingOfficerName}</td>
+            <div className="table-container">
+              <table className="gov-table" style={{ width: "100%" }}>
+                <thead>
+                  <tr>
+                    <th>Receipt #</th>
+                    <th>Payment Source</th>
+                    <th>Amount (PKR)</th>
+                    <th>Receipt Date</th>
+                    <th>Channel &amp; Scroll Ref</th>
+                    <th>Receiving Officer</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {receipts.map((r) => (
+                    <tr key={r.id}>
+                      <td>
+                        <strong style={{ color: "#166534" }}>{r.receiptNumber}</strong>
+                      </td>
+                      <td>
+                        <span className="badge badge-approved" style={{ fontSize: "0.7rem" }}>
+                          {r.paymentSource ?? "ISSUED_PFT2"}
+                        </span>
+                      </td>
+                      <td>
+                        <strong style={{ color: "#166534" }}>
+                          PKR {r.amountPaidPkr.toLocaleString()}
+                        </strong>
+                      </td>
+                      <td>{r.dateOfReceipt}</td>
+                      <td>
+                        <span>{r.paymentChannel}</span>
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "0.7rem",
+                            fontFamily: "monospace",
+                            color: "#1e3a8a"
+                          }}
+                        >
+                          {r.bankScrollRef}
+                        </span>
+                      </td>
+                      <td>{r.receivingOfficerName}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>

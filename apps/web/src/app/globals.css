@@ -55,7 +55,8 @@ textarea {
 }
 
 .gov-header-inner {
-  max-width: 80rem;
+  max-width: 1720px;
+  width: 100%;
   margin: 0 auto;
   display: flex;
   flex-wrap: wrap;
@@ -105,7 +106,8 @@ textarea {
 }
 
 .officer-bar-inner {
-  max-width: 80rem;
+  max-width: 1720px;
+  width: 100%;
   margin: 0 auto;
   display: flex;
   flex-wrap: wrap;
@@ -190,9 +192,11 @@ textarea {
 
 /* Page Shell */
 .page-shell {
-  max-width: 80rem;
+  max-width: 1720px;
+  width: 100%;
   margin: 0 auto;
-  padding: 1.5rem 2rem 4rem;
+  padding: 1rem 1.25rem 3rem;
+  box-sizing: border-box;
 }
 
 /* Metric Cards */
@@ -256,7 +260,8 @@ textarea {
 }
 
 .decoupled-desks-inner {
-  max-width: 1400px;
+  max-width: 1720px;
+  width: 100%;
   margin: 0 auto;
   padding: 0.6rem 1.5rem;
   display: flex;
@@ -524,8 +529,10 @@ textarea {
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  padding: 1.5rem;
+  padding: 1rem 1.25rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .panel-header {
@@ -620,37 +627,48 @@ textarea {
 }
 
 /* Tables */
-.table-container {
+.table-container,
+.table-responsive {
+  width: 100%;
   overflow-x: auto;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
+  background: #ffffff;
+  box-sizing: border-box;
 }
 
-.gov-table {
+.gov-table,
+.data-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }
 
-.gov-table th {
+.gov-table th,
+.data-table th {
   background: #f8fafc;
-  padding: 0.75rem 1rem;
-  font-weight: 600;
+  padding: 0.5rem 0.65rem;
+  font-weight: 700;
+  font-size: 0.775rem;
   color: #475569;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid #cbd5e1;
   white-space: nowrap;
+  letter-spacing: 0.01em;
 }
 
-.gov-table td {
-  padding: 0.85rem 1rem;
+.gov-table td,
+.data-table td {
+  padding: 0.5rem 0.65rem;
   border-bottom: 1px solid #f1f5f9;
   color: #1e293b;
   vertical-align: middle;
+  font-size: 0.8125rem;
 }
 
-.gov-table tr:hover td {
-  background: #fafafa;
+.gov-table tr:hover td,
+.data-table tr:hover td {
+  background: #f8fafc;
 }
 
 /* Badges */
