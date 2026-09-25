@@ -131,7 +131,7 @@ import {
   verifyStatutoryDocument
 } from "../lib/public-portal";
 
-export type RouteHubId = "assessment" | "enforcement" | "revenue" | "intelligence";
+export type RouteHubId = "assessment" | "enforcement" | "revenue" | "intelligence" | "admin";
 
 export type TabId =
   | "UNITS"
@@ -172,7 +172,8 @@ export const HUB_DEFAULT_TABS: Record<RouteHubId, TabId> = {
   assessment: "UNITS",
   enforcement: "DEFAULTERS",
   revenue: "PFT2",
-  intelligence: "ANALYTICS"
+  intelligence: "ANALYTICS",
+  admin: "UNITS"
 };
 
 export const TAB_TO_CANONICAL_PATH: Record<TabId, string> = {
@@ -185,7 +186,7 @@ export const TAB_TO_CANONICAL_PATH: Record<TabId, string> = {
   CLEARANCE: "/enforcement/clearance",
   PFT2: "/revenue",
   RECEIPTS: "/revenue/receipts",
-  EPAY: "/revenue/receipts",
+  EPAY: "/revenue/epay",
   PUBLIC_PORTAL: "/verify",
   ANALYTICS: "/intelligence",
   MIS_HUB: "/intelligence",
@@ -206,6 +207,7 @@ export const PATH_TO_TAB: Record<string, { hub: RouteHubId; tab: TabId }> = {
   "/revenue": { hub: "revenue", tab: "PFT2" },
   "/revenue/challans": { hub: "revenue", tab: "PFT2" },
   "/revenue/receipts": { hub: "revenue", tab: "RECEIPTS" },
+  "/revenue/epay": { hub: "revenue", tab: "EPAY" },
   "/intelligence": { hub: "intelligence", tab: "ANALYTICS" },
   "/intelligence/analytics": { hub: "intelligence", tab: "ANALYTICS" },
   "/intelligence/reports": { hub: "intelligence", tab: "REPORTS" },
@@ -3613,15 +3615,15 @@ export default function HomePage({
           <Link
             href="/revenue"
             className={`route-hub-card ${activeRouteHub === "revenue" ? "active" : ""}`}
-            title="Revenue & Citizen Desk Hub (/revenue)"
+            title="Revenue & Collections Desk Hub (/revenue)"
             style={{ textDecoration: "none" }}
           >
             <span className="route-hub-icon">💳</span>
             <div className="route-hub-content">
               <div className="route-hub-title-row">
-                <span className="route-hub-title">Revenue &amp; Citizen Desk</span>
+                <span className="route-hub-title">Revenue &amp; Collections Desk</span>
               </div>
-              <p className="route-hub-desc">Ledger, ePay &amp; Self-Assessment</p>
+              <p className="route-hub-desc">Challans, Receipts &amp; Treasury Collections</p>
             </div>
           </Link>
 
@@ -3637,6 +3639,21 @@ export default function HomePage({
                 <span className="route-hub-title">Intelligence &amp; Governance</span>
               </div>
               <p className="route-hub-desc">Executive MIS, Slabs &amp; Audit Trail</p>
+            </div>
+          </Link>
+
+          <Link
+            href="/admin/user-management"
+            className={`route-hub-card ${activeRouteHub === "admin" ? "active" : ""}`}
+            title="Administration & Access Desk (/admin/user-management)"
+            style={{ textDecoration: "none" }}
+          >
+            <span className="route-hub-icon">👥</span>
+            <div className="route-hub-content">
+              <div className="route-hub-title-row">
+                <span className="route-hub-title">Administration &amp; Access</span>
+              </div>
+              <p className="route-hub-desc">Departmental Staff &amp; Citizen Verification</p>
             </div>
           </Link>
         </nav>
@@ -3668,6 +3685,26 @@ export default function HomePage({
                 {metrics.pendingApprovals > 0 && (
                   <span className="subtab-badge">{metrics.pendingApprovals}</span>
                 )}
+              </Link>
+              <Link
+                href={asRoute("/documents/pft1")}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="subtab-btn"
+                style={{ textDecoration: "none" }}
+                title="Open Form P.F.T-1 Notice Studio (/documents/pft1)"
+              >
+                📜 Form P.F.T-1 Notices ↗
+              </Link>
+              <Link
+                href={asRoute("/documents/pf2/new")}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="subtab-btn"
+                style={{ textDecoration: "none" }}
+                title="Issue New Form PFT-2 Challan (/documents/pf2/new)"
+              >
+                📄 Issue Form PFT-2 ↗
               </Link>
             </>
           )}
@@ -3736,6 +3773,16 @@ export default function HomePage({
                   </span>
                 )}
               </Link>
+              <Link
+                href={asRoute("/documents/land-revenue-recovery")}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="subtab-btn"
+                style={{ textDecoration: "none" }}
+                title="Open Land Revenue Recovery (Rule 12) Certificate Desk (/documents/land-revenue-recovery)"
+              >
+                🏛️ Land Revenue Recovery (Rule 12) ↗
+              </Link>
             </>
           )}
 
@@ -3754,6 +3801,23 @@ export default function HomePage({
                 style={{ textDecoration: "none" }}
               >
                 🧾 Receipts &amp; Collections ({statutoryReceipts.length})
+              </Link>
+              <Link
+                href={asRoute("/revenue/epay")}
+                className={`subtab-btn ${pathname === "/revenue/epay" || activeTab === "EPAY" ? "active" : ""}`}
+                style={{ textDecoration: "none" }}
+              >
+                💳 ePay Punjab Reconciliation
+              </Link>
+              <Link
+                href={asRoute("/documents/pf2/new")}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="subtab-btn"
+                style={{ textDecoration: "none" }}
+                title="Issue New Form PFT-2 Challan (/documents/pf2/new)"
+              >
+                📄 Issue Form PFT-2 ↗
               </Link>
             </>
           )}
@@ -3775,11 +3839,43 @@ export default function HomePage({
                 📑 Statutory Gazette &amp; Reports
               </Link>
               <Link
+                href={asRoute("/intelligence/statutory-category-yield")}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="subtab-btn"
+                style={{ textDecoration: "none" }}
+                title="Open Statutory Category Yield & Slabs Analysis (/intelligence/statutory-category-yield)"
+              >
+                📈 Statutory Category Yield &amp; Slabs ↗
+              </Link>
+              <Link
                 href={asRoute("/intelligence/audit")}
                 className={`subtab-btn ${pathname === "/intelligence/audit" || activeTab === "AUDIT" ? "active" : ""}`}
                 style={{ textDecoration: "none" }}
               >
                 🛡️ Immutable Audit Log ({auditLogs.length})
+              </Link>
+            </>
+          )}
+
+          {activeRouteHub === "admin" && (
+            <>
+              <Link
+                href={asRoute("/admin/user-management")}
+                className="subtab-btn active"
+                style={{ textDecoration: "none" }}
+              >
+                👥 User Management Desk
+              </Link>
+              <Link
+                href={asRoute("/verify")}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="subtab-btn"
+                style={{ textDecoration: "none" }}
+                title="Open Public Citizen Document Verification Portal (/verify)"
+              >
+                🔍 Public Citizen Verification Portal ↗
               </Link>
             </>
           )}

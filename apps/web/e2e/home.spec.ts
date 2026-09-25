@@ -14,11 +14,16 @@ test("renders official PTAS header and unified route hubs", async ({ page }) => 
     })
   ).toBeVisible({ timeout: 20000 });
 
-  // Verify all 4 unified route hubs are visible as links
+  // Verify all 5 unified route hubs are visible as links
   await expect(page.getByRole("link", { name: /Assessment & Field Desk/i })).toBeVisible();
   await expect(page.getByRole("link", { name: /Compliance & Recovery/i })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Revenue & Citizen Desk/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Revenue & Collections Desk/i })).toBeVisible();
   await expect(page.getByRole("link", { name: /Intelligence & Governance/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Administration & Access/i })).toBeVisible();
+
+  // Verify contextual subtabs in Assessment Hub
+  await expect(page.getByRole("link", { name: /Form P\.F\.T-1 Notices/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Issue Form PFT-2/i })).toBeVisible();
 });
 
 test("navigates across unified route hubs and contextual sub-tabs", async ({ page }) => {
@@ -34,6 +39,7 @@ test("navigates across unified route hubs and contextual sub-tabs", async ({ pag
   await expect(page).toHaveURL(/.*intelligence/);
   await expect(page.getByRole("link", { name: /Analytics Dashboard/i })).toBeVisible();
   await expect(page.getByRole("link", { name: /Statutory Gazette & Reports/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Statutory Category Yield & Slabs/i })).toBeVisible();
 
   // Verify 47-slab distribution table is visible in Analytics
   await expect(
@@ -73,9 +79,10 @@ test("verifies statutory sub-class and tertiary slabs in Form P.F.T-1 and Form P
   await pft1Page.close();
 
   // Navigate to Revenue Hub -> Form PFT-2 Challans
-  await page.getByRole("link", { name: /Revenue & Citizen Desk/i }).click();
+  await page.getByRole("link", { name: /Revenue & Collections Desk/i }).click();
   await expect(page).toHaveURL(/.*revenue/);
   await expect(page.getByRole("link", { name: /Form PFT-2 Challans/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /ePay Punjab Reconciliation/i })).toBeVisible();
   await page.getByRole("link", { name: /Form PFT-2 Challans/i }).click();
   await expect(page.locator(".action-menu-trigger").first()).toBeVisible();
 
@@ -84,6 +91,14 @@ test("verifies statutory sub-class and tertiary slabs in Form P.F.T-1 and Form P
   await page.getByRole("menuitem", { name: /Download Challan PDF/i }).click();
   await expect(page.getByText(/TAXPAYER'S COPY/i).first()).toBeVisible();
   await expect(page.getByText(/BANK'S COPY/i).first()).toBeVisible();
+  await page.getByRole("button", { name: "✕", exact: true }).click();
+
+  // Switch to ePay Punjab Reconciliation tab
+  await page.getByRole("link", { name: /ePay Punjab Reconciliation/i }).click();
+  await expect(page).toHaveURL(/.*revenue\/epay/);
+  await expect(
+    page.getByRole("heading", { name: /ePay Punjab Real-Time Reconciliation Hub/i })
+  ).toBeVisible();
 });
 
 test("verifies RowActionMenu popover interactions in Compliance & Recovery Hub", async ({
@@ -100,6 +115,9 @@ test("verifies RowActionMenu popover interactions in Compliance & Recovery Hub",
   await page.getByRole("link", { name: /Compliance & Recovery/i }).click();
   await expect(page).toHaveURL(/.*enforcement/);
   await expect(page.getByRole("link", { name: /Defaulter & Arrears Roll/i })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /Land Revenue Recovery \(Rule 12\)/i })
+  ).toBeVisible();
   await expect(page.getByRole("heading", { name: /Defaulter Tracking/i })).toBeVisible();
 
   // Open Defaulter row action menu
