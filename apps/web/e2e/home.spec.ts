@@ -27,6 +27,10 @@ test("renders official PTAS header and unified route hubs", async ({ page }) => 
   ).toBeVisible();
   await expect(page.getByRole("link", { name: /Tax Units & Survey/i })).toBeVisible();
   await expect(page.getByRole("link", { name: /Assessment Queue/i })).toBeVisible();
+
+  // Verify metric cards row is completely removed from coding and UI
+  await expect(page.locator(".metric-grid")).toHaveCount(0);
+  await expect(page.getByLabel("District Vehari Summary Metrics")).toHaveCount(0);
 });
 
 test("navigates across unified route hubs and contextual sub-tabs", async ({ page }) => {
@@ -165,10 +169,11 @@ test("verifies sign out leads to sign-in page and role pre-filled sign-in works"
     page.getByRole("heading", { name: /Statutory Role Sign In & Access Control/i })
   ).toBeVisible();
 
-  // Verify all 3 pre-filled roles exist
+  // Verify all 4 pre-filled roles exist (including Admin)
   await expect(page.getByRole("heading", { name: "Muhammad Aslam" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Tariq Mahmood" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Shahid Nawaz" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Provincial Administrator" })).toBeVisible();
 
   // Click one-click sign in as ETO
   await page.getByRole("button", { name: /One-Click Sign In as ETO/i }).click();
@@ -176,4 +181,24 @@ test("verifies sign out leads to sign-in page and role pre-filled sign-in works"
   // Expect redirection back to dashboard with ETO session active
   await expect(page).toHaveURL(/.*assessment/);
   await expect(page.getByText(/Tariq Mahmood/i).first()).toBeVisible();
+
+  // Non-admin roles (ETO, Inspector, Director) must NOT see pilot/sync/auth buttons in app header
+  await expect(page.getByText(/PILOT READY/i)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Sync Supabase/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Reset Demo/i })).toHaveCount(0);
+  await expect(page.getByText(/Supabase Auth/i)).toHaveCount(0);
+
+  // Sign out again and sign in as Admin
+  await page.getByRole("button", { name: /Sign Out/i }).click();
+  await expect(page).toHaveURL(/.*sign-in/);
+
+  // Click one-click sign in as ADMIN
+  await page.getByRole("button", { name: /One-Click Sign In as ADMIN/i }).click();
+  await expect(page).toHaveURL(/.*assessment/);
+  await expect(page.getByText(/Provincial Administrator/i).first()).toBeVisible();
+
+  // Admin MUST see the administration/system buttons in app header
+  await expect(page.getByText(/PILOT READY • VERCEL/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /Sync Supabase/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Reset Demo/i })).toBeVisible();
 });

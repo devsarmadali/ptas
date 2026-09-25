@@ -1651,7 +1651,11 @@ export default function HomePage({
 
   // Phase 9: Effective Perspective for Analytics Dashboard
   const effectivePerspective: "INSPECTOR" | "ETO" | "DIRECTOR" =
-    dashboardPerspective === "AUTO" ? officer.role : dashboardPerspective;
+    dashboardPerspective === "AUTO"
+      ? officer.role === "ADMIN"
+        ? "DIRECTOR"
+        : officer.role
+      : dashboardPerspective;
 
   // Helpers for Statutory Reports Export & Print
   const handleExportScheduleCsv = (
@@ -2089,10 +2093,10 @@ export default function HomePage({
   // Handler: Submit Statutory Penalty
   const handleImposePenalty = (e: React.FormEvent) => {
     e.preventDefault();
-    if (officer.role !== "ETO") {
+    if (officer.role !== "ETO" && officer.role !== "ADMIN") {
       showToast(
         "error",
-        "Statutory violation: Only Assessing Authority (ETO) can impose penalties under Section 3(4)."
+        "Statutory violation: Only Assessing Authority (ETO) or Provincial Admin can impose penalties under Section 3(4)."
       );
       return;
     }
@@ -2163,10 +2167,10 @@ export default function HomePage({
 
   // Handler: Confirm Land Revenue Certification
   const handleConfirmRecoveryCertification = () => {
-    if (officer.role !== "ETO") {
+    if (officer.role !== "ETO" && officer.role !== "ADMIN") {
       showToast(
         "error",
-        "Statutory violation: Only Assessing Authority (ETO) can certify recovery under Rule 12."
+        "Statutory violation: Only Assessing Authority (ETO) or Provincial Admin can certify recovery under Rule 12."
       );
       return;
     }
@@ -3163,7 +3167,7 @@ export default function HomePage({
   const renderSurveyUnitActions = (targetUnit: StoredUnit) => {
     const latestAsm = targetUnit.assessments[0];
     const status = latestAsm?.status ?? "DRAFT";
-    const isEto = officer.role === "ETO" || officer.role === "DIRECTOR";
+    const isEto = officer.role === "ETO" || officer.role === "DIRECTOR" || officer.role === "ADMIN";
 
     const actions: RowAction[] = [
       {
@@ -3378,55 +3382,59 @@ export default function HomePage({
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <span
-              style={{
-                background: "rgba(255, 255, 255, 0.2)",
-                padding: "0.3rem 0.75rem",
-                borderRadius: "9999px",
-                fontSize: "0.75rem",
-                fontWeight: 700,
-                letterSpacing: "0.05em"
-              }}
-            >
-              PILOT READY &bull; VERCEL
-            </span>
-            <button
-              onClick={handleSyncCloud}
-              disabled={isSyncingCloud}
-              className="btn-reset"
-              style={{
-                background: "#047857",
-                borderColor: "#10b981",
-                color: "#ffffff",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.35rem"
-              }}
-              title="Synchronize pilot units, assessments, and ledgers to live Supabase PostgreSQL"
-            >
-              <span>{isSyncingCloud ? "⏳" : "☁️"}</span>
-              <span>{isSyncingCloud ? "Syncing..." : "Sync Supabase"}</span>
-            </button>
-            {lastSyncTime && (
-              <span
-                style={{
-                  fontSize: "0.7rem",
-                  background: "rgba(16, 185, 129, 0.25)",
-                  color: "#d1fae5",
-                  padding: "0.25rem 0.5rem",
-                  borderRadius: "4px"
-                }}
-              >
-                ✓ Synced {lastSyncTime}
-              </span>
+            {officer.role === "ADMIN" && (
+              <>
+                <span
+                  style={{
+                    background: "rgba(255, 255, 255, 0.2)",
+                    padding: "0.3rem 0.75rem",
+                    borderRadius: "9999px",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    letterSpacing: "0.05em"
+                  }}
+                >
+                  PILOT READY &bull; VERCEL
+                </span>
+                <button
+                  onClick={handleSyncCloud}
+                  disabled={isSyncingCloud}
+                  className="btn-reset"
+                  style={{
+                    background: "#047857",
+                    borderColor: "#10b981",
+                    color: "#ffffff",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.35rem"
+                  }}
+                  title="Synchronize pilot units, assessments, and ledgers to live Supabase PostgreSQL"
+                >
+                  <span>{isSyncingCloud ? "⏳" : "☁️"}</span>
+                  <span>{isSyncingCloud ? "Syncing..." : "Sync Supabase"}</span>
+                </button>
+                {lastSyncTime && (
+                  <span
+                    style={{
+                      fontSize: "0.7rem",
+                      background: "rgba(16, 185, 129, 0.25)",
+                      color: "#d1fae5",
+                      padding: "0.25rem 0.5rem",
+                      borderRadius: "4px"
+                    }}
+                  >
+                    ✓ Synced {lastSyncTime}
+                  </span>
+                )}
+                <button
+                  onClick={handleResetDemo}
+                  className="btn-reset"
+                  title="Reset all data to baseline seed state"
+                >
+                  Reset Demo
+                </button>
+              </>
             )}
-            <button
-              onClick={handleResetDemo}
-              className="btn-reset"
-              title="Reset all data to baseline seed state"
-            >
-              Reset Demo
-            </button>
           </div>
         </div>
       </header>
@@ -3439,7 +3447,13 @@ export default function HomePage({
             style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}
           >
             <div className="officer-avatar" style={{ fontSize: "1.2rem", fontWeight: 700 }}>
-              {officer.role === "INSPECTOR" ? "👤" : officer.role === "ETO" ? "⚖️" : "📊"}
+              {officer.role === "INSPECTOR"
+                ? "👤"
+                : officer.role === "ETO"
+                  ? "⚖️"
+                  : officer.role === "DIRECTOR"
+                    ? "📊"
+                    : "🛡️"}
             </div>
             <div className="officer-details">
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -3451,13 +3465,17 @@ export default function HomePage({
                         ? "#e0f2fe"
                         : officer.role === "ETO"
                           ? "#fef3c7"
-                          : "#f3e8ff",
+                          : officer.role === "DIRECTOR"
+                            ? "#f3e8ff"
+                            : "#fce7f3",
                     color:
                       officer.role === "INSPECTOR"
                         ? "#0369a1"
                         : officer.role === "ETO"
                           ? "#92400e"
-                          : "#6b21a8",
+                          : officer.role === "DIRECTOR"
+                            ? "#6b21a8"
+                            : "#831843",
                     padding: "0.15rem 0.45rem",
                     borderRadius: "4px",
                     fontSize: "0.7rem",
@@ -3466,20 +3484,24 @@ export default function HomePage({
                 >
                   {officer.role}
                 </span>
-                <span
-                  style={{
-                    background: "#ecfdf5",
-                    color: "#065f46",
-                    border: "1px solid #a7f3d0",
-                    padding: "0.15rem 0.45rem",
-                    borderRadius: "4px",
-                    fontSize: "0.68rem",
-                    fontWeight: 600
-                  }}
-                >
-                  🟢{" "}
-                  {authenticatedSessionType === "CLOUD" ? "Supabase Auth" : "Authenticated Session"}
-                </span>
+                {officer.role === "ADMIN" && (
+                  <span
+                    style={{
+                      background: "#ecfdf5",
+                      color: "#065f46",
+                      border: "1px solid #a7f3d0",
+                      padding: "0.15rem 0.45rem",
+                      borderRadius: "4px",
+                      fontSize: "0.68rem",
+                      fontWeight: 600
+                    }}
+                  >
+                    🟢{" "}
+                    {authenticatedSessionType === "CLOUD"
+                      ? "Supabase Auth"
+                      : "Authenticated Session"}
+                  </span>
+                )}
               </div>
               <span style={{ fontSize: "0.78rem", color: "#64748b" }}>
                 {officer.title} &bull; Jurisdiction: <strong>{officer.jurisdictionName}</strong> (
@@ -3545,35 +3567,6 @@ export default function HomePage({
 
       {/* Main Page Body */}
       <main className="page-shell">
-        {/* Metric Cards Row */}
-        <section className="metric-grid" aria-label="District Vehari Summary Metrics">
-          <div className="metric-card highlight">
-            <p className="metric-label">Registered Units</p>
-            <p className="metric-value">{metrics.totalUnits}</p>
-            <p className="metric-subtext">Circle-Vehari Registry</p>
-          </div>
-          <div className="metric-card info">
-            <p className="metric-label">Assessed Demand</p>
-            <p className="metric-value">PKR {metrics.totalDemand.toLocaleString()}</p>
-            <p className="metric-subtext">Statutory Second Schedule</p>
-          </div>
-          <div className="metric-card success">
-            <p className="metric-label">Total Recoveries</p>
-            <p className="metric-value">PKR {metrics.totalPayments.toLocaleString()}</p>
-            <p className="metric-subtext">Form PFT-2 &amp; ePay Credits</p>
-          </div>
-          <div className="metric-card warning">
-            <p className="metric-label">Outstanding Balance</p>
-            <p className="metric-value">PKR {metrics.outstandingBalance.toLocaleString()}</p>
-            <p className="metric-subtext">Live Derived Balance</p>
-          </div>
-          <div className="metric-card">
-            <p className="metric-label">Pending ETO Review</p>
-            <p className="metric-value">{metrics.pendingApprovals}</p>
-            <p className="metric-subtext">Statutory Queue</p>
-          </div>
-        </section>
-
         {/* Tier 1: Unified Route Hubs Navigation */}
         <nav className="route-hubs-bar" aria-label="Unified Operational Routes">
           <Link
@@ -4307,7 +4300,9 @@ export default function HomePage({
 
                           {status === "SUBMITTED" && (
                             <div style={{ display: "flex", gap: "0.5rem" }}>
-                              {officer.role === "ETO" || officer.role === "DIRECTOR" ? (
+                              {officer.role === "ETO" ||
+                              officer.role === "DIRECTOR" ||
+                              officer.role === "ADMIN" ? (
                                 <>
                                   <button
                                     onClick={() => handleApproveAssessment(u.id)}
@@ -5177,9 +5172,14 @@ export default function HomePage({
                                   id: "impose-penalty",
                                   label: "Impose Statutory Penalty (Section 3(4))",
                                   icon: "⚠️",
-                                  disabled: officer.role !== "ETO" && officer.role !== "DIRECTOR",
+                                  disabled:
+                                    officer.role !== "ETO" &&
+                                    officer.role !== "DIRECTOR" &&
+                                    officer.role !== "ADMIN",
                                   title:
-                                    officer.role === "ETO" || officer.role === "DIRECTOR"
+                                    officer.role === "ETO" ||
+                                    officer.role === "DIRECTOR" ||
+                                    officer.role === "ADMIN"
                                       ? "Impose Statutory Penalty under Section 3(4)"
                                       : "ETO Role Required to Impose Penalty",
                                   onClick: () => handleOpenPenaltyModal(u.id)
@@ -5188,9 +5188,14 @@ export default function HomePage({
                                   id: "land-revenue",
                                   label: "Certify Arrears (Punjab Land Revenue Act, Rule 12)",
                                   icon: "🏛️",
-                                  disabled: officer.role !== "ETO" && officer.role !== "DIRECTOR",
+                                  disabled:
+                                    officer.role !== "ETO" &&
+                                    officer.role !== "DIRECTOR" &&
+                                    officer.role !== "ADMIN",
                                   title:
-                                    officer.role === "ETO" || officer.role === "DIRECTOR"
+                                    officer.role === "ETO" ||
+                                    officer.role === "DIRECTOR" ||
+                                    officer.role === "ADMIN"
                                       ? "Certify Arrears under Punjab Land Revenue Act (Rule 12)"
                                       : "ETO Role Required to Certify Recovery",
                                   onClick: () => handleOpenRecoveryModal(u.id)
@@ -5538,7 +5543,8 @@ export default function HomePage({
                             <RowActionMenu
                               align="right"
                               actions={[
-                                ...(appeal.status === "FILED" && officer.role === "DIRECTOR"
+                                ...(appeal.status === "FILED" &&
+                                (officer.role === "DIRECTOR" || officer.role === "ADMIN")
                                   ? [
                                       {
                                         id: "fix-hearing",
@@ -5553,7 +5559,7 @@ export default function HomePage({
                                   : []),
                                 ...((appeal.status === "FILED" ||
                                   appeal.status === "HEARING_SCHEDULED") &&
-                                officer.role === "DIRECTOR"
+                                (officer.role === "DIRECTOR" || officer.role === "ADMIN")
                                   ? [
                                       {
                                         id: "adjudicate-appeal",
@@ -6127,7 +6133,9 @@ export default function HomePage({
                                       ]
                                     : []),
                                   ...(isInspected &&
-                                  (officer.role === "ETO" || officer.role === "DIRECTOR")
+                                  (officer.role === "ETO" ||
+                                    officer.role === "DIRECTOR" ||
+                                    officer.role === "ADMIN")
                                     ? [
                                         {
                                           id: "issue-closure-order",
@@ -6368,7 +6376,9 @@ export default function HomePage({
                                 align="right"
                                 actions={[
                                   ...(isPending &&
-                                  (officer.role === "ETO" || officer.role === "DIRECTOR")
+                                  (officer.role === "ETO" ||
+                                    officer.role === "DIRECTOR" ||
+                                    officer.role === "ADMIN")
                                     ? [
                                         {
                                           id: "approve-refund",
@@ -15707,13 +15717,17 @@ export default function HomePage({
                                         ? "#e0f2fe"
                                         : info.role === "ETO"
                                           ? "#fef3c7"
-                                          : "#f3e8ff",
+                                          : info.role === "DIRECTOR"
+                                            ? "#f3e8ff"
+                                            : "#fce7f3",
                                     color:
                                       info.role === "INSPECTOR"
                                         ? "#0369a1"
                                         : info.role === "ETO"
                                           ? "#92400e"
-                                          : "#6b21a8"
+                                          : info.role === "DIRECTOR"
+                                            ? "#6b21a8"
+                                            : "#831843"
                                   }}
                                 >
                                   {info.role} &bull; {info.jurisdictionTier}
@@ -15738,7 +15752,9 @@ export default function HomePage({
                                   ? "👤"
                                   : info.role === "ETO"
                                     ? "⚖️"
-                                    : "📊"}
+                                    : info.role === "DIRECTOR"
+                                      ? "📊"
+                                      : "🛡️"}
                               </span>
                             </div>
 

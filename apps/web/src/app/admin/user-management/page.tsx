@@ -95,7 +95,7 @@ export default function UserManagementPage() {
     );
   }
 
-  const isDirector = currentOfficer.role === "DIRECTOR";
+  const isDirector = currentOfficer.role === "DIRECTOR" || currentOfficer.role === "ADMIN";
   const isEto = currentOfficer.role === "ETO";
 
   // Filter users based on jurisdiction & role hierarchy (Director sees all, ETO sees subordinate inspectors)

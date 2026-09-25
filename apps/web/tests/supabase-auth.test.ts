@@ -7,10 +7,10 @@ import {
 } from "../src/lib/supabase-auth.js";
 
 describe("Phase 5: Supabase Real Auth & Statutory Authority Enforcement", () => {
-  it("maintains exactly 3 distinct official Punjab Excise officer accounts", () => {
-    expect(OFFICIAL_OFFICERS_REGISTRY).toHaveLength(3);
+  it("maintains exactly 4 distinct official Punjab Excise officer accounts (including Admin)", () => {
+    expect(OFFICIAL_OFFICERS_REGISTRY).toHaveLength(4);
 
-    const [inspector, eto, director] = OFFICIAL_OFFICERS_REGISTRY;
+    const [inspector, eto, director, admin] = OFFICIAL_OFFICERS_REGISTRY;
     expect(inspector?.role).toBe("INSPECTOR");
     expect(inspector?.email).toBe("inspector.vehari@punjab.gov.pk");
     expect(inspector?.jurisdictionTier).toBe("CIRCLE");
@@ -22,6 +22,10 @@ describe("Phase 5: Supabase Real Auth & Statutory Authority Enforcement", () => 
     expect(director?.role).toBe("DIRECTOR");
     expect(director?.email).toBe("director.multan@punjab.gov.pk");
     expect(director?.jurisdictionTier).toBe("REGION");
+
+    expect(admin?.role).toBe("ADMIN");
+    expect(admin?.email).toBe("admin.ptas@punjab.gov.pk");
+    expect(admin?.jurisdictionTier).toBe("REGION");
   });
 
   it("resolves official officer profiles from official @punjab.gov.pk emails", () => {
@@ -39,6 +43,11 @@ describe("Phase 5: Supabase Real Auth & Statutory Authority Enforcement", () => 
     expect(director.role).toBe("DIRECTOR");
     expect(director.name).toBe("Shahid Nawaz");
     expect(director.jurisdictionTier).toBe("REGION");
+
+    const admin = getOfficerProfileByEmail("admin.ptas@punjab.gov.pk");
+    expect(admin.role).toBe("ADMIN");
+    expect(admin.name).toBe("Provincial Administrator");
+    expect(admin.jurisdictionTier).toBe("REGION");
   });
 
   it("accepts custom deployment and Vercel domain emails dynamically", async () => {
@@ -58,36 +67,53 @@ describe("Phase 5: Supabase Real Auth & Statutory Authority Enforcement", () => 
     expect(result.success).toBe(true);
     expect(result.officer.role).toBe("INSPECTOR");
     expect(result.officer.name).toBe("Muhammad Aslam");
+
+    const adminResult = await signInOfficer("admin.ptas@punjab.gov.pk", "PunjabAdmin2026!");
+    expect(adminResult.success).toBe(true);
+    expect(adminResult.officer.role).toBe("ADMIN");
+    expect(adminResult.officer.name).toBe("Provincial Administrator");
   });
 
   it("strictly enforces role and jurisdiction authority on actions (AGENTS.md Rule 2)", () => {
     const inspector = getOfficerProfileByEmail("inspector.vehari@punjab.gov.pk");
     const eto = getOfficerProfileByEmail("eto.vehari@punjab.gov.pk");
     const director = getOfficerProfileByEmail("director.multan@punjab.gov.pk");
+    const admin = getOfficerProfileByEmail("admin.ptas@punjab.gov.pk");
 
     // 1. Assessment submission: All officers can submit survey assessments
     expect(verifyOfficerAuthority(inspector, "SUBMIT_ASSESSMENT").authorized).toBe(true);
     expect(verifyOfficerAuthority(eto, "SUBMIT_ASSESSMENT").authorized).toBe(true);
+    expect(verifyOfficerAuthority(admin, "SUBMIT_ASSESSMENT").authorized).toBe(true);
 
-    // 2. Assessment approval: Requires ETO or Director
+    // 2. Assessment approval: Requires ETO, Director, or Admin
     const inspAppr = verifyOfficerAuthority(inspector, "APPROVE_ASSESSMENT");
     expect(inspAppr.authorized).toBe(false);
     expect(inspAppr.reason).toContain("Statutory Authority Violation");
     expect(verifyOfficerAuthority(eto, "APPROVE_ASSESSMENT").authorized).toBe(true);
     expect(verifyOfficerAuthority(director, "APPROVE_ASSESSMENT").authorized).toBe(true);
+    expect(verifyOfficerAuthority(admin, "APPROVE_ASSESSMENT").authorized).toBe(true);
 
-    // 3. Section 3(4) Penalty Imposition: Exclusive to Assessing Authority (ETO)
+    // 3. Section 3(4) Penalty Imposition: ETO and Admin
     const inspPen = verifyOfficerAuthority(inspector, "IMPOSE_PENALTY");
     expect(inspPen.authorized).toBe(false);
     expect(verifyOfficerAuthority(eto, "IMPOSE_PENALTY").authorized).toBe(true);
     const dirPen = verifyOfficerAuthority(director, "IMPOSE_PENALTY");
     expect(dirPen.authorized).toBe(false);
+    expect(verifyOfficerAuthority(admin, "IMPOSE_PENALTY").authorized).toBe(true);
 
-    // 4. Section 7 & Rule 13 Appellate Adjudication: Exclusive to Appellate Authority (Director)
+    // 4. Section 7 & Rule 13 Appellate Adjudication: Director and Admin
     const inspApp = verifyOfficerAuthority(inspector, "ADJUDICATE_APPEAL");
     expect(inspApp.authorized).toBe(false);
     const etoApp = verifyOfficerAuthority(eto, "ADJUDICATE_APPEAL");
     expect(etoApp.authorized).toBe(false); // ETO cannot adjudicate appeals against own orders
     expect(verifyOfficerAuthority(director, "ADJUDICATE_APPEAL").authorized).toBe(true);
+    expect(verifyOfficerAuthority(admin, "ADJUDICATE_APPEAL").authorized).toBe(true);
+
+    // 5. Admin possesses full fledged authorities of all roles
+    expect(verifyOfficerAuthority(admin, "ISSUE_CLEARANCE_CERTIFICATE").authorized).toBe(true);
+    expect(verifyOfficerAuthority(admin, "ISSUE_RECOVERY_CERTIFICATE").authorized).toBe(true);
+    expect(verifyOfficerAuthority(admin, "SUBMIT_DISCONTINUANCE_INSPECTION").authorized).toBe(true);
+    expect(verifyOfficerAuthority(admin, "ADJUDICATE_DISCONTINUANCE").authorized).toBe(true);
+    expect(verifyOfficerAuthority(admin, "ADJUDICATE_REFUND").authorized).toBe(true);
   });
 });

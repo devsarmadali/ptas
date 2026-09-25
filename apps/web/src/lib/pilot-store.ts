@@ -24,7 +24,7 @@ import {
 } from "@ptas/domain";
 import { formatStandardDocNumber, generatePft2NoticeNumber } from "./statutory-forms";
 
-export type MockRole = "INSPECTOR" | "ETO" | "DIRECTOR";
+export type MockRole = "INSPECTOR" | "ETO" | "DIRECTOR" | "ADMIN";
 
 export interface MockOfficer {
   readonly id: string;
@@ -194,7 +194,19 @@ export const DISTRICT_VEHARI_CIRCLES: readonly CircleMasterRecord[] = [
 
 export const FINANCIAL_YEAR_2026_27 = "FY-2026-2027";
 
-export const MOCK_OFFICERS: readonly [MockOfficer, MockOfficer, MockOfficer] = [
+export const ADMIN_OFFICER: MockOfficer = {
+  id: "a0000000-0000-4000-8000-000000000000",
+  name: "Provincial Administrator",
+  email: "admin.ptas@punjab.gov.pk",
+  role: "ADMIN",
+  title: "Provincial System Administrator",
+  jurisdictionId: MULTAN_REGION_ID,
+  jurisdictionName: "Punjab Provincial Apex (All Jurisdictions)",
+  jurisdictionTier: "REGION",
+  badgeText: "System Administrator (Full Statutory Powers: Director, ETO, Inspector)"
+};
+
+export const MOCK_OFFICERS: readonly [MockOfficer, MockOfficer, MockOfficer, MockOfficer] = [
   {
     id: "officer-inspector-aslam",
     name: "Muhammad Aslam",
@@ -227,7 +239,8 @@ export const MOCK_OFFICERS: readonly [MockOfficer, MockOfficer, MockOfficer] = [
     jurisdictionName: "Multan Region (Division Oversight)",
     jurisdictionTier: "REGION",
     badgeText: "Executive (Division Analytics & Exception Desk)"
-  }
+  },
+  ADMIN_OFFICER
 ];
 
 export interface AppealRecord {

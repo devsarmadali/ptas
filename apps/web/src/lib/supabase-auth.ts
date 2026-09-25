@@ -94,6 +94,27 @@ export const OFFICIAL_OFFICERS_REGISTRY: readonly OfficerCredentialInfo[] = [
       "Demand Ledger Revision & Relief Adjustments",
       "Regional Division Oversight & ePay Exception Desk"
     ]
+  },
+  {
+    id: "a0000000-0000-4000-8000-000000000000",
+    name: "Provincial Administrator",
+    email: "admin.ptas@punjab.gov.pk",
+    role: "ADMIN",
+    title: "Provincial System Administrator",
+    jurisdictionId: MULTAN_REGION_ID,
+    jurisdictionName: "Punjab Provincial Apex (All Jurisdictions)",
+    jurisdictionTier: "REGION",
+    badgeText: "System Administrator (Full Statutory Powers: Director, ETO, Inspector)",
+    defaultPassword: "PunjabAdmin2026!",
+    statutoryPowers: [
+      "Super-Administrator: Full Fledged Statutory Authority Across All Roles (Director, ETO, Inspector)",
+      "Director Appellate Authority: Section 7 & Rule 13 Judicial Review, Decrees & Remissions",
+      "ETO Assessing Authority: Section 3 & Rule 5(1) Assessment & Ledger Approval",
+      "Section 3(4) Penalty Imposition & Rule 12 Land Revenue Recovery Certification",
+      "Inspector Field Authority: Rule 4 & 5 Field Survey, Unit Registration & Form PFT-3",
+      "Rule 9: Form PFT-2 Challan Collections & Rule 10 Discontinuance Orders",
+      "System Administration: Supabase Cloud Synchronization & Data Seed Management"
+    ]
   }
 ];
 
@@ -312,6 +333,11 @@ export function verifyOfficerAuthority(
   officer: MockOfficer,
   action: StatutoryAction
 ): { authorized: boolean; reason?: string } {
+  // Admin role possesses full-fledged authority across all statutory powers (Director, ETO, Inspector)
+  if (officer.role === "ADMIN") {
+    return { authorized: true };
+  }
+
   switch (action) {
     case "REGISTER_UNIT":
     case "SUBMIT_ASSESSMENT":

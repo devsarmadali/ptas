@@ -244,8 +244,9 @@ export default function SignInPage() {
               marginRight: "auto"
             }}
           >
-            Select any of the three pre-filled departmental roles below to immediately authenticate
-            with certified jurisdiction powers under Section 3 of the Punjab Finance Act 1977.
+            Select any of the official departmental roles below (including Provincial Administrator
+            with full authorities) to immediately authenticate with certified jurisdiction powers
+            under Section 3 of the Punjab Finance Act 1977.
           </p>
         </div>
 
@@ -321,7 +322,7 @@ export default function SignInPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(20rem, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))",
               gap: "1rem"
             }}
           >
@@ -332,7 +333,9 @@ export default function SignInPage() {
                   ? { bg: "#e0f2fe", text: "#0369a1", border: "#7dd3fc", accent: "#0284c7" }
                   : info.role === "ETO"
                     ? { bg: "#fef3c7", text: "#92400e", border: "#fde68a", accent: "#d97706" }
-                    : { bg: "#f3e8ff", text: "#6b21a8", border: "#d8b4fe", accent: "#9333ea" };
+                    : info.role === "DIRECTOR"
+                      ? { bg: "#f3e8ff", text: "#6b21a8", border: "#d8b4fe", accent: "#9333ea" }
+                      : { bg: "#fce7f3", text: "#831843", border: "#fbcfe8", accent: "#be185d" };
 
               return (
                 <div

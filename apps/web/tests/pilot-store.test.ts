@@ -10,10 +10,10 @@ import {
 import { computeLedgerBalance } from "@ptas/domain";
 
 describe("Vehari Pilot Store & Statutory Seed Verification", () => {
-  it("provides exactly 3 distinct mock authority roles", () => {
-    expect(MOCK_OFFICERS).toHaveLength(3);
+  it("provides exactly 4 distinct mock authority roles (including Admin)", () => {
+    expect(MOCK_OFFICERS).toHaveLength(4);
 
-    const [inspector, eto, director] = MOCK_OFFICERS;
+    const [inspector, eto, director, admin] = MOCK_OFFICERS;
     expect(inspector.role).toBe("INSPECTOR");
     expect(inspector.name).toBe("Muhammad Aslam");
     expect(inspector.jurisdictionTier).toBe("CIRCLE");
@@ -25,6 +25,10 @@ describe("Vehari Pilot Store & Statutory Seed Verification", () => {
     expect(director.role).toBe("DIRECTOR");
     expect(director.name).toBe("Shahid Nawaz");
     expect(director.jurisdictionTier).toBe("REGION");
+
+    expect(admin.role).toBe("ADMIN");
+    expect(admin.name).toBe("Provincial Administrator");
+    expect(admin.jurisdictionTier).toBe("REGION");
   });
 
   it("seeds initial Vehari taxpayers strictly with Second Schedule statutory rates", () => {
