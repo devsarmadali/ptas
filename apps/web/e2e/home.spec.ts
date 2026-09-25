@@ -7,22 +7,22 @@ test("renders official PTAS header and unified route hubs", async ({ page }) => 
       console.error("CLIENT_PAGE_LOG:", msg.text());
     }
   });
-  await page.goto("/");
+  await page.goto("/assessment");
   await expect(
     page.getByRole("heading", {
       name: /Government of the Punjab — Professional Tax Administration/i
     })
   ).toBeVisible({ timeout: 20000 });
 
-  // Verify all 4 unified route hubs are visible
-  await expect(page.getByRole("button", { name: /Assessment & Field Desk/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Compliance & Recovery/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Revenue & Citizen Desk/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Intelligence & Governance/i })).toBeVisible();
+  // Verify all 4 unified route hubs are visible as links
+  await expect(page.getByRole("link", { name: /Assessment & Field Desk/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Compliance & Recovery/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Revenue & Citizen Desk/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Intelligence & Governance/i })).toBeVisible();
 });
 
 test("navigates across unified route hubs and contextual sub-tabs", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/assessment");
   await expect(
     page.getByRole("heading", {
       name: /Government of the Punjab — Professional Tax Administration/i
@@ -30,9 +30,10 @@ test("navigates across unified route hubs and contextual sub-tabs", async ({ pag
   ).toBeVisible({ timeout: 20000 });
 
   // Switch to Intelligence & Governance Route Hub
-  await page.getByRole("button", { name: /Intelligence & Governance/i }).click();
-  await expect(page.getByRole("tab", { name: /Analytics Dashboard/i })).toBeVisible();
-  await expect(page.getByRole("tab", { name: /Statutory Reports Studio/i })).toBeVisible();
+  await page.getByRole("link", { name: /Intelligence & Governance/i }).click();
+  await expect(page).toHaveURL(/.*intelligence/);
+  await expect(page.getByRole("link", { name: /Analytics Dashboard/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Statutory Gazette & Reports/i })).toBeVisible();
 
   // Verify 47-slab distribution table is visible in Analytics
   await expect(
@@ -40,16 +41,17 @@ test("navigates across unified route hubs and contextual sub-tabs", async ({ pag
   ).toBeVisible();
 
   // Switch to Reports Studio
-  await page.getByRole("tab", { name: /Statutory Reports Studio/i }).click();
+  await page.getByRole("link", { name: /Statutory Gazette & Reports/i }).click();
+  await expect(page).toHaveURL(/.*intelligence\/reports/);
   await expect(
-    page.getByRole("tab", { name: /Statutory Slabs Distribution \(47\)/i })
+    page.getByText(/Statutory Registers & Detailed Revenue Reporting Studio/i)
   ).toBeVisible();
 });
 
 test("verifies statutory sub-class and tertiary slabs in Form P.F.T-1 and Form P.F.T-2", async ({
   page
 }) => {
-  await page.goto("/");
+  await page.goto("/assessment");
   await expect(
     page.getByRole("heading", {
       name: /Government of the Punjab — Professional Tax Administration/i
@@ -57,19 +59,25 @@ test("verifies statutory sub-class and tertiary slabs in Form P.F.T-1 and Form P
   ).toBeVisible({ timeout: 20000 });
 
   // Open Form P.F.T-1 via the Form PFT-3 Register where approved assessees reside
-  await page.getByRole("tab", { name: /Form P\.F\.T-3 Assessment Register/i }).click();
+  await page.getByRole("link", { name: /Form P\.F\.T-3 Assessment Register/i }).click();
+  await expect(page).toHaveURL(/.*assessment\/pft3/);
+  await expect(page.getByRole("heading", { name: /Form P\.F\.T-3/i })).toBeVisible();
+
+  const pagePromise = page.context().waitForEvent("page");
   await page.locator(".action-menu-trigger").first().click();
   await page.getByRole("menuitem", { name: /View Form P\.F\.T-1/i }).click();
-  await expect(page.getByText(/FORM P\.F\.T-1/i).first()).toBeVisible();
-  await expect(page.getByText(/NOTICE OF TAX DEMAND/i).first()).toBeVisible();
-
-  // Close modal
-  await page.getByLabel("Close").click();
+  const pft1Page = await pagePromise;
+  await pft1Page.waitForLoadState();
+  await expect(pft1Page.getByText(/FORM P\.F\.T-1/i).first()).toBeVisible();
+  await expect(pft1Page.getByText(/NOTICE OF TAX DEMAND/i).first()).toBeVisible();
+  await pft1Page.close();
 
   // Navigate to Revenue Hub -> Form PFT-2 Challans
-  await page.getByRole("button", { name: /Revenue & Citizen Desk/i }).click();
-  await expect(page.getByRole("tab", { name: /Form PFT-2 Challans/i })).toBeVisible();
-  await page.getByRole("tab", { name: /Form PFT-2 Challans/i }).click();
+  await page.getByRole("link", { name: /Revenue & Citizen Desk/i }).click();
+  await expect(page).toHaveURL(/.*revenue/);
+  await expect(page.getByRole("link", { name: /Form PFT-2 Challans/i })).toBeVisible();
+  await page.getByRole("link", { name: /Form PFT-2 Challans/i }).click();
+  await expect(page.locator(".action-menu-trigger").first()).toBeVisible();
 
   // Open single Form PFT-2 Challan modal
   await page.locator(".action-menu-trigger").first().click();
@@ -81,7 +89,7 @@ test("verifies statutory sub-class and tertiary slabs in Form P.F.T-1 and Form P
 test("verifies RowActionMenu popover interactions in Compliance & Recovery Hub", async ({
   page
 }) => {
-  await page.goto("/");
+  await page.goto("/assessment");
   await expect(
     page.getByRole("heading", {
       name: /Government of the Punjab — Professional Tax Administration/i
@@ -89,8 +97,10 @@ test("verifies RowActionMenu popover interactions in Compliance & Recovery Hub",
   ).toBeVisible({ timeout: 20000 });
 
   // Navigate to Compliance & Recovery Route Hub
-  await page.getByRole("button", { name: /Compliance & Recovery/i }).click();
-  await expect(page.getByRole("tab", { name: /Defaulter & Arrears Roll/i })).toBeVisible();
+  await page.getByRole("link", { name: /Compliance & Recovery/i }).click();
+  await expect(page).toHaveURL(/.*enforcement/);
+  await expect(page.getByRole("link", { name: /Defaulter & Arrears Roll/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Defaulter Tracking/i })).toBeVisible();
 
   // Open Defaulter row action menu
   await page.locator(".action-menu-trigger").first().click();
@@ -108,7 +118,9 @@ test("verifies RowActionMenu popover interactions in Compliance & Recovery Hub",
   await page.getByLabel("Close").click();
 
   // Navigate to Clearance subtab
-  await page.getByRole("tab", { name: /Clearance Certificates/i }).click();
+  await page.getByRole("link", { name: /Tax Clearance Certificates/i }).click();
+  await expect(page).toHaveURL(/.*enforcement\/clearance/);
+  await expect(page.locator(".action-menu-trigger").first()).toBeVisible();
   await page.locator(".action-menu-trigger").first().click();
   await expect(page.getByRole("menuitem", { name: /Clearance/i })).toBeVisible();
 });

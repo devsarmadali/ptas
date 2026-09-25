@@ -30,6 +30,7 @@ body {
   background: #f4f6f9;
   color: #1e293b;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 button,

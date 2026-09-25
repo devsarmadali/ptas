@@ -1,6 +1,11 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import type { Route } from "next";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+
+const asRoute = (path: string): Route => path as unknown as Route;
 import {
   type AuditActor,
   type DuplicateMatch,
@@ -31,17 +36,22 @@ import {
   CIRCLE_VEHARI_ID,
   FINANCIAL_YEAR_2026_27,
   MOCK_OFFICERS,
+  VEHARI_LOCALITIES,
   type AppealRecord,
   type ClearanceCertificateRecord,
   type DiscontinuanceRecord,
   type MockOfficer,
   type PilotAuditItem,
   type RefundAdjustmentRecord,
+  type FutureTaxAdjustmentRecord,
   type StoredUnit,
   type StoredUnitSnapshot,
   type Pft2ChallanRecord,
   type StatutoryReceiptRecord,
   type Pft2Status,
+  createInitialPilotUnits,
+  createInitialAuditLogs,
+  createInitialAppeals,
   createInitialClearanceCertificates,
   createInitialDiscontinuances,
   createInitialRefundAdjustments,
@@ -137,7 +147,6 @@ export type TabId =
   | "APPEALS"
   | "CLEARANCE"
   | "RELIEF_DESK"
-  | "LEDGER"
   | "EPAY"
   | "AUDIT";
 
@@ -151,7 +160,6 @@ export const TAB_TO_HUB: Record<TabId, RouteHubId> = {
   CLEARANCE: "enforcement",
   PFT2: "revenue",
   RECEIPTS: "revenue",
-  LEDGER: "revenue",
   EPAY: "revenue",
   PUBLIC_PORTAL: "revenue",
   ANALYTICS: "intelligence",
@@ -167,6 +175,43 @@ export const HUB_DEFAULT_TABS: Record<RouteHubId, TabId> = {
   intelligence: "ANALYTICS"
 };
 
+export const TAB_TO_CANONICAL_PATH: Record<TabId, string> = {
+  UNITS: "/assessment",
+  ASSESSMENTS: "/assessment/queue",
+  REGISTER_PFT3: "/assessment/pft3",
+  DEFAULTERS: "/enforcement",
+  APPEALS: "/enforcement/appeals",
+  RELIEF_DESK: "/enforcement/adjustments",
+  CLEARANCE: "/enforcement/clearance",
+  PFT2: "/revenue",
+  RECEIPTS: "/revenue/receipts",
+  EPAY: "/revenue/receipts",
+  PUBLIC_PORTAL: "/verify",
+  ANALYTICS: "/intelligence",
+  MIS_HUB: "/intelligence",
+  REPORTS: "/intelligence/reports",
+  AUDIT: "/intelligence/audit"
+};
+
+export const PATH_TO_TAB: Record<string, { hub: RouteHubId; tab: TabId }> = {
+  "/assessment": { hub: "assessment", tab: "UNITS" },
+  "/assessment/units": { hub: "assessment", tab: "UNITS" },
+  "/assessment/queue": { hub: "assessment", tab: "ASSESSMENTS" },
+  "/assessment/pft3": { hub: "assessment", tab: "REGISTER_PFT3" },
+  "/enforcement": { hub: "enforcement", tab: "DEFAULTERS" },
+  "/enforcement/defaulters": { hub: "enforcement", tab: "DEFAULTERS" },
+  "/enforcement/appeals": { hub: "enforcement", tab: "APPEALS" },
+  "/enforcement/adjustments": { hub: "enforcement", tab: "RELIEF_DESK" },
+  "/enforcement/clearance": { hub: "enforcement", tab: "CLEARANCE" },
+  "/revenue": { hub: "revenue", tab: "PFT2" },
+  "/revenue/challans": { hub: "revenue", tab: "PFT2" },
+  "/revenue/receipts": { hub: "revenue", tab: "RECEIPTS" },
+  "/intelligence": { hub: "intelligence", tab: "ANALYTICS" },
+  "/intelligence/analytics": { hub: "intelligence", tab: "ANALYTICS" },
+  "/intelligence/reports": { hub: "intelligence", tab: "REPORTS" },
+  "/intelligence/audit": { hub: "intelligence", tab: "AUDIT" }
+};
+
 export default function HomePage({
   initialRouteHub,
   initialTab
@@ -174,37 +219,30 @@ export default function HomePage({
   initialRouteHub?: RouteHubId;
   initialTab?: TabId;
 } = {}) {
-  const [isLoaded, setIsLoaded] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+
   const [officer, setOfficer] = useState<MockOfficer>(MOCK_OFFICERS[0]);
-  const [units, setUnits] = useState<StoredUnit[]>([]);
-  const [auditLogs, setAuditLogs] = useState<PilotAuditItem[]>([]);
-  const [activeRouteHub, setActiveRouteHub] = useState<RouteHubId>(initialRouteHub ?? "assessment");
-  const [activeTab, setActiveTabState] = useState<TabId>(initialTab ?? "UNITS");
+  const [units, setUnits] = useState<StoredUnit[]>(() => createInitialPilotUnits());
+  const [auditLogs, setAuditLogs] = useState<PilotAuditItem[]>(() => createInitialAuditLogs());
 
-  // Synchronized Tab and Route Switcher
+  // Resolve active hub and tab directly from URL pathname with fallback to props
+  const resolvedFromPath = pathname ? PATH_TO_TAB[pathname] : null;
+  const activeRouteHub: RouteHubId = resolvedFromPath?.hub ?? initialRouteHub ?? "assessment";
+  const activeTab: TabId = resolvedFromPath?.tab ?? initialTab ?? "UNITS";
+
+  // URL-based Navigation
   const switchTab = (tab: TabId) => {
-    setActiveTabState(tab);
-    const hub = TAB_TO_HUB[tab] ?? "assessment";
-    setActiveRouteHub(hub);
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      url.searchParams.set("route", hub);
-      url.searchParams.set("tab", tab);
-      window.history.replaceState(null, "", url.toString());
-    }
+    const targetPath = TAB_TO_CANONICAL_PATH[tab] ?? "/assessment";
+    router.push(asRoute(targetPath));
   };
 
-  const switchRouteHub = (hub: RouteHubId) => {
-    setActiveRouteHub(hub);
-    const targetTab = TAB_TO_HUB[activeTab] === hub ? activeTab : HUB_DEFAULT_TABS[hub];
-    setActiveTabState(targetTab);
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      url.searchParams.set("route", hub);
-      url.searchParams.set("tab", targetTab);
-      window.history.replaceState(null, "", url.toString());
+  // Auto-redirect root URL to canonical /assessment route
+  useEffect(() => {
+    if (pathname === "/") {
+      router.replace(asRoute("/assessment"));
     }
-  };
+  }, [pathname, router]);
 
   // Compatible setter for all child handlers
   const setActiveTab = (tab: TabId) => {
@@ -226,10 +264,14 @@ export default function HomePage({
   const [selectedUnitId, setSelectedUnitId] = useState<string>("");
 
   // Phase 6 State: Clearance Certificates, Discontinuance (Rule 10), and Statutory Refunds (Rule 5)
-  const [discontinuances, setDiscontinuances] = useState<DiscontinuanceRecord[]>([]);
-  const [refundAdjustments, setRefundAdjustments] = useState<RefundAdjustmentRecord[]>([]);
+  const [discontinuances, setDiscontinuances] = useState<DiscontinuanceRecord[]>(() =>
+    createInitialDiscontinuances()
+  );
+  const [refundAdjustments, setRefundAdjustments] = useState<RefundAdjustmentRecord[]>(() =>
+    createInitialRefundAdjustments()
+  );
   const [clearanceCertificates, setClearanceCertificates] = useState<ClearanceCertificateRecord[]>(
-    []
+    () => createInitialClearanceCertificates()
   );
 
   // Clearance Certificate Modal State
@@ -262,13 +304,14 @@ export default function HomePage({
   const [activeDiscontinuanceOrder, setActiveDiscontinuanceOrder] =
     useState<DiscontinuanceOrderModel | null>(null);
 
-  // Refund / Adjustment Modal States (Rule 5)
+  // Future Tax Adjustment Modal States (Rule 5)
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refUnitId, setRefUnitId] = useState("");
-  const [refType, setRefType] = useState<"CREDIT_ADJUSTMENT" | "REFUND">("CREDIT_ADJUSTMENT");
   const [refAmount, setRefAmount] = useState<number>(2000);
+  const [refOriginalPayment, setRefOriginalPayment] = useState<number>(10000);
+  const [refTargetYear, setRefTargetYear] = useState<string>("FY-2027-2028");
   const [refGrounds, setRefGrounds] = useState(
-    "Taxpayer deposited excess amount under Challan 32-A"
+    "Taxpayer deposited excess amount under Challan 32-A. Eligible for adjustment against future tax demand."
   );
   const [refEvidence, setRefEvidence] = useState(
     "National Bank of Pakistan Challan 32-A Deposit Scroll Reference verified"
@@ -279,7 +322,7 @@ export default function HomePage({
   );
 
   // Appeals & Revisions (Section 7) State
-  const [appeals, setAppeals] = useState<AppealRecord[]>([]);
+  const [appeals, setAppeals] = useState<AppealRecord[]>(() => createInitialAppeals());
   const [showFileAppealModal, setShowFileAppealModal] = useState(false);
   const [showScheduleHearingModal, setShowScheduleHearingModal] = useState(false);
   const [showAdjudicateAppealModal, setShowAdjudicateAppealModal] = useState(false);
@@ -401,28 +444,7 @@ export default function HomePage({
     "CLOUD"
   );
 
-  // Phase 7: Executive MIS Hub & Report Studio
-  const [showExecutivePrintModal, setShowExecutivePrintModal] = useState(false);
-  const [executiveReportType, setExecutiveReportType] = useState<
-    | "EXECUTIVE_MIS_SUMMARY"
-    | "PFT3_REGISTER"
-    | "DEFAULTER_ROLL"
-    | "NOTICE_DISPATCH"
-    | "CLEARANCE_LOG"
-    | "RELIEF_REGISTER"
-    | "SLAB_DISTRIBUTION"
-  >("EXECUTIVE_MIS_SUMMARY");
-
   // Phase 9: Analytics Dashboard & Statutory Reports Separation
-  const [activeReportTab, setActiveReportTab] = useState<
-    | "PFT3_REGISTER"
-    | "DEFAULTER_ROLL"
-    | "NOTICE_DISPATCH"
-    | "CLEARANCE_LOG"
-    | "RELIEF_REGISTER"
-    | "SLAB_DISTRIBUTION"
-  >("PFT3_REGISTER");
-  const [reportSearchQuery, setReportSearchQuery] = useState("");
   const [dashboardPerspective, setDashboardPerspective] = useState<
     "AUTO" | "INSPECTOR" | "ETO" | "DIRECTOR"
   >("AUTO");
@@ -435,6 +457,7 @@ export default function HomePage({
   const [newIdentifierType, setNewIdentifierType] = useState<"CNIC" | "NTN">("CNIC");
   const [newIdentifierValue, setNewIdentifierValue] = useState("");
   const [newAddress, setNewAddress] = useState("");
+  const [newLocality, setNewLocality] = useState("");
   const [newCategoryCode, setNewCategoryCode] = useState("3");
   const [newSubclassCode, setNewSubclassCode] = useState("3(i)");
   const [newTertiaryCode, setNewTertiaryCode] = useState("3(i)(b)");
@@ -493,8 +516,18 @@ export default function HomePage({
     useState<CitizenPaymentSimulationResult | null>(null);
 
   // Phase 10 State: PFT-2 Challan Management & Statutory Receipts Desk
-  const [pft2Challans, setPft2Challans] = useState<Pft2ChallanRecord[]>([]);
-  const [statutoryReceipts, setStatutoryReceipts] = useState<StatutoryReceiptRecord[]>([]);
+  const [pft2Challans, setPft2Challans] = useState<Pft2ChallanRecord[]>(() =>
+    createInitialPft2Challans(createInitialPilotUnits())
+  );
+  const [statutoryReceipts, setStatutoryReceipts] = useState<StatutoryReceiptRecord[]>(() =>
+    createInitialStatutoryReceipts(createInitialPilotUnits())
+  );
+
+  // Tax Units & Survey Filters
+  const [unitsSearchQuery, setUnitsSearchQuery] = useState("");
+  const [unitsStatusFilter, setUnitsStatusFilter] = useState<
+    "ALL" | "DRAFT" | "SUBMITTED" | "RETURNED" | "APPROVED"
+  >("ALL");
 
   // PFT-2 Filters & Modals
   const [pft2StatusFilter, setPft2StatusFilter] = useState<
@@ -523,8 +556,8 @@ export default function HomePage({
   const [showIssuePft2Modal, setShowIssuePft2Modal] = useState(false);
   const [issuePft2UnitId, setIssuePft2UnitId] = useState("");
   const [issuePft2DueDate, setIssuePft2DueDate] = useState("2026-08-31");
-  const [issuePft2IssueDate, setIssuePft2IssueDate] = useState("2026-09-20");
-  const [issuePft2FormType, setIssuePft2FormType] = useState<
+  const [issuePft2IssueDate] = useState("2026-09-20");
+  const [issuePft2FormType] = useState<
     "STANDARD" | "NOTICE_CUM_CHALLAN" | "ARREARS_DEMAND" | "REVISED_ASSESSMENT"
   >("STANDARD");
   const [issuePft2DemandScope, setIssuePft2DemandScope] = useState<
@@ -565,48 +598,49 @@ export default function HomePage({
 
   // Load from local storage / seed on mount
   useEffect(() => {
-    const state = loadPilotState();
-    setOfficer(state.currentOfficer);
-    setUnits(state.units);
-    setAuditLogs(state.auditLogs);
-    setAppeals(state.appeals ?? []);
-    setDiscontinuances(state.discontinuances ?? createInitialDiscontinuances());
-    setRefundAdjustments(state.refundAdjustments ?? createInitialRefundAdjustments());
-    setClearanceCertificates(state.clearanceCertificates ?? createInitialClearanceCertificates());
-    setPft2Challans(state.pft2Challans ?? createInitialPft2Challans(state.units));
-    setStatutoryReceipts(state.statutoryReceipts ?? createInitialStatutoryReceipts(state.units));
-    if (state.units.length > 0) {
-      const firstId = state.units[0]?.id ?? "";
-      setSelectedUnitId(firstId);
-      setPaymentUnitId(firstId);
-      setAppealUnitId(firstId);
-      setDiscUnitId(firstId);
-      setRefUnitId(firstId);
-    }
-    // Check URL search parameters on mount for decoupled tab links
-    if (typeof window !== "undefined") {
-      const sp = new URLSearchParams(window.location.search);
-      const urlTab = sp.get("tab") as TabId | null;
-      const urlRoute = sp.get("route") as RouteHubId | null;
-      if (urlTab && TAB_TO_HUB[urlTab]) {
-        setActiveTabState(urlTab);
-        setActiveRouteHub(TAB_TO_HUB[urlTab]);
-      } else if (urlRoute && HUB_DEFAULT_TABS[urlRoute]) {
-        setActiveRouteHub(urlRoute);
-        setActiveTabState(HUB_DEFAULT_TABS[urlRoute]);
+    let sub: { unsubscribe: () => void } | undefined;
+    try {
+      const state = loadPilotState();
+      setOfficer(state.currentOfficer);
+      setUnits(state.units);
+      setAuditLogs(state.auditLogs);
+      setAppeals(state.appeals ?? []);
+      setDiscontinuances(state.discontinuances ?? createInitialDiscontinuances());
+      setRefundAdjustments(state.refundAdjustments ?? createInitialRefundAdjustments());
+      setClearanceCertificates(state.clearanceCertificates ?? createInitialClearanceCertificates());
+      setPft2Challans(state.pft2Challans ?? createInitialPft2Challans(state.units));
+      setStatutoryReceipts(state.statutoryReceipts ?? createInitialStatutoryReceipts(state.units));
+      if (state.units.length > 0) {
+        const firstId = state.units[0]?.id ?? "";
+        setSelectedUnitId(firstId);
+        setPaymentUnitId(firstId);
+        setAppealUnitId(firstId);
+        setDiscUnitId(firstId);
+        setRefUnitId(firstId);
       }
-    }
-
-    setIsLoaded(true);
-
-    // Subscribe to real Supabase Auth session updates
-    const sub = subscribeToAuthChanges((event, session) => {
-      if (session?.user?.email) {
-        const matching = getOfficerProfileByEmail(session.user.email);
-        setOfficer(matching);
-        setAuthenticatedSessionType("CLOUD");
+      // Check URL search parameters on mount for backward-compatible deep links
+      if (typeof window !== "undefined") {
+        const sp = new URLSearchParams(window.location.search);
+        const urlTab = sp.get("tab") as TabId | null;
+        const urlRoute = sp.get("route") as RouteHubId | null;
+        if (urlTab && TAB_TO_CANONICAL_PATH[urlTab]) {
+          router.replace(asRoute(TAB_TO_CANONICAL_PATH[urlTab]));
+        } else if (urlRoute && HUB_DEFAULT_TABS[urlRoute]) {
+          router.replace(asRoute(TAB_TO_CANONICAL_PATH[HUB_DEFAULT_TABS[urlRoute]]));
+        }
       }
-    });
+
+      // Subscribe to real Supabase Auth session updates
+      sub = subscribeToAuthChanges((event, session) => {
+        if (session?.user?.email) {
+          const matching = getOfficerProfileByEmail(session.user.email);
+          setOfficer(matching);
+          setAuthenticatedSessionType("CLOUD");
+        }
+      });
+    } catch (err) {
+      console.error("Critical error in HomePage mount useEffect:", err);
+    }
 
     return () => {
       sub?.unsubscribe();
@@ -746,11 +780,6 @@ export default function HomePage({
     };
     syncState(units, [auditItem, ...auditLogs]);
     showToast("info", `Signed out of ${officer.name}'s session.`);
-  };
-
-  // Switch Active Officer
-  const handleSwitchOfficer = (targetOfficer: MockOfficer) => {
-    handleAuthenticateOfficer(targetOfficer.email);
   };
 
   // All categories and rules
@@ -1053,6 +1082,10 @@ export default function HomePage({
 
     const newUnit: StoredUnit = {
       id: unitId,
+      assessmentNumber: `ASM-${new Date().getFullYear()}-${String(units.length + 1).padStart(4, "0")}`,
+      demandNumber: undefined,
+      pinNumber: undefined,
+      locality: newLocality.trim() || undefined,
       legalName: newLegalName.trim(),
       tradeName: newTradeName.trim() || undefined,
       identifierType: newIdentifierType,
@@ -1085,7 +1118,7 @@ export default function HomePage({
       target: newUnit.legalName,
       timestamp: new Date().toISOString(),
       correlationId,
-      details: `Registered unit under Class ${rule.rule_code} (${rule.category}) with PIN ${provincialUin} at official statutory rate PKR ${rule.annual_rate_pkr.toLocaleString()}`
+      details: `Registered unit under Class ${rule.rule_code} (${rule.category}) with Assessment No. ${newUnit.assessmentNumber} at official statutory rate PKR ${rule.annual_rate_pkr.toLocaleString()}`
     };
 
     const updated = [newUnit, ...units];
@@ -1097,6 +1130,7 @@ export default function HomePage({
     setNewTradeName("");
     setNewIdentifierValue("");
     setNewAddress("");
+    setNewLocality("");
     setNewCategoryCode("3");
     setNewSubclassCode("3(i)");
     setNewTertiaryCode("3(i)(b)");
@@ -1149,6 +1183,59 @@ export default function HomePage({
     }
   };
 
+  // Handler: Bulk Submit all Feeded / Draft Survey Units to ETO
+  const handleBulkSubmitDraftUnits = () => {
+    const draftUnits = units.filter((u) => (u.assessments[0]?.status ?? "DRAFT") === "DRAFT");
+    if (draftUnits.length === 0) {
+      showToast("info", "No feeded / draft units available for submission.");
+      return;
+    }
+
+    try {
+      let submitCount = 0;
+      let newUnits = [...units];
+
+      for (const targetUnit of draftUnits) {
+        const currentAssessment = targetUnit.assessments[0];
+        const currentVersion = targetUnit.assessmentVersions[0];
+        if (!currentAssessment || !currentVersion) continue;
+
+        const { assessment: submittedAsm, version: submittedVer } = submitAssessmentVersion(
+          currentAssessment,
+          currentVersion
+        );
+
+        const updatedUnit: StoredUnit = {
+          ...targetUnit,
+          assessments: [submittedAsm, ...targetUnit.assessments.slice(1)],
+          assessmentVersions: [submittedVer, ...targetUnit.assessmentVersions.slice(1)]
+        };
+
+        newUnits = newUnits.map((u) => (u.id === targetUnit.id ? updatedUnit : u));
+        submitCount++;
+      }
+
+      const auditItem: PilotAuditItem = {
+        id: `audit-bulk-sub-${Date.now()}`,
+        eventType: "ASSESSMENT_SUBMITTED",
+        actorName: officer.name,
+        actorRole: officer.role,
+        target: `Bulk Survey Batch (${submitCount} Units)`,
+        timestamp: new Date().toISOString(),
+        correlationId: `corr-bulk-sub-${Date.now()}`,
+        details: `Inspector bulk submitted ${submitCount} feeded survey units to ETO review queue (FY-2026-2027)`
+      };
+
+      syncState(newUnits, [auditItem, ...auditLogs]);
+      showToast(
+        "success",
+        `Successfully submitted ${submitCount} survey units to ETO Review Queue.`
+      );
+    } catch (err: unknown) {
+      showToast("error", (err as Error).message);
+    }
+  };
+
   // Handler: ETO Grants Statutory Approval
   const handleApproveAssessment = (unitId: string) => {
     const authCheck = verifyOfficerAuthority(officer, "APPROVE_ASSESSMENT");
@@ -1189,8 +1276,22 @@ export default function HomePage({
         idempotencyKey: `idem-dem-${Date.now()}`
       });
 
+      // Allocate permanent Demand Number and PIN Number upon ETO Approval
+      const allocatedDemandNo =
+        targetUnit.demandNumber ||
+        String(targetUnit.demandUnit.permanentDemandNo || units.indexOf(targetUnit) + 1).padStart(
+          4,
+          "0"
+        );
+      const allocatedPinNo =
+        targetUnit.pinNumber ||
+        targetUnit.provincialUin ||
+        `237-7704-V${String(units.indexOf(targetUnit) + 1).padStart(2, "0")}`;
+
       const updatedUnit: StoredUnit = {
         ...targetUnit,
+        demandNumber: allocatedDemandNo,
+        pinNumber: allocatedPinNo,
         assessments: [approvedAsm, ...targetUnit.assessments.slice(1)],
         assessmentVersions: [approvedVer, ...targetUnit.assessmentVersions.slice(1)],
         ledgerEntries: [...targetUnit.ledgerEntries, demandEntry]
@@ -1204,7 +1305,7 @@ export default function HomePage({
         target: targetUnit.legalName,
         timestamp: new Date().toISOString(),
         correlationId: `corr-appr-${Date.now()}`,
-        details: `Statutory Approval granted by ETO. Posted initial demand of PKR ${approvedVer.snapshot.taxAmount.toLocaleString()} to demand ledger.`
+        details: `Statutory Approval granted by ETO. Allocated Demand No. ${allocatedDemandNo}, PIN ${allocatedPinNo}. Posted initial demand of PKR ${approvedVer.snapshot.taxAmount.toLocaleString()} to demand ledger.`
       };
 
       const updatedUnits = units.map((u) => (u.id === unitId ? updatedUnit : u));
@@ -1548,116 +1649,17 @@ export default function HomePage({
   const effectivePerspective: "INSPECTOR" | "ETO" | "DIRECTOR" =
     dashboardPerspective === "AUTO" ? officer.role : dashboardPerspective;
 
-  // Phase 9: Normalized search and filtered lists for Statutory Reports
-  const normalizedReportSearch = reportSearchQuery.trim().toLowerCase();
-
-  const filteredPft3Units = useMemo(() => {
-    if (!normalizedReportSearch) return units;
-    return units.filter(
-      (u) =>
-        u.legalName.toLowerCase().includes(normalizedReportSearch) ||
-        (u.tradeName ?? "").toLowerCase().includes(normalizedReportSearch) ||
-        u.demandUnit.permanentDemandNo.toLowerCase().includes(normalizedReportSearch) ||
-        (u.provincialUin?.toLowerCase().includes(normalizedReportSearch) ?? false) ||
-        u.identifierValue.toLowerCase().includes(normalizedReportSearch) ||
-        u.statutoryRule.category.toLowerCase().includes(normalizedReportSearch) ||
-        (u.statutoryRule.subclassification_code?.toLowerCase().includes(normalizedReportSearch) ??
-          false) ||
-        u.statutoryRule.rule_code.toLowerCase().includes(normalizedReportSearch)
-    );
-  }, [units, normalizedReportSearch]);
-
-  const filteredDefaulterUnits = useMemo(() => {
-    const defaulters = units.filter((u) => computeLedgerBalance(u.ledgerEntries) > 0);
-    if (!normalizedReportSearch) return defaulters;
-    return defaulters.filter(
-      (u) =>
-        u.legalName.toLowerCase().includes(normalizedReportSearch) ||
-        (u.tradeName ?? "").toLowerCase().includes(normalizedReportSearch) ||
-        u.demandUnit.permanentDemandNo.toLowerCase().includes(normalizedReportSearch) ||
-        (u.provincialUin?.toLowerCase().includes(normalizedReportSearch) ?? false) ||
-        u.identifierValue.toLowerCase().includes(normalizedReportSearch)
-    );
-  }, [units, normalizedReportSearch]);
-
-  const filteredDispatchRows = useMemo(() => {
-    const rows = circleDispatchRegisterData.rows;
-    if (!normalizedReportSearch) return rows;
-    return rows.filter(
-      (r) =>
-        r.assesseeLegalName.toLowerCase().includes(normalizedReportSearch) ||
-        (r.assesseeTradeName ?? "").toLowerCase().includes(normalizedReportSearch) ||
-        r.noticeNumber.toLowerCase().includes(normalizedReportSearch) ||
-        r.demandNumber.toLowerCase().includes(normalizedReportSearch) ||
-        r.serviceStatus.toLowerCase().includes(normalizedReportSearch)
-    );
-  }, [circleDispatchRegisterData.rows, normalizedReportSearch]);
-
-  const filteredClearanceCerts = useMemo(() => {
-    if (!normalizedReportSearch) return clearanceCertificates;
-    return clearanceCertificates.filter(
-      (c) =>
-        c.assesseeLegalName.toLowerCase().includes(normalizedReportSearch) ||
-        (c.assesseeTradeName ?? "").toLowerCase().includes(normalizedReportSearch) ||
-        c.certificateNumber.toLowerCase().includes(normalizedReportSearch) ||
-        c.cnicOrNtn.toLowerCase().includes(normalizedReportSearch)
-    );
-  }, [clearanceCertificates, normalizedReportSearch]);
-
-  const filteredReliefRecords = useMemo(() => {
-    type ReliefRow = {
-      id: string;
-      reliefType: "RULE_10_DISCONTINUANCE" | "RULE_5_REFUND_CREDIT";
-      unitId: string;
-      legalName: string;
-      effectiveDate: string;
-      statutoryReason: string;
-      amountAdjustedPkr: number;
-      approvedByEto: string;
-      status: string;
-    };
-    const rows: ReliefRow[] = [];
-    for (const d of discontinuances) {
-      const u = units.find((x) => x.id === d.unitId);
-      rows.push({
-        id: d.id,
-        reliefType: "RULE_10_DISCONTINUANCE",
-        unitId: d.unitId,
-        legalName: u?.legalName ?? d.assesseeLegalName,
-        effectiveDate: d.discontinuanceDate,
-        statutoryReason: d.reason,
-        amountAdjustedPkr: 0,
-        approvedByEto: d.adjudicatedBy ?? "ETO Vehari",
-        status: d.status
-      });
-    }
-    for (const r of refundAdjustments) {
-      const u = units.find((x) => x.id === r.unitId);
-      rows.push({
-        id: r.id,
-        reliefType: "RULE_5_REFUND_CREDIT",
-        unitId: r.unitId,
-        legalName: u?.legalName ?? r.assesseeLegalName,
-        effectiveDate: r.orderDate ?? r.filedAt,
-        statutoryReason: r.grounds,
-        amountAdjustedPkr: r.amount,
-        approvedByEto: r.adjudicatedBy ?? "ETO Vehari",
-        status: r.status
-      });
-    }
-    if (!normalizedReportSearch) return rows;
-    return rows.filter(
-      (r) =>
-        r.legalName.toLowerCase().includes(normalizedReportSearch) ||
-        r.statutoryReason.toLowerCase().includes(normalizedReportSearch) ||
-        r.reliefType.toLowerCase().includes(normalizedReportSearch) ||
-        r.status.toLowerCase().includes(normalizedReportSearch)
-    );
-  }, [discontinuances, refundAdjustments, units, normalizedReportSearch]);
-
-  // Phase 9: Helpers for Statutory Reports Export & Print
-  const handleExportActiveReportCsv = () => {
-    switch (activeReportTab) {
+  // Helpers for Statutory Reports Export & Print
+  const handleExportScheduleCsv = (
+    schedule:
+      | "PFT3_REGISTER"
+      | "DEFAULTER_ROLL"
+      | "NOTICE_DISPATCH"
+      | "CLEARANCE_LOG"
+      | "RELIEF_REGISTER"
+      | "SLAB_DISTRIBUTION"
+  ) => {
+    switch (schedule) {
       case "PFT3_REGISTER":
         downloadCsvFile("PFT-3_Assessment_Register_Vehari_2026.csv", exportPft3RegisterCsv(units));
         showToast("success", "Form P.F.T-3 Register CSV downloaded.");
@@ -1700,9 +1702,30 @@ export default function HomePage({
     }
   };
 
+  const handlePrintScheduleReport = (
+    schedule:
+      | "PFT3_REGISTER"
+      | "DEFAULTER_ROLL"
+      | "NOTICE_DISPATCH"
+      | "CLEARANCE_LOG"
+      | "RELIEF_REGISTER"
+      | "SLAB_DISTRIBUTION"
+  ) => {
+    let reportSlug = "pft3-gazette";
+    if (schedule === "DEFAULTER_ROLL") reportSlug = "defaulters-roll";
+    if (schedule === "NOTICE_DISPATCH") reportSlug = "notice-dispatch";
+    if (schedule === "CLEARANCE_LOG") reportSlug = "clearance-log";
+    if (schedule === "RELIEF_REGISTER") reportSlug = "relief-adjustments";
+    if (schedule === "SLAB_DISTRIBUTION") reportSlug = "schedule-2";
+    window.open(`/intelligence/reports/view?report=${reportSlug}`, "_blank");
+  };
+
+  const handleExportActiveReportCsv = () => {
+    handleExportScheduleCsv("PFT3_REGISTER");
+  };
+
   const handlePrintActiveReport = () => {
-    setExecutiveReportType(activeReportTab);
-    setShowExecutivePrintModal(true);
+    handlePrintScheduleReport("PFT3_REGISTER");
   };
 
   // Handler: Record Batch Service
@@ -2510,16 +2533,22 @@ export default function HomePage({
       return;
     }
 
-    const appNumber = `REF-VEH-2026-${Math.floor(Math.random() * 900 + 100)}`;
-    const newRefundRecord: RefundAdjustmentRecord = {
-      id: `ref-${Date.now()}`,
+    const appNumber = `ADJ-VEH-2026-${Math.floor(Math.random() * 900 + 100)}`;
+    const newRefundRecord: FutureTaxAdjustmentRecord = {
+      id: `adj-${Date.now()}`,
       applicationNumber: appNumber,
       unitId: targetUnit.id,
       assesseeLegalName: targetUnit.legalName,
       assesseeTradeName: targetUnit.tradeName,
       cnicOrNtn: targetUnit.identifierValue,
-      type: refType,
+      type: "CREDIT_ADJUSTMENT",
       amount: refAmount,
+      originalPaymentAmount: refOriginalPayment,
+      excessAmount: refAmount,
+      adjustmentCreditBalance: refAmount,
+      amountAdjusted: 0,
+      remainingAdjustmentBalance: refAmount,
+      targetFutureFinancialYear: refTargetYear,
       grounds: refGrounds.trim(),
       evidenceReference: refEvidence.trim(),
       status: "PENDING_REVIEW",
@@ -2535,7 +2564,7 @@ export default function HomePage({
       target: targetUnit.legalName,
       timestamp: new Date().toISOString(),
       correlationId: `corr-refapp-${Date.now()}`,
-      details: `Filed Rule 5 application (${appNumber}) for ${refType} of PKR ${refAmount.toLocaleString()} for ${targetUnit.legalName}.`
+      details: `Filed Rule 5 Future Tax Adjustment claim (${appNumber}) for credit adjustment of PKR ${refAmount.toLocaleString()} against ${refTargetYear} for ${targetUnit.legalName}.`
     };
 
     syncState(units, [auditItem, ...auditLogs], undefined, undefined, undefined, [
@@ -2910,20 +2939,6 @@ export default function HomePage({
     setShowReceiptDocumentModal(true);
   };
 
-  const handleOpenIssuePft2Modal = (unitId?: string) => {
-    const targetId = unitId || (units[0]?.id ?? "");
-    setIssuePft2UnitId(targetId);
-    setIssuePft2DueDate("2026-08-31");
-    setIssuePft2IssueDate(new Date().toISOString().split("T")[0] || "2026-09-20");
-    setIssuePft2FormType("STANDARD");
-    setIssuePft2DemandScope("CURRENT");
-    setIssuePft2PaymentScope("FULL");
-    const u = units.find((x) => x.id === targetId);
-    const assessed = u?.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
-    setIssuePft2PartialAmount(Math.round(assessed / 2));
-    setShowIssuePft2Modal(true);
-  };
-
   const handleConfirmIssuePft2 = () => {
     const targetUnit = units.find((u) => u.id === issuePft2UnitId);
     if (!targetUnit) {
@@ -3189,18 +3204,6 @@ export default function HomePage({
           onClick: () => handleOpenReturnModal(targetUnit.id)
         });
       }
-      actions.push({
-        id: "edit-survey",
-        label: "Edit Survey Data",
-        icon: "✏️",
-        onClick: () => handleOpenEditSurveyUnit(targetUnit)
-      });
-      actions.push({
-        id: "close-draft",
-        label: "Close Draft",
-        icon: "✖️",
-        onClick: () => handleCloseDraftSurvey(targetUnit.id)
-      });
     } else if (status === "RETURNED") {
       actions.push({
         id: "resubmit-survey",
@@ -3242,12 +3245,6 @@ export default function HomePage({
         align="right"
         actions={[
           {
-            id: "issue-pft2-modal",
-            label: "Issue Form PFT-2 (Challan)",
-            icon: "💳",
-            onClick: () => handleOpenIssuePft2Modal(targetUnit.id)
-          },
-          {
             id: "issue-pft2-tab",
             label: "Issue Form PFT-2 (New Tab ↗)",
             icon: "🖨️",
@@ -3256,12 +3253,9 @@ export default function HomePage({
           },
           {
             id: "view-pft1",
-            label: "View Form P.F.T-1 (Assessment Notice)",
+            label: "View Form P.F.T-1 (Assessment Notice ↗)",
             icon: "📄",
-            onClick: () => {
-              setSelectedUnitId(targetUnit.id);
-              setShowPft1NoticeModal(true);
-            }
+            onClick: () => window.open(`/documents/pft1?pin=${targetUnit.provincialUin}`, "_blank")
           },
           {
             id: "view-details",
@@ -3270,25 +3264,8 @@ export default function HomePage({
             onClick: () => window.open(`/units/${targetUnit.provincialUin}/details`, "_blank")
           },
           {
-            id: "receive-payment",
-            label: "Receive Bank Payment",
-            icon: "📥",
-            onClick: () => {
-              setSelectedUnitId(targetUnit.id);
-              switchTab("PFT2");
-              const ch = pft2Challans.find(
-                (c) => c.unitId === targetUnit.id && c.status === "ISSUED"
-              );
-              if (ch) {
-                handleOpenReceivePft2(ch);
-              } else {
-                setPft2SearchQuery(targetUnit.demandUnit.permanentDemandNo);
-              }
-            }
-          },
-          {
-            id: "view-receipts",
-            label: "View Statutory Receipts (Rule 10)",
+            id: "payment-details",
+            label: "Payment Details & Receipts",
             icon: "🧾",
             onClick: () => {
               setSelectedUnitId(targetUnit.id);
@@ -3297,25 +3274,14 @@ export default function HomePage({
             }
           },
           {
-            id: "inspect-ledger",
-            label: "Inspect Demand & Payment Ledger",
-            icon: "📒",
-            onClick: () => {
-              setSelectedUnitId(targetUnit.id);
-              setPaymentUnitId(targetUnit.id);
-              switchTab("LEDGER");
-            }
-          },
-          {
             id: "land-revenue-recovery",
-            label: "Issue Land Revenue Arrears Certificate (Rule 12)",
+            label: "Issue Land Revenue Arrears Certificate (Rule 12 ↗)",
             icon: "🏛️",
-            onClick: () => {
-              setSelectedUnitId(targetUnit.id);
-              setRecoveryTargetUnitId(targetUnit.id);
-              switchTab("DEFAULTERS");
-              setShowRecoveryModal(true);
-            }
+            onClick: () =>
+              window.open(
+                `/documents/land-revenue-recovery?pin=${targetUnit.provincialUin}`,
+                "_blank"
+              )
           },
           {
             id: "tax-clearance",
@@ -3364,14 +3330,6 @@ export default function HomePage({
       />
     );
   };
-
-  if (!isLoaded) {
-    return (
-      <div style={{ padding: "3rem", textAlign: "center" }}>
-        <h2>Loading Punjab Professional Tax Administration System (Vehari Pilot)...</h2>
-      </div>
-    );
-  }
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -3527,137 +3485,55 @@ export default function HomePage({
           </div>
 
           <div
-            className="role-switcher-group"
-            style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+            className="header-utilities"
+            style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}
           >
-            <button
-              type="button"
-              onClick={() => setShowAuthModal(true)}
-              className="btn-secondary btn-sm"
-              style={{
-                backgroundColor: "#0d3822",
-                color: "#ffffff",
-                borderColor: "#0d3822",
-                fontWeight: 600
-              }}
-              title="Open Official Officer Authentication Studio"
-            >
-              🔑 Auth Studio / Switch Officer
-            </button>
-            <div style={{ display: "flex", gap: "0.25rem" }}>
-              {OFFICIAL_OFFICERS_REGISTRY.map((o) => (
-                <button
-                  key={o.id}
-                  onClick={() => handleSwitchOfficer(o)}
-                  className={`role-switch-btn ${officer.email === o.email ? "active" : ""}`}
-                  title={`Quick switch to ${o.name} (${o.role})`}
-                >
-                  {o.role === "INSPECTOR"
-                    ? "👤 Inspector"
-                    : o.role === "ETO"
-                      ? "⚖️ ETO"
-                      : "📊 Director"}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={handleOfficerSignOut}
-              className="btn-secondary btn-sm"
-              style={{ color: "#991b1b", borderColor: "#fecaca" }}
-              title="Sign out of current officer session"
-            >
-              🚪 Sign Out
-            </button>
-          </div>
-        </div>
-      </nav>
-
-      {/* Decoupled Operational Desks & Standalone Portals Navigation */}
-      <nav
-        className="decoupled-desks-bar"
-        aria-label="Decoupled Government Desks and Standalone Portals"
-      >
-        <div className="decoupled-desks-inner">
-          <div className="decoupled-desks-label">
-            <span className="decoupled-badge">DECOUPLED DESKS</span>
-            <span className="decoupled-subtitle">Dedicated Standalone Portals</span>
-          </div>
-          <div className="decoupled-desks-links">
-            <a
-              href="/verify"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="decoupled-desk-link"
-              title="Open Citizen Document Verification Portal in a new tab"
-            >
-              <span className="desk-icon">🔍</span>
-              <span className="desk-name">Citizen Verification</span>
-              <span className="desk-ext">↗</span>
-            </a>
-
             <a
               href="/admin/user-management"
               target="_blank"
               rel="noopener noreferrer"
-              className="decoupled-desk-link"
-              title="Open User Management & Jurisdiction Desk in a new tab"
+              className="btn-secondary btn-sm"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                textDecoration: "none",
+                fontWeight: 600,
+                color: "#1e293b",
+                backgroundColor: "#f8fafc",
+                borderColor: "#cbd5e1"
+              }}
+              title="Open Departmental User & Jurisdiction Management Desk (/admin/user-management)"
             >
-              <span className="desk-icon">👥</span>
-              <span className="desk-name">User Management</span>
-              <span className="desk-ext">↗</span>
+              👥 User Management ↗
             </a>
-
             <a
-              href="/intelligence/statutory-category-yield"
+              href="/verify"
               target="_blank"
               rel="noopener noreferrer"
-              className="decoupled-desk-link"
-              title="Open Statutory Category & Slab Yield Desk in a new tab"
+              className="btn-secondary btn-sm"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                textDecoration: "none",
+                fontWeight: 600,
+                color: "#1e293b",
+                backgroundColor: "#f8fafc",
+                borderColor: "#cbd5e1"
+              }}
+              title="Open Public Citizen Document Verification Portal (/verify)"
             >
-              <span className="desk-icon">📊</span>
-              <span className="desk-name">Category Yield</span>
-              <span className="desk-ext">↗</span>
+              🔍 Citizen Verification ↗
             </a>
-
             <button
               type="button"
-              onClick={() => switchTab("EPAY")}
-              className={`decoupled-desk-btn ${activeTab === "EPAY" ? "active" : ""}`}
-              title="Switch to ePay Punjab Gateway & Reconciliation Desk"
+              onClick={handleOfficerSignOut}
+              className="btn-secondary btn-sm"
+              style={{ color: "#991b1b", borderColor: "#fecaca", fontWeight: 600 }}
+              title="Sign out of current officer session"
             >
-              <span className="desk-icon">🔄</span>
-              <span className="desk-name">ePay Punjab</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => switchTab("PUBLIC_PORTAL")}
-              className={`decoupled-desk-btn ${activeTab === "PUBLIC_PORTAL" ? "active" : ""}`}
-              title="Switch to Public Facilitation & Self-Assessment Desk"
-            >
-              <span className="desk-icon">🌐</span>
-              <span className="desk-name">Public Facilitation</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => switchTab("PFT2")}
-              className={`decoupled-desk-btn ${activeTab === "PFT2" ? "active" : ""}`}
-              title="Switch to Form PFT-2 Revenue Challans Register"
-            >
-              <span className="desk-icon">📑</span>
-              <span className="desk-name">Revenue Challans</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => switchTab("LEDGER")}
-              className={`decoupled-desk-btn ${activeTab === "LEDGER" ? "active" : ""}`}
-              title="Switch to Demand & Payment Ledger Desk"
-            >
-              <span className="desk-icon">📒</span>
-              <span className="desk-name">Demand Ledger</span>
+              🚪 Sign Out
             </button>
           </div>
         </div>
@@ -3696,11 +3572,11 @@ export default function HomePage({
 
         {/* Tier 1: Unified Route Hubs Navigation */}
         <nav className="route-hubs-bar" aria-label="Unified Operational Routes">
-          <button
-            type="button"
-            onClick={() => switchRouteHub("assessment")}
+          <Link
+            href="/assessment"
             className={`route-hub-card ${activeRouteHub === "assessment" ? "active" : ""}`}
             title="Assessment & Field Desk Hub (/assessment)"
+            style={{ textDecoration: "none" }}
           >
             <span className="route-hub-icon">🏛️</span>
             <div className="route-hub-content">
@@ -3712,13 +3588,13 @@ export default function HomePage({
               </div>
               <p className="route-hub-desc">Registration, Approvals &amp; Notices</p>
             </div>
-          </button>
+          </Link>
 
-          <button
-            type="button"
-            onClick={() => switchRouteHub("enforcement")}
+          <Link
+            href="/enforcement"
             className={`route-hub-card ${activeRouteHub === "enforcement" ? "active" : ""}`}
             title="Compliance & Recovery Hub (/enforcement)"
+            style={{ textDecoration: "none" }}
           >
             <span className="route-hub-icon">🚨</span>
             <div className="route-hub-content">
@@ -3732,13 +3608,13 @@ export default function HomePage({
               </div>
               <p className="route-hub-desc">Arrears, Appeals &amp; Clearances</p>
             </div>
-          </button>
+          </Link>
 
-          <button
-            type="button"
-            onClick={() => switchRouteHub("revenue")}
+          <Link
+            href="/revenue"
             className={`route-hub-card ${activeRouteHub === "revenue" ? "active" : ""}`}
             title="Revenue & Citizen Desk Hub (/revenue)"
+            style={{ textDecoration: "none" }}
           >
             <span className="route-hub-icon">💳</span>
             <div className="route-hub-content">
@@ -3747,13 +3623,13 @@ export default function HomePage({
               </div>
               <p className="route-hub-desc">Ledger, ePay &amp; Self-Assessment</p>
             </div>
-          </button>
+          </Link>
 
-          <button
-            type="button"
-            onClick={() => switchRouteHub("intelligence")}
+          <Link
+            href="/intelligence"
             className={`route-hub-card ${activeRouteHub === "intelligence" ? "active" : ""}`}
             title="Intelligence & Governance Hub (/intelligence)"
+            style={{ textDecoration: "none" }}
           >
             <span className="route-hub-icon">📊</span>
             <div className="route-hub-content">
@@ -3762,50 +3638,46 @@ export default function HomePage({
               </div>
               <p className="route-hub-desc">Executive MIS, Slabs &amp; Audit Trail</p>
             </div>
-          </button>
+          </Link>
         </nav>
 
         {/* Tier 2: Contextual Sub-Tab Navigation Bar */}
         <div className="subtabs-nav" role="tablist" aria-label="Route Contextual Sub-Tabs">
           {activeRouteHub === "assessment" && (
             <>
-              <button
-                role="tab"
-                aria-selected={activeTab === "UNITS"}
-                onClick={() => switchTab("UNITS")}
-                className={`subtab-btn ${activeTab === "UNITS" ? "active" : ""}`}
+              <Link
+                href={asRoute("/assessment/pft3")}
+                className={`subtab-btn ${pathname === "/assessment/pft3" || activeTab === "REGISTER_PFT3" ? "active" : ""}`}
+                style={{ textDecoration: "none" }}
+              >
+                📋 Form P.F.T-3 Assessment Register ({units.length})
+              </Link>
+              <Link
+                href={asRoute("/assessment")}
+                className={`subtab-btn ${pathname === "/assessment" || pathname === "/" || activeTab === "UNITS" ? "active" : ""}`}
+                style={{ textDecoration: "none" }}
               >
                 🏢 Tax Units &amp; Survey
-              </button>
-              <button
-                role="tab"
-                aria-selected={activeTab === "ASSESSMENTS"}
-                onClick={() => switchTab("ASSESSMENTS")}
-                className={`subtab-btn ${activeTab === "ASSESSMENTS" ? "active" : ""}`}
+              </Link>
+              <Link
+                href={asRoute("/assessment/queue")}
+                className={`subtab-btn ${pathname === "/assessment/queue" || activeTab === "ASSESSMENTS" ? "active" : ""}`}
+                style={{ textDecoration: "none" }}
               >
                 ⚖️ Assessment Queue
                 {metrics.pendingApprovals > 0 && (
                   <span className="subtab-badge">{metrics.pendingApprovals}</span>
                 )}
-              </button>
-              <button
-                role="tab"
-                aria-selected={activeTab === "REGISTER_PFT3"}
-                onClick={() => switchTab("REGISTER_PFT3")}
-                className={`subtab-btn ${activeTab === "REGISTER_PFT3" ? "active" : ""}`}
-              >
-                📋 Form P.F.T-3 Assessment Register ({units.length})
-              </button>
+              </Link>
             </>
           )}
 
           {activeRouteHub === "enforcement" && (
             <>
-              <button
-                role="tab"
-                aria-selected={activeTab === "DEFAULTERS"}
-                onClick={() => switchTab("DEFAULTERS")}
-                className={`subtab-btn ${activeTab === "DEFAULTERS" ? "active" : ""}`}
+              <Link
+                href={asRoute("/enforcement")}
+                className={`subtab-btn ${pathname === "/enforcement" || activeTab === "DEFAULTERS" ? "active" : ""}`}
+                style={{ textDecoration: "none" }}
               >
                 ⚠️ Defaulter &amp; Arrears Roll
                 {metrics.defaultersPenaltyEligible + metrics.defaultersOverdue > 0 && (
@@ -3813,12 +3685,11 @@ export default function HomePage({
                     {metrics.defaultersPenaltyEligible + metrics.defaultersOverdue}
                   </span>
                 )}
-              </button>
-              <button
-                role="tab"
-                aria-selected={activeTab === "APPEALS"}
-                onClick={() => switchTab("APPEALS")}
-                className={`subtab-btn ${activeTab === "APPEALS" ? "active" : ""}`}
+              </Link>
+              <Link
+                href={asRoute("/enforcement/appeals")}
+                className={`subtab-btn ${pathname === "/enforcement/appeals" || activeTab === "APPEALS" ? "active" : ""}`}
+                style={{ textDecoration: "none" }}
               >
                 ⚖️ Appellate Tribunal Desk
                 {appeals.filter((a) => a.status === "FILED" || a.status === "HEARING_SCHEDULED")
@@ -3831,12 +3702,11 @@ export default function HomePage({
                     }
                   </span>
                 )}
-              </button>
-              <button
-                role="tab"
-                aria-selected={activeTab === "RELIEF_DESK"}
-                onClick={() => switchTab("RELIEF_DESK")}
-                className={`subtab-btn ${activeTab === "RELIEF_DESK" ? "active" : ""}`}
+              </Link>
+              <Link
+                href={asRoute("/enforcement/adjustments")}
+                className={`subtab-btn ${pathname === "/enforcement/adjustments" || activeTab === "RELIEF_DESK" ? "active" : ""}`}
+                style={{ textDecoration: "none" }}
               >
                 🛑 Discontinuance &amp; Refunds
                 {discontinuances.filter(
@@ -3850,14 +3720,13 @@ export default function HomePage({
                     }
                   </span>
                 )}
-              </button>
-              <button
-                role="tab"
-                aria-selected={activeTab === "CLEARANCE"}
-                onClick={() => switchTab("CLEARANCE")}
-                className={`subtab-btn ${activeTab === "CLEARANCE" ? "active" : ""}`}
+              </Link>
+              <Link
+                href={asRoute("/enforcement/clearance")}
+                className={`subtab-btn ${pathname === "/enforcement/clearance" || activeTab === "CLEARANCE" ? "active" : ""}`}
+                style={{ textDecoration: "none" }}
               >
-                📜 Clearance Certificates (PFT-5)
+                📜 Tax Clearance Certificates
                 {clearanceCertificates.length > 0 && (
                   <span
                     className="subtab-badge"
@@ -3866,234 +3735,406 @@ export default function HomePage({
                     {clearanceCertificates.length}
                   </span>
                 )}
-              </button>
+              </Link>
             </>
           )}
 
           {activeRouteHub === "revenue" && (
             <>
-              <button
-                role="tab"
-                aria-selected={activeTab === "PFT2"}
-                onClick={() => switchTab("PFT2")}
-                className={`subtab-btn ${activeTab === "PFT2" ? "active" : ""}`}
+              <Link
+                href={asRoute("/revenue")}
+                className={`subtab-btn ${pathname === "/revenue" || activeTab === "PFT2" ? "active" : ""}`}
+                style={{ textDecoration: "none" }}
               >
                 📑 Form PFT-2 Challans ({pft2Challans.length})
-              </button>
-              <button
-                role="tab"
-                aria-selected={activeTab === "RECEIPTS"}
-                onClick={() => switchTab("RECEIPTS")}
-                className={`subtab-btn ${activeTab === "RECEIPTS" ? "active" : ""}`}
+              </Link>
+              <Link
+                href={asRoute("/revenue/receipts")}
+                className={`subtab-btn ${pathname === "/revenue/receipts" || activeTab === "RECEIPTS" ? "active" : ""}`}
+                style={{ textDecoration: "none" }}
               >
                 🧾 Receipts &amp; Collections ({statutoryReceipts.length})
-              </button>
-              <button
-                role="tab"
-                aria-selected={activeTab === "LEDGER"}
-                onClick={() => switchTab("LEDGER")}
-                className={`subtab-btn ${activeTab === "LEDGER" ? "active" : ""}`}
-              >
-                📒 Demand &amp; Payment Ledger
-              </button>
-              <button
-                role="tab"
-                aria-selected={activeTab === "EPAY"}
-                onClick={() => switchTab("EPAY")}
-                className={`subtab-btn ${activeTab === "EPAY" ? "active" : ""}`}
-              >
-                🔄 ePay Punjab Reconciliation
-              </button>
-              <button
-                role="tab"
-                aria-selected={activeTab === "PUBLIC_PORTAL"}
-                onClick={() => switchTab("PUBLIC_PORTAL")}
-                className={`subtab-btn ${activeTab === "PUBLIC_PORTAL" ? "active" : ""}`}
-              >
-                🌐 Public Portal &amp; QR Authenticator
-              </button>
+              </Link>
             </>
           )}
 
           {activeRouteHub === "intelligence" && (
             <>
-              <button
-                role="tab"
-                aria-selected={activeTab === "ANALYTICS" || activeTab === "MIS_HUB"}
-                onClick={() => switchTab("ANALYTICS")}
-                className={`subtab-btn ${activeTab === "ANALYTICS" || activeTab === "MIS_HUB" ? "active" : ""}`}
+              <Link
+                href={asRoute("/intelligence")}
+                className={`subtab-btn ${pathname === "/intelligence" || activeTab === "ANALYTICS" || activeTab === "MIS_HUB" ? "active" : ""}`}
+                style={{ textDecoration: "none" }}
               >
                 📊 Analytics Dashboard
-              </button>
-              <button
-                role="tab"
-                aria-selected={activeTab === "REPORTS"}
-                onClick={() => switchTab("REPORTS")}
-                className={`subtab-btn ${activeTab === "REPORTS" ? "active" : ""}`}
+              </Link>
+              <Link
+                href={asRoute("/intelligence/reports")}
+                className={`subtab-btn ${pathname === "/intelligence/reports" || activeTab === "REPORTS" ? "active" : ""}`}
+                style={{ textDecoration: "none" }}
               >
-                📑 Statutory Reports Studio
-              </button>
-
-              <button
-                role="tab"
-                aria-selected={activeTab === "AUDIT"}
-                onClick={() => switchTab("AUDIT")}
-                className={`subtab-btn ${activeTab === "AUDIT" ? "active" : ""}`}
+                📑 Statutory Gazette &amp; Reports
+              </Link>
+              <Link
+                href={asRoute("/intelligence/audit")}
+                className={`subtab-btn ${pathname === "/intelligence/audit" || activeTab === "AUDIT" ? "active" : ""}`}
+                style={{ textDecoration: "none" }}
               >
                 🛡️ Immutable Audit Log ({auditLogs.length})
-              </button>
+              </Link>
             </>
           )}
         </div>
 
         {/* TAB 1: TAX UNITS & REGISTRATION */}
-        {activeTab === "UNITS" && (
-          <section className="content-panel">
-            <div className="panel-header">
-              <div>
-                <h2>Circle-Vehari Taxpayer Units</h2>
-                <p>
-                  Official registry of commercial establishments, companies, and professions
-                  governed by Section 3 of the Punjab Finance Act 1977.
-                </p>
-              </div>
-              <div className="panel-actions" style={{ display: "flex", gap: "0.5rem" }}>
-                <button
-                  type="button"
-                  onClick={() => setShowBulkSurveyModal(true)}
-                  className="btn-secondary"
-                  style={{
-                    backgroundColor: "#065f46",
-                    color: "#ffffff",
-                    borderColor: "#047857"
-                  }}
-                  title="Batch upload field survey records via CSV into Form P.F.T-3 Register"
-                >
-                  📥 Bulk Import Survey (CSV)
-                </button>
-                <button
-                  onClick={() => setShowAddUnitModal(true)}
-                  className="btn-primary"
-                  title="Capture and register a new tax unit in Circle-Vehari"
-                >
-                  + Add a New Unit
-                </button>
-              </div>
-            </div>
+        {activeTab === "UNITS" &&
+          (() => {
+            const draftUnitsCount = units.filter(
+              (u) => (u.assessments[0]?.status ?? "DRAFT") === "DRAFT"
+            ).length;
 
-            <div className="table-container">
-              <table className="gov-table">
-                <thead>
-                  <tr>
-                    <th>Demand No.</th>
-                    <th>Legal &amp; Trade Name</th>
-                    <th>CNIC / NTN</th>
-                    <th>Second Schedule Classification</th>
-                    <th>Statutory Rate</th>
-                    <th>Assessment Status</th>
-                    <th>Ledger Balance</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {units.map((u) => {
-                    const latestAsm = u.assessments[0];
-                    const balance = computeLedgerBalance(u.ledgerEntries);
-                    return (
-                      <tr key={u.id}>
-                        <td>
-                          <strong>{u.demandUnit.permanentDemandNo}</strong>
-                          {u.provincialUin && (
-                            <span
-                              style={{
-                                display: "block",
-                                fontFamily: "monospace",
-                                fontSize: "0.725rem",
-                                color: "#1d4ed8",
-                                fontWeight: 600,
-                                marginTop: "2px"
-                              }}
-                              title="PIN (Professional Identification Number)"
-                            >
-                              PIN: {u.provincialUin}
-                            </span>
-                          )}
-                        </td>
-                        <td>
-                          <strong>{u.legalName}</strong>
-                          {u.tradeName && u.tradeName !== u.legalName && (
-                            <span
-                              style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
-                            >
-                              {u.tradeName}
-                            </span>
-                          )}
-                          <span style={{ display: "block", fontSize: "0.75rem", color: "#94a3b8" }}>
-                            {u.address}
-                          </span>
-                        </td>
-                        <td>
-                          <span style={{ fontFamily: "monospace", fontSize: "0.85rem" }}>
-                            {u.identifierType}: {u.identifierValue}
-                          </span>
-                        </td>
-                        <td>
-                          <strong>
-                            Class {u.statutoryRule.rule_code} &bull; {u.statutoryRule.category}
-                          </strong>
-                          <span
-                            style={{
-                              display: "block",
-                              fontSize: "0.75rem",
-                              color: "#64748b",
-                              maxWidth: "20rem",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis"
-                            }}
-                          >
-                            {u.statutoryRule.statutory_tertiary_classification
-                              ? `${u.statutoryRule.subclassification_label ?? u.statutoryRule.subcategory} (${u.statutoryRule.statutory_tertiary_classification})`
-                              : (u.statutoryRule.subclassification_label ??
-                                (u.statutoryRule.subclassification_code
-                                  ? u.statutoryRule.subcategory
-                                  : "Direct Category Rate"))}
-                          </span>
-                        </td>
-                        <td>
-                          <strong style={{ color: "#0d3822" }}>
-                            PKR {u.statutoryRule.annual_rate_pkr.toLocaleString()}
-                          </strong>
-                        </td>
-                        <td>
-                          <span
-                            className={`badge badge-${
-                              latestAsm?.status === "APPROVED"
-                                ? "approved"
-                                : latestAsm?.status === "SUBMITTED"
-                                  ? "submitted"
-                                  : latestAsm?.status === "RETURNED"
-                                    ? "returned"
-                                    : "draft"
-                            }`}
-                          >
-                            {latestAsm?.status ?? "DRAFT"}
-                          </span>
-                        </td>
-                        <td>
-                          <strong style={{ color: balance > 0 ? "#b91c1c" : "#15803d" }}>
-                            PKR {balance.toLocaleString()}
-                          </strong>
-                        </td>
-                        <td>{renderSurveyUnitActions(u)}</td>
+            const filteredSurveyUnits = units.filter((u) => {
+              const currentStatus = u.assessments[0]?.status ?? "DRAFT";
+              if (unitsStatusFilter !== "ALL" && currentStatus !== unitsStatusFilter) return false;
+              if (unitsSearchQuery.trim()) {
+                const q = unitsSearchQuery.toLowerCase();
+                const match =
+                  u.legalName.toLowerCase().includes(q) ||
+                  (u.tradeName && u.tradeName.toLowerCase().includes(q)) ||
+                  u.identifierValue.toLowerCase().includes(q) ||
+                  u.address.toLowerCase().includes(q) ||
+                  (u.assessmentNumber && u.assessmentNumber.toLowerCase().includes(q)) ||
+                  (u.demandNumber && u.demandNumber.toLowerCase().includes(q)) ||
+                  (u.pinNumber && u.pinNumber.toLowerCase().includes(q)) ||
+                  (u.provincialUin && u.provincialUin.toLowerCase().includes(q)) ||
+                  (u.demandUnit?.permanentDemandNo && u.demandUnit.permanentDemandNo.includes(q));
+                if (!match) return false;
+              }
+              return true;
+            });
+
+            return (
+              <section className="content-panel">
+                <div className="panel-header">
+                  <div>
+                    <h2>Circle-Vehari Taxpayer Units</h2>
+                    <p>
+                      Official registry of commercial establishments, companies, and professions
+                      governed by Section 3 of the Punjab Finance Act 1977.
+                    </p>
+                  </div>
+                  <div
+                    className="panel-actions"
+                    style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
+                  >
+                    {draftUnitsCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleBulkSubmitDraftUnits}
+                        className="btn-success"
+                        style={{
+                          backgroundColor: "#15803d",
+                          color: "#ffffff",
+                          borderColor: "#166534",
+                          fontWeight: 700
+                        }}
+                        title={`Bulk submit all ${draftUnitsCount} feeded survey units to ETO review queue`}
+                      >
+                        ⚡ Bulk Submit Feeded Units ({draftUnitsCount})
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowBulkSurveyModal(true)}
+                      className="btn-secondary"
+                      style={{
+                        backgroundColor: "#065f46",
+                        color: "#ffffff",
+                        borderColor: "#047857"
+                      }}
+                      title="Batch upload field survey records via CSV into Form P.F.T-3 Register"
+                    >
+                      📥 Bulk Import Survey (CSV)
+                    </button>
+                    <button
+                      onClick={() => setShowAddUnitModal(true)}
+                      className="btn-primary"
+                      title="Capture and register a new tax unit in Circle-Vehari"
+                    >
+                      + Add a New Unit
+                    </button>
+                  </div>
+                </div>
+
+                {/* Search & Filter Toolbar */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "0.75rem",
+                    marginBottom: "1rem",
+                    alignItems: "center",
+                    background: "#f8fafc",
+                    padding: "0.75rem 1rem",
+                    borderRadius: "6px",
+                    border: "1px solid #e2e8f0"
+                  }}
+                >
+                  <div style={{ flex: "1 1 16rem" }}>
+                    <input
+                      type="text"
+                      placeholder="Search by legal name, trade name, CNIC, NTN, PIN, or PDN..."
+                      value={unitsSearchQuery}
+                      onChange={(e) => setUnitsSearchQuery(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "0.45rem 0.75rem",
+                        borderRadius: "6px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.85rem"
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
+                      Status:
+                    </label>
+                    <select
+                      value={unitsStatusFilter}
+                      onChange={(e) =>
+                        setUnitsStatusFilter(
+                          e.target.value as "ALL" | "DRAFT" | "SUBMITTED" | "RETURNED" | "APPROVED"
+                        )
+                      }
+                      style={{
+                        padding: "0.45rem 0.75rem",
+                        borderRadius: "6px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.85rem",
+                        backgroundColor: "#ffffff"
+                      }}
+                    >
+                      <option value="ALL">All Statuses ({units.length})</option>
+                      <option value="DRAFT">Feeded / Updated ({draftUnitsCount})</option>
+                      <option value="SUBMITTED">
+                        Submitted (
+                        {units.filter((u) => u.assessments[0]?.status === "SUBMITTED").length})
+                      </option>
+                      <option value="RETURNED">
+                        Returned (
+                        {units.filter((u) => u.assessments[0]?.status === "RETURNED").length})
+                      </option>
+                      <option value="APPROVED">
+                        Approved (
+                        {units.filter((u) => u.assessments[0]?.status === "APPROVED").length})
+                      </option>
+                    </select>
+                  </div>
+                  {(unitsSearchQuery || unitsStatusFilter !== "ALL") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUnitsSearchQuery("");
+                        setUnitsStatusFilter("ALL");
+                      }}
+                      className="btn-secondary btn-sm"
+                      style={{ fontSize: "0.75rem" }}
+                    >
+                      Clear Filters
+                    </button>
+                  )}
+                </div>
+
+                <div className="table-container">
+                  <table className="gov-table">
+                    <thead>
+                      <tr>
+                        <th>Assessment No.</th>
+                        <th>Demand No.</th>
+                        <th>PIN Number</th>
+                        <th>Legal &amp; Trade Name</th>
+                        <th>CNIC / NTN</th>
+                        <th>Second Schedule Classification</th>
+                        <th>Statutory Rate</th>
+                        <th>Assessment Status</th>
+                        <th>Ledger Balance</th>
+                        <th>Actions</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
+                    </thead>
+                    <tbody>
+                      {filteredSurveyUnits.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={10}
+                            style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
+                          >
+                            No taxpayer units match the selected search or filter criteria.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredSurveyUnits.map((u) => {
+                          const latestAsm = u.assessments[0];
+                          const isApproved = latestAsm?.status === "APPROVED";
+                          const rawStatus = latestAsm?.status ?? "DRAFT";
+                          const balance = computeLedgerBalance(u.ledgerEntries);
+                          return (
+                            <tr key={u.id}>
+                              <td>
+                                <span
+                                  style={{
+                                    fontFamily: "monospace",
+                                    fontSize: "0.8rem",
+                                    color: "#0f766e",
+                                    fontWeight: 600
+                                  }}
+                                >
+                                  {u.assessmentNumber || `ASM-2026-${u.id.slice(-4)}`}
+                                </span>
+                              </td>
+                              <td>
+                                {isApproved || u.demandNumber ? (
+                                  <strong>
+                                    {u.demandNumber || u.demandUnit.permanentDemandNo}
+                                  </strong>
+                                ) : (
+                                  <span
+                                    style={{
+                                      color: "#94a3b8",
+                                      fontSize: "0.75rem",
+                                      fontStyle: "italic"
+                                    }}
+                                  >
+                                    — Pending Approval
+                                  </span>
+                                )}
+                              </td>
+                              <td>
+                                {isApproved || u.pinNumber ? (
+                                  <span
+                                    style={{
+                                      fontFamily: "monospace",
+                                      fontSize: "0.8rem",
+                                      color: "#1d4ed8",
+                                      fontWeight: 600
+                                    }}
+                                  >
+                                    {u.pinNumber || u.provincialUin}
+                                  </span>
+                                ) : (
+                                  <span
+                                    style={{
+                                      color: "#94a3b8",
+                                      fontSize: "0.75rem",
+                                      fontStyle: "italic"
+                                    }}
+                                  >
+                                    — Pending Approval
+                                  </span>
+                                )}
+                              </td>
+                              <td>
+                                <strong>{u.legalName}</strong>
+                                {u.tradeName && u.tradeName !== u.legalName && (
+                                  <span
+                                    style={{
+                                      display: "block",
+                                      fontSize: "0.75rem",
+                                      color: "#64748b"
+                                    }}
+                                  >
+                                    {u.tradeName}
+                                  </span>
+                                )}
+                                {u.locality && (
+                                  <span
+                                    style={{
+                                      display: "inline-block",
+                                      fontSize: "0.7rem",
+                                      backgroundColor: "#f0fdf4",
+                                      color: "#166534",
+                                      border: "1px solid #bbf7d0",
+                                      borderRadius: "4px",
+                                      padding: "1px 5px",
+                                      marginTop: "2px"
+                                    }}
+                                  >
+                                    📍 {u.locality}
+                                  </span>
+                                )}
+                                <span
+                                  style={{
+                                    display: "block",
+                                    fontSize: "0.75rem",
+                                    color: "#94a3b8"
+                                  }}
+                                >
+                                  {u.address}
+                                </span>
+                              </td>
+                              <td>
+                                <span style={{ fontFamily: "monospace", fontSize: "0.85rem" }}>
+                                  {u.identifierType}: {u.identifierValue}
+                                </span>
+                              </td>
+                              <td>
+                                <strong>
+                                  Class {u.statutoryRule.rule_code} &bull;{" "}
+                                  {u.statutoryRule.category}
+                                </strong>
+                                <span
+                                  style={{
+                                    display: "block",
+                                    fontSize: "0.75rem",
+                                    color: "#64748b",
+                                    maxWidth: "20rem",
+                                    whiteSpace: "nowrap",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis"
+                                  }}
+                                >
+                                  {u.statutoryRule.statutory_tertiary_classification
+                                    ? `${u.statutoryRule.subclassification_label ?? u.statutoryRule.subcategory} (${u.statutoryRule.statutory_tertiary_classification})`
+                                    : (u.statutoryRule.subclassification_label ??
+                                      (u.statutoryRule.subclassification_code
+                                        ? u.statutoryRule.subcategory
+                                        : "Direct Category Rate"))}
+                                </span>
+                              </td>
+                              <td>
+                                <strong style={{ color: "#0d3822" }}>
+                                  PKR {u.statutoryRule.annual_rate_pkr.toLocaleString()}
+                                </strong>
+                              </td>
+                              <td>
+                                <span
+                                  className={`badge badge-${
+                                    rawStatus === "APPROVED"
+                                      ? "approved"
+                                      : rawStatus === "SUBMITTED"
+                                        ? "submitted"
+                                        : rawStatus === "RETURNED"
+                                          ? "returned"
+                                          : "draft"
+                                  }`}
+                                >
+                                  {rawStatus === "DRAFT" ? "FEEDED" : rawStatus}
+                                </span>
+                              </td>
+                              <td>
+                                <strong style={{ color: balance > 0 ? "#b91c1c" : "#15803d" }}>
+                                  PKR {balance.toLocaleString()}
+                                </strong>
+                              </td>
+                              <td>{renderSurveyUnitActions(u)}</td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            );
+          })()}
 
         {/* TAB 2: STATUTORY ASSESSMENT QUEUE */}
         {activeTab === "ASSESSMENTS" && (
@@ -4169,7 +4210,7 @@ export default function HomePage({
                                     : "draft"
                             }`}
                           >
-                            {status}
+                            {status === "DRAFT" ? "FEEDED" : status}
                           </span>
                         </td>
                         <td>
@@ -4223,9 +4264,35 @@ export default function HomePage({
                           )}
 
                           {status === "RETURNED" && (
-                            <span style={{ fontSize: "0.8rem", color: "#991b1b", fontWeight: 700 }}>
-                              Returned: {currentVer?.reason || "Reclassification requested"}
-                            </span>
+                            <div
+                              style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}
+                            >
+                              <span
+                                style={{ fontSize: "0.75rem", color: "#991b1b", fontWeight: 700 }}
+                              >
+                                ↩ Returned: {currentVer?.reason || "Reclassification requested"}
+                              </span>
+                              <div style={{ display: "flex", gap: "0.35rem" }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditSurveyUnit(u)}
+                                  className="btn-secondary btn-sm"
+                                  style={{ fontSize: "0.725rem", padding: "0.2rem 0.45rem" }}
+                                  title="Edit survey data to address ETO remarks"
+                                >
+                                  ✏️ Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSubmitAssessment(u.id)}
+                                  className="btn-primary btn-sm"
+                                  style={{ fontSize: "0.725rem", padding: "0.2rem 0.45rem" }}
+                                  title="Resubmit to ETO"
+                                >
+                                  📤 Resubmit
+                                </button>
+                              </div>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -4234,210 +4301,6 @@ export default function HomePage({
                 </tbody>
               </table>
             </div>
-          </section>
-        )}
-
-        {/* TAB 3: DEMAND & PAYMENT LEDGER */}
-        {activeTab === "LEDGER" && (
-          <section className="content-panel">
-            <div className="panel-header">
-              <div>
-                <h2>Append-Only Demand &amp; Payment Ledger</h2>
-                <p>
-                  Statutory accounting ledger. Debits post positive amounts (+PKR); payments post
-                  negative credits (-PKR) as PAYMENT_CREDIT. Live balance is strictly derived;
-                  entries are immutable.
-                </p>
-              </div>
-              <div className="panel-actions">
-                <button
-                  onClick={() => {
-                    const fallbackId = selectedUnitId || units[0]?.id || "";
-                    setPaymentUnitId(fallbackId);
-                    setShowPaymentModal(true);
-                  }}
-                  className="btn-primary"
-                  title="Record a payment receipt (Form PFT-2 or ePay)"
-                >
-                  + Add a Payment Receipt
-                </button>
-              </div>
-            </div>
-
-            {/* Select Unit for Detailed Ledger */}
-            <div
-              style={{ marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "1rem" }}
-            >
-              <label htmlFor="ledger-unit-select" style={{ fontWeight: 700, fontSize: "0.9rem" }}>
-                Select Unit Ledger:
-              </label>
-              <select
-                id="ledger-unit-select"
-                className="form-control"
-                style={{ maxWidth: "25rem" }}
-                value={selectedUnitId}
-                onChange={(e) => setSelectedUnitId(e.target.value)}
-              >
-                {units.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.demandUnit.permanentDemandNo}
-                    {u.provincialUin ? ` [${u.provincialUin}]` : ""} &bull; {u.legalName}
-                  </option>
-                ))}
-              </select>
-
-              {activeUnit && (
-                <div
-                  style={{
-                    marginLeft: "auto",
-                    background: "#f8fafc",
-                    padding: "0.5rem 1rem",
-                    border: "1px solid #cbd5e1",
-                    borderRadius: "6px"
-                  }}
-                >
-                  <span style={{ fontSize: "0.8rem", color: "#64748b", display: "block" }}>
-                    Derived Balance:
-                  </span>
-                  <strong
-                    style={{
-                      fontSize: "1.2rem",
-                      color:
-                        computeLedgerBalance(activeUnit.ledgerEntries) > 0 ? "#b91c1c" : "#166534"
-                    }}
-                  >
-                    PKR {computeLedgerBalance(activeUnit.ledgerEntries).toLocaleString()}
-                  </strong>
-                </div>
-              )}
-            </div>
-
-            {activeUnit && (
-              <div className="table-container">
-                <table className="gov-table">
-                  <thead>
-                    <tr>
-                      <th>Posted At</th>
-                      <th>Entry Type</th>
-                      <th>Reference / Source</th>
-                      <th>Posted By</th>
-                      <th>Debit (+) / Credit (-)</th>
-                      <th>Running Balance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {activeUnit.ledgerEntries.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={6}
-                          style={{ textAlign: "center", padding: "2rem", color: "#64748b" }}
-                        >
-                          No financial ledger entries recorded yet. (Requires ETO Statutory Approval
-                          to post initial demand).
-                        </td>
-                      </tr>
-                    ) : (
-                      (() => {
-                        let running = 0;
-                        return activeUnit.ledgerEntries.map((entry) => {
-                          running += entry.amount;
-                          return (
-                            <tr key={entry.id}>
-                              <td style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                                {new Date(entry.postedAt).toLocaleString()}
-                              </td>
-                              <td>
-                                <span
-                                  className={`badge badge-${
-                                    entry.entryType === "PAYMENT_CREDIT"
-                                      ? "approved"
-                                      : entry.entryType === "ASSESSMENT_DEMAND"
-                                        ? "pending"
-                                        : "draft"
-                                  }`}
-                                >
-                                  {entry.entryType}
-                                </span>
-                              </td>
-                              <td>
-                                <strong>
-                                  {entry.sourceType}: {entry.sourceId}
-                                </strong>
-                                {Boolean(entry.metadata.paymentChannel) && (
-                                  <span
-                                    style={{
-                                      display: "block",
-                                      fontSize: "0.75rem",
-                                      color: "#64748b"
-                                    }}
-                                  >
-                                    Channel: {String(entry.metadata.paymentChannel)}
-                                  </span>
-                                )}
-                                {Boolean(entry.metadata.receiptScanUrl) && (
-                                  <div style={{ marginTop: "0.4rem" }}>
-                                    <button
-                                      type="button"
-                                      className="btn-secondary btn-sm"
-                                      style={{
-                                        fontSize: "0.725rem",
-                                        padding: "0.25rem 0.5rem",
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        gap: "0.3rem",
-                                        borderColor: "#10b981",
-                                        color: "#065f46",
-                                        background: "#ecfdf5",
-                                        fontWeight: 600
-                                      }}
-                                      title={`SHA-256: ${String(entry.metadata.receiptScanSha256 || "")}`}
-                                      onClick={() => {
-                                        setPreviewScanModalUrl(
-                                          String(entry.metadata.receiptScanUrl)
-                                        );
-                                        setPreviewScanHash(
-                                          String(entry.metadata.receiptScanSha256 || "")
-                                        );
-                                        setPreviewScanTitle(entry.sourceId);
-                                        setPreviewScanFileName(
-                                          String(
-                                            entry.metadata.receiptScanFileName ||
-                                              "Challan_32A_Scan.png"
-                                          )
-                                        );
-                                      }}
-                                    >
-                                      📎 View Form PFT-2 / Challan Scan
-                                    </button>
-                                  </div>
-                                )}
-                              </td>
-                              <td style={{ fontSize: "0.85rem" }}>{entry.postedBy}</td>
-                              <td>
-                                <strong
-                                  style={{
-                                    color: entry.amount < 0 ? "#166534" : "#b91c1c",
-                                    fontSize: "0.95rem"
-                                  }}
-                                >
-                                  {entry.amount < 0 ? "-" : "+"}PKR{" "}
-                                  {Math.abs(entry.amount).toLocaleString()}
-                                </strong>
-                              </td>
-                              <td>
-                                <strong style={{ color: running > 0 ? "#b91c1c" : "#166534" }}>
-                                  PKR {running.toLocaleString()}
-                                </strong>
-                              </td>
-                            </tr>
-                          );
-                        });
-                      })()
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </section>
         )}
 
@@ -4751,10 +4614,9 @@ export default function HomePage({
                 <thead>
                   <tr>
                     <th>S.No</th>
-                    <th>Permanent Demand No.</th>
-                    <th>Assessment No.</th>
+                    <th>Demand Number</th>
+                    <th>PIN Number</th>
                     <th>Taxpayer Legal Name</th>
-                    <th>CNIC / NTN</th>
                     <th>Statutory Class</th>
                     <th>Assessed Tax (PKR)</th>
                     <th>Paid (PKR)</th>
@@ -4767,7 +4629,7 @@ export default function HomePage({
                   {filteredFormPFT3Rows.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={11}
+                        colSpan={10}
                         style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
                       >
                         No assessed units match the selected search or filter criteria.
@@ -4779,26 +4641,18 @@ export default function HomePage({
                         <td>{row.serialNumber}</td>
                         <td>
                           <strong>{row.permanentDemandNo}</strong>
-                          {row.provincialUin && (
-                            <span
-                              style={{
-                                display: "block",
-                                fontFamily: "monospace",
-                                fontSize: "0.7rem",
-                                color: "#1d4ed8",
-                                fontWeight: 600,
-                                marginTop: "2px"
-                              }}
-                              title="PIN (Professional Identification Number)"
-                            >
-                              PIN: {row.provincialUin}
-                            </span>
-                          )}
                         </td>
-                        <td
-                          style={{ fontFamily: "monospace", fontSize: "0.8rem", color: "#64748b" }}
-                        >
-                          {row.assessmentNo}
+                        <td>
+                          <span
+                            style={{
+                              fontFamily: "monospace",
+                              fontSize: "0.8rem",
+                              color: "#1d4ed8",
+                              fontWeight: 600
+                            }}
+                          >
+                            {row.provincialUin}
+                          </span>
                         </td>
                         <td>
                           <strong>{row.legalName}</strong>
@@ -4810,7 +4664,6 @@ export default function HomePage({
                             </span>
                           )}
                         </td>
-                        <td style={{ fontSize: "0.85rem" }}>{row.identifier}</td>
                         <td>
                           <span className="badge badge-draft" style={{ fontSize: "0.7rem" }}>
                             {row.scheduleEntry}
@@ -5238,20 +5091,13 @@ export default function HomePage({
                                   onClick: () => handleOpenRecoveryModal(u.id)
                                 },
                                 {
-                                  id: "view-dossier",
-                                  label: "View Unit Dossier (New Tab)",
-                                  icon: "📋",
-                                  onClick: () =>
-                                    window.open(`/units/${u.provincialUin}/details`, "_blank")
-                                },
-                                {
-                                  id: "inspect-ledger",
-                                  label: "Inspect Demand & Payment Ledger",
-                                  icon: "📒",
+                                  id: "payment-details",
+                                  label: "Payment Details & Receipts",
+                                  icon: "🧾",
                                   onClick: () => {
                                     setSelectedUnitId(u.id);
                                     setPaymentUnitId(u.id);
-                                    switchTab("LEDGER");
+                                    switchTab("RECEIPTS");
                                   }
                                 }
                               ]}
@@ -5640,13 +5486,13 @@ export default function HomePage({
                                     )
                                 },
                                 {
-                                  id: "inspect-ledger",
-                                  label: "Inspect Demand Ledger",
-                                  icon: "📒",
+                                  id: "payment-details",
+                                  label: "Payment Details & Receipts",
+                                  icon: "🧾",
                                   onClick: () => {
                                     setSelectedUnitId(appeal.unitId);
                                     setPaymentUnitId(appeal.unitId);
-                                    switchTab("LEDGER");
+                                    switchTab("RECEIPTS");
                                   }
                                 }
                               ]}
@@ -5759,7 +5605,7 @@ export default function HomePage({
                   {clearanceCertificates.length} Issued
                 </strong>
                 <span style={{ fontSize: "0.75rem", color: "#1e40af" }}>
-                  Sealed with SHA-256 non-repudiation digest
+                  Verified under official statutory seal
                 </span>
               </div>
             </div>
@@ -5920,13 +5766,13 @@ export default function HomePage({
                                   window.open(`/units/${u.provincialUin}/details`, "_blank")
                               },
                               {
-                                id: "inspect-ledger",
-                                label: "Inspect Demand Ledger",
-                                icon: "📒",
+                                id: "payment-details",
+                                label: "Payment Details & Receipts",
+                                icon: "🧾",
                                 onClick: () => {
                                   setSelectedUnitId(u.id);
                                   setPaymentUnitId(u.id);
-                                  switchTab("LEDGER");
+                                  switchTab("RECEIPTS");
                                 }
                               }
                             ]}
@@ -6206,13 +6052,13 @@ export default function HomePage({
                                       )
                                   },
                                   {
-                                    id: "inspect-ledger",
-                                    label: "Inspect Demand Ledger",
-                                    icon: "📒",
+                                    id: "payment-details",
+                                    label: "Payment Details & Receipts",
+                                    icon: "🧾",
                                     onClick: () => {
                                       setSelectedUnitId(disc.unitId);
                                       setPaymentUnitId(disc.unitId);
-                                      switchTab("LEDGER");
+                                      switchTab("RECEIPTS");
                                     }
                                   }
                                 ]}
@@ -6448,13 +6294,13 @@ export default function HomePage({
                                       )
                                   },
                                   {
-                                    id: "inspect-ledger",
-                                    label: "Inspect Demand Ledger",
-                                    icon: "📒",
+                                    id: "payment-details",
+                                    label: "Payment Details & Receipts",
+                                    icon: "🧾",
                                     onClick: () => {
                                       setSelectedUnitId(ref.unitId);
                                       setPaymentUnitId(ref.unitId);
-                                      switchTab("LEDGER");
+                                      switchTab("RECEIPTS");
                                     }
                                   }
                                 ]}
@@ -6512,115 +6358,87 @@ export default function HomePage({
                 marginBottom: "1.5rem"
               }}
             >
-              {/* Simulation Card */}
+              {/* Simulation Card - Dormant/Read-only per Spec 13.2 */}
               <div
                 style={{
-                  background: "#f8fafc",
+                  background: "#f1f5f9",
                   border: "1px solid #cbd5e1",
                   borderRadius: "8px",
-                  padding: "1.25rem"
+                  padding: "1.25rem",
+                  opacity: 0.85
                 }}
               >
-                <h3 style={{ margin: "0 0 0.5rem", fontSize: "1.05rem" }}>
-                  Simulate ePay Webhook Dispatch
-                </h3>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "0.5rem"
+                  }}
+                >
+                  <h3 style={{ margin: 0, fontSize: "1.05rem", color: "#334155" }}>
+                    Simulate ePay Webhook Dispatch
+                  </h3>
+                  <span
+                    className="badge badge-draft"
+                    style={{ fontSize: "0.7rem", backgroundColor: "#e2e8f0", color: "#475569" }}
+                  >
+                    🔒 Dormant / Read-Only
+                  </span>
+                </div>
                 <p style={{ fontSize: "0.8rem", color: "#64748b", margin: "0 0 1rem" }}>
-                  Trigger simulated digital payment callbacks from the ePay Punjab gateway into the
-                  PTAS engine.
+                  Live payment ledger modifications via simulated webhooks are strictly locked to
+                  protect fiscal ledger integrity. Production settlement connects exclusively via
+                  authenticated 1Link/ePay banking channels.
                 </p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
                   <button
-                    onClick={() => {
-                      const target =
-                        units.find((u) => computeLedgerBalance(u.ledgerEntries) > 0) || units[1];
-                      if (!target) return;
-                      const balance = computeLedgerBalance(target.ledgerEntries) || 2000;
-                      const correlationId = `corr-epay-${Date.now()}`;
-                      const paymentEntry = createPaymentReceiptEntry({
-                        demandUnitId: target.demandUnit.id,
-                        financialYearId: FINANCIAL_YEAR_2026_27,
-                        amount: balance,
-                        receiptNumber: `EPAY-${Date.now().toString().slice(-6)}`,
-                        paymentChannel: "EPAY_PUNJAB",
-                        actorId: "system-epay-gateway",
-                        correlationId,
-                        idempotencyKey: `idem-epay-${Date.now()}`,
-                        depositDate: new Date().toISOString().split("T")[0]
-                      });
-
-                      const updatedUnit: StoredUnit = {
-                        ...target,
-                        ledgerEntries: [...target.ledgerEntries, paymentEntry]
-                      };
-
-                      const auditItem: PilotAuditItem = {
-                        id: `audit-${Date.now()}`,
-                        eventType: "EPAY_RECONCILIATION_MATCH",
-                        actorName: "ePay Punjab Gateway",
-                        actorRole: "SYSTEM",
-                        target: target.legalName,
-                        timestamp: new Date().toISOString(),
-                        correlationId,
-                        details: `ePay callback matched! Credited PKR ${balance.toLocaleString()} to demand ledger.`
-                      };
-
-                      const updatedUnits = units.map((u) => (u.id === target.id ? updatedUnit : u));
-                      syncState(updatedUnits, [auditItem, ...auditLogs]);
-                      showToast(
-                        "success",
-                        `ePay callback processed: PKR ${balance.toLocaleString()} credited to ${target.legalName}`
-                      );
+                    type="button"
+                    disabled={true}
+                    title="Simulated payment ledger modifications are disabled per statutory reconciliation controls."
+                    style={{
+                      cursor: "not-allowed",
+                      opacity: 0.6,
+                      backgroundColor: "#94a3b8",
+                      color: "#ffffff",
+                      borderColor: "#94a3b8"
                     }}
                     className="btn-primary btn-sm"
                   >
-                    ▶ Send Valid Callback (Match &amp; Auto-Credit)
+                    ▶ Send Valid Callback (Dormant in Sandbox)
                   </button>
 
                   <button
-                    onClick={() => {
-                      const auditItem: PilotAuditItem = {
-                        id: `audit-${Date.now()}`,
-                        eventType: "EPAY_DUPLICATE_REJECTED",
-                        actorName: "ePay Punjab Gateway",
-                        actorRole: "SYSTEM",
-                        target: "Vehari Cotton Ginners (Pvt.) Ltd.",
-                        timestamp: new Date().toISOString(),
-                        correlationId: `corr-replay-${Date.now()}`,
-                        details: `Replay attack detected: PSID EPAY-PUNJAB-992144 already settled. Rejected duplicate callback.`
-                      };
-                      syncState(units, [auditItem, ...auditLogs]);
-                      showToast(
-                        "error",
-                        "Duplicate Callback Replay Rejected: Idempotency Key already settled."
-                      );
+                    type="button"
+                    disabled={true}
+                    title="Simulated payment triggers are disabled to prevent artificial ledger mutation."
+                    style={{
+                      cursor: "not-allowed",
+                      opacity: 0.6,
+                      backgroundColor: "#cbd5e1",
+                      color: "#475569",
+                      borderColor: "#cbd5e1"
                     }}
                     className="btn-secondary btn-sm"
                   >
-                    ⚡ Simulate Duplicate Replay (Replay Guard Test)
+                    ⚡ Simulate Duplicate Replay (Dormant)
                   </button>
 
                   <button
-                    onClick={() => {
-                      const auditItem: PilotAuditItem = {
-                        id: `audit-${Date.now()}`,
-                        eventType: "EPAY_AMOUNT_MISMATCH",
-                        actorName: "ePay Punjab Gateway",
-                        actorRole: "SYSTEM",
-                        target: "Al-Madina Commercial Center",
-                        timestamp: new Date().toISOString(),
-                        correlationId: `corr-mismatch-${Date.now()}`,
-                        details: `Amount mismatch: Expected PKR 4,000, received callback for PKR 3,500. Routed to dead-letter desk.`
-                      };
-                      syncState(units, [auditItem, ...auditLogs]);
-                      showToast(
-                        "error",
-                        "Amount Mismatch Flagged: Expected PKR 4,000, Received PKR 3,500!"
-                      );
+                    type="button"
+                    disabled={true}
+                    title="Simulated anomaly injection is disabled in pilot operational mode."
+                    style={{
+                      cursor: "not-allowed",
+                      opacity: 0.6,
+                      backgroundColor: "#fca5a5",
+                      color: "#991b1b",
+                      borderColor: "#fca5a5"
                     }}
                     className="btn-danger btn-sm"
                   >
-                    ⚠️ Simulate Amount Mismatch Anomaly
+                    ⚠️ Simulate Amount Mismatch (Dormant)
                   </button>
                 </div>
               </div>
@@ -7117,70 +6935,72 @@ export default function HomePage({
                             )}
                           </td>
                           <td style={{ textAlign: "right" }}>
-                            <RowActionMenu
-                              align="right"
-                              actions={[
-                                {
-                                  id: "view-challan",
-                                  label: "View Challan",
-                                  icon: "👁️",
-                                  onClick: () => {
-                                    setSelectedUnitId(challan.unitId);
-                                    setShowIssuePft2Modal(true);
-                                  }
-                                },
-                                {
-                                  id: "download-pdf",
-                                  label: "Download Challan PDF",
-                                  icon: "📥",
-                                  onClick: () => handlePrintPft2Challan(challan)
-                                },
-                                {
-                                  id: "view-dossier",
-                                  label: "View Unit Dossier",
-                                  icon: "📋",
-                                  onClick: () =>
-                                    window.open(
-                                      `/units/${getUnitPin(challan.unitId)}/details`,
-                                      "_blank"
-                                    )
-                                },
-                                {
-                                  id: "receive-pft2",
-                                  label: "Receive Bank Payment",
-                                  icon: "📥",
-                                  disabled: !isIssued,
-                                  onClick: () => handleOpenReceivePft2(challan)
-                                },
-                                {
-                                  id: "cancel-pft2",
-                                  label: "Cancel Challan",
-                                  icon: "✕",
-                                  variant: "danger",
-                                  disabled: !isIssued,
-                                  onClick: () => handleOpenCancelPft2(challan)
-                                },
-                                {
-                                  id: "view-receipt",
-                                  label: "View Statutory Receipt",
-                                  icon: "🧾",
-                                  disabled: !isReceived || !challan.receiptNumber,
-                                  onClick: () => {
-                                    const rec = statutoryReceipts.find(
-                                      (r) => r.receiptNumber === challan.receiptNumber
-                                    );
-                                    if (rec) {
-                                      handleOpenReceiptDocument(rec);
-                                    } else {
-                                      showToast(
-                                        "info",
-                                        `Receipt ${challan.receiptNumber} recorded in ledger.`
-                                      );
-                                    }
-                                  }
+                            {isCancelled ? (
+                              <span
+                                style={{
+                                  fontSize: "0.75rem",
+                                  color: "#94a3b8",
+                                  fontStyle: "italic"
+                                }}
+                              >
+                                Cancelled
+                              </span>
+                            ) : (
+                              <RowActionMenu
+                                align="right"
+                                actions={
+                                  isReceived
+                                    ? [
+                                        {
+                                          id: "download-pdf",
+                                          label: "Download Challan PDF",
+                                          icon: "📥",
+                                          onClick: () => handlePrintPft2Challan(challan)
+                                        },
+                                        {
+                                          id: "view-receipt",
+                                          label: "View Statutory Receipt",
+                                          icon: "🧾",
+                                          disabled: !challan.receiptNumber,
+                                          onClick: () => {
+                                            const rec = statutoryReceipts.find(
+                                              (r) => r.receiptNumber === challan.receiptNumber
+                                            );
+                                            if (rec) {
+                                              handleOpenReceiptDocument(rec);
+                                            } else {
+                                              showToast(
+                                                "info",
+                                                `Receipt ${challan.receiptNumber} recorded in ledger.`
+                                              );
+                                            }
+                                          }
+                                        }
+                                      ]
+                                    : [
+                                        {
+                                          id: "download-pdf",
+                                          label: "Download Challan PDF",
+                                          icon: "📥",
+                                          onClick: () => handlePrintPft2Challan(challan)
+                                        },
+                                        {
+                                          id: "receive-pft2",
+                                          label: "Receive Bank Payment",
+                                          icon: "📥",
+                                          onClick: () => handleOpenReceivePft2(challan)
+                                        },
+                                        {
+                                          id: "cancel-pft2",
+                                          label: "Cancel Challan",
+                                          icon: "✕",
+                                          variant: "danger",
+                                          onClick: () => handleOpenCancelPft2(challan)
+                                        }
+                                      ]
                                 }
-                              ]}
-                            />
+                              />
+                            )}
                           </td>
                         </tr>
                       );
@@ -7676,6 +7496,19 @@ export default function HomePage({
                                   }, 300);
                                 }
                               },
+                              {
+                                id: "view-evidence",
+                                label: "View Stamped Treasury Slip",
+                                icon: "📜",
+                                onClick: () => {
+                                  setPreviewScanModalUrl("/receipts/sample_slip.png");
+                                  setPreviewScanTitle(rec.receiptNumber);
+                                  setPreviewScanFileName(
+                                    `Treasury_Deposit_${rec.bankScrollRef}.pdf`
+                                  );
+                                  setPreviewScanHash(rec.officialSha256);
+                                }
+                              },
                               ...(rec.unitId
                                 ? [
                                     {
@@ -7937,8 +7770,7 @@ export default function HomePage({
                 <button
                   type="button"
                   onClick={() => {
-                    setExecutiveReportType("EXECUTIVE_MIS_SUMMARY");
-                    setShowExecutivePrintModal(true);
+                    window.open("/intelligence/reports/view?report=executive-summary", "_blank");
                   }}
                   className="btn-primary"
                   style={{
@@ -9368,18 +9200,19 @@ export default function HomePage({
                     arrears certification
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab("REPORTS");
-                    setActiveReportTab("DEFAULTER_ROLL");
-                  }}
+                <Link
+                  href={asRoute("/enforcement")}
                   className="btn-secondary btn-sm"
-                  style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
+                    textDecoration: "none"
+                  }}
                 >
                   <span>📑</span>
                   <span>Inspect Full Defaulter Roll &rarr;</span>
-                </button>
+                </Link>
               </div>
 
               <div style={{ padding: "1.25rem" }}>
@@ -9726,1232 +9559,862 @@ export default function HomePage({
               </div>
             </div>
 
-            {/* Sub-Tabs: 5 Statutory Registers */}
+            {/* Statutory Schedule Export & Navigation Catalog */}
             <div
               style={{
-                display: "flex",
-                gap: "0.5rem",
-                flexWrap: "wrap",
-                marginBottom: "1rem",
-                borderBottom: "2px solid #e2e8f0",
-                paddingBottom: "0.75rem"
-              }}
-              role="tablist"
-              aria-label="Statutory Registers Selector"
-            >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeReportTab === "PFT3_REGISTER"}
-                onClick={() => setActiveReportTab("PFT3_REGISTER")}
-                className={`tab-btn ${activeReportTab === "PFT3_REGISTER" ? "active" : ""}`}
-                style={{
-                  fontWeight: 600,
-                  fontSize: "0.85rem",
-                  padding: "0.5rem 0.85rem",
-                  borderRadius: "6px"
-                }}
-              >
-                📋 Form P.F.T-3 Register ({units.length})
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeReportTab === "DEFAULTER_ROLL"}
-                onClick={() => setActiveReportTab("DEFAULTER_ROLL")}
-                className={`tab-btn ${activeReportTab === "DEFAULTER_ROLL" ? "active" : ""}`}
-                style={{
-                  fontWeight: 600,
-                  fontSize: "0.85rem",
-                  padding: "0.5rem 0.85rem",
-                  borderRadius: "6px"
-                }}
-              >
-                🚨 Defaulter &amp; Arrears Roll (
-                {units.filter((u) => computeLedgerBalance(u.ledgerEntries) > 0).length})
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeReportTab === "NOTICE_DISPATCH"}
-                onClick={() => setActiveReportTab("NOTICE_DISPATCH")}
-                className={`tab-btn ${activeReportTab === "NOTICE_DISPATCH" ? "active" : ""}`}
-                style={{
-                  fontWeight: 600,
-                  fontSize: "0.85rem",
-                  padding: "0.5rem 0.85rem",
-                  borderRadius: "6px"
-                }}
-              >
-                📬 Notice Dispatch Sheet ({circleDispatchRegisterData.rows.length})
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeReportTab === "CLEARANCE_LOG"}
-                onClick={() => setActiveReportTab("CLEARANCE_LOG")}
-                className={`tab-btn ${activeReportTab === "CLEARANCE_LOG" ? "active" : ""}`}
-                style={{
-                  fontWeight: 600,
-                  fontSize: "0.85rem",
-                  padding: "0.5rem 0.85rem",
-                  borderRadius: "6px"
-                }}
-              >
-                📜 Clearance Certificate Log ({clearanceCertificates.length})
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeReportTab === "RELIEF_REGISTER"}
-                onClick={() => setActiveReportTab("RELIEF_REGISTER")}
-                className={`tab-btn ${activeReportTab === "RELIEF_REGISTER" ? "active" : ""}`}
-                style={{
-                  fontWeight: 600,
-                  fontSize: "0.85rem",
-                  padding: "0.5rem 0.85rem",
-                  borderRadius: "6px"
-                }}
-              >
-                ⚖️ Statutory Relief Register ({discontinuances.length + refundAdjustments.length})
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeReportTab === "SLAB_DISTRIBUTION"}
-                onClick={() => setActiveReportTab("SLAB_DISTRIBUTION")}
-                className={`tab-btn ${activeReportTab === "SLAB_DISTRIBUTION" ? "active" : ""}`}
-                style={{
-                  fontWeight: 600,
-                  fontSize: "0.85rem",
-                  padding: "0.5rem 0.85rem",
-                  borderRadius: "6px"
-                }}
-              >
-                📊 Statutory Slabs Distribution (47)
-              </button>
-            </div>
-
-            {/* Filter & Search Bar */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: "0.75rem",
-                marginBottom: "1rem",
-                background: "#ffffff",
-                padding: "0.75rem 1rem",
-                borderRadius: "8px",
-                border: "1px solid #cbd5e1"
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(20rem, 1fr))",
+                gap: "1rem",
+                marginBottom: "1.5rem"
               }}
             >
+              {/* Schedule 1: Form P.F.T-3 Assessment Register */}
               <div
                 style={{
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "1.25rem",
                   display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  flex: 1,
-                  minWidth: "280px"
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
                 }}
               >
-                <span style={{ fontSize: "1rem" }}>🔍</span>
-                <input
-                  type="text"
-                  placeholder="Filter records by legal name, CNIC, PDN, category, ref..."
-                  value={reportSearchQuery}
-                  onChange={(e) => setReportSearchQuery(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.4rem 0.65rem",
-                    borderRadius: "4px",
-                    border: "1px solid #cbd5e1",
-                    fontSize: "0.85rem"
-                  }}
-                />
-                {reportSearchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setReportSearchQuery("")}
+                <div>
+                  <div
                     style={{
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      fontSize: "0.8rem",
-                      color: "#64748b"
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "0.5rem"
                     }}
                   >
-                    Clear
+                    <span style={{ fontSize: "1.2rem" }}>📋</span>
+                    <span className="badge badge-approved" style={{ fontSize: "0.7rem" }}>
+                      Rule 11 Statutory Register
+                    </span>
+                  </div>
+                  <h4
+                    style={{
+                      margin: "0 0 0.35rem",
+                      fontSize: "1rem",
+                      color: "#0d3822",
+                      fontWeight: 700
+                    }}
+                  >
+                    Form P.F.T-3 Assessment &amp; Demand Roll
+                  </h4>
+                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
+                    Master annual assessment roll of all professions, trades, callings &amp;
+                    employments in Circle-Vehari with permanent demand numbers and assessed tax.
+                  </p>
+                  <div
+                    style={{
+                      background: "#f8fafc",
+                      padding: "0.5rem 0.75rem",
+                      borderRadius: "6px",
+                      marginBottom: "1rem",
+                      fontSize: "0.8rem"
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#64748b" }}>Assessed Units:</span>
+                      <strong style={{ color: "#0f172a" }}>{units.length} Units</strong>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginTop: "0.25rem"
+                      }}
+                    >
+                      <span style={{ color: "#64748b" }}>Assessed Demand:</span>
+                      <strong style={{ color: "#0f172a", fontFamily: "monospace" }}>
+                        PKR {misMetrics.kpis.totalAssessedGross.toLocaleString()}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    flexWrap: "wrap",
+                    borderTop: "1px solid #f1f5f9",
+                    paddingTop: "0.75rem"
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleExportScheduleCsv("PFT3_REGISTER")}
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    ⬇ Export CSV
                   </button>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => handlePrintScheduleReport("PFT3_REGISTER")}
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    🖨️ Print Gazette
+                  </button>
+                  <Link
+                    href={asRoute("/assessment/pft3")}
+                    className="btn-primary btn-sm"
+                    style={{
+                      fontSize: "0.75rem",
+                      backgroundColor: "#0d3822",
+                      borderColor: "#0d3822",
+                      marginLeft: "auto",
+                      textDecoration: "none",
+                      display: "inline-flex",
+                      alignItems: "center"
+                    }}
+                  >
+                    Open Register →
+                  </Link>
+                </div>
               </div>
 
-              <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                {activeReportTab === "PFT3_REGISTER" &&
-                  `Showing ${filteredPft3Units.length} of ${units.length} Assessees`}
-                {activeReportTab === "DEFAULTER_ROLL" &&
-                  `Showing ${filteredDefaulterUnits.length} Defaulters`}
-                {activeReportTab === "NOTICE_DISPATCH" &&
-                  `Showing ${filteredDispatchRows.length} Dispatch Entries`}
-                {activeReportTab === "CLEARANCE_LOG" &&
-                  `Showing ${filteredClearanceCerts.length} Issued Certificates`}
-                {activeReportTab === "RELIEF_REGISTER" &&
-                  `Showing ${filteredReliefRecords.length} Relief Actions`}
-                {activeReportTab === "SLAB_DISTRIBUTION" &&
-                  `Showing ${misMetrics.slabYields.length} Statutory Slabs`}
+              {/* Schedule 2: Defaulter & Arrears Recovery Roll */}
+              <div
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "1.25rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "0.5rem"
+                    }}
+                  >
+                    <span style={{ fontSize: "1.2rem" }}>🚨</span>
+                    <span className="badge badge-returned" style={{ fontSize: "0.7rem" }}>
+                      Rule 13 Coercive Recovery
+                    </span>
+                  </div>
+                  <h4
+                    style={{
+                      margin: "0 0 0.35rem",
+                      fontSize: "1rem",
+                      color: "#b91c1c",
+                      fontWeight: 700
+                    }}
+                  >
+                    Defaulter &amp; Arrears Recovery Roll
+                  </h4>
+                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
+                    Statutory recovery roll with Section 3(4) penalty computations, aging brackets,
+                    and Land Revenue Act Section 67 coercive escalation status.
+                  </p>
+                  <div
+                    style={{
+                      background: "#fef2f2",
+                      padding: "0.5rem 0.75rem",
+                      borderRadius: "6px",
+                      marginBottom: "1rem",
+                      fontSize: "0.8rem"
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#991b1b" }}>Active Defaulters:</span>
+                      <strong style={{ color: "#991b1b" }}>
+                        {units.filter((u) => computeLedgerBalance(u.ledgerEntries) > 0).length}{" "}
+                        Assessees
+                      </strong>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginTop: "0.25rem"
+                      }}
+                    >
+                      <span style={{ color: "#991b1b" }}>Outstanding Arrears:</span>
+                      <strong style={{ color: "#991b1b", fontFamily: "monospace" }}>
+                        PKR {misMetrics.kpis.outstandingArrears.toLocaleString()}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    flexWrap: "wrap",
+                    borderTop: "1px solid #f1f5f9",
+                    paddingTop: "0.75rem"
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleExportScheduleCsv("DEFAULTER_ROLL")}
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    ⬇ Export CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePrintScheduleReport("DEFAULTER_ROLL")}
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    🖨️ Print Roll
+                  </button>
+                  <Link
+                    href={asRoute("/enforcement")}
+                    className="btn-primary btn-sm"
+                    style={{
+                      fontSize: "0.75rem",
+                      backgroundColor: "#b91c1c",
+                      borderColor: "#b91c1c",
+                      marginLeft: "auto",
+                      textDecoration: "none",
+                      display: "inline-flex",
+                      alignItems: "center"
+                    }}
+                  >
+                    Open Defaulters →
+                  </Link>
+                </div>
+              </div>
+
+              {/* Schedule 3: Notice Service & Dispatch Register */}
+              <div
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "1.25rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "0.5rem"
+                    }}
+                  >
+                    <span style={{ fontSize: "1.2rem" }}>📬</span>
+                    <span className="badge badge-submitted" style={{ fontSize: "0.7rem" }}>
+                      Rule 6 Service Proof
+                    </span>
+                  </div>
+                  <h4
+                    style={{
+                      margin: "0 0 0.35rem",
+                      fontSize: "1rem",
+                      color: "#1e40af",
+                      fontWeight: 700
+                    }}
+                  >
+                    Notice Service &amp; Dispatch Register
+                  </h4>
+                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
+                    Official service register for Form P.F.T-1 survey notices, postal registries,
+                    bailiff hand delivery receipts, and electronic delivery acknowledgments.
+                  </p>
+                  <div
+                    style={{
+                      background: "#f8fafc",
+                      padding: "0.5rem 0.75rem",
+                      borderRadius: "6px",
+                      marginBottom: "1rem",
+                      fontSize: "0.8rem"
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#64748b" }}>Dispatched Notices:</span>
+                      <strong style={{ color: "#0f172a" }}>
+                        {circleDispatchRegisterData.rows.length} Dispatches
+                      </strong>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginTop: "0.25rem"
+                      }}
+                    >
+                      <span style={{ color: "#64748b" }}>Verified Served:</span>
+                      <strong style={{ color: "#166534" }}>
+                        {
+                          circleDispatchRegisterData.rows.filter(
+                            (r) => r.serviceStatus === "SERVED"
+                          ).length
+                        }{" "}
+                        Served
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    flexWrap: "wrap",
+                    borderTop: "1px solid #f1f5f9",
+                    paddingTop: "0.75rem"
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleExportScheduleCsv("NOTICE_DISPATCH")}
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    ⬇ Export CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePrintScheduleReport("NOTICE_DISPATCH")}
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    🖨️ Print Log
+                  </button>
+                  <Link
+                    href={asRoute("/assessment/queue")}
+                    className="btn-primary btn-sm"
+                    style={{
+                      fontSize: "0.75rem",
+                      backgroundColor: "#1e40af",
+                      borderColor: "#1e40af",
+                      marginLeft: "auto",
+                      textDecoration: "none",
+                      display: "inline-flex",
+                      alignItems: "center"
+                    }}
+                  >
+                    Open Queue →
+                  </Link>
+                </div>
+              </div>
+
+              {/* Schedule 4: Tax Clearance Certificates Register */}
+              <div
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "1.25rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "0.5rem"
+                    }}
+                  >
+                    <span style={{ fontSize: "1.2rem" }}>📜</span>
+                    <span className="badge badge-approved" style={{ fontSize: "0.7rem" }}>
+                      Rule 14 Clearance Log
+                    </span>
+                  </div>
+                  <h4
+                    style={{
+                      margin: "0 0 0.35rem",
+                      fontSize: "1rem",
+                      color: "#15803d",
+                      fontWeight: 700
+                    }}
+                  >
+                    Tax Clearance Certificates Register
+                  </h4>
+                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
+                    Departmental log of zero-dues clearance certificates issued for legal title
+                    transfers, licensing renewals, and commercial public procurement tenders.
+                  </p>
+                  <div
+                    style={{
+                      background: "#f0fdf4",
+                      padding: "0.5rem 0.75rem",
+                      borderRadius: "6px",
+                      marginBottom: "1rem",
+                      fontSize: "0.8rem"
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#166534" }}>Issued Certificates:</span>
+                      <strong style={{ color: "#166534" }}>
+                        {clearanceCertificates.length} Certificates
+                      </strong>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginTop: "0.25rem"
+                      }}
+                    >
+                      <span style={{ color: "#166534" }}>Cleared Revenue:</span>
+                      <strong style={{ color: "#166534", fontFamily: "monospace" }}>
+                        PKR{" "}
+                        {clearanceCertificates
+                          .reduce((sum, c) => sum + c.clearedAmountPkr, 0)
+                          .toLocaleString()}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    flexWrap: "wrap",
+                    borderTop: "1px solid #f1f5f9",
+                    paddingTop: "0.75rem"
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleExportScheduleCsv("CLEARANCE_LOG")}
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    ⬇ Export CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePrintScheduleReport("CLEARANCE_LOG")}
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    🖨️ Print Log
+                  </button>
+                  <Link
+                    href={asRoute("/enforcement/clearance")}
+                    className="btn-primary btn-sm"
+                    style={{
+                      fontSize: "0.75rem",
+                      backgroundColor: "#15803d",
+                      borderColor: "#15803d",
+                      marginLeft: "auto",
+                      textDecoration: "none",
+                      display: "inline-flex",
+                      alignItems: "center"
+                    }}
+                  >
+                    Open Desk →
+                  </Link>
+                </div>
+              </div>
+
+              {/* Schedule 5: Statutory Relief & Discontinuance Register */}
+              <div
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "1.25rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "0.5rem"
+                    }}
+                  >
+                    <span style={{ fontSize: "1.2rem" }}>⚖️</span>
+                    <span className="badge badge-draft" style={{ fontSize: "0.7rem" }}>
+                      Rules 5 &amp; 10 Adjudications
+                    </span>
+                  </div>
+                  <h4
+                    style={{
+                      margin: "0 0 0.35rem",
+                      fontSize: "1rem",
+                      color: "#92400e",
+                      fontWeight: 700
+                    }}
+                  >
+                    Statutory Relief &amp; Adjustments Register
+                  </h4>
+                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
+                    Quasi-judicial record of Rule 10 business closures, frozen demand orders, and
+                    Rule 5 statutory future tax credit balance adjustments.
+                  </p>
+                  <div
+                    style={{
+                      background: "#fffbeb",
+                      padding: "0.5rem 0.75rem",
+                      borderRadius: "6px",
+                      marginBottom: "1rem",
+                      fontSize: "0.8rem"
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#92400e" }}>Discontinuances:</span>
+                      <strong style={{ color: "#92400e" }}>{discontinuances.length} Orders</strong>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginTop: "0.25rem"
+                      }}
+                    >
+                      <span style={{ color: "#92400e" }}>Credit Adjustments:</span>
+                      <strong style={{ color: "#92400e" }}>
+                        {refundAdjustments.length} Active Records
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    flexWrap: "wrap",
+                    borderTop: "1px solid #f1f5f9",
+                    paddingTop: "0.75rem"
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleExportScheduleCsv("RELIEF_REGISTER")}
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    ⬇ Export CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePrintScheduleReport("RELIEF_REGISTER")}
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    🖨️ Print Log
+                  </button>
+                  <Link
+                    href={asRoute("/enforcement/adjustments")}
+                    className="btn-primary btn-sm"
+                    style={{
+                      fontSize: "0.75rem",
+                      backgroundColor: "#92400e",
+                      borderColor: "#92400e",
+                      marginLeft: "auto",
+                      textDecoration: "none",
+                      display: "inline-flex",
+                      alignItems: "center"
+                    }}
+                  >
+                    Open Relief →
+                  </Link>
+                </div>
+              </div>
+
+              {/* Schedule 6: Second Schedule Category & Slab Yields */}
+              <div
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "1.25rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "0.5rem"
+                    }}
+                  >
+                    <span style={{ fontSize: "1.2rem" }}>📊</span>
+                    <span className="badge badge-submitted" style={{ fontSize: "0.7rem" }}>
+                      Second Schedule Yields
+                    </span>
+                  </div>
+                  <h4
+                    style={{
+                      margin: "0 0 0.35rem",
+                      fontSize: "1rem",
+                      color: "#0f766e",
+                      fontWeight: 700
+                    }}
+                  >
+                    Category &amp; Rate Slab Yield Schedule
+                  </h4>
+                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
+                    Macro statutory distribution across 11 legal categories and 47 rate slabs,
+                    analyzing collection efficacy against approved budget baselines.
+                  </p>
+                  <div
+                    style={{
+                      background: "#f0fdfa",
+                      padding: "0.5rem 0.75rem",
+                      borderRadius: "6px",
+                      marginBottom: "1rem",
+                      fontSize: "0.8rem"
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#0f766e" }}>Statutory Slabs:</span>
+                      <strong style={{ color: "#0f766e" }}>
+                        {misMetrics.slabYields.length} Slabs (11 Categories)
+                      </strong>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginTop: "0.25rem"
+                      }}
+                    >
+                      <span style={{ color: "#0f766e" }}>Overall Recovery:</span>
+                      <strong style={{ color: "#0f766e" }}>
+                        {misMetrics.kpis.recoveryRatePct}% Realization
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    flexWrap: "wrap",
+                    borderTop: "1px solid #f1f5f9",
+                    paddingTop: "0.75rem"
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleExportScheduleCsv("SLAB_DISTRIBUTION")}
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    ⬇ Export CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePrintScheduleReport("SLAB_DISTRIBUTION")}
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    🖨️ Print Schedule
+                  </button>
+                  <a
+                    href="/intelligence/statutory-category-yield"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-primary btn-sm"
+                    style={{
+                      fontSize: "0.75rem",
+                      backgroundColor: "#0f766e",
+                      borderColor: "#0f766e",
+                      marginLeft: "auto",
+                      textDecoration: "none",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.25rem"
+                    }}
+                  >
+                    Yield Desk ↗
+                  </a>
+                </div>
               </div>
             </div>
 
-            {/* REGISTER TABLE 1: Form P.F.T-3 Assessment & Demand Register */}
-            {activeReportTab === "PFT3_REGISTER" && (
-              <div className="table-card">
-                <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid #e2e8f0" }}>
-                  <h4 style={{ margin: 0, fontSize: "1.05rem", color: "#0d3822", fontWeight: 700 }}>
-                    📋 Form P.F.T-3 Assessment &amp; Demand Register (Rule 11)
-                  </h4>
-                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
-                    Official statutory register of assessed professions and trades &bull; Financial
-                    Year 2026-27 &bull; Circle-Vehari
-                  </p>
+            {/* Comprehensive Gazette Breakdown Table */}
+            <div className="table-card">
+              <div style={{ padding: "1.25rem", borderBottom: "1px solid #e2e8f0" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "1rem"
+                  }}
+                >
+                  <div>
+                    <h4
+                      style={{ margin: 0, fontSize: "1.1rem", color: "#0d3822", fontWeight: 700 }}
+                    >
+                      📊 Statutory Classification &amp; Category Yield Schedule
+                    </h4>
+                    <p style={{ margin: "0.25rem 0 0", fontSize: "0.825rem", color: "#64748b" }}>
+                      Aggregated statutory assessment metrics &bull; Financial Year 2026-27 &bull;
+                      District Vehari
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => handleExportScheduleCsv("SLAB_DISTRIBUTION")}
+                      className="btn-secondary btn-sm"
+                    >
+                      ⬇ Export Schedule (CSV)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePrintScheduleReport("SLAB_DISTRIBUTION")}
+                      className="btn-primary btn-sm"
+                      style={{ backgroundColor: "#0d3822", borderColor: "#0d3822" }}
+                    >
+                      🖨️ Print Gazette Schedule
+                    </button>
+                  </div>
                 </div>
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
-                    <thead>
-                      <tr style={{ background: "#f8fafc", borderBottom: "2px solid #cbd5e1" }}>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>PDN</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>
-                          Assessee Legal Name
-                        </th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Trade Name</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>CNIC / NTN</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Category / Entry</th>
-                        <th style={{ padding: "0.6rem", textAlign: "right" }}>Base Demand</th>
-                        <th style={{ padding: "0.6rem", textAlign: "right" }}>S.3(4) Penalty</th>
-                        <th style={{ padding: "0.6rem", textAlign: "right" }}>Realized</th>
-                        <th style={{ padding: "0.6rem", textAlign: "right" }}>Balance Arrears</th>
-                        <th style={{ padding: "0.6rem", textAlign: "center" }}>Status</th>
-                        <th style={{ padding: "0.6rem", textAlign: "center" }}>Dossier</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredPft3Units.length === 0 ? (
-                        <tr>
+              </div>
+
+              <div style={{ padding: "1.25rem", overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.825rem" }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc", borderBottom: "2px solid #cbd5e1" }}>
+                      <th style={{ padding: "0.65rem", textAlign: "left" }}>Category Code</th>
+                      <th style={{ padding: "0.65rem", textAlign: "left" }}>
+                        Statutory Category Name
+                      </th>
+                      <th style={{ padding: "0.65rem", textAlign: "center" }}>Units Count</th>
+                      <th style={{ padding: "0.65rem", textAlign: "right" }}>Total Demand (PKR)</th>
+                      <th style={{ padding: "0.65rem", textAlign: "right" }}>Realized (PKR)</th>
+                      <th style={{ padding: "0.65rem", textAlign: "right" }}>
+                        Balance Arrears (PKR)
+                      </th>
+                      <th style={{ padding: "0.65rem", textAlign: "right" }}>Compliance %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {misMetrics.categoryYields.map((cat) => {
+                      const arrears = Math.max(0, cat.totalDemand - cat.realizedRecovery);
+                      return (
+                        <tr key={cat.categoryCode} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                          <td style={{ padding: "0.65rem", fontWeight: 600 }}>
+                            Category {cat.categoryCode}
+                          </td>
+                          <td style={{ padding: "0.65rem" }}>{cat.categoryName}</td>
+                          <td style={{ padding: "0.65rem", textAlign: "center", fontWeight: 600 }}>
+                            {cat.unitCount}
+                          </td>
                           <td
-                            colSpan={11}
-                            style={{ padding: "2rem", textAlign: "center", color: "#64748b" }}
+                            style={{
+                              padding: "0.65rem",
+                              textAlign: "right",
+                              fontFamily: "monospace"
+                            }}
                           >
-                            No assessees match search query "{reportSearchQuery}".
+                            {cat.totalDemand.toLocaleString()}
+                          </td>
+                          <td
+                            style={{
+                              padding: "0.65rem",
+                              textAlign: "right",
+                              fontFamily: "monospace",
+                              color: "#166534"
+                            }}
+                          >
+                            {cat.realizedRecovery.toLocaleString()}
+                          </td>
+                          <td
+                            style={{
+                              padding: "0.65rem",
+                              textAlign: "right",
+                              fontFamily: "monospace",
+                              color: arrears > 0 ? "#b91c1c" : undefined
+                            }}
+                          >
+                            {arrears.toLocaleString()}
+                          </td>
+                          <td
+                            style={{
+                              padding: "0.65rem",
+                              textAlign: "right",
+                              fontWeight: 700,
+                              color: cat.compliancePct >= 50 ? "#166534" : "#b45309"
+                            }}
+                          >
+                            {cat.compliancePct}%
                           </td>
                         </tr>
-                      ) : (
-                        filteredPft3Units.map((u) => {
-                          const baseTax = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
-                          let penalty = 0;
-                          let paid = 0;
-                          for (const e of u.ledgerEntries) {
-                            if (e.entryType === "PENALTY_DEMAND") penalty += e.amount;
-                            if (e.amount < 0) paid += Math.abs(e.amount);
-                          }
-                          const bal = computeLedgerBalance(u.ledgerEntries);
-                          return (
-                            <tr key={u.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                              <td
-                                style={{
-                                  padding: "0.6rem",
-                                  fontFamily: "monospace",
-                                  fontWeight: 600
-                                }}
-                              >
-                                {u.demandUnit.permanentDemandNo}
-                              </td>
-                              <td style={{ padding: "0.6rem" }}>
-                                <strong>{u.legalName}</strong>
-                              </td>
-                              <td style={{ padding: "0.6rem", color: "#475569" }}>{u.tradeName}</td>
-                              <td style={{ padding: "0.6rem", fontFamily: "monospace" }}>
-                                {u.identifierValue}
-                              </td>
-                              <td style={{ padding: "0.6rem" }}>
-                                <span
-                                  style={{
-                                    background: "#f1f5f9",
-                                    padding: "0.15rem 0.4rem",
-                                    borderRadius: "4px",
-                                    fontSize: "0.75rem"
-                                  }}
-                                >
-                                  Cat {u.statutoryRule.category_code}{" "}
-                                  {u.statutoryRule.subclassification_code
-                                    ? `(${u.statutoryRule.subclassification_code})`
-                                    : "(Direct Rate)"}
-                                </span>
-                              </td>
-                              <td
-                                style={{
-                                  padding: "0.6rem",
-                                  textAlign: "right",
-                                  fontFamily: "monospace"
-                                }}
-                              >
-                                PKR {baseTax.toLocaleString()}
-                              </td>
-                              <td
-                                style={{
-                                  padding: "0.6rem",
-                                  textAlign: "right",
-                                  fontFamily: "monospace",
-                                  color: penalty > 0 ? "#b91c1c" : undefined
-                                }}
-                              >
-                                {penalty > 0 ? `PKR ${penalty.toLocaleString()}` : "—"}
-                              </td>
-                              <td
-                                style={{
-                                  padding: "0.6rem",
-                                  textAlign: "right",
-                                  fontFamily: "monospace",
-                                  color: "#166534"
-                                }}
-                              >
-                                {paid > 0 ? `PKR ${paid.toLocaleString()}` : "—"}
-                              </td>
-                              <td
-                                style={{
-                                  padding: "0.6rem",
-                                  textAlign: "right",
-                                  fontFamily: "monospace",
-                                  fontWeight: 700,
-                                  color: bal > 0 ? "#b91c1c" : "#166534"
-                                }}
-                              >
-                                PKR {bal.toLocaleString()}
-                              </td>
-                              <td style={{ padding: "0.6rem", textAlign: "center" }}>
-                                <span
-                                  className={`badge ${bal <= 0 ? "badge-approved" : "badge-returned"}`}
-                                >
-                                  {bal <= 0 ? "PAID" : "ARREARS"}
-                                </span>
-                              </td>
-                              <td style={{ padding: "0.6rem", textAlign: "center" }}>
-                                <a
-                                  href={`/units/${u.provincialUin}/details`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{
-                                    fontSize: "0.75rem",
-                                    color: "#0d3822",
-                                    fontWeight: 700,
-                                    textDecoration: "underline"
-                                  }}
-                                  title="View audit-locked unit dossier"
-                                >
-                                  Dossier ↗
-                                </a>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                    <tfoot
-                      style={{
-                        background: "#f8fafc",
-                        fontWeight: 700,
-                        borderTop: "2px solid #cbd5e1"
-                      }}
-                    >
-                      <tr>
-                        <td colSpan={5} style={{ padding: "0.6rem" }}>
-                          Total ({filteredPft3Units.length} Assessees)
-                        </td>
-                        <td
-                          style={{ padding: "0.6rem", textAlign: "right", fontFamily: "monospace" }}
-                        >
-                          PKR{" "}
-                          {filteredPft3Units
-                            .reduce(
-                              (sum, u) => sum + (u.assessmentVersions[0]?.snapshot.taxAmount ?? 0),
-                              0
-                            )
-                            .toLocaleString()}
-                        </td>
-                        <td
-                          style={{
-                            padding: "0.6rem",
-                            textAlign: "right",
-                            fontFamily: "monospace",
-                            color: "#b91c1c"
-                          }}
-                        >
-                          PKR{" "}
-                          {filteredPft3Units
-                            .reduce((sum, u) => {
-                              let p = 0;
-                              for (const e of u.ledgerEntries)
-                                if (e.entryType === "PENALTY_DEMAND") p += e.amount;
-                              return sum + p;
-                            }, 0)
-                            .toLocaleString()}
-                        </td>
-                        <td
-                          style={{
-                            padding: "0.6rem",
-                            textAlign: "right",
-                            fontFamily: "monospace",
-                            color: "#166534"
-                          }}
-                        >
-                          PKR{" "}
-                          {filteredPft3Units
-                            .reduce((sum, u) => {
-                              let pd = 0;
-                              for (const e of u.ledgerEntries)
-                                if (e.amount < 0) pd += Math.abs(e.amount);
-                              return sum + pd;
-                            }, 0)
-                            .toLocaleString()}
-                        </td>
-                        <td
-                          style={{
-                            padding: "0.6rem",
-                            textAlign: "right",
-                            fontFamily: "monospace",
-                            color: "#0f172a"
-                          }}
-                        >
-                          PKR{" "}
-                          {filteredPft3Units
-                            .reduce((sum, u) => sum + computeLedgerBalance(u.ledgerEntries), 0)
-                            .toLocaleString()}
-                        </td>
-                        <td colSpan={2} />
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot
+                    style={{
+                      background: "#f8fafc",
+                      fontWeight: 700,
+                      borderTop: "2px solid #cbd5e1"
+                    }}
+                  >
+                    <tr>
+                      <td colSpan={2} style={{ padding: "0.65rem" }}>
+                        Aggregate Totals
+                      </td>
+                      <td style={{ padding: "0.65rem", textAlign: "center" }}>{units.length}</td>
+                      <td
+                        style={{ padding: "0.65rem", textAlign: "right", fontFamily: "monospace" }}
+                      >
+                        PKR {misMetrics.kpis.totalAssessedGross.toLocaleString()}
+                      </td>
+                      <td
+                        style={{
+                          padding: "0.65rem",
+                          textAlign: "right",
+                          fontFamily: "monospace",
+                          color: "#166534"
+                        }}
+                      >
+                        PKR {misMetrics.kpis.totalRealizedRecovery.toLocaleString()}
+                      </td>
+                      <td
+                        style={{
+                          padding: "0.65rem",
+                          textAlign: "right",
+                          fontFamily: "monospace",
+                          color: "#b91c1c"
+                        }}
+                      >
+                        PKR {misMetrics.kpis.outstandingArrears.toLocaleString()}
+                      </td>
+                      <td style={{ padding: "0.65rem", textAlign: "right" }}>
+                        {misMetrics.kpis.recoveryRatePct}%
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
-            )}
-
-            {/* REGISTER TABLE 2: Defaulter & Arrears Recovery Roll */}
-            {activeReportTab === "DEFAULTER_ROLL" && (
-              <div className="table-card">
-                <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid #e2e8f0" }}>
-                  <h4 style={{ margin: 0, fontSize: "1.05rem", color: "#b91c1c", fontWeight: 700 }}>
-                    🚨 Defaulter &amp; Arrears Recovery Roll (Section 3(4) &amp; Land Revenue S.67)
-                  </h4>
-                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
-                    Statutory schedule of units with outstanding demand, progressive aging stages
-                    &amp; coercive enforcement status
-                  </p>
-                </div>
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
-                    <thead>
-                      <tr style={{ background: "#f8fafc", borderBottom: "2px solid #cbd5e1" }}>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>PDN</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Defaulter Name</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>CNIC / NTN</th>
-                        <th style={{ padding: "0.6rem", textAlign: "center" }}>Overdue Days</th>
-                        <th style={{ padding: "0.6rem", textAlign: "center" }}>Aging Status</th>
-                        <th style={{ padding: "0.6rem", textAlign: "right" }}>Base Demand</th>
-                        <th style={{ padding: "0.6rem", textAlign: "right" }}>S.3(4) Penalty</th>
-                        <th style={{ padding: "0.6rem", textAlign: "right" }}>Total Arrears</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>
-                          Statutory Enforcement Action
-                        </th>
-                        <th style={{ padding: "0.6rem", textAlign: "center" }}>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredDefaulterUnits.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={10}
-                            style={{ padding: "2rem", textAlign: "center", color: "#166534" }}
-                          >
-                            No outstanding defaulters matching search criteria.
-                          </td>
-                        </tr>
-                      ) : (
-                        filteredDefaulterUnits.map((u) => {
-                          const bal = computeLedgerBalance(u.ledgerEntries);
-                          const baseTax = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
-                          let penalty = 0;
-                          for (const e of u.ledgerEntries) {
-                            if (e.entryType === "PENALTY_DEMAND") penalty += e.amount;
-                          }
-                          const aging = computeDefaulterAging(
-                            u.ledgerEntries,
-                            "2026-08-31",
-                            undefined,
-                            Boolean(u.isRecoveryCertified)
-                          );
-                          return (
-                            <tr key={u.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                              <td
-                                style={{
-                                  padding: "0.6rem",
-                                  fontFamily: "monospace",
-                                  fontWeight: 600
-                                }}
-                              >
-                                {u.demandUnit.permanentDemandNo}
-                              </td>
-                              <td style={{ padding: "0.6rem" }}>
-                                <strong>{u.legalName}</strong>
-                                <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                                  {u.tradeName}
-                                </div>
-                              </td>
-                              <td style={{ padding: "0.6rem", fontFamily: "monospace" }}>
-                                {u.identifierValue}
-                              </td>
-                              <td
-                                style={{ padding: "0.6rem", textAlign: "center", fontWeight: 700 }}
-                              >
-                                {aging.daysOverdue}d
-                              </td>
-                              <td style={{ padding: "0.6rem", textAlign: "center" }}>
-                                <span
-                                  style={{
-                                    background:
-                                      aging.status === "RECOVERY_CERTIFIED"
-                                        ? "#7f1d1d"
-                                        : aging.status === "PENALIZED"
-                                          ? "#fee2e2"
-                                          : aging.status === "PENALTY_ELIGIBLE"
-                                            ? "#ffedd5"
-                                            : "#fef3c7",
-                                    color:
-                                      aging.status === "RECOVERY_CERTIFIED"
-                                        ? "#ffffff"
-                                        : aging.status === "PENALIZED"
-                                          ? "#991b1b"
-                                          : aging.status === "PENALTY_ELIGIBLE"
-                                            ? "#9a3412"
-                                            : "#92400e",
-                                    padding: "0.2rem 0.5rem",
-                                    borderRadius: "4px",
-                                    fontSize: "0.72rem",
-                                    fontWeight: 700
-                                  }}
-                                >
-                                  {aging.status}
-                                </span>
-                              </td>
-                              <td
-                                style={{
-                                  padding: "0.6rem",
-                                  textAlign: "right",
-                                  fontFamily: "monospace"
-                                }}
-                              >
-                                PKR {baseTax.toLocaleString()}
-                              </td>
-                              <td
-                                style={{
-                                  padding: "0.6rem",
-                                  textAlign: "right",
-                                  fontFamily: "monospace",
-                                  color: penalty > 0 ? "#b91c1c" : undefined
-                                }}
-                              >
-                                {penalty > 0 ? `PKR ${penalty.toLocaleString()}` : "0"}
-                              </td>
-                              <td
-                                style={{
-                                  padding: "0.6rem",
-                                  textAlign: "right",
-                                  fontFamily: "monospace",
-                                  fontWeight: 700,
-                                  color: "#b91c1c"
-                                }}
-                              >
-                                PKR {bal.toLocaleString()}
-                              </td>
-                              <td style={{ padding: "0.6rem" }}>
-                                {aging.status === "RECOVERY_CERTIFIED" ? (
-                                  <span style={{ color: "#7f1d1d", fontWeight: 600 }}>
-                                    🏛️ Land Revenue S.67 Arrears Referral Issued
-                                  </span>
-                                ) : aging.status === "PENALIZED" ? (
-                                  <span style={{ color: "#b91c1c", fontWeight: 600 }}>
-                                    ⚖️ 100% S.3(4) Penalty Warrant Active
-                                  </span>
-                                ) : aging.status === "PENALTY_ELIGIBLE" ? (
-                                  <span style={{ color: "#c2410c", fontWeight: 600 }}>
-                                    ⚠️ Section 3(4) Show Cause Notice Due
-                                  </span>
-                                ) : (
-                                  <span style={{ color: "#64748b" }}>
-                                    📄 Form P.F.T-1 Reminder Dispatch
-                                  </span>
-                                )}
-                              </td>
-                              <td style={{ padding: "0.6rem", textAlign: "center" }}>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedUnitId(u.id);
-                                    setActiveTab("LEDGER");
-                                  }}
-                                  className="btn-secondary btn-sm"
-                                  style={{ fontSize: "0.72rem", padding: "0.2rem 0.5rem" }}
-                                >
-                                  Action
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                    <tfoot
-                      style={{
-                        background: "#f8fafc",
-                        fontWeight: 700,
-                        borderTop: "2px solid #cbd5e1"
-                      }}
-                    >
-                      <tr>
-                        <td colSpan={7} style={{ padding: "0.6rem" }}>
-                          Total Outstanding Defaulter Debt ({filteredDefaulterUnits.length}{" "}
-                          Defaulters)
-                        </td>
-                        <td
-                          style={{
-                            padding: "0.6rem",
-                            textAlign: "right",
-                            fontFamily: "monospace",
-                            color: "#b91c1c",
-                            fontSize: "0.9rem"
-                          }}
-                        >
-                          PKR{" "}
-                          {filteredDefaulterUnits
-                            .reduce((sum, u) => sum + computeLedgerBalance(u.ledgerEntries), 0)
-                            .toLocaleString()}
-                        </td>
-                        <td colSpan={2} />
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* REGISTER TABLE 3: Notice Dispatch & Service Register */}
-            {activeReportTab === "NOTICE_DISPATCH" && (
-              <div className="table-card">
-                <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid #e2e8f0" }}>
-                  <h4 style={{ margin: 0, fontSize: "1.05rem", color: "#0d3822", fontWeight: 700 }}>
-                    📬 Circle Notice Dispatch &amp; Service Register (Rule 6)
-                  </h4>
-                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
-                    Statutory record of Form P.F.T-1 notices dispatched, postal delivery tracking
-                    &amp; field service affidavits
-                  </p>
-                </div>
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
-                    <thead>
-                      <tr style={{ background: "#f8fafc", borderBottom: "2px solid #cbd5e1" }}>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Notice Ref</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Dispatch Date</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Assessee Name</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Demand No</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Premises Address</th>
-                        <th style={{ padding: "0.6rem", textAlign: "center" }}>Service Status</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Served Date</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>
-                          Process Server / Inspector
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredDispatchRows.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={8}
-                            style={{ padding: "2rem", textAlign: "center", color: "#64748b" }}
-                          >
-                            No dispatch entries match search query "{reportSearchQuery}".
-                          </td>
-                        </tr>
-                      ) : (
-                        filteredDispatchRows.map((r) => (
-                          <tr key={r.noticeNumber} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                            <td
-                              style={{
-                                padding: "0.6rem",
-                                fontFamily: "monospace",
-                                fontWeight: 600
-                              }}
-                            >
-                              {r.noticeNumber}
-                            </td>
-                            <td style={{ padding: "0.6rem" }}>{r.dispatchDate}</td>
-                            <td style={{ padding: "0.6rem" }}>
-                              <strong>{r.assesseeLegalName}</strong>
-                              {r.assesseeTradeName && (
-                                <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                                  {r.assesseeTradeName}
-                                </div>
-                              )}
-                            </td>
-                            <td style={{ padding: "0.6rem", fontFamily: "monospace" }}>
-                              {r.demandNumber}
-                            </td>
-                            <td style={{ padding: "0.6rem", color: "#475569", maxWidth: "250px" }}>
-                              {r.address}
-                            </td>
-                            <td style={{ padding: "0.6rem", textAlign: "center" }}>
-                              <span
-                                className={`badge ${r.serviceStatus === "SERVED" ? "badge-approved" : r.serviceStatus === "PENDING" ? "badge-submitted" : "badge-returned"}`}
-                              >
-                                {r.serviceStatus}
-                              </span>
-                            </td>
-                            <td style={{ padding: "0.6rem" }}>{r.servedAt ?? "Pending"}</td>
-                            <td style={{ padding: "0.6rem", color: "#334155" }}>{r.serverName}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                    <tfoot
-                      style={{
-                        background: "#f8fafc",
-                        fontWeight: 700,
-                        borderTop: "2px solid #cbd5e1"
-                      }}
-                    >
-                      <tr>
-                        <td colSpan={5} style={{ padding: "0.6rem" }}>
-                          Total Dispatches: {filteredDispatchRows.length}
-                        </td>
-                        <td colSpan={3} style={{ padding: "0.6rem", color: "#166534" }}>
-                          Served:{" "}
-                          {filteredDispatchRows.filter((x) => x.serviceStatus === "SERVED").length}{" "}
-                          &bull; Pending:{" "}
-                          {filteredDispatchRows.filter((x) => x.serviceStatus !== "SERVED").length}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* REGISTER TABLE 4: Tax Clearance & Good-Standing Certificate Log */}
-            {activeReportTab === "CLEARANCE_LOG" && (
-              <div className="table-card">
-                <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid #e2e8f0" }}>
-                  <h4 style={{ margin: 0, fontSize: "1.05rem", color: "#0d3822", fontWeight: 700 }}>
-                    📜 Tax Clearance &amp; Good-Standing Certificates Log (Form P.F.T-5)
-                  </h4>
-                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
-                    Verified statutory clearance certificates issued to compliant assessees with
-                    digital cryptographic verification
-                  </p>
-                </div>
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
-                    <thead>
-                      <tr style={{ background: "#f8fafc", borderBottom: "2px solid #cbd5e1" }}>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>
-                          Certificate Serial No
-                        </th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Verification Hash</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>
-                          Assessee Legal Name
-                        </th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>CNIC / NTN</th>
-                        <th style={{ padding: "0.6rem", textAlign: "center" }}>Financial Year</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Issue Date</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Valid Until</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>
-                          Approving Authority
-                        </th>
-                        <th style={{ padding: "0.6rem", textAlign: "right" }}>Cleared Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredClearanceCerts.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={9}
-                            style={{ padding: "2rem", textAlign: "center", color: "#64748b" }}
-                          >
-                            No clearance certificates match search query "{reportSearchQuery}".
-                          </td>
-                        </tr>
-                      ) : (
-                        filteredClearanceCerts.map((c) => (
-                          <tr key={c.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                            <td
-                              style={{
-                                padding: "0.6rem",
-                                fontFamily: "monospace",
-                                fontWeight: 700,
-                                color: "#0d3822"
-                              }}
-                            >
-                              {c.certificateNumber}
-                            </td>
-                            <td
-                              style={{
-                                padding: "0.6rem",
-                                fontFamily: "monospace",
-                                color: "#2563eb",
-                                fontSize: "0.75rem"
-                              }}
-                            >
-                              {c.officialSha256.slice(0, 12)}...
-                            </td>
-                            <td style={{ padding: "0.6rem" }}>
-                              <strong>{c.assesseeLegalName}</strong>
-                              {c.assesseeTradeName && (
-                                <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                                  {c.assesseeTradeName}
-                                </div>
-                              )}
-                            </td>
-                            <td style={{ padding: "0.6rem", fontFamily: "monospace" }}>
-                              {c.cnicOrNtn}
-                            </td>
-                            <td style={{ padding: "0.6rem", textAlign: "center" }}>
-                              {c.financialYear}
-                            </td>
-                            <td style={{ padding: "0.6rem" }}>{c.issueDate}</td>
-                            <td style={{ padding: "0.6rem" }}>{c.validUntil}</td>
-                            <td style={{ padding: "0.6rem", color: "#334155" }}>
-                              {c.issuedByOfficerName}
-                            </td>
-                            <td
-                              style={{
-                                padding: "0.6rem",
-                                textAlign: "right",
-                                fontFamily: "monospace",
-                                color: "#166534",
-                                fontWeight: 700
-                              }}
-                            >
-                              PKR {c.clearedAmountPkr.toLocaleString()}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                    <tfoot
-                      style={{
-                        background: "#f8fafc",
-                        fontWeight: 700,
-                        borderTop: "2px solid #cbd5e1"
-                      }}
-                    >
-                      <tr>
-                        <td colSpan={8} style={{ padding: "0.6rem" }}>
-                          Total Certificates Issued: {filteredClearanceCerts.length} &bull;
-                          Validated under Section 3 &amp; Rule 11
-                        </td>
-                        <td
-                          style={{
-                            padding: "0.6rem",
-                            textAlign: "right",
-                            fontFamily: "monospace",
-                            color: "#166534"
-                          }}
-                        >
-                          PKR{" "}
-                          {filteredClearanceCerts
-                            .reduce((sum, c) => sum + c.clearedAmountPkr, 0)
-                            .toLocaleString()}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* REGISTER TABLE 5: Statutory Relief & Adjustment Register */}
-            {activeReportTab === "RELIEF_REGISTER" && (
-              <div className="table-card">
-                <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid #e2e8f0" }}>
-                  <h4 style={{ margin: 0, fontSize: "1.05rem", color: "#0d3822", fontWeight: 700 }}>
-                    ⚖️ Statutory Relief &amp; Adjustment Register (Rules 5 &amp; 10)
-                  </h4>
-                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
-                    Legal audit roll of Rule 10 business discontinuances, freeze orders &amp; Rule 5
-                    statutory tax refund credits
-                  </p>
-                </div>
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
-                    <thead>
-                      <tr style={{ background: "#f8fafc", borderBottom: "2px solid #cbd5e1" }}>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>
-                          Statutory Relief Type
-                        </th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>
-                          Assessee Legal Name
-                        </th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Effective Date</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>
-                          Legal Basis / Grounds
-                        </th>
-                        <th style={{ padding: "0.6rem", textAlign: "right" }}>
-                          Credit / Adjusted Amount
-                        </th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>
-                          Adjudicating Authority
-                        </th>
-                        <th style={{ padding: "0.6rem", textAlign: "center" }}>Order Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredReliefRecords.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={7}
-                            style={{ padding: "2rem", textAlign: "center", color: "#64748b" }}
-                          >
-                            No relief records match search query "{reportSearchQuery}".
-                          </td>
-                        </tr>
-                      ) : (
-                        filteredReliefRecords.map((r) => (
-                          <tr key={r.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                            <td style={{ padding: "0.6rem" }}>
-                              <span
-                                style={{
-                                  background:
-                                    r.reliefType === "RULE_10_DISCONTINUANCE"
-                                      ? "#fef3c7"
-                                      : "#dbeafe",
-                                  color:
-                                    r.reliefType === "RULE_10_DISCONTINUANCE"
-                                      ? "#92400e"
-                                      : "#1e40af",
-                                  padding: "0.2rem 0.5rem",
-                                  borderRadius: "4px",
-                                  fontSize: "0.72rem",
-                                  fontWeight: 700
-                                }}
-                              >
-                                {r.reliefType === "RULE_10_DISCONTINUANCE"
-                                  ? "Rule 10 Discontinuance"
-                                  : "Rule 5 Refund Credit"}
-                              </span>
-                            </td>
-                            <td style={{ padding: "0.6rem" }}>
-                              <strong>{r.legalName}</strong>
-                            </td>
-                            <td style={{ padding: "0.6rem" }}>{r.effectiveDate}</td>
-                            <td style={{ padding: "0.6rem", color: "#475569", maxWidth: "300px" }}>
-                              {r.statutoryReason}
-                            </td>
-                            <td
-                              style={{
-                                padding: "0.6rem",
-                                textAlign: "right",
-                                fontFamily: "monospace",
-                                fontWeight: 700
-                              }}
-                            >
-                              {r.amountAdjustedPkr > 0
-                                ? `PKR ${r.amountAdjustedPkr.toLocaleString()}`
-                                : "Demand Frozen"}
-                            </td>
-                            <td style={{ padding: "0.6rem", color: "#334155" }}>
-                              {r.approvedByEto}
-                            </td>
-                            <td style={{ padding: "0.6rem", textAlign: "center" }}>
-                              <span className="badge badge-approved">{r.status}</span>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                    <tfoot
-                      style={{
-                        background: "#f8fafc",
-                        fontWeight: 700,
-                        borderTop: "2px solid #cbd5e1"
-                      }}
-                    >
-                      <tr>
-                        <td colSpan={4} style={{ padding: "0.6rem" }}>
-                          Total Adjudicated Relief Records: {filteredReliefRecords.length}
-                        </td>
-                        <td
-                          style={{
-                            padding: "0.6rem",
-                            textAlign: "right",
-                            fontFamily: "monospace",
-                            color: "#0284c7"
-                          }}
-                        >
-                          PKR{" "}
-                          {filteredReliefRecords
-                            .reduce((sum, r) => sum + r.amountAdjustedPkr, 0)
-                            .toLocaleString()}
-                        </td>
-                        <td colSpan={2} />
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* REGISTER TABLE 6: Statutory Slabs & Tertiary Yield Distribution */}
-            {activeReportTab === "SLAB_DISTRIBUTION" && (
-              <div className="table-card">
-                <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid #e2e8f0" }}>
-                  <h4 style={{ margin: 0, fontSize: "1.05rem", color: "#0d3822", fontWeight: 700 }}>
-                    📊 Statutory Slabs &amp; Tertiary Yield Distribution Register (Section 3 &amp;
-                    Second Schedule)
-                  </h4>
-                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
-                    Comprehensive 47-slab statutory baseline &bull; Capital thresholds, turnover
-                    brackets, staff tiers &bull; FY 2026-27 &bull; Circle-Vehari
-                  </p>
-                </div>
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
-                    <thead>
-                      <tr style={{ background: "#f8fafc", borderBottom: "2px solid #cbd5e1" }}>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Schedule Sub-Class</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>Primary Class</th>
-                        <th style={{ padding: "0.6rem", textAlign: "left" }}>
-                          Tertiary Slab / Criteria
-                        </th>
-                        <th style={{ padding: "0.6rem", textAlign: "right" }}>Statutory Rate</th>
-                        <th style={{ padding: "0.6rem", textAlign: "center" }}>Units</th>
-                        <th style={{ padding: "0.6rem", textAlign: "right" }}>Assessed Demand</th>
-                        <th style={{ padding: "0.6rem", textAlign: "right" }}>Realized Recovery</th>
-                        <th style={{ padding: "0.6rem", textAlign: "right" }}>
-                          Outstanding Arrears
-                        </th>
-                        <th style={{ padding: "0.6rem", textAlign: "center" }}>Recovery %</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {misMetrics.slabYields
-                        .filter((slab) => {
-                          const q = reportSearchQuery.trim().toLowerCase();
-                          if (!q) return true;
-                          return (
-                            (slab.ruleCode?.toLowerCase().includes(q) ?? false) ||
-                            (slab.statutoryTertiaryCode?.toLowerCase().includes(q) ?? false) ||
-                            (slab.subclassificationCode?.toLowerCase().includes(q) ?? false) ||
-                            (slab.tertiarySlab?.toLowerCase().includes(q) ?? false) ||
-                            slab.categoryName.toLowerCase().includes(q) ||
-                            String(slab.slabRatePkr).includes(q)
-                          );
-                        })
-                        .map((slab) => {
-                          const specificCode =
-                            slab.ruleCode ??
-                            slab.statutoryTertiaryCode ??
-                            slab.subclassificationCode ??
-                            slab.categoryCode;
-                          return (
-                            <tr
-                              key={slab.ruleId}
-                              style={{
-                                borderBottom: "1px solid #e2e8f0",
-                                background: slab.assessedUnitsCount > 0 ? "#f0fdf4" : undefined
-                              }}
-                            >
-                              <td style={{ padding: "0.6rem", fontWeight: 700, color: "#0d3822" }}>
-                                <span
-                                  style={{
-                                    display: "inline-block",
-                                    padding: "0.15rem 0.45rem",
-                                    borderRadius: "4px",
-                                    background: "#f1f5f9",
-                                    border: "1px solid #cbd5e1",
-                                    fontFamily: "monospace",
-                                    fontSize: "0.82rem"
-                                  }}
-                                >
-                                  {specificCode}
-                                </span>
-                              </td>
-                              <td style={{ padding: "0.6rem" }}>
-                                <span style={{ fontWeight: 600, display: "block" }}>
-                                  {slab.categoryName}
-                                </span>
-                                {slab.subclassificationCode &&
-                                  slab.subclassificationCode !== specificCode && (
-                                    <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                                      Entry Clause: {slab.subclassificationCode}
-                                    </span>
-                                  )}
-                              </td>
-                              <td style={{ padding: "0.6rem", color: "#334155" }}>
-                                {slab.subclassificationLabel &&
-                                slab.statutoryTertiaryClassification ? (
-                                  <div>
-                                    <strong
-                                      style={{
-                                        display: "block",
-                                        color: "#0f172a",
-                                        fontSize: "0.82rem"
-                                      }}
-                                    >
-                                      {slab.subclassificationLabel}
-                                    </strong>
-                                    <span
-                                      style={{
-                                        fontSize: "0.75rem",
-                                        color: "#166534",
-                                        display: "inline-block",
-                                        marginTop: "0.15rem"
-                                      }}
-                                    >
-                                      📍 {slab.statutoryTertiaryClassification}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  (slab.tertiarySlab ?? "—")
-                                )}
-                              </td>
-                              <td
-                                style={{
-                                  padding: "0.6rem",
-                                  textAlign: "right",
-                                  fontWeight: 700,
-                                  color: "#166534"
-                                }}
-                              >
-                                PKR {slab.slabRatePkr.toLocaleString()}
-                                <span
-                                  style={{
-                                    display: "block",
-                                    fontSize: "0.7rem",
-                                    color: "#64748b",
-                                    fontWeight: 400
-                                  }}
-                                >
-                                  {slab.rateBasis}
-                                </span>
-                              </td>
-                              <td style={{ padding: "0.6rem", textAlign: "center" }}>
-                                <span
-                                  style={{
-                                    display: "inline-block",
-                                    padding: "0.15rem 0.45rem",
-                                    borderRadius: "4px",
-                                    fontWeight: 700,
-                                    background: slab.assessedUnitsCount > 0 ? "#dcfce7" : "#f1f5f9",
-                                    color: slab.assessedUnitsCount > 0 ? "#166534" : "#64748b"
-                                  }}
-                                >
-                                  {slab.assessedUnitsCount}
-                                </span>
-                              </td>
-                              <td
-                                style={{ padding: "0.6rem", textAlign: "right", fontWeight: 600 }}
-                              >
-                                PKR {slab.assessedDemandPkr.toLocaleString()}
-                              </td>
-                              <td
-                                style={{
-                                  padding: "0.6rem",
-                                  textAlign: "right",
-                                  fontWeight: 600,
-                                  color: "#166534"
-                                }}
-                              >
-                                PKR {slab.realizedRecoveryPkr.toLocaleString()}
-                              </td>
-                              <td
-                                style={{
-                                  padding: "0.6rem",
-                                  textAlign: "right",
-                                  fontWeight: 600,
-                                  color: slab.outstandingArrearsPkr > 0 ? "#dc2626" : "#64748b"
-                                }}
-                              >
-                                PKR {slab.outstandingArrearsPkr.toLocaleString()}
-                              </td>
-                              <td style={{ padding: "0.6rem", textAlign: "center" }}>
-                                <span
-                                  style={{
-                                    display: "inline-block",
-                                    padding: "0.15rem 0.4rem",
-                                    borderRadius: "4px",
-                                    fontSize: "0.75rem",
-                                    fontWeight: 700,
-                                    background:
-                                      slab.recoveryRatePct >= 80
-                                        ? "#dcfce7"
-                                        : slab.recoveryRatePct >= 50
-                                          ? "#fef3c7"
-                                          : "#fee2e2",
-                                    color:
-                                      slab.recoveryRatePct >= 80
-                                        ? "#166534"
-                                        : slab.recoveryRatePct >= 50
-                                          ? "#92400e"
-                                          : "#991b1b"
-                                  }}
-                                >
-                                  {slab.recoveryRatePct}%
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                    </tbody>
-                    <tfoot
-                      style={{
-                        background: "#f8fafc",
-                        fontWeight: 700,
-                        borderTop: "2px solid #cbd5e1"
-                      }}
-                    >
-                      <tr>
-                        <td colSpan={4} style={{ padding: "0.6rem" }}>
-                          Total Second Schedule Slabs: {misMetrics.slabYields.length} &bull; Active
-                          in Circle:{" "}
-                          {misMetrics.slabYields.filter((s) => s.assessedUnitsCount > 0).length}
-                        </td>
-                        <td style={{ padding: "0.6rem", textAlign: "center" }}>
-                          {misMetrics.slabYields.reduce((sum, s) => sum + s.assessedUnitsCount, 0)}
-                        </td>
-                        <td style={{ padding: "0.6rem", textAlign: "right", color: "#0f172a" }}>
-                          PKR{" "}
-                          {misMetrics.slabYields
-                            .reduce((sum, s) => sum + s.assessedDemandPkr, 0)
-                            .toLocaleString()}
-                        </td>
-                        <td style={{ padding: "0.6rem", textAlign: "right", color: "#166534" }}>
-                          PKR{" "}
-                          {misMetrics.slabYields
-                            .reduce((sum, s) => sum + s.realizedRecoveryPkr, 0)
-                            .toLocaleString()}
-                        </td>
-                        <td style={{ padding: "0.6rem", textAlign: "right", color: "#dc2626" }}>
-                          PKR{" "}
-                          {misMetrics.slabYields
-                            .reduce((sum, s) => sum + s.outstandingArrearsPkr, 0)
-                            .toLocaleString()}
-                        </td>
-                        <td style={{ padding: "0.6rem", textAlign: "center", color: "#166534" }}>
-                          {misMetrics.kpis.recoveryRatePct}%
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            )}
+            </div>
           </section>
         )}
 
@@ -11210,7 +10673,7 @@ export default function HomePage({
                     }
                   }}
                 >
-                  📱 QR PFT-5 Clearance
+                  📱 QR Clearance Certificate
                 </button>
                 <button
                   type="button"
@@ -11647,8 +11110,10 @@ export default function HomePage({
                       type="button"
                       className="btn-secondary"
                       onClick={() => {
-                        setSelectedUnitId(portalSearchResult.unit.id);
-                        setShowPft1NoticeModal(true);
+                        window.open(
+                          `/documents/pft1?pin=${portalSearchResult.unit.provincialUin}`,
+                          "_blank"
+                        );
                       }}
                     >
                       📜 View Demand Notice ({portalSearchResult.noticeNumber})
@@ -11657,8 +11122,10 @@ export default function HomePage({
                       type="button"
                       className="btn-secondary"
                       onClick={() => {
-                        setSelectedUnitId(portalSearchResult.unit.id);
-                        setShowIssuePft2Modal(true);
+                        window.open(
+                          `/documents/pf2/new?pin=${portalSearchResult.unit.provincialUin}`,
+                          "_blank"
+                        );
                       }}
                     >
                       💳 View Bank Challan ({portalSearchResult.challanNumber})
@@ -12172,6 +11639,47 @@ export default function HomePage({
                     </span>
                   </div>
                 )}
+
+                <div className="form-group" style={{ marginBottom: "1rem" }}>
+                  <label
+                    htmlFor="new-locality"
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center"
+                    }}
+                  >
+                    <span style={{ fontWeight: 600 }}>Assigned Locality / Commercial Zone</span>
+                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: "normal" }}>
+                      Optional
+                    </span>
+                  </label>
+                  <select
+                    id="new-locality"
+                    className="form-control"
+                    value={newLocality}
+                    onChange={(e) => setNewLocality(e.target.value)}
+                    style={{ width: "100%", padding: "0.5rem" }}
+                  >
+                    <option value="">-- Select Predefined Locality (Optional) --</option>
+                    {VEHARI_LOCALITIES.map((loc) => (
+                      <option key={loc} value={loc}>
+                        {loc}
+                      </option>
+                    ))}
+                  </select>
+                  <span
+                    style={{
+                      fontSize: "0.725rem",
+                      color: "#64748b",
+                      display: "block",
+                      marginTop: "0.25rem"
+                    }}
+                  >
+                    Stored independently from street address to enable locality-wise assessment,
+                    compliance &amp; revenue analysis.
+                  </span>
+                </div>
 
                 <div className="form-group">
                   <label htmlFor="new-address">Physical Business Address in Vehari *</label>
@@ -12787,10 +12295,10 @@ export default function HomePage({
               >
                 <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
                   <div>
-                    <strong>SHA-256 Non-Repudiation Digest:</strong>
+                    <strong>Official Seal &amp; Authority:</strong>
                   </div>
-                  <div style={{ fontFamily: "monospace", fontSize: "0.7rem", color: "#047857" }}>
-                    {showCauseNoticeData.officialSha256}
+                  <div style={{ fontSize: "0.7rem", color: "#047857" }}>
+                    Excise, Taxation &amp; Narcotics Control Department, Punjab
                   </div>
                 </div>
                 <div style={{ textAlign: "center" }}>
@@ -13253,10 +12761,10 @@ export default function HomePage({
               >
                 <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
                   <div>
-                    <strong>SHA-256 Non-Repudiation Digest:</strong>
+                    <strong>Official Statutory Certificate:</strong>
                   </div>
-                  <div style={{ fontFamily: "monospace", fontSize: "0.7rem", color: "#047857" }}>
-                    {recoveryCertData.officialSha256}
+                  <div style={{ fontSize: "0.7rem", color: "#047857" }}>
+                    Issued under Section 38, Punjab Land Revenue Act, 1967
                   </div>
                 </div>
                 <div style={{ textAlign: "center" }}>
@@ -13851,9 +13359,9 @@ export default function HomePage({
                         }}
                       >
                         <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                          <div>SHA-256 Digest:</div>
-                          <div style={{ fontFamily: "monospace" }}>
-                            {noticeData.officialSha256.slice(0, 32)}...
+                          <div>Official Record:</div>
+                          <div style={{ color: "#047857" }}>
+                            Rule 6(2), Punjab Professions &amp; Trades Tax Rules, 1977
                           </div>
                         </div>
                         <div style={{ textAlign: "center" }}>
@@ -14521,8 +14029,8 @@ export default function HomePage({
                 }}
               >
                 <span>
-                  SHA-256 Non-Repudiation Digest:{" "}
-                  <code>{circleDispatchRegisterData.officialSha256.slice(0, 32)}...</code>
+                  Official Dispatch Register &bull; Rule 6(2), Punjab Professions and Trades Tax
+                  Rules, 1977
                 </span>
                 <span>Assessing Authority: Tariq Mahmood, ETO Tehsil Vehari</span>
               </div>
@@ -16641,7 +16149,7 @@ export default function HomePage({
                   </div>
                 </div>
 
-                {/* Cryptographic SHA-256 Digest Non-Repudiation */}
+                {/* Official Statutory Verification Footer */}
                 <div
                   style={{
                     marginTop: "1.25rem",
@@ -16655,9 +16163,9 @@ export default function HomePage({
                   }}
                 >
                   <div>
-                    <span>Official SHA-256 Digest: </span>
-                    <span style={{ fontFamily: "monospace", color: "#334155" }}>
-                      {activeClearanceCert.officialSha256}
+                    <span>Official Statutory Seal: </span>
+                    <span style={{ fontWeight: 600, color: "#166534" }}>
+                      Punjab Professional Tax Administration System (PTAS)
                     </span>
                   </div>
                   <span>Punjab IT Board &bull; ET&amp;NC Department</span>
@@ -16677,7 +16185,7 @@ export default function HomePage({
                   onClick={() =>
                     downloadDocumentPdf(
                       "clearance-certificate-printable",
-                      `Form_PFT5_Clearance_${activeClearanceCert.certificateNumber}.pdf`
+                      `Tax_Clearance_Certificate_${activeClearanceCert.certificateNumber}.pdf`
                     )
                   }
                 >
@@ -17324,27 +16832,42 @@ export default function HomePage({
                   </select>
                 </div>
 
+                <div
+                  className="statutory-notice"
+                  style={{
+                    backgroundColor: "#f0fdf4",
+                    border: "1px solid #86efac",
+                    borderRadius: "6px",
+                    padding: "0.75rem 1rem",
+                    marginBottom: "1rem",
+                    fontSize: "0.85rem",
+                    color: "#166534"
+                  }}
+                >
+                  <strong>Statutory Mechanism (Rule 5, 1977 Rules):</strong> Excess payments are
+                  recorded as immutable double-entry credit balances carried forward against future
+                  tax liability. Cash refunds are strictly disallowed under Punjab Professional Tax
+                  Administration.
+                </div>
+
                 <div className="form-group" style={{ marginBottom: "1rem" }}>
                   <label
-                    htmlFor="ref-type-select"
+                    htmlFor="ref-orig-payment-input"
                     style={{ fontWeight: 600, display: "block", marginBottom: "0.3rem" }}
                   >
-                    Relief Mechanism:
+                    Original Tax Payment Deposited (PKR):
                   </label>
-                  <select
-                    id="ref-type-select"
-                    value={refType}
-                    onChange={(e) => setRefType(e.target.value as "CREDIT_ADJUSTMENT" | "REFUND")}
+                  <input
+                    id="ref-orig-payment-input"
+                    type="number"
+                    min={1}
+                    value={refOriginalPayment}
+                    onChange={(e) => setRefOriginalPayment(Number(e.target.value))}
                     className="form-control"
                     style={{ width: "100%", padding: "0.5rem" }}
-                  >
-                    <option value="CREDIT_ADJUSTMENT">
-                      Double-Entry Credit Adjustment (Carry forward against future demand)
-                    </option>
-                    <option value="REFUND">
-                      Cash Treasury Refund (State Bank / Treasury Voucher)
-                    </option>
-                  </select>
+                    placeholder="E.g. 12000"
+                    required
+                  />
                 </div>
 
                 <div className="form-group" style={{ marginBottom: "1rem" }}>
@@ -17352,18 +16875,38 @@ export default function HomePage({
                     htmlFor="ref-amount-input"
                     style={{ fontWeight: 600, display: "block", marginBottom: "0.3rem" }}
                   >
-                    Claimed Relief Amount (PKR):
+                    Excess Amount / Future Credit Balance (PKR):
                   </label>
                   <input
                     id="ref-amount-input"
                     type="number"
                     min={1}
+                    max={refOriginalPayment}
                     value={refAmount}
                     onChange={(e) => setRefAmount(Number(e.target.value))}
                     className="form-control"
                     style={{ width: "100%", padding: "0.5rem" }}
                     required
                   />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: "1rem" }}>
+                  <label
+                    htmlFor="ref-target-year-select"
+                    style={{ fontWeight: 600, display: "block", marginBottom: "0.3rem" }}
+                  >
+                    Target Future Liability Year:
+                  </label>
+                  <select
+                    id="ref-target-year-select"
+                    value={refTargetYear}
+                    onChange={(e) => setRefTargetYear(e.target.value)}
+                    className="form-control"
+                    style={{ width: "100%", padding: "0.5rem" }}
+                  >
+                    <option value="FY-2027-2028">FY 2027-2028 (Subsequent Assessment)</option>
+                    <option value="FY-2028-2029">FY 2028-2029 (Long-term Carry Forward)</option>
+                  </select>
                 </div>
 
                 <div className="form-group" style={{ marginBottom: "1rem" }}>
@@ -17626,976 +17169,7 @@ export default function HomePage({
         </div>
       )}
 
-      {/* MODAL 24: EXECUTIVE PRINT REPORT STUDIO (PHASE 7) */}
-      {showExecutivePrintModal && (
-        <div
-          className="modal-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="exec-report-title"
-        >
-          <div className="modal-card modal-card-lg" style={{ maxWidth: "64rem" }}>
-            <div
-              className="modal-header"
-              style={{
-                background: "linear-gradient(135deg, #0d3822 0%, #064e3b 100%)",
-                color: "#ffffff"
-              }}
-            >
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <span style={{ fontSize: "1.25rem" }}>🏛️</span>
-                  <h3
-                    id="exec-report-title"
-                    style={{ margin: 0, color: "#ffffff", fontSize: "1.1rem" }}
-                  >
-                    Executive Gazetted Report Studio &bull; Punjab PTAS
-                  </h3>
-                </div>
-                <p style={{ margin: "0.2rem 0 0", fontSize: "0.75rem", color: "#d1fae5" }}>
-                  Official High-Fidelity Printable Document &bull; Section 15 of Digitization Plan
-                  &bull; Multan Division
-                </p>
-              </div>
-              <button
-                type="button"
-                className="modal-close-btn"
-                onClick={() => setShowExecutivePrintModal(false)}
-                aria-label="Close report studio"
-              >
-                &times;
-              </button>
-            </div>
-
-            <div
-              className="modal-body"
-              style={{
-                maxHeight: "75vh",
-                overflowY: "auto",
-                padding: "1.5rem",
-                background: "#f8fafc"
-              }}
-            >
-              {/* Official Printable Report Container */}
-              <div
-                id="executive-report-printable"
-                style={{
-                  background: "#ffffff",
-                  border: "2px solid #0d3822",
-                  borderRadius: "6px",
-                  padding: "2rem",
-                  fontFamily: "Georgia, serif",
-                  boxShadow: "0 4px 10px rgba(0,0,0,0.05)"
-                }}
-              >
-                {/* Official Letterhead Header */}
-                <div
-                  style={{
-                    textAlign: "center",
-                    borderBottom: "2px solid #0d3822",
-                    paddingBottom: "1.25rem",
-                    marginBottom: "1.5rem"
-                  }}
-                >
-                  <div style={{ fontSize: "2rem", marginBottom: "0.25rem" }}>🏛️</div>
-                  <h4
-                    style={{
-                      margin: "0.15rem 0",
-                      color: "#0d3822",
-                      fontSize: "1.25rem",
-                      letterSpacing: "0.05em"
-                    }}
-                  >
-                    GOVERNMENT OF THE PUNJAB
-                  </h4>
-                  <p
-                    style={{
-                      margin: "0.15rem 0",
-                      fontSize: "0.9rem",
-                      color: "#334155",
-                      fontWeight: 600
-                    }}
-                  >
-                    DIRECTORATE GENERAL OF EXCISE, TAXATION &amp; NARCOTICS CONTROL
-                  </p>
-                  <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
-                    MULTAN DIVISION &bull; DISTRICT VEHARI &bull; CIRCLE-VEHARI
-                  </p>
-
-                  <div
-                    style={{
-                      background: "#0d3822",
-                      color: "#ffffff",
-                      display: "inline-block",
-                      padding: "0.35rem 1.25rem",
-                      borderRadius: "4px",
-                      marginTop: "0.85rem",
-                      fontSize: "0.95rem",
-                      fontWeight: 700,
-                      letterSpacing: "0.03em"
-                    }}
-                  >
-                    {executiveReportType === "EXECUTIVE_MIS_SUMMARY" &&
-                      "EXECUTIVE MIS COMPREHENSIVE REVENUE & COMPLIANCE BRIEF"}
-                    {executiveReportType === "PFT3_REGISTER" &&
-                      "FORM P.F.T-3: ASSESSMENT & DEMAND REGISTER (RULE 11)"}
-                    {executiveReportType === "DEFAULTER_ROLL" &&
-                      "DEFAULTER ARREARS RECOVERY & REFERRAL ROLL (SECTION 3(4) & RULE 12)"}
-                    {executiveReportType === "NOTICE_DISPATCH" &&
-                      "CIRCLE NOTICE DISPATCH & SERVICE REGISTER (RULE 6(2))"}
-                    {executiveReportType === "CLEARANCE_LOG" &&
-                      "FORM P.F.T-5 TAX CLEARANCE CERTIFICATE ISSUANCE REGISTER"}
-                    {executiveReportType === "RELIEF_REGISTER" &&
-                      "STATUTORY RELIEF & ADJUSTMENT REGISTER (RULES 5 & 10)"}
-                    {executiveReportType === "SLAB_DISTRIBUTION" &&
-                      "STATUTORY SCHEDULE SUB-CLASS & TERTIARY SLABS DISTRIBUTION REGISTER"}
-                  </div>
-                </div>
-
-                {/* Meta Details Row */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr 1fr",
-                    fontSize: "0.8rem",
-                    borderBottom: "1px solid #cbd5e1",
-                    paddingBottom: "0.85rem",
-                    marginBottom: "1.25rem",
-                    color: "#334155"
-                  }}
-                >
-                  <div>
-                    <strong>Financial Year:</strong> 2026–2027
-                    <br />
-                    <strong>Jurisdiction:</strong> Circle-Vehari (Tehsil Vehari)
-                  </div>
-                  <div style={{ textAlign: "center" }}>
-                    <strong>Statutory Baseline:</strong> Section 3, Second Schedule
-                    <br />
-                    <strong>Accounting Head:</strong> B01601 - Tax on Professions
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <strong>Date of Run:</strong> {new Date().toLocaleDateString("en-GB")}
-                    <br />
-                    <strong>Generated By:</strong> {officer.name} ({officer.role})
-                  </div>
-                </div>
-
-                {/* Dynamic Content based on executiveReportType */}
-                {executiveReportType === "EXECUTIVE_MIS_SUMMARY" && (
-                  <div>
-                    {/* Executive Summary Metrics Box */}
-                    <div
-                      style={{
-                        background: "#f0fdf4",
-                        border: "1px solid #bbf7d0",
-                        padding: "1rem",
-                        borderRadius: "6px",
-                        marginBottom: "1.5rem"
-                      }}
-                    >
-                      <h5 style={{ margin: "0 0 0.5rem", color: "#166534", fontSize: "0.95rem" }}>
-                        1. EXECUTIVE REVENUE REALIZATION SYNOPSIS:
-                      </h5>
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(3, 1fr)",
-                          gap: "0.75rem",
-                          fontSize: "0.85rem"
-                        }}
-                      >
-                        <div>
-                          <span style={{ color: "#64748b" }}>Registered Assessees:</span>
-                          <br />
-                          <strong>{misMetrics.kpis.totalUnitsCount} Commercial Units</strong>
-                        </div>
-                        <div>
-                          <span style={{ color: "#64748b" }}>Gross Assessed Demand:</span>
-                          <br />
-                          <strong>PKR {misMetrics.kpis.totalAssessedGross.toLocaleString()}</strong>
-                        </div>
-                        <div>
-                          <span style={{ color: "#64748b" }}>Realized Collections:</span>
-                          <br />
-                          <strong style={{ color: "#166534" }}>
-                            PKR {misMetrics.kpis.totalRealizedRecovery.toLocaleString()}
-                          </strong>
-                        </div>
-                        <div>
-                          <span style={{ color: "#64748b" }}>Recovery Yield Rate:</span>
-                          <br />
-                          <strong>{misMetrics.kpis.recoveryRatePct}% Realized</strong>
-                        </div>
-                        <div>
-                          <span style={{ color: "#64748b" }}>Budget Target (PKR 50,000):</span>
-                          <br />
-                          <strong>{misMetrics.kpis.targetRealizationPct}% Realized</strong>
-                        </div>
-                        <div>
-                          <span style={{ color: "#64748b" }}>Remaining Arrears:</span>
-                          <br />
-                          <strong style={{ color: "#b91c1c" }}>
-                            PKR {misMetrics.kpis.outstandingArrears.toLocaleString()}
-                          </strong>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Category Yield Breakdown */}
-                    <h5 style={{ margin: "1rem 0 0.5rem", color: "#0d3822", fontSize: "0.95rem" }}>
-                      2. SECOND SCHEDULE STATUTORY CATEGORY REVENUE YIELD:
-                    </h5>
-                    <table
-                      style={{
-                        width: "100%",
-                        borderCollapse: "collapse",
-                        fontSize: "0.8rem",
-                        marginBottom: "1.5rem"
-                      }}
-                    >
-                      <thead>
-                        <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                          <th style={{ padding: "0.4rem", textAlign: "left" }}>Entry</th>
-                          <th style={{ padding: "0.4rem", textAlign: "left" }}>Category Name</th>
-                          <th style={{ padding: "0.4rem", textAlign: "center" }}>Units</th>
-                          <th style={{ padding: "0.4rem", textAlign: "right" }}>Demand (PKR)</th>
-                          <th style={{ padding: "0.4rem", textAlign: "right" }}>Realized (PKR)</th>
-                          <th style={{ padding: "0.4rem", textAlign: "right" }}>Compliance</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {misMetrics.categoryYields.map((cat) => (
-                          <tr key={cat.categoryCode} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                            <td style={{ padding: "0.35rem" }}>{cat.categoryCode}</td>
-                            <td style={{ padding: "0.35rem" }}>{cat.categoryName}</td>
-                            <td style={{ padding: "0.35rem", textAlign: "center" }}>
-                              {cat.unitCount}
-                            </td>
-                            <td
-                              style={{
-                                padding: "0.35rem",
-                                textAlign: "right",
-                                fontFamily: "monospace"
-                              }}
-                            >
-                              {cat.totalDemand.toLocaleString()}
-                            </td>
-                            <td
-                              style={{
-                                padding: "0.35rem",
-                                textAlign: "right",
-                                fontFamily: "monospace",
-                                color: "#166534"
-                              }}
-                            >
-                              {cat.realizedRecovery.toLocaleString()}
-                            </td>
-                            <td style={{ padding: "0.35rem", textAlign: "right", fontWeight: 700 }}>
-                              {cat.compliancePct}%
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-
-                    {/* Defaulter Funnel & Action Velocity */}
-                    <h5 style={{ margin: "1rem 0 0.5rem", color: "#0d3822", fontSize: "0.95rem" }}>
-                      3. STATUTORY ENFORCEMENT &amp; OPERATIONAL DESK VELOCITY:
-                    </h5>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "1rem",
-                        fontSize: "0.82rem",
-                        marginBottom: "1.5rem"
-                      }}
-                    >
-                      <div
-                        style={{
-                          border: "1px solid #e2e8f0",
-                          padding: "0.75rem",
-                          borderRadius: "4px"
-                        }}
-                      >
-                        <strong
-                          style={{ display: "block", color: "#b91c1c", marginBottom: "0.4rem" }}
-                        >
-                          Defaulter Arrears Exposure:
-                        </strong>
-                        <div>
-                          &bull; Current within grace: {misMetrics.defaulterFunnel.current.count}{" "}
-                          units (PKR {misMetrics.defaulterFunnel.current.amount.toLocaleString()})
-                        </div>
-                        <div>
-                          &bull; Overdue 30+ days: {misMetrics.defaulterFunnel.overdue30Days.count}{" "}
-                          units (PKR{" "}
-                          {misMetrics.defaulterFunnel.overdue30Days.amount.toLocaleString()})
-                        </div>
-                        <div>
-                          &bull; Show Cause Notice eligible:{" "}
-                          {misMetrics.defaulterFunnel.penaltyEligible.count} units (PKR{" "}
-                          {misMetrics.defaulterFunnel.penaltyEligible.amount.toLocaleString()})
-                        </div>
-                        <div>
-                          &bull; Penalized under Sec 3(4):{" "}
-                          {misMetrics.defaulterFunnel.penalized.count} units (PKR{" "}
-                          {misMetrics.defaulterFunnel.penalized.amount.toLocaleString()})
-                        </div>
-                        <div>
-                          &bull; Certified under Rule 12:{" "}
-                          {misMetrics.defaulterFunnel.recoveryCertified.count} units (PKR{" "}
-                          {misMetrics.defaulterFunnel.recoveryCertified.amount.toLocaleString()})
-                        </div>
-                      </div>
-                      <div
-                        style={{
-                          border: "1px solid #e2e8f0",
-                          padding: "0.75rem",
-                          borderRadius: "4px"
-                        }}
-                      >
-                        <strong
-                          style={{ display: "block", color: "#0d3822", marginBottom: "0.4rem" }}
-                        >
-                          Operational Action Desk Backlog:
-                        </strong>
-                        <div>
-                          &bull; Draft Assessments awaiting approval:{" "}
-                          {misMetrics.pendency.pendingDraftAssessments}
-                        </div>
-                        <div>
-                          &bull; Unserved Rule 6 Demand Notices:{" "}
-                          {misMetrics.pendency.unservedNotices}
-                        </div>
-                        <div>
-                          &bull; Rule 10 On-site Discontinuance Inspections:{" "}
-                          {misMetrics.pendency.pendingFieldInspections}
-                        </div>
-                        <div>
-                          &bull; Section 7 Appellate Hearings pending:{" "}
-                          {misMetrics.pendency.pendingAppeals}
-                        </div>
-                        <div>
-                          &bull; Rule 5 Statutory Refund Claims in review:{" "}
-                          {misMetrics.pendency.pendingRefunds}
-                        </div>
-                        <div>
-                          &bull; Form P.F.T-5 Clearance Certificates issued:{" "}
-                          {misMetrics.pendency.clearanceCertificatesIssued}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {executiveReportType === "PFT3_REGISTER" && (
-                  <table
-                    style={{
-                      width: "100%",
-                      borderCollapse: "collapse",
-                      fontSize: "0.75rem",
-                      marginBottom: "1.5rem"
-                    }}
-                  >
-                    <thead>
-                      <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>PDN</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>
-                          Assessee Legal Name
-                        </th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>CNIC / NTN</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Category / Entry</th>
-                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Demand (PKR)</th>
-                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Penalty (PKR)</th>
-                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Paid (PKR)</th>
-                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Balance (PKR)</th>
-                        <th style={{ padding: "0.35rem", textAlign: "center" }}>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {units.map((u) => {
-                        const baseTax = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
-                        let penalty = 0;
-                        let paid = 0;
-                        for (const e of u.ledgerEntries) {
-                          if (e.entryType === "PENALTY_DEMAND") penalty += e.amount;
-                          if (e.amount < 0) paid += Math.abs(e.amount);
-                        }
-                        const bal = computeLedgerBalance(u.ledgerEntries);
-                        return (
-                          <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                            <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                              {u.demandUnit.permanentDemandNo}
-                              {u.provincialUin ? (
-                                <span
-                                  style={{ display: "block", fontSize: "0.7rem", color: "#0369a1" }}
-                                >
-                                  {u.provincialUin}
-                                </span>
-                              ) : null}
-                            </td>
-                            <td style={{ padding: "0.35rem" }}>
-                              <strong>{u.legalName}</strong>
-                            </td>
-                            <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                              {u.identifierValue}
-                            </td>
-                            <td style={{ padding: "0.35rem" }}>
-                              Class {u.statutoryRule.subclassification_code}
-                            </td>
-                            <td
-                              style={{
-                                padding: "0.35rem",
-                                textAlign: "right",
-                                fontFamily: "monospace"
-                              }}
-                            >
-                              {baseTax.toLocaleString()}
-                            </td>
-                            <td
-                              style={{
-                                padding: "0.35rem",
-                                textAlign: "right",
-                                fontFamily: "monospace",
-                                color: penalty > 0 ? "#b91c1c" : undefined
-                              }}
-                            >
-                              {penalty > 0 ? penalty.toLocaleString() : "0"}
-                            </td>
-                            <td
-                              style={{
-                                padding: "0.35rem",
-                                textAlign: "right",
-                                fontFamily: "monospace",
-                                color: "#166534"
-                              }}
-                            >
-                              {paid.toLocaleString()}
-                            </td>
-                            <td
-                              style={{
-                                padding: "0.35rem",
-                                textAlign: "right",
-                                fontFamily: "monospace",
-                                fontWeight: 700,
-                                color: bal > 0 ? "#b91c1c" : "#166534"
-                              }}
-                            >
-                              {bal.toLocaleString()}
-                            </td>
-                            <td style={{ padding: "0.35rem", textAlign: "center" }}>
-                              {bal <= 0 ? "PAID" : "ARREARS"}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
-
-                {executiveReportType === "DEFAULTER_ROLL" && (
-                  <table
-                    style={{
-                      width: "100%",
-                      borderCollapse: "collapse",
-                      fontSize: "0.75rem",
-                      marginBottom: "1.5rem"
-                    }}
-                  >
-                    <thead>
-                      <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>PDN</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Assessee Name</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Address</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Schedule Entry</th>
-                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Days Overdue</th>
-                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Original Tax</th>
-                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Penalty</th>
-                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Total Arrears</th>
-                        <th style={{ padding: "0.35rem", textAlign: "center" }}>Recovery Stage</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {units
-                        .filter((u) => computeLedgerBalance(u.ledgerEntries) > 0)
-                        .map((u) => {
-                          const aging = computeDefaulterAging(
-                            u.ledgerEntries,
-                            "2026-08-31",
-                            undefined,
-                            Boolean(u.isRecoveryCertified)
-                          );
-                          return (
-                            <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                              <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                                {u.demandUnit.permanentDemandNo}
-                                {u.provincialUin ? (
-                                  <span
-                                    style={{
-                                      display: "block",
-                                      fontSize: "0.7rem",
-                                      color: "#0369a1"
-                                    }}
-                                  >
-                                    {u.provincialUin}
-                                  </span>
-                                ) : null}
-                              </td>
-                              <td style={{ padding: "0.35rem" }}>
-                                <strong>{u.legalName}</strong>
-                              </td>
-                              <td style={{ padding: "0.35rem" }}>{u.address}</td>
-                              <td style={{ padding: "0.35rem" }}>
-                                Class {u.statutoryRule.subclassification_code}
-                              </td>
-                              <td style={{ padding: "0.35rem", textAlign: "right" }}>
-                                {aging.daysOverdue} days
-                              </td>
-                              <td
-                                style={{
-                                  padding: "0.35rem",
-                                  textAlign: "right",
-                                  fontFamily: "monospace"
-                                }}
-                              >
-                                {aging.originalDemand.toLocaleString()}
-                              </td>
-                              <td
-                                style={{
-                                  padding: "0.35rem",
-                                  textAlign: "right",
-                                  fontFamily: "monospace",
-                                  color: "#b91c1c"
-                                }}
-                              >
-                                {aging.penaltyDemand.toLocaleString()}
-                              </td>
-                              <td
-                                style={{
-                                  padding: "0.35rem",
-                                  textAlign: "right",
-                                  fontFamily: "monospace",
-                                  fontWeight: 700,
-                                  color: "#b91c1c"
-                                }}
-                              >
-                                {aging.remainingBalance.toLocaleString()}
-                              </td>
-                              <td
-                                style={{ padding: "0.35rem", textAlign: "center", fontWeight: 700 }}
-                              >
-                                {aging.status}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                    </tbody>
-                  </table>
-                )}
-
-                {executiveReportType === "NOTICE_DISPATCH" && (
-                  <table
-                    style={{
-                      width: "100%",
-                      borderCollapse: "collapse",
-                      fontSize: "0.75rem",
-                      marginBottom: "1.5rem"
-                    }}
-                  >
-                    <thead>
-                      <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Notice No</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Demand No</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Assessee Name</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Address</th>
-                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Amount (PKR)</th>
-                        <th style={{ padding: "0.35rem", textAlign: "center" }}>Status</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Served Date</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Serving Officer</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {units.map((u) => (
-                        <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                          <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                            PFT-1/VEH/2026/{u.id.slice(-4)}
-                          </td>
-                          <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                            {u.demandUnit.permanentDemandNo}
-                          </td>
-                          <td style={{ padding: "0.35rem" }}>
-                            <strong>{u.legalName}</strong>
-                          </td>
-                          <td style={{ padding: "0.35rem" }}>{u.address}</td>
-                          <td
-                            style={{
-                              padding: "0.35rem",
-                              textAlign: "right",
-                              fontFamily: "monospace"
-                            }}
-                          >
-                            {(u.assessmentVersions[0]?.snapshot.taxAmount ?? 0).toLocaleString()}
-                          </td>
-                          <td style={{ padding: "0.35rem", textAlign: "center" }}>
-                            <span
-                              className={
-                                u.serviceStatus === "SERVED"
-                                  ? "badge badge-approved"
-                                  : "badge badge-draft"
-                              }
-                            >
-                              {u.serviceStatus ?? "PENDING"}
-                            </span>
-                          </td>
-                          <td style={{ padding: "0.35rem" }}>{u.servedAt ?? "—"}</td>
-                          <td style={{ padding: "0.35rem" }}>
-                            {u.servedBy ?? "Muhammad Aslam, Inspector"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-
-                {executiveReportType === "CLEARANCE_LOG" && (
-                  <table
-                    style={{
-                      width: "100%",
-                      borderCollapse: "collapse",
-                      fontSize: "0.75rem",
-                      marginBottom: "1.5rem"
-                    }}
-                  >
-                    <thead>
-                      <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Certificate No</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Issue Date</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Valid Until</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Assessee Name</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>CNIC / NTN</th>
-                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Cleared (PKR)</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>
-                          Official SHA-256 Digest
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {clearanceCertificates.map((cert) => (
-                        <tr key={cert.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                          <td
-                            style={{ padding: "0.35rem", fontFamily: "monospace", fontWeight: 700 }}
-                          >
-                            {cert.certificateNumber}
-                          </td>
-                          <td style={{ padding: "0.35rem" }}>{cert.issueDate}</td>
-                          <td style={{ padding: "0.35rem" }}>{cert.validUntil}</td>
-                          <td style={{ padding: "0.35rem" }}>
-                            <strong>{cert.assesseeLegalName}</strong>
-                          </td>
-                          <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                            {cert.cnicOrNtn}
-                          </td>
-                          <td
-                            style={{
-                              padding: "0.35rem",
-                              textAlign: "right",
-                              fontFamily: "monospace",
-                              color: "#166534",
-                              fontWeight: 700
-                            }}
-                          >
-                            {cert.clearedAmountPkr.toLocaleString()}
-                          </td>
-                          <td
-                            style={{
-                              padding: "0.35rem",
-                              fontFamily: "monospace",
-                              fontSize: "0.7rem",
-                              color: "#64748b"
-                            }}
-                          >
-                            {cert.officialSha256.slice(0, 24)}...
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-
-                {executiveReportType === "RELIEF_REGISTER" && (
-                  <table
-                    style={{
-                      width: "100%",
-                      borderCollapse: "collapse",
-                      fontSize: "0.75rem",
-                      marginBottom: "1.5rem"
-                    }}
-                  >
-                    <thead>
-                      <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Reference No</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Relief Type</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Assessee Name</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Filing Date</th>
-                        <th style={{ padding: "0.35rem", textAlign: "center" }}>Status</th>
-                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Relief (PKR)</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>
-                          Order Number &amp; Date
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {discontinuances.map((d) => (
-                        <tr key={d.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                          <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                            {d.noticeNumber}
-                          </td>
-                          <td style={{ padding: "0.35rem" }}>Rule 10 Discontinuance</td>
-                          <td style={{ padding: "0.35rem" }}>
-                            <strong>{d.assesseeLegalName}</strong>
-                          </td>
-                          <td style={{ padding: "0.35rem" }}>{d.discontinuanceDate}</td>
-                          <td style={{ padding: "0.35rem", textAlign: "center" }}>
-                            <span className="badge badge-approved">{d.status}</span>
-                          </td>
-                          <td style={{ padding: "0.35rem", textAlign: "right" }}>Closure</td>
-                          <td style={{ padding: "0.35rem" }}>
-                            {d.etoOrderNumber ?? "Pending"} ({d.etoOrderDate ?? "—"})
-                          </td>
-                        </tr>
-                      ))}
-                      {refundAdjustments.map((r) => (
-                        <tr key={r.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                          <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                            {r.applicationNumber}
-                          </td>
-                          <td style={{ padding: "0.35rem" }}>Rule 5 {r.type}</td>
-                          <td style={{ padding: "0.35rem" }}>
-                            <strong>{r.assesseeLegalName}</strong>
-                          </td>
-                          <td style={{ padding: "0.35rem" }}>{r.filedAt.split("T")[0]}</td>
-                          <td style={{ padding: "0.35rem", textAlign: "center" }}>
-                            <span className="badge badge-approved">{r.status}</span>
-                          </td>
-                          <td
-                            style={{
-                              padding: "0.35rem",
-                              textAlign: "right",
-                              fontFamily: "monospace",
-                              color: "#166534"
-                            }}
-                          >
-                            {r.amount.toLocaleString()}
-                          </td>
-                          <td style={{ padding: "0.35rem" }}>
-                            {r.orderNumber ?? "Pending"} ({r.orderDate ?? "—"})
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-
-                {executiveReportType === "SLAB_DISTRIBUTION" && (
-                  <table
-                    style={{
-                      width: "100%",
-                      fontSize: "0.75rem",
-                      borderCollapse: "collapse",
-                      marginBottom: "1.5rem"
-                    }}
-                  >
-                    <thead>
-                      <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Sub-Class</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>Category</th>
-                        <th style={{ padding: "0.35rem", textAlign: "left" }}>
-                          Tertiary Slab / Criteria
-                        </th>
-                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Statutory Rate</th>
-                        <th style={{ padding: "0.35rem", textAlign: "center" }}>Units</th>
-                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Demand (PKR)</th>
-                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Recovery (PKR)</th>
-                        <th style={{ padding: "0.35rem", textAlign: "right" }}>Arrears (PKR)</th>
-                        <th style={{ padding: "0.35rem", textAlign: "center" }}>Rate %</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {misMetrics.slabYields.map((s) => (
-                        <tr key={s.ruleId} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                          <td style={{ padding: "0.35rem", fontWeight: 700 }}>
-                            {s.ruleCode ??
-                              s.statutoryTertiaryCode ??
-                              s.subclassificationCode ??
-                              s.categoryCode}
-                          </td>
-                          <td style={{ padding: "0.35rem" }}>{s.categoryName}</td>
-                          <td style={{ padding: "0.35rem" }}>{s.tertiarySlab}</td>
-                          <td
-                            style={{
-                              padding: "0.35rem",
-                              textAlign: "right",
-                              fontFamily: "monospace"
-                            }}
-                          >
-                            {s.slabRatePkr.toLocaleString()}
-                          </td>
-                          <td style={{ padding: "0.35rem", textAlign: "center" }}>
-                            {s.assessedUnitsCount}
-                          </td>
-                          <td
-                            style={{
-                              padding: "0.35rem",
-                              textAlign: "right",
-                              fontFamily: "monospace"
-                            }}
-                          >
-                            {s.assessedDemandPkr.toLocaleString()}
-                          </td>
-                          <td
-                            style={{
-                              padding: "0.35rem",
-                              textAlign: "right",
-                              fontFamily: "monospace",
-                              color: "#166534"
-                            }}
-                          >
-                            {s.realizedRecoveryPkr.toLocaleString()}
-                          </td>
-                          <td
-                            style={{
-                              padding: "0.35rem",
-                              textAlign: "right",
-                              fontFamily: "monospace",
-                              color: s.outstandingArrearsPkr > 0 ? "#dc2626" : undefined
-                            }}
-                          >
-                            {s.outstandingArrearsPkr.toLocaleString()}
-                          </td>
-                          <td style={{ padding: "0.35rem", textAlign: "center", fontWeight: 700 }}>
-                            {s.recoveryRatePct}%
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-
-                {/* Official Certification & Non-Repudiation Block */}
-                <div
-                  style={{
-                    background: "#f8fafc",
-                    border: "1px solid #cbd5e1",
-                    padding: "1rem",
-                    borderRadius: "4px",
-                    fontSize: "0.75rem",
-                    color: "#475569",
-                    marginBottom: "1.5rem"
-                  }}
-                >
-                  <p style={{ margin: "0 0 0.25rem", fontWeight: 700, color: "#0d3822" }}>
-                    STATUTORY CERTIFICATION UNDER PUNJAB PROFESSIONAL TAX RULES, 1977:
-                  </p>
-                  <p style={{ margin: 0 }}>
-                    This document is officially generated from the Punjab Professional Tax
-                    Administration System (PTAS) immutable financial demand ledger. All figures are
-                    non-repudiable and derived in compliance with Section 15 of the Punjab
-                    Professional Tax Digitization Plan. Cryptographically hashed for provincial
-                    audit integrity.
-                  </p>
-                </div>
-
-                {/* Dual Signature Block */}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    paddingTop: "2rem",
-                    borderTop: "1px solid #0d3822"
-                  }}
-                >
-                  <div style={{ textAlign: "center", width: "40%" }}>
-                    <div
-                      style={{
-                        borderBottom: "1px dashed #64748b",
-                        height: "2.5rem",
-                        marginBottom: "0.5rem"
-                      }}
-                    ></div>
-                    <strong style={{ display: "block", fontSize: "0.85rem", color: "#0d3822" }}>
-                      Tariq Mahmood
-                    </strong>
-                    <span style={{ fontSize: "0.75rem", color: "#475569" }}>
-                      Excise &amp; Taxation Officer / Assessing Authority
-                      <br />
-                      Tehsil Vehari &bull; Circle-Vehari
-                    </span>
-                  </div>
-
-                  <div style={{ textAlign: "center", width: "40%" }}>
-                    <div
-                      style={{
-                        borderBottom: "1px dashed #64748b",
-                        height: "2.5rem",
-                        marginBottom: "0.5rem"
-                      }}
-                    ></div>
-                    <strong style={{ display: "block", fontSize: "0.85rem", color: "#0d3822" }}>
-                      Shahid Nawaz
-                    </strong>
-                    <span style={{ fontSize: "0.75rem", color: "#475569" }}>
-                      Director, Excise, Taxation &amp; Narcotics Control
-                      <br />
-                      Multan Division &bull; Government of the Punjab
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div
-              className="modal-footer"
-              style={{ display: "flex", justifyContent: "space-between" }}
-            >
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setShowExecutivePrintModal(false)}
-              >
-                Close Report Studio
-              </button>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={() =>
-                    downloadDocumentPdf(
-                      "executive-report-printable",
-                      "Punjab_PTAS_Executive_Gazetted_Report.pdf"
-                    )
-                  }
-                  style={{ background: "#0d3822", borderColor: "#0d3822" }}
-                >
-                  📥 Download PDF
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => {
-                    handleExportActiveReportCsv();
-                    showToast("success", "Aggregated gazetted summary exported as CSV.");
-                  }}
-                  title="Export aggregated statistics as CSV"
-                >
-                  📊 Export Aggregated CSV
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* MODAL 24 REMOVED IN FAVOR OF DEDICATED /intelligence/reports/view ROUTE */}
 
       {/* MODAL: CITIZEN DIGITAL PAYMENT SIMULATOR (17-DIGIT EPAY PSID) */}
       {showCitizenPaymentModal && (
@@ -20383,14 +18957,14 @@ export default function HomePage({
             </div>
 
             {/* Document Body Target */}
-            <div style={{ padding: "1.5rem" }}>
+            <div style={{ padding: "1rem" }}>
               <div
                 id="receipt-document-card"
                 className="printable-document receipt-document"
                 style={{
                   border: "2px solid #0d3822",
                   borderRadius: "6px",
-                  padding: "2rem",
+                  padding: "1.25rem 1.5rem",
                   background: "#ffffff",
                   fontFamily: "Georgia, serif",
                   position: "relative"
@@ -20401,14 +18975,14 @@ export default function HomePage({
                   style={{
                     textAlign: "center",
                     borderBottom: "2px solid #0d3822",
-                    paddingBottom: "1.25rem",
-                    marginBottom: "1.5rem"
+                    paddingBottom: "0.5rem",
+                    marginBottom: "0.75rem"
                   }}
                 >
                   <p
                     style={{
                       margin: 0,
-                      fontSize: "0.85rem",
+                      fontSize: "0.75rem",
                       color: "#475569",
                       letterSpacing: "0.05em"
                     }}
@@ -20418,26 +18992,26 @@ export default function HomePage({
                   </p>
                   <h2
                     style={{
-                      margin: "0.35rem 0",
+                      margin: "0.2rem 0",
                       color: "#0d3822",
-                      fontSize: "1.35rem",
+                      fontSize: "1.1rem",
                       textTransform: "uppercase",
-                      letterSpacing: "0.04em"
+                      letterSpacing: "0.03em"
                     }}
                   >
                     OFFICE OF THE EXCISE &amp; TAXATION OFFICER, CIRCLE-VEHARI
                   </h2>
                   <h3
                     style={{
-                      margin: "0.25rem 0 0",
-                      fontSize: "1.05rem",
+                      margin: "0.15rem 0 0",
+                      fontSize: "0.95rem",
                       color: "#166534",
                       fontWeight: 700
                     }}
                   >
                     STATUTORY PAYMENT RECEIPT / ACKNOWLEDGEMENT
                   </h3>
-                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                  <p style={{ margin: "0.15rem 0 0", fontSize: "0.72rem", color: "#64748b" }}>
                     (Issued under Rule 10 of the Punjab Professions and Trades Tax Rules, 1977)
                   </p>
                 </div>
@@ -20446,37 +19020,37 @@ export default function HomePage({
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(14rem, 1fr))",
-                    gap: "1rem",
-                    padding: "0.75rem 1rem",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
+                    gap: "0.5rem 1rem",
+                    padding: "0.5rem 0.75rem",
                     background: "#f8fafc",
                     border: "1px solid #cbd5e1",
                     borderRadius: "6px",
-                    marginBottom: "1.5rem",
-                    fontSize: "0.85rem"
+                    marginBottom: "0.75rem",
+                    fontSize: "0.78rem"
                   }}
                 >
                   <div>
-                    <span style={{ color: "#64748b", display: "block", fontSize: "0.75rem" }}>
+                    <span style={{ color: "#64748b", display: "block", fontSize: "0.7rem" }}>
                       Receipt Number:
                     </span>
-                    <strong style={{ color: "#065f46", fontSize: "1rem" }}>
+                    <strong style={{ color: "#065f46", fontSize: "0.95rem" }}>
                       {activeReceiptRecord.receiptNumber}
                     </strong>
                     {activeReceiptRecord.pin && (
                       <span
                         style={{
                           display: "inline-block",
-                          marginLeft: "0.5rem",
-                          padding: "0.1rem 0.4rem",
+                          marginLeft: "0.4rem",
+                          padding: "0.1rem 0.35rem",
                           borderRadius: "4px",
                           fontFamily: "monospace",
                           fontWeight: 800,
-                          fontSize: "0.8rem",
+                          fontSize: "0.75rem",
                           background: "#ecfdf5",
                           color: "#047857",
                           border: "1px solid #a7f3d0",
-                          letterSpacing: "1px"
+                          letterSpacing: "0.5px"
                         }}
                       >
                         🔐 PIN: {activeReceiptRecord.pin}
@@ -20484,7 +19058,7 @@ export default function HomePage({
                     )}
                   </div>
                   <div>
-                    <span style={{ color: "#64748b", display: "block", fontSize: "0.75rem" }}>
+                    <span style={{ color: "#64748b", display: "block", fontSize: "0.7rem" }}>
                       Date &amp; Time of Receipt:
                     </span>
                     <strong>
@@ -20492,13 +19066,13 @@ export default function HomePage({
                     </strong>
                   </div>
                   <div>
-                    <span style={{ color: "#64748b", display: "block", fontSize: "0.75rem" }}>
+                    <span style={{ color: "#64748b", display: "block", fontSize: "0.7rem" }}>
                       Challan Reference (Form P.F.T-2):
                     </span>
                     <strong>{activeReceiptRecord.challanNumber}</strong>
                   </div>
                   <div>
-                    <span style={{ color: "#64748b", display: "block", fontSize: "0.75rem" }}>
+                    <span style={{ color: "#64748b", display: "block", fontSize: "0.7rem" }}>
                       Permanent Demand No (PDN):
                     </span>
                     <strong>{activeReceiptRecord.demandNumber}</strong>
@@ -20510,56 +19084,56 @@ export default function HomePage({
                   style={{
                     width: "100%",
                     borderCollapse: "collapse",
-                    marginBottom: "1.5rem",
-                    fontSize: "0.875rem"
+                    marginBottom: "0.75rem",
+                    fontSize: "0.8rem"
                   }}
                 >
                   <tbody>
                     <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                      <td style={{ padding: "0.5rem 0", color: "#64748b", width: "30%" }}>
+                      <td style={{ padding: "0.3rem 0", color: "#64748b", width: "28%" }}>
                         Assessee Legal Name:
                       </td>
-                      <td style={{ padding: "0.5rem 0", fontWeight: 700, color: "#0f172a" }}>
+                      <td style={{ padding: "0.3rem 0", fontWeight: 700, color: "#0f172a" }}>
                         {activeReceiptRecord.assesseeLegalName}
                       </td>
                     </tr>
                     {activeReceiptRecord.assesseeTradeName && (
                       <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                        <td style={{ padding: "0.5rem 0", color: "#64748b" }}>
+                        <td style={{ padding: "0.3rem 0", color: "#64748b" }}>
                           Trade / Business Name:
                         </td>
-                        <td style={{ padding: "0.5rem 0", fontWeight: 600 }}>
+                        <td style={{ padding: "0.3rem 0", fontWeight: 600 }}>
                           {activeReceiptRecord.assesseeTradeName}
                         </td>
                       </tr>
                     )}
                     <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                      <td style={{ padding: "0.5rem 0", color: "#64748b" }}>
+                      <td style={{ padding: "0.3rem 0", color: "#64748b" }}>
                         Registration / Tax Identifier:
                       </td>
-                      <td style={{ padding: "0.5rem 0", fontFamily: "monospace", fontWeight: 600 }}>
+                      <td style={{ padding: "0.3rem 0", fontFamily: "monospace", fontWeight: 600 }}>
                         {activeReceiptRecord.identifierType}: {activeReceiptRecord.identifierValue}
                       </td>
                     </tr>
                     <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                      <td style={{ padding: "0.5rem 0", color: "#64748b" }}>Commercial Address:</td>
-                      <td style={{ padding: "0.5rem 0" }}>{activeReceiptRecord.address}</td>
+                      <td style={{ padding: "0.3rem 0", color: "#64748b" }}>Commercial Address:</td>
+                      <td style={{ padding: "0.3rem 0" }}>{activeReceiptRecord.address}</td>
                     </tr>
                     <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                      <td style={{ padding: "0.5rem 0", color: "#64748b" }}>
+                      <td style={{ padding: "0.3rem 0", color: "#64748b" }}>
                         Second Schedule Classification:
                       </td>
-                      <td style={{ padding: "0.5rem 0", fontWeight: 600 }}>
+                      <td style={{ padding: "0.3rem 0", fontWeight: 600 }}>
                         Entry {activeReceiptRecord.subclassificationCode}:{" "}
                         {activeReceiptRecord.statutoryCategory} (Slab:{" "}
                         {activeReceiptRecord.tertiarySlab})
                       </td>
                     </tr>
                     <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                      <td style={{ padding: "0.5rem 0", color: "#64748b" }}>
+                      <td style={{ padding: "0.3rem 0", color: "#64748b" }}>
                         Provincial Account Head:
                       </td>
-                      <td style={{ padding: "0.5rem 0", fontFamily: "monospace" }}>
+                      <td style={{ padding: "0.3rem 0", fontFamily: "monospace" }}>
                         B01601 &mdash; Punjab Professional Tax (Provincial)
                       </td>
                     </tr>
@@ -20572,19 +19146,19 @@ export default function HomePage({
                     border: "2px solid #10b981",
                     borderRadius: "6px",
                     background: "#f0fdf4",
-                    padding: "1.25rem",
-                    marginBottom: "1.5rem",
+                    padding: "0.75rem 1rem",
+                    marginBottom: "0.75rem",
                     display: "flex",
                     flexWrap: "wrap",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    gap: "1rem"
+                    gap: "0.75rem"
                   }}
                 >
                   <div>
                     <span
                       style={{
-                        fontSize: "0.8rem",
+                        fontSize: "0.72rem",
                         color: "#166534",
                         fontWeight: 700,
                         textTransform: "uppercase"
@@ -20592,11 +19166,11 @@ export default function HomePage({
                     >
                       Total Tax Liability Discharged
                     </span>
-                    <h1 style={{ margin: "0.25rem 0", color: "#065f46", fontSize: "1.75rem" }}>
+                    <h2 style={{ margin: "0.15rem 0", color: "#065f46", fontSize: "1.4rem" }}>
                       PKR {activeReceiptRecord.amountPaidPkr.toLocaleString()}
-                    </h1>
+                    </h2>
                     <p
-                      style={{ margin: 0, fontSize: "0.85rem", color: "#166534", fontWeight: 600 }}
+                      style={{ margin: 0, fontSize: "0.78rem", color: "#166534", fontWeight: 600 }}
                     >
                       (Amount in words: {activeReceiptRecord.amountPaidWords})
                     </p>
@@ -20605,12 +19179,12 @@ export default function HomePage({
                     <span
                       style={{
                         display: "inline-block",
-                        padding: "0.35rem 0.75rem",
+                        padding: "0.25rem 0.6rem",
                         background: "#dcfce7",
                         color: "#166534",
                         fontWeight: 700,
                         borderRadius: "20px",
-                        fontSize: "0.8rem",
+                        fontSize: "0.72rem",
                         border: "1px solid #86efac"
                       }}
                     >
@@ -20619,9 +19193,9 @@ export default function HomePage({
                     <span
                       style={{
                         display: "block",
-                        fontSize: "0.75rem",
+                        fontSize: "0.7rem",
                         color: "#64748b",
-                        marginTop: "0.35rem"
+                        marginTop: "0.25rem"
                       }}
                     >
                       Channel: {activeReceiptRecord.paymentChannel}
@@ -20629,7 +19203,7 @@ export default function HomePage({
                     <span
                       style={{
                         display: "block",
-                        fontSize: "0.75rem",
+                        fontSize: "0.7rem",
                         fontFamily: "monospace",
                         color: "#1e3a8a"
                       }}
@@ -20644,11 +19218,11 @@ export default function HomePage({
                   style={{
                     background: "#fafafa",
                     borderLeft: "4px solid #0d3822",
-                    padding: "0.85rem 1rem",
-                    marginBottom: "1.75rem",
-                    fontSize: "0.85rem",
+                    padding: "0.5rem 0.75rem",
+                    marginBottom: "0.75rem",
+                    fontSize: "0.75rem",
                     color: "#334155",
-                    lineHeight: 1.5
+                    lineHeight: 1.35
                   }}
                 >
                   <strong>Statutory Certification:</strong> Received the amount stated above on
@@ -20664,16 +19238,16 @@ export default function HomePage({
                     justifyContent: "space-between",
                     alignItems: "flex-end",
                     flexWrap: "wrap",
-                    gap: "1.5rem",
+                    gap: "1rem",
                     borderTop: "1px solid #cbd5e1",
-                    paddingTop: "1.5rem"
+                    paddingTop: "0.75rem"
                   }}
                 >
                   {/* Left: Authentic ISO/IEC 18004 QR Code */}
-                  <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                     <StatutoryQrCode
                       payload={activeReceiptRecord.qrPayload}
-                      size={110}
+                      size={80}
                       label="SCAN TO VERIFY"
                       subtitle={activeReceiptRecord.receiptNumber}
                     />
@@ -20681,7 +19255,7 @@ export default function HomePage({
                       <span
                         style={{
                           display: "block",
-                          fontSize: "0.7rem",
+                          fontSize: "0.68rem",
                           fontWeight: 700,
                           color: "#0d3822"
                         }}
@@ -20691,10 +19265,10 @@ export default function HomePage({
                       <span
                         style={{
                           display: "block",
-                          fontSize: "0.65rem",
+                          fontSize: "0.62rem",
                           color: "#64748b",
-                          maxWidth: "16rem",
-                          marginTop: "0.2rem"
+                          maxWidth: "15rem",
+                          marginTop: "0.15rem"
                         }}
                       >
                         Scan via smartphone camera to verify authenticity directly against the
@@ -20704,28 +19278,28 @@ export default function HomePage({
                   </div>
 
                   {/* Right: Receiving Officer Seal & Sign */}
-                  <div style={{ textAlign: "center", minWidth: "16rem" }}>
+                  <div style={{ textAlign: "center", minWidth: "14rem" }}>
                     <div
                       style={{
                         borderBottom: "1px solid #000000",
                         width: "100%",
-                        marginBottom: "0.5rem",
-                        height: "2.5rem"
+                        marginBottom: "0.35rem",
+                        height: "1.75rem"
                       }}
                     />
-                    <strong style={{ display: "block", fontSize: "0.9rem" }}>
+                    <strong style={{ display: "block", fontSize: "0.82rem" }}>
                       {activeReceiptRecord.receivingOfficerName}
                     </strong>
-                    <span style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}>
+                    <span style={{ display: "block", fontSize: "0.7rem", color: "#64748b" }}>
                       {activeReceiptRecord.receivingOfficerTitle}
                     </span>
                     <span
                       style={{
                         display: "block",
-                        fontSize: "0.7rem",
+                        fontSize: "0.68rem",
                         color: "#0d3822",
                         fontWeight: 700,
-                        marginTop: "0.2rem"
+                        marginTop: "0.15rem"
                       }}
                     >
                       Assessing Authority &bull; Circle-Vehari
@@ -20746,7 +19320,7 @@ export default function HomePage({
               }}
             >
               <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                Document SHA-256: {activeReceiptRecord.officialSha256.slice(0, 24)}...
+                Statutory Receipt &bull; Rule 10, Punjab Professions and Trades Tax Rules, 1977
               </span>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <button
@@ -20839,93 +19413,95 @@ export default function HomePage({
               const summary = calculatePft2ExecutiveSummary(pft2Challans);
               return (
                 <div>
-                  <p style={{ fontSize: "0.85rem", color: "#475569", margin: "0 0 1.25rem" }}>
-                    Lifecycle summary of all Form P.F.T-2 Payment Challans in Circle-Vehari under
-                    Rule 9 of the 1977 Rules.
-                  </p>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "1rem",
-                      marginBottom: "1.25rem"
-                    }}
-                  >
-                    <div
-                      style={{
-                        background: "#f8fafc",
-                        padding: "1rem",
-                        borderRadius: "6px",
-                        border: "1px solid #e2e8f0"
-                      }}
-                    >
-                      <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                        Total Assessed Demand
-                      </span>
-                      <h3 style={{ margin: "0.25rem 0", color: "#0d3822" }}>
-                        PKR {summary.totalDemandPkr.toLocaleString()}
-                      </h3>
-                      <span style={{ fontSize: "0.75rem", color: "#475569" }}>
-                        {summary.total} total challans issued
-                      </span>
-                    </div>
+                  <div id="pft2-executive-brief-card" style={{ padding: "0.5rem" }}>
+                    <p style={{ fontSize: "0.85rem", color: "#475569", margin: "0 0 1.25rem" }}>
+                      Lifecycle summary of all Form P.F.T-2 Payment Challans in Circle-Vehari under
+                      Rule 9 of the 1977 Rules.
+                    </p>
 
                     <div
                       style={{
-                        background: "#f0fdf4",
-                        padding: "1rem",
-                        borderRadius: "6px",
-                        border: "1px solid #bbf7d0"
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "1rem",
+                        marginBottom: "1.25rem"
                       }}
                     >
-                      <span style={{ fontSize: "0.75rem", color: "#166534" }}>
-                        Realized Collections
-                      </span>
-                      <h3 style={{ margin: "0.25rem 0", color: "#15803d" }}>
-                        PKR {summary.receivedAmountPkr.toLocaleString()}
-                      </h3>
-                      <span style={{ fontSize: "0.75rem", color: "#166534" }}>
-                        {summary.receivedCount} challans converted to receipts
-                      </span>
-                    </div>
+                      <div
+                        style={{
+                          background: "#f8fafc",
+                          padding: "1rem",
+                          borderRadius: "6px",
+                          border: "1px solid #e2e8f0"
+                        }}
+                      >
+                        <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                          Total Assessed Demand
+                        </span>
+                        <h3 style={{ margin: "0.25rem 0", color: "#0d3822" }}>
+                          PKR {summary.totalDemandPkr.toLocaleString()}
+                        </h3>
+                        <span style={{ fontSize: "0.75rem", color: "#475569" }}>
+                          {summary.total} total challans issued
+                        </span>
+                      </div>
 
-                    <div
-                      style={{
-                        background: "#fffbeb",
-                        padding: "1rem",
-                        borderRadius: "6px",
-                        border: "1px solid #fde68a"
-                      }}
-                    >
-                      <span style={{ fontSize: "0.75rem", color: "#b45309" }}>
-                        Pending Collections
-                      </span>
-                      <h3 style={{ margin: "0.25rem 0", color: "#d97706" }}>
-                        PKR {summary.pendingAmountPkr.toLocaleString()}
-                      </h3>
-                      <span style={{ fontSize: "0.75rem", color: "#b45309" }}>
-                        {summary.issuedCount} challans active in field
-                      </span>
-                    </div>
+                      <div
+                        style={{
+                          background: "#f0fdf4",
+                          padding: "1rem",
+                          borderRadius: "6px",
+                          border: "1px solid #bbf7d0"
+                        }}
+                      >
+                        <span style={{ fontSize: "0.75rem", color: "#166534" }}>
+                          Realized Collections
+                        </span>
+                        <h3 style={{ margin: "0.25rem 0", color: "#15803d" }}>
+                          PKR {summary.receivedAmountPkr.toLocaleString()}
+                        </h3>
+                        <span style={{ fontSize: "0.75rem", color: "#166534" }}>
+                          {summary.receivedCount} challans converted to receipts
+                        </span>
+                      </div>
 
-                    <div
-                      style={{
-                        background: "#f1f5f9",
-                        padding: "1rem",
-                        borderRadius: "6px",
-                        border: "1px solid #cbd5e1"
-                      }}
-                    >
-                      <span style={{ fontSize: "0.75rem", color: "#475569" }}>
-                        Collection Realization Rate
-                      </span>
-                      <h3 style={{ margin: "0.25rem 0", color: "#1e3a8a" }}>
-                        {summary.realizationRate}%
-                      </h3>
-                      <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                        {summary.cancelledCount} superseded / cancelled
-                      </span>
+                      <div
+                        style={{
+                          background: "#fffbeb",
+                          padding: "1rem",
+                          borderRadius: "6px",
+                          border: "1px solid #fde68a"
+                        }}
+                      >
+                        <span style={{ fontSize: "0.75rem", color: "#b45309" }}>
+                          Pending Collections
+                        </span>
+                        <h3 style={{ margin: "0.25rem 0", color: "#d97706" }}>
+                          PKR {summary.pendingAmountPkr.toLocaleString()}
+                        </h3>
+                        <span style={{ fontSize: "0.75rem", color: "#b45309" }}>
+                          {summary.issuedCount} challans active in field
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          background: "#f1f5f9",
+                          padding: "1rem",
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1"
+                        }}
+                      >
+                        <span style={{ fontSize: "0.75rem", color: "#475569" }}>
+                          Collection Realization Rate
+                        </span>
+                        <h3 style={{ margin: "0.25rem 0", color: "#1e3a8a" }}>
+                          {summary.realizationRate}%
+                        </h3>
+                        <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                          {summary.cancelledCount} superseded / cancelled
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -20933,12 +19509,28 @@ export default function HomePage({
                     <button
                       type="button"
                       className="btn-primary"
+                      onClick={() =>
+                        downloadDocumentPdf(
+                          "pft2-executive-brief-card",
+                          "Form_PFT2_Executive_Management_Brief.pdf"
+                        )
+                      }
+                      style={{
+                        background: "#0d3822",
+                        borderColor: "#0a2a1a"
+                      }}
+                    >
+                      📥 Download PDF
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary"
                       onClick={() => {
                         handleExportPft2Csv();
                         setShowPft2ExecutiveModal(false);
                       }}
                     >
-                      📥 Export CSV Register
+                      📊 Export CSV Register
                     </button>
                     <button
                       type="button"

@@ -51,6 +51,20 @@ export interface StoredUnitSnapshot {
   [key: string]: unknown;
 }
 
+export const VEHARI_LOCALITIES: readonly string[] = [
+  "Vehari City Commercial Zone",
+  "Club Road Commercial Area",
+  "Grain Market (Galla Mandi)",
+  "Karkhana Bazaar",
+  "Chungi No. 9 Commercial Strip",
+  "Burewala Commercial Hub",
+  "Mailsi Main Bazaar",
+  "Luddan Rural Market",
+  "Thingi Sub-Tehsil Market",
+  "Tibba Sultanpur Market",
+  "Vehari Industrial Area"
+];
+
 export interface StoredUnit {
   readonly id: string;
   readonly legalName: string;
@@ -58,6 +72,8 @@ export interface StoredUnit {
   readonly identifierType: "CNIC" | "NTN";
   readonly identifierValue: string;
   readonly address: string;
+  /** Dedicated locality field separated from address for area-based operations & reporting */
+  readonly locality?: string | undefined;
   readonly circleId: string;
   readonly categoryCode: string;
   readonly subclassificationCode?: string | null | undefined;
@@ -65,6 +81,12 @@ export interface StoredUnit {
   readonly tertiaryDimensions?: Record<string, string> | undefined;
   readonly statutoryRuleId: string;
   readonly statutoryRule: StatutoryRuleDefinition;
+  /** Lifecycle identifier 1: Survey Assessment Number (e.g. ASM-2026-0001) */
+  readonly assessmentNumber: string;
+  /** Lifecycle identifier 2: Permanent Demand Number (allocated strictly upon ETO approval) */
+  readonly demandNumber?: string | undefined;
+  /** Lifecycle identifier 3: Professional Identification Number (PIN) (allocated strictly upon ETO approval) */
+  readonly pinNumber?: string | undefined;
   /** Province-wide Unique Identification Number (format: DDD-TTT-CC-SS-UU-RR-NNNNN-VV) */
   readonly provincialUin: string;
   readonly demandUnit: DemandUnit;
@@ -112,6 +134,63 @@ export const MULTAN_REGION_ID = "00000000-0000-4000-8000-000000000001";
 export const VEHARI_DISTRICT_ID = "00000000-0000-4000-8000-000000000002";
 export const TEHSIL_VEHARI_ID = "00000000-0000-4000-8000-000000000003";
 export const CIRCLE_VEHARI_ID = "00000000-0000-4000-8000-000000000004";
+export const CIRCLE_VEHARI_2_ID = "00000000-0000-4000-8000-000000000005";
+export const CIRCLE_BUREWALA_ID = "00000000-0000-4000-8000-000000000006";
+export const CIRCLE_MAILSI_ID = "00000000-0000-4000-8000-000000000007";
+
+export interface CircleMasterRecord {
+  readonly id: string;
+  readonly code: string;
+  readonly name: string;
+  readonly districtId: string;
+  readonly districtName: string;
+  readonly tehsil: string;
+  readonly description: string;
+}
+
+/**
+ * Predefined permanent administrative Circles for District Vehari.
+ * Protected administrative master data — fixed by Government of Punjab gazette notification.
+ * Cannot be renamed, deleted, or altered through user account operations.
+ */
+export const DISTRICT_VEHARI_CIRCLES: readonly CircleMasterRecord[] = [
+  {
+    id: CIRCLE_VEHARI_ID,
+    code: "CIR-VHR-01",
+    name: "Vehari Circle I (City / Commercial)",
+    districtId: VEHARI_DISTRICT_ID,
+    districtName: "Vehari",
+    tehsil: "Vehari",
+    description: "Vehari City Commercial Zone, Club Road Commercial Area, Karkhana Bazaar"
+  },
+  {
+    id: CIRCLE_VEHARI_2_ID,
+    code: "CIR-VHR-02",
+    name: "Vehari Circle II (Grain Market / Rural)",
+    districtId: VEHARI_DISTRICT_ID,
+    districtName: "Vehari",
+    tehsil: "Vehari",
+    description: "Grain Market (Galla Mandi), Chungi No. 9, Luddan, Thingi Sub-Tehsil"
+  },
+  {
+    id: CIRCLE_BUREWALA_ID,
+    code: "CIR-BWL-01",
+    name: "Burewala Circle",
+    districtId: VEHARI_DISTRICT_ID,
+    districtName: "Vehari",
+    tehsil: "Burewala",
+    description: "Burewala Commercial Hub, Grain Market, Chichawatni Road"
+  },
+  {
+    id: CIRCLE_MAILSI_ID,
+    code: "CIR-MLS-01",
+    name: "Mailsi Circle",
+    districtId: VEHARI_DISTRICT_ID,
+    districtName: "Vehari",
+    tehsil: "Mailsi",
+    description: "Mailsi Main Bazaar, Tibba Sultanpur, Colony Road"
+  }
+];
 
 export const FINANCIAL_YEAR_2026_27 = "FY-2026-2027";
 
@@ -210,15 +289,21 @@ export interface DiscontinuanceRecord {
   readonly adjudicatedBy?: string | undefined;
 }
 
-export interface RefundAdjustmentRecord {
+export interface FutureTaxAdjustmentRecord {
   readonly id: string;
   readonly applicationNumber: string;
   readonly unitId: string;
   readonly assesseeLegalName: string;
   readonly assesseeTradeName?: string | undefined;
   readonly cnicOrNtn: string;
-  readonly type: "CREDIT_ADJUSTMENT" | "REFUND";
+  readonly type: "CREDIT_ADJUSTMENT";
   readonly amount: number;
+  readonly originalPaymentAmount?: number | undefined;
+  readonly excessAmount?: number | undefined;
+  readonly adjustmentCreditBalance?: number | undefined;
+  readonly amountAdjusted?: number | undefined;
+  readonly remainingAdjustmentBalance?: number | undefined;
+  readonly targetFutureFinancialYear?: string | undefined;
   readonly grounds: string;
   readonly evidenceReference: string;
   readonly status: "PENDING_REVIEW" | "APPROVED" | "REJECTED";
@@ -230,6 +315,8 @@ export interface RefundAdjustmentRecord {
   readonly rejectionReason?: string | undefined;
   readonly ledgerEntryId?: string | undefined;
 }
+
+export type RefundAdjustmentRecord = FutureTaxAdjustmentRecord;
 
 export interface ClearanceCertificateRecord {
   readonly id: string;
@@ -784,6 +871,10 @@ export function createInitialPilotUnits(): StoredUnit[] {
   return [
     {
       id: unit1Id,
+      assessmentNumber: "ASM-2026-0001",
+      demandNumber: "0001",
+      pinNumber: "237-7704-V01",
+      locality: "Club Road Commercial Area",
       legalName: "Vehari Cotton Ginners (Pvt.) Ltd.",
       tradeName: "Vehari Ginning & Pressing Mills",
       identifierType: "NTN",
@@ -814,6 +905,10 @@ export function createInitialPilotUnits(): StoredUnit[] {
     },
     {
       id: unit2Id,
+      assessmentNumber: "ASM-2026-0002",
+      demandNumber: "0002",
+      pinNumber: "237-7704-V02",
+      locality: "Grain Market (Galla Mandi)",
       legalName: "Muhammad Akram",
       tradeName: "Kisan Pesticides & Fertilizer Agency",
       identifierType: "CNIC",
@@ -844,6 +939,10 @@ export function createInitialPilotUnits(): StoredUnit[] {
     },
     {
       id: unit3Id,
+      assessmentNumber: "ASM-2026-0003",
+      demandNumber: undefined,
+      pinNumber: undefined,
+      locality: "Karkhana Bazaar",
       legalName: "Al-Madina Commercial Center",
       tradeName: "Al-Madina Commercial Center",
       identifierType: "CNIC",
@@ -871,6 +970,10 @@ export function createInitialPilotUnits(): StoredUnit[] {
     },
     {
       id: unit4Id,
+      assessmentNumber: "ASM-2026-0004",
+      demandNumber: "0004",
+      pinNumber: "237-7704-V04",
+      locality: "Chungi No. 9 Commercial Strip",
       legalName: "Chenab Sweets & Bakers",
       tradeName: "Chenab Sweets & Bakers (AC Branch)",
       identifierType: "CNIC",
@@ -1029,6 +1132,12 @@ export function createInitialRefundAdjustments(): RefundAdjustmentRecord[] {
       cnicOrNtn: "NTN-7412983-1",
       type: "CREDIT_ADJUSTMENT",
       amount: 2000,
+      originalPaymentAmount: 12000,
+      excessAmount: 2000,
+      adjustmentCreditBalance: 2000,
+      amountAdjusted: 0,
+      remainingAdjustmentBalance: 2000,
+      targetFutureFinancialYear: "FY-2027-2028",
       grounds:
         "Taxpayer mistakenly paid PKR 12,000 under Challan 32-A against an assessment demand of PKR 10,000. Statutory credit adjustment applied under Rule 5 of 1977 Rules.",
       evidenceReference: "Challan 32-A Bank Deposit Scroll Ref: NBP-VHR-8849192",
@@ -1077,9 +1186,9 @@ export function createInitialPft2Challans(units: StoredUnit[]): Pft2ChallanRecor
 
   for (let i = 0; i < units.length; i++) {
     const u = units[i]!;
-    const serial =
-      u.demandUnit.permanentDemandNo.replace(/[^0-9]/g, "").slice(-4) ||
-      String(i + 1).padStart(4, "0");
+    const demandNo =
+      u.demandNumber || u.demandUnit?.permanentDemandNo || String(i + 1).padStart(4, "0");
+    const serial = demandNo.replace(/[^0-9]/g, "").slice(-4) || String(i + 1).padStart(4, "0");
     const challanNumber = formatStandardDocNumber({ docCode: "PFT2", sequence: serial });
     const amountPayable = u.statutoryRule.annual_rate_pkr;
     const isPaid = u.id === "unit-vehari-cotton-01";
@@ -1087,7 +1196,7 @@ export function createInitialPft2Challans(units: StoredUnit[]): Pft2ChallanRecor
       ? formatStandardDocNumber({ docCode: "RCPT", sequence: "00001" })
       : undefined;
     const noticeNumber = generatePft2NoticeNumber({
-      demandNumber: u.demandUnit.permanentDemandNo,
+      demandNumber: demandNo,
       issueDate,
       formTypeCode: "01",
       demandScope: "01",
@@ -1172,15 +1281,18 @@ export function createInitialPft2Challans(units: StoredUnit[]): Pft2ChallanRecor
 }
 
 export function createInitialStatutoryReceipts(units: StoredUnit[]): StatutoryReceiptRecord[] {
-  const cottonUnit = units.find((u) => u.id === "unit-vehari-cotton-01") ?? units[0]!;
+  const cottonUnit = units.find((u) => u.id === "unit-vehari-cotton-01") ?? units[0];
+  if (!cottonUnit) return [];
   const receiptNumber = formatStandardDocNumber({ docCode: "RCPT", sequence: "00001" });
   const challanNumber = formatStandardDocNumber({ docCode: "PFT2", sequence: "00001" });
+  const demandNumber =
+    cottonUnit.demandNumber || cottonUnit.demandUnit?.permanentDemandNo || "0001";
   return [
     {
       id: "rec-01",
       receiptNumber,
       challanNumber,
-      demandNumber: cottonUnit.demandUnit.permanentDemandNo,
+      demandNumber,
       unitId: cottonUnit.id,
       assesseeLegalName: cottonUnit.legalName,
       assesseeTradeName: cottonUnit.tradeName,
@@ -1330,15 +1442,24 @@ export function loadPilotState(): PilotState {
     const parsed = JSON.parse(raw) as PilotState;
     const matchingOfficer =
       MOCK_OFFICERS.find((o) => o.id === parsed.currentOfficer?.id) ?? MOCK_OFFICERS[0];
+    const rawUnits = parsed.units && parsed.units.length > 0 ? parsed.units : initialUnits;
+    const safeUnits: StoredUnit[] = rawUnits.map((u, idx) => ({
+      ...u,
+      assessmentNumber: u.assessmentNumber || `ASM-2026-${String(idx + 1).padStart(4, "0")}`,
+      demandNumber:
+        u.demandNumber ??
+        (u.demandUnit?.permanentDemandNo ? u.demandUnit.permanentDemandNo : undefined),
+      pinNumber: u.pinNumber ?? (u.provincialUin ? u.provincialUin : undefined)
+    }));
     return {
       ...parsed,
+      units: safeUnits,
       appeals: parsed.appeals ?? createInitialAppeals(),
       discontinuances: parsed.discontinuances ?? createInitialDiscontinuances(),
       refundAdjustments: parsed.refundAdjustments ?? createInitialRefundAdjustments(),
       clearanceCertificates: parsed.clearanceCertificates ?? createInitialClearanceCertificates(),
-      pft2Challans: parsed.pft2Challans ?? createInitialPft2Challans(parsed.units || initialUnits),
-      statutoryReceipts:
-        parsed.statutoryReceipts ?? createInitialStatutoryReceipts(parsed.units || initialUnits),
+      pft2Challans: parsed.pft2Challans ?? createInitialPft2Challans(safeUnits),
+      statutoryReceipts: parsed.statutoryReceipts ?? createInitialStatutoryReceipts(safeUnits),
       users: parsed.users ?? createInitialUserAccounts(),
       userAuditLogs: parsed.userAuditLogs ?? createInitialUserAuditLogs(),
       currentOfficer: matchingOfficer

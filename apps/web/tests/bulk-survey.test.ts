@@ -8,15 +8,18 @@ import {
 import { MOCK_OFFICERS, createInitialPilotUnits } from "../src/lib/pilot-store.js";
 
 describe("Phase 4: Bulk Survey Import & PFT-3 Register Ingestion", () => {
-  it("generates a valid, download-ready survey CSV template", () => {
+  it("generates a valid, download-ready blank survey CSV template", () => {
     const template = generateSurveyCsvTemplate();
     expect(template).toContain("Legal Name");
+    expect(template).toContain("Trade Name");
+    expect(template).toContain("Identifier Type");
     expect(template).toContain("Identifier Value");
+    expect(template).toContain("Commercial Address");
     expect(template).toContain("Statutory Rule ID");
-    expect(template).toContain("Vehari Grain Commission Shop");
+    expect(template).toContain("Phone");
 
     const parsed = parseCsvContent(template);
-    expect(parsed.length).toBe(6); // 1 header + 5 data rows
+    expect(parsed.length).toBe(1); // 1 header row, zero sample units
     expect(parsed[0]).toContain("Legal Name");
   });
 
@@ -33,11 +36,17 @@ describe("Phase 4: Bulk Survey Import & PFT-3 Register Ingestion", () => {
     expect(parsed[2]?.[0]).toBe('Al-Qasim "Special" Rice Mills');
   });
 
-  it("successfully validates and parses the standard template against Second Schedule rules", () => {
+  it("successfully validates and parses a survey batch against Second Schedule rules", () => {
     const existingUnits = createInitialPilotUnits();
-    const template = generateSurveyCsvTemplate();
+    const sampleCsv =
+      "Legal Name,Trade Name,Identifier Type,Identifier Value,Commercial Address,Statutory Rule ID,Phone\n" +
+      "Vehari Grain Commission Shop,Kisan Commission,CNIC,36601-3829103-7,Shop 14 Grain Market Vehari,PFT-6.x,0300-7766554\n" +
+      "Dr. Tariq Dental Clinic,Tariq Clinic,CNIC,36601-9281726-1,Club Road Vehari,PFT-6.ii,0301-4433221\n" +
+      "Al-Madina Sweet Palace,Al-Madina Sweets,CNIC,36601-1928374-5,Karkhana Bazar Vehari,PFT-10,0302-1122334\n" +
+      "Vehari Modern Developers,Modern City,NTN,7829102-4,Main Boulevard Vehari,PFT-8,0303-9988776\n" +
+      "Chenab Cotton Ginners,Chenab Ginning,NTN,3920192-1,Multan Road Vehari,PFT-1.i,0304-5566778";
 
-    const result = parseBulkSurveyCsv(template, existingUnits);
+    const result = parseBulkSurveyCsv(sampleCsv, existingUnits);
     expect(result.totalRows).toBe(5);
     expect(result.validRowsCount).toBe(5);
     expect(result.errorRowsCount).toBe(0);
@@ -128,9 +137,16 @@ describe("Phase 4: Bulk Survey Import & PFT-3 Register Ingestion", () => {
     expect(result.rows[0]?.errors[0]).toContain("Already registered");
   });
 
-  it("converts valid survey units into StoredUnit records with initial submitted assessments", () => {
-    const template = generateSurveyCsvTemplate();
-    const result = parseBulkSurveyCsv(template, []);
+  it("converts valid survey units into StoredUnit records with initial draft assessments", () => {
+    const sampleCsv =
+      "Legal Name,Trade Name,Identifier Type,Identifier Value,Commercial Address,Statutory Rule ID,Phone\n" +
+      "Vehari Grain Commission Shop,Kisan Commission,CNIC,36601-3829103-7,Shop 14 Grain Market Vehari,PFT-6.x,0300-7766554\n" +
+      "Dr. Tariq Dental Clinic,Tariq Clinic,CNIC,36601-9281726-1,Club Road Vehari,PFT-6.ii,0301-4433221\n" +
+      "Al-Madina Sweet Palace,Al-Madina Sweets,CNIC,36601-1928374-5,Karkhana Bazar Vehari,PFT-10,0302-1122334\n" +
+      "Vehari Modern Developers,Modern City,NTN,7829102-4,Main Boulevard Vehari,PFT-8,0303-9988776\n" +
+      "Chenab Cotton Ginners,Chenab Ginning,NTN,3920192-1,Multan Road Vehari,PFT-1.i,0304-5566778";
+
+    const result = parseBulkSurveyCsv(sampleCsv, []);
     expect(result.validUnits.length).toBe(5);
 
     const officer = MOCK_OFFICERS[0]; // Inspector Aslam
@@ -149,11 +165,11 @@ describe("Phase 4: Bulk Survey Import & PFT-3 Register Ingestion", () => {
     expect(newUnits[0]?.demandUnit.permanentDemandNo).toBe("0005");
     expect(newUnits[4]?.demandUnit.permanentDemandNo).toBe("0009");
 
-    // Check initial submitted assessment state
+    // Check initial draft (feeded) assessment state per Issue 03
     for (const unit of newUnits) {
       expect(unit.assessments).toHaveLength(1);
-      expect(unit.assessments[0]?.status).toBe("SUBMITTED");
-      expect(unit.assessmentVersions[0]?.status).toBe("SUBMITTED");
+      expect(unit.assessments[0]?.status).toBe("DRAFT");
+      expect(unit.assessmentVersions[0]?.status).toBe("DRAFT");
       expect(unit.ledgerEntries).toHaveLength(0); // Ledger begins on approval
     }
   });

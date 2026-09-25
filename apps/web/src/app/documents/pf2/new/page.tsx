@@ -85,6 +85,7 @@ function DocumentIssuanceContent() {
   }, [unitParam]);
 
   const handleSelectUnit = (newPin: string) => {
+    if (unitParam) return; // Originating unit context is immutable
     const selected = allUnits.find(
       (u) =>
         u.provincialUin === newPin || u.id === newPin || u.demandUnit?.permanentDemandNo === newPin
@@ -317,14 +318,6 @@ function DocumentIssuanceContent() {
           >
             📥 Download PDF (Landscape)
           </button>
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => window.print()}
-            title="Print 3-copy Form PFT-2 document"
-          >
-            🖨️ Print Document
-          </button>
           <a
             href="/"
             style={{
@@ -383,44 +376,87 @@ function DocumentIssuanceContent() {
           }}
         >
           <div>
-            <label
-              htmlFor="establishment-selector"
-              style={{
-                display: "block",
-                fontSize: "0.78rem",
-                fontWeight: 700,
-                color: "#166534",
-                marginBottom: "0.25rem"
-              }}
-            >
-              Select Taxpayer Establishment:
-            </label>
-            <select
-              id="establishment-selector"
-              value={unit.provincialUin}
-              onChange={(e) => handleSelectUnit(e.target.value)}
-              style={{
-                minWidth: "22rem",
-                maxWidth: "38rem",
-                padding: "0.45rem 0.75rem",
-                borderRadius: "6px",
-                border: "1px solid #86efac",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                backgroundColor: "#f0fdf4",
-                color: "#0f172a"
-              }}
-            >
-              {allUnits.map((u) => {
-                const assessed = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
-                return (
-                  <option key={u.id} value={u.provincialUin}>
-                    PIN: {u.provincialUin} &bull; PDN: {u.demandUnit.permanentDemandNo} &bull;{" "}
-                    {u.statutoryRule.category} (Assessed: PKR {assessed.toLocaleString()})
-                  </option>
-                );
-              })}
-            </select>
+            {unitParam ? (
+              <div>
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
+                    color: "#166534",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  Originating Taxpayer Establishment (Locked):
+                </span>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    padding: "0.45rem 0.75rem",
+                    borderRadius: "6px",
+                    border: "1px solid #86efac",
+                    backgroundColor: "#f0fdf4",
+                    color: "#0f172a",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    flexWrap: "wrap"
+                  }}
+                >
+                  <span>🔒 {unit.legalName}</span>
+                  <span style={{ color: "#64748b" }}>•</span>
+                  <span>PIN: {unit.provincialUin}</span>
+                  <span style={{ color: "#64748b" }}>•</span>
+                  <span>PDN: {unit.demandUnit.permanentDemandNo}</span>
+                  <span style={{ color: "#64748b" }}>•</span>
+                  <span>
+                    Class {unit.statutoryRule.rule_code} ({unit.statutoryRule.category})
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label
+                  htmlFor="establishment-selector"
+                  style={{
+                    display: "block",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
+                    color: "#166534",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  Select Taxpayer Establishment:
+                </label>
+                <select
+                  id="establishment-selector"
+                  value={unit.provincialUin}
+                  onChange={(e) => handleSelectUnit(e.target.value)}
+                  style={{
+                    minWidth: "22rem",
+                    maxWidth: "38rem",
+                    padding: "0.45rem 0.75rem",
+                    borderRadius: "6px",
+                    border: "1px solid #86efac",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    backgroundColor: "#f0fdf4",
+                    color: "#0f172a"
+                  }}
+                >
+                  {allUnits.map((u) => {
+                    const assessed = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+                    return (
+                      <option key={u.id} value={u.provincialUin}>
+                        PIN: {u.provincialUin} &bull; PDN: {u.demandUnit.permanentDemandNo} &bull;{" "}
+                        {u.statutoryRule.category} (Assessed: PKR {assessed.toLocaleString()})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>

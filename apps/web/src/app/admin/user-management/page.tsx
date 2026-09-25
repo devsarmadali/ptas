@@ -5,7 +5,7 @@ import {
   type MockOfficer,
   type UserAccount,
   type UserManagementAuditRecord,
-  MOCK_OFFICERS,
+  DISTRICT_VEHARI_CIRCLES,
   loadPilotState,
   savePilotState,
   getPakistanCurrentTimestamp
@@ -16,14 +16,15 @@ export default function UserManagementPage() {
   const [currentOfficer, setCurrentOfficer] = useState<MockOfficer | null>(null);
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [auditLogs, setUserAuditLogs] = useState<UserManagementAuditRecord[]>([]);
-  const [activeTab, setActiveTab] = useState<"ETOS" | "INSPECTORS" | "ASSIGNMENTS" | "AUDIT">(
-    "INSPECTORS"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "ETOS" | "INSPECTORS" | "CIRCLES" | "ASSIGNMENTS" | "AUDIT"
+  >("INSPECTORS");
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Modal / Edit state
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
-  const [newCircleName, setNewCircleName] = useState("");
+  const [newName, setNewName] = useState("");
+  const [selectedCircleId, setSelectedCircleId] = useState(DISTRICT_VEHARI_CIRCLES[0]?.id ?? "");
   const [newMobile, setNewMobile] = useState("");
   const [newStatus, setNewStatus] = useState<"ACTIVE" | "SUSPENDED" | "INACTIVE">("ACTIVE");
   const [passwordChangeUser, setPasswordChangeUser] = useState<UserAccount | null>(null);
@@ -78,48 +79,16 @@ export default function UserManagementPage() {
             display: "flex",
             gap: "0.75rem",
             justifyContent: "center",
-            marginTop: "1.5rem",
-            flexWrap: "wrap"
+            marginTop: "1.5rem"
           }}
         >
           <button
             type="button"
             className="btn-primary"
-            style={{ backgroundColor: "#065f46", borderColor: "#047857" }}
-            onClick={() => {
-              const eto = MOCK_OFFICERS.find((o) => o.role === "ETO");
-              if (eto) {
-                const state = loadPilotState();
-                state.currentOfficer = eto;
-                savePilotState(state);
-                setCurrentOfficer(eto);
-              }
-            }}
-          >
-            ⚖️ Switch to ETO Tariq Mahmood
-          </button>
-          <button
-            type="button"
-            className="btn-primary"
-            style={{ backgroundColor: "#4338ca", borderColor: "#3730a3" }}
-            onClick={() => {
-              const director = MOCK_OFFICERS.find((o) => o.role === "DIRECTOR");
-              if (director) {
-                const state = loadPilotState();
-                state.currentOfficer = director;
-                savePilotState(state);
-                setCurrentOfficer(director);
-              }
-            }}
-          >
-            📊 Switch to Director Tahir Raza
-          </button>
-          <button
-            type="button"
-            className="btn-secondary"
+            style={{ backgroundColor: "#0d3822", borderColor: "#062415" }}
             onClick={() => (window.location.href = "/")}
           >
-            ← Return to Dashboard
+            ← Return to Authorized Dashboard
           </button>
         </div>
       </div>
@@ -141,20 +110,53 @@ export default function UserManagementPage() {
   const etoUsers = users.filter((u) => u.role === "ETO");
   const inspectorUsers = visibleUsers.filter((u) => u.role === "INSPECTOR");
 
+  const handleOpenEditUser = (u: UserAccount) => {
+    setEditingUser(u);
+    setNewName(u.name);
+    setSelectedCircleId(u.assignedCircleId || DISTRICT_VEHARI_CIRCLES[0]?.id || "");
+    setNewMobile(u.mobileNumber);
+    setNewStatus(u.status);
+  };
+
   const handleSaveUserAssignment = () => {
     if (!editingUser) return;
 
+    // Backend validation: selected circle MUST exist in predefined Circle Master Data
+    const targetCircle = DISTRICT_VEHARI_CIRCLES.find((c) => c.id === selectedCircleId);
+    if (!targetCircle) {
+      setFeedbackMessage({
+        type: "error",
+        text: "Invalid Circle selected. Circle must belong to predefined district master data."
+      });
+      return;
+    }
+
+    // Role hierarchy validation: ETO can only edit subordinate Inspectors
+    if (isEto && editingUser.role !== "INSPECTOR") {
+      setFeedbackMessage({
+        type: "error",
+        text: "Unauthorized: ETOs may only manage subordinate Tax Inspectors."
+      });
+      return;
+    }
+
     const state = loadPilotState();
-    const oldCircle = editingUser.assignedCircleName;
+    const oldCircleName = editingUser.assignedCircleName;
+    const oldCircleId = editingUser.assignedCircleId;
     const oldStatus = editingUser.status;
+
+    const isCircleChanged = oldCircleId !== targetCircle.id || oldCircleName !== targetCircle.name;
 
     const updatedUsers = (state.users ?? users).map((u) => {
       if (u.id === editingUser.id) {
         return {
           ...u,
-          assignedCircleName: newCircleName || u.assignedCircleName,
-          mobileNumber: newMobile || u.mobileNumber,
+          name: newName.trim() || u.name,
+          assignedCircleId: targetCircle.id,
+          assignedCircleName: targetCircle.name,
+          mobileNumber: newMobile.trim() || u.mobileNumber,
           status: newStatus
+          // Email remains strictly immutable through User Management!
         };
       }
       return u;
@@ -165,10 +167,10 @@ export default function UserManagementPage() {
       performedBy: currentOfficer.name,
       performedByRole: currentOfficer.role,
       targetUserId: editingUser.id,
-      targetUserName: editingUser.name,
-      actionType: oldCircle !== newCircleName ? "CIRCLE_REASSIGNED" : "PROFILE_UPDATED",
-      oldValue: `Circle: ${oldCircle} | Status: ${oldStatus}`,
-      newValue: `Circle: ${newCircleName || oldCircle} | Status: ${newStatus}`,
+      targetUserName: newName.trim() || editingUser.name,
+      actionType: isCircleChanged ? "CIRCLE_REASSIGNED" : "PROFILE_UPDATED",
+      oldValue: `Circle: ${oldCircleName} | Mobile: ${editingUser.mobileNumber} | Status: ${oldStatus}`,
+      newValue: `Circle: ${targetCircle.name} (${targetCircle.code}) | Mobile: ${newMobile} | Status: ${newStatus}`,
       timestamp: getPakistanCurrentTimestamp()
     };
 
@@ -182,7 +184,9 @@ export default function UserManagementPage() {
     setEditingUser(null);
     setFeedbackMessage({
       type: "success",
-      text: `Successfully updated profile and circle jurisdiction for ${editingUser.name}.`
+      text: isCircleChanged
+        ? `Reassigned ${editingUser.name} to ${targetCircle.name}. Circle master records remain protected.`
+        : `Successfully updated profile details for ${editingUser.name}.`
     });
   };
 
@@ -330,39 +334,17 @@ export default function UserManagementPage() {
             &bull; Tier: <strong>{currentOfficer.jurisdictionTier}</strong>
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: "0.25rem" }}>
-            {MOCK_OFFICERS.map((o) => (
-              <button
-                key={o.id}
-                type="button"
-                className={`role-switch-btn ${currentOfficer.email === o.email ? "active" : ""}`}
-                onClick={() => {
-                  const state = loadPilotState();
-                  state.currentOfficer = o;
-                  savePilotState(state);
-                  setCurrentOfficer(o);
-                }}
-                style={{
-                  fontSize: "0.75rem",
-                  padding: "0.25rem 0.5rem",
-                  background:
-                    currentOfficer.email === o.email ? "#ffffff" : "rgba(255, 255, 255, 0.2)",
-                  color: currentOfficer.email === o.email ? "#0d3822" : "#ffffff",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: 600
-                }}
-                title={`Switch to ${o.name} (${o.role})`}
-              >
-                {o.role === "INSPECTOR"
-                  ? "👤 Inspector"
-                  : o.role === "ETO"
-                    ? "⚖️ ETO"
-                    : "📊 Director"}
-              </button>
-            ))}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          <div
+            style={{
+              background: "rgba(255, 255, 255, 0.15)",
+              padding: "0.35rem 0.75rem",
+              borderRadius: "4px",
+              fontSize: "0.8rem",
+              border: "1px solid rgba(255, 255, 255, 0.3)"
+            }}
+          >
+            🔒 Verified Session: <strong>{currentOfficer.name}</strong> ({currentOfficer.role})
           </div>
           <button
             type="button"
@@ -415,6 +397,13 @@ export default function UserManagementPage() {
           onClick={() => setActiveTab("INSPECTORS")}
         >
           👮 Circle Inspectors ({inspectorUsers.length})
+        </button>
+        <button
+          type="button"
+          className={`subtab-btn ${activeTab === "CIRCLES" ? "active" : ""}`}
+          onClick={() => setActiveTab("CIRCLES")}
+        >
+          🏛️ Predefined Circle Master ({DISTRICT_VEHARI_CIRCLES.length})
         </button>
         <button
           type="button"
@@ -499,12 +488,7 @@ export default function UserManagementPage() {
                           id: "edit-eto",
                           label: "Edit Officer Details & Circle",
                           icon: "✏️",
-                          onClick: () => {
-                            setEditingUser(u);
-                            setNewCircleName(u.assignedCircleName);
-                            setNewMobile(u.mobileNumber);
-                            setNewStatus(u.status);
-                          }
+                          onClick: () => handleOpenEditUser(u)
                         },
                         {
                           id: "password-eto",
@@ -514,6 +498,102 @@ export default function UserManagementPage() {
                         }
                       ]}
                     />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Tab: Predefined Fixed Circle Master Data (Spec 17) */}
+      {activeTab === "CIRCLES" && (
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #cbd5e1",
+            borderRadius: "8px",
+            padding: "1.25rem"
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "1rem"
+            }}
+          >
+            <div>
+              <h2 style={{ fontSize: "1.1rem", margin: 0, color: "#0d3822" }}>
+                🏛️ Predefined Circle Master Directory (District Vehari)
+              </h2>
+              <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                Fixed administrative structures established by Government of Punjab gazette
+                notification. Protected master data.
+              </span>
+            </div>
+            <span
+              style={{
+                background: "#f0fdf4",
+                border: "1px solid #86efac",
+                color: "#166534",
+                padding: "0.3rem 0.65rem",
+                borderRadius: "4px",
+                fontSize: "0.75rem",
+                fontWeight: 700
+              }}
+            >
+              🔒 Administrative Structure: Fixed &amp; Immutable
+            </span>
+          </div>
+
+          <div
+            style={{
+              background: "#eff6ff",
+              border: "1px solid #bfdbfe",
+              borderRadius: "6px",
+              padding: "0.85rem 1rem",
+              marginBottom: "1rem",
+              fontSize: "0.85rem",
+              color: "#1e3a8a"
+            }}
+          >
+            <strong>Statutory Administrative Separation:</strong> Circles are permanent
+            organizational entities of the district. User Management permits reassigning authorized
+            officers between existing Circles, but strictly prohibits renaming, creating, or
+            deleting Circles.
+          </div>
+
+          <table className="gov-table" style={{ width: "100%" }}>
+            <thead>
+              <tr>
+                <th>Circle Code</th>
+                <th>Official Circle Name</th>
+                <th>Tehsil Jurisdiction</th>
+                <th>District</th>
+                <th>Commercial Scope &amp; Localities</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {DISTRICT_VEHARI_CIRCLES.map((circle) => (
+                <tr key={circle.id}>
+                  <td>
+                    <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#0d3822" }}>
+                      {circle.code}
+                    </span>
+                  </td>
+                  <td>
+                    <strong>{circle.name}</strong>
+                  </td>
+                  <td>Tehsil {circle.tehsil}</td>
+                  <td>{circle.districtName}</td>
+                  <td style={{ fontSize: "0.8rem", color: "#475569" }}>{circle.description}</td>
+                  <td>
+                    <span className="badge badge-approved" style={{ fontSize: "0.7rem" }}>
+                      PERMANENT MASTER
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -591,12 +671,7 @@ export default function UserManagementPage() {
                           id: "reassign-inspector",
                           label: "Reassign Circle & Edit Details",
                           icon: "🔄",
-                          onClick: () => {
-                            setEditingUser(u);
-                            setNewCircleName(u.assignedCircleName);
-                            setNewMobile(u.mobileNumber);
-                            setNewStatus(u.status);
-                          }
+                          onClick: () => handleOpenEditUser(u)
                         },
                         {
                           id: "password-inspector",
@@ -756,18 +831,74 @@ export default function UserManagementPage() {
             </div>
             <div style={{ padding: "1.5rem" }}>
               <div className="form-group" style={{ marginBottom: "1rem" }}>
-                <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                  Assigned Circle Jurisdiction:
-                </label>
+                <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>Officer Name:</label>
                 <input
                   type="text"
                   className="form-control"
-                  value={newCircleName}
-                  onChange={(e) => setNewCircleName(e.target.value)}
-                  placeholder="e.g. Circle-Vehari, Circle-Mailsi, Circle-Burewala"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Official departmental officer name"
                   required
                 />
               </div>
+
+              <div className="form-group" style={{ marginBottom: "1rem" }}>
+                <div
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                >
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    Official Login Email (Identity):
+                  </label>
+                  <span style={{ fontSize: "0.75rem", color: "#64748b" }}>🔒 Immutable</span>
+                </div>
+                <input
+                  type="email"
+                  className="form-control"
+                  value={editingUser.email}
+                  disabled
+                  style={{ background: "#f1f5f9", cursor: "not-allowed", color: "#64748b" }}
+                />
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "#64748b",
+                    display: "block",
+                    marginTop: "0.25rem"
+                  }}
+                >
+                  Login email is permanent departmental master identity and cannot be edited.
+                </span>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: "1rem" }}>
+                <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                  Assigned Circle (Select from Predefined Master Data):
+                </label>
+                <select
+                  className="form-control"
+                  value={selectedCircleId}
+                  onChange={(e) => setSelectedCircleId(e.target.value)}
+                  style={{ fontWeight: 600 }}
+                >
+                  {DISTRICT_VEHARI_CIRCLES.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.code}) — Tehsil {c.tehsil}
+                    </option>
+                  ))}
+                </select>
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "#065f46",
+                    display: "block",
+                    marginTop: "0.3rem"
+                  }}
+                >
+                  ✓ Fixed Administrative Structure: Circle names and boundaries are statutory
+                  entities and cannot be modified or deleted through account management.
+                </span>
+              </div>
+
               <div className="form-group" style={{ marginBottom: "1rem" }}>
                 <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
                   Mobile Number (Verification &amp; Recovery):
@@ -780,6 +911,7 @@ export default function UserManagementPage() {
                   required
                 />
               </div>
+
               <div className="form-group" style={{ marginBottom: "1.5rem" }}>
                 <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>Account Status:</label>
                 <select
@@ -794,6 +926,7 @@ export default function UserManagementPage() {
                   <option value="INACTIVE">INACTIVE</option>
                 </select>
               </div>
+
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
                 <button
                   type="button"

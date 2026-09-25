@@ -20,8 +20,7 @@ import {
   getStatutoryRuleById,
   getStatutoryRuleBySubclassification,
   maskIdentifier,
-  normalizeIdentifier,
-  submitAssessmentVersion
+  normalizeIdentifier
 } from "@ptas/domain";
 import {
   CIRCLE_VEHARI_ID,
@@ -78,67 +77,7 @@ export function generateSurveyCsvTemplate(): string {
     "Phone"
   ];
 
-  const sampleRows = [
-    [
-      "Vehari Grain Commission Shop",
-      "Al-Rehman Traders",
-      "CNIC",
-      "36601-5829103-1",
-      "Shop 14, Grain Market, Club Road, Vehari",
-      "PFT-6.x",
-      "0300-7712345"
-    ],
-    [
-      "Burewala Model Clinic",
-      "Dr. Tariq Medical Clinic",
-      "CNIC",
-      "36601-9823712-5",
-      "Club Road, Opp. Civil Hospital, Vehari",
-      "PFT-6.ii",
-      "0301-6623912"
-    ],
-    [
-      "Ittehad Sweet Palace & Bakers",
-      "Ittehad Bakers",
-      "CNIC",
-      "36601-4458921-7",
-      "Karkhana Bazar, Near Chowk, Vehari",
-      "PFT-10",
-      "0302-8812903"
-    ],
-    [
-      "Vehari Hardware & Sanitary Store",
-      "Al-Makkah Hardware",
-      "CNIC",
-      "36601-3312984-9",
-      "Luddan Road, Commercial Hub, Vehari",
-      "PFT-3.i.b",
-      "0303-4419283"
-    ],
-    [
-      "Chenab Housing Developers",
-      "Chenab Real Estate Builders",
-      "NTN",
-      "4182931-4",
-      "Multan Road, Near Bypass, Vehari",
-      "PFT-8",
-      "0300-9928172"
-    ]
-  ];
-
-  const escapeCell = (cell: string): string => {
-    if (cell.includes(",") || cell.includes('"') || cell.includes("\n")) {
-      return `"${cell.replace(/"/g, '""')}"`;
-    }
-    return cell;
-  };
-
-  const lines = [
-    headers.map(escapeCell).join(","),
-    ...sampleRows.map((row) => row.map(escapeCell).join(","))
-  ];
-
-  return lines.join("\r\n");
+  return headers.join(",") + "\r\n";
 }
 
 /**
@@ -533,14 +472,12 @@ export function convertValidSurveyUnitsToStoredUnits(
       baseTimestamp
     );
 
-    // Auto-submit assessment for ETO review & approval
-    const { assessment: submittedAsm, version: submittedVer } = submitAssessmentVersion(
-      draftAsm,
-      draftVer
-    );
-
     const unit: StoredUnit = {
       id: unitId,
+      assessmentNumber: `ASM-${FINANCIAL_YEAR_2026_27.split("-")[1] ?? "2026"}-${String(sequenceNumber).padStart(4, "0")}`,
+      demandNumber: undefined,
+      pinNumber: undefined,
+      locality: undefined,
       legalName: item.legalName,
       tradeName: item.tradeName,
       identifierType: item.identifierType,
@@ -559,8 +496,8 @@ export function convertValidSurveyUnitsToStoredUnits(
         permanentDemandNo,
         createdAt: baseTimestamp
       },
-      assessments: [submittedAsm],
-      assessmentVersions: [submittedVer],
+      assessments: [draftAsm],
+      assessmentVersions: [draftVer],
       ledgerEntries: [],
       createdAt: baseTimestamp
     };
@@ -578,7 +515,7 @@ export function convertValidSurveyUnitsToStoredUnits(
     target: `Batch Survey Import (${validUnits.length} Units)`,
     timestamp: baseTimestamp,
     correlationId: auditCorrelationId,
-    details: `Imported ${validUnits.length} survey units into Form P.F.T-3 Assessment Register for Circle-Vehari. Total assessed demand submitted: PKR ${totalAssessedDemand.toLocaleString()}`
+    details: `Imported ${validUnits.length} survey units in Feeded / Draft status for Circle-Vehari. Total surveyed demand: PKR ${totalAssessedDemand.toLocaleString()}`
   };
 
   return {
