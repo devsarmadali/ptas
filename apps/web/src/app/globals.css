@@ -630,11 +630,18 @@ textarea {
 .table-container,
 .table-responsive {
   width: 100%;
-  overflow-x: auto;
+  overflow: visible;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
   background: #ffffff;
   box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .table-container,
+  .table-responsive {
+    overflow-x: auto;
+  }
 }
 
 .gov-table,

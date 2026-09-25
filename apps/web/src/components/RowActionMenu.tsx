@@ -24,9 +24,9 @@ export interface RowActionMenuProps {
 
 /**
  * Universal Floating Popover Row Action Menu.
- * Replaces cluttered inline row buttons with a single Actions dropdown.
+ * Replaces cluttered inline row buttons with an overlay action dropdown.
+ * - Renders as an overlay popover with zIndex 10000 without nesting or inner scrollbars.
  * - Single-action exception: renders direct button if exactly 1 action exists.
- * - Does not alter table row height or cause page layout shifting.
  * - Closes on click, outside click, and Escape key.
  */
 export function RowActionMenu({
@@ -39,7 +39,7 @@ export function RowActionMenu({
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
+  // Close on outside click and Escape key
   useEffect(() => {
     if (!isOpen) return;
 
@@ -156,12 +156,13 @@ export function RowActionMenu({
             position: "absolute",
             top: "calc(100% + 4px)",
             [align === "right" ? "right" : "left"]: 0,
-            zIndex: 1000,
-            minWidth: "13.5rem",
+            zIndex: 10000,
+            minWidth: "14.5rem",
+            maxWidth: "20rem",
             background: "#ffffff",
             border: "1px solid #cbd5e1",
             borderRadius: "8px",
-            boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+            boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.15)",
             padding: "0.35rem 0",
             overflow: "hidden"
           }}

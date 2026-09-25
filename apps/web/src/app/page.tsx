@@ -169,15 +169,15 @@ export const TAB_TO_HUB: Record<TabId, RouteHubId> = {
 };
 
 export const HUB_DEFAULT_TABS: Record<RouteHubId, TabId> = {
-  assessment: "UNITS",
+  assessment: "REGISTER_PFT3",
   enforcement: "DEFAULTERS",
   revenue: "PFT2",
   intelligence: "ANALYTICS",
-  admin: "UNITS"
+  admin: "REGISTER_PFT3"
 };
 
 export const TAB_TO_CANONICAL_PATH: Record<TabId, string> = {
-  UNITS: "/assessment",
+  UNITS: "/assessment/survey",
   ASSESSMENTS: "/assessment/queue",
   REGISTER_PFT3: "/assessment/pft3",
   DEFAULTERS: "/enforcement",
@@ -195,10 +195,11 @@ export const TAB_TO_CANONICAL_PATH: Record<TabId, string> = {
 };
 
 export const PATH_TO_TAB: Record<string, { hub: RouteHubId; tab: TabId }> = {
-  "/assessment": { hub: "assessment", tab: "UNITS" },
+  "/assessment": { hub: "assessment", tab: "REGISTER_PFT3" },
+  "/assessment/pft3": { hub: "assessment", tab: "REGISTER_PFT3" },
+  "/assessment/survey": { hub: "assessment", tab: "UNITS" },
   "/assessment/units": { hub: "assessment", tab: "UNITS" },
   "/assessment/queue": { hub: "assessment", tab: "ASSESSMENTS" },
-  "/assessment/pft3": { hub: "assessment", tab: "REGISTER_PFT3" },
   "/enforcement": { hub: "enforcement", tab: "DEFAULTERS" },
   "/enforcement/defaulters": { hub: "enforcement", tab: "DEFAULTERS" },
   "/enforcement/appeals": { hub: "enforcement", tab: "APPEALS" },
@@ -231,7 +232,7 @@ export default function HomePage({
   // Resolve active hub and tab directly from URL pathname with fallback to props
   const resolvedFromPath = pathname ? PATH_TO_TAB[pathname] : null;
   const activeRouteHub: RouteHubId = resolvedFromPath?.hub ?? initialRouteHub ?? "assessment";
-  const activeTab: TabId = resolvedFromPath?.tab ?? initialTab ?? "UNITS";
+  const activeTab: TabId = resolvedFromPath?.tab ?? initialTab ?? "REGISTER_PFT3";
 
   // URL-based Navigation
   const switchTab = (tab: TabId) => {
@@ -3228,20 +3229,6 @@ export default function HomePage({
       });
     } else if (status === "APPROVED") {
       actions.push({
-        id: "view-pft1",
-        label: "View Form P.F.T-1 (Assessment Notice ↗)",
-        icon: "📄",
-        href: `/documents/pft1?pin=${targetUnit.provincialUin}`,
-        target: "_blank"
-      });
-      actions.push({
-        id: "issue-pft2-tab",
-        label: "Issue Form PFT-2 (New Tab ↗)",
-        icon: "🖨️",
-        href: `/documents/pf2/new?pin=${targetUnit.provincialUin}`,
-        target: "_blank"
-      });
-      actions.push({
         id: "view-in-pft3",
         label: "Enrolled in Form PFT-3 Register ↗",
         icon: "📑",
@@ -3678,14 +3665,14 @@ export default function HomePage({
             <>
               <Link
                 href={asRoute("/assessment/pft3")}
-                className={`subtab-btn ${pathname === "/assessment/pft3" || activeTab === "REGISTER_PFT3" ? "active" : ""}`}
+                className={`subtab-btn ${pathname === "/assessment/pft3" || pathname === "/assessment" || pathname === "/" || activeTab === "REGISTER_PFT3" ? "active" : ""}`}
                 style={{ textDecoration: "none" }}
               >
                 📋 Form P.F.T-3 Assessment Register ({units.length})
               </Link>
               <Link
-                href={asRoute("/assessment")}
-                className={`subtab-btn ${pathname === "/assessment" || pathname === "/" || activeTab === "UNITS" ? "active" : ""}`}
+                href={asRoute("/assessment/survey")}
+                className={`subtab-btn ${pathname === "/assessment/survey" || activeTab === "UNITS" ? "active" : ""}`}
                 style={{ textDecoration: "none" }}
               >
                 🏢 Tax Units &amp; Survey
