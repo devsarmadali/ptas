@@ -12,6 +12,7 @@ import {
   generateDocumentPin,
   type StatutoryRuleDefinition
 } from "@ptas/domain";
+export { computeLedgerBalance };
 import type { MockOfficer, StoredUnit } from "./pilot-store";
 
 export function getScheduleEntryLabel(rule: StatutoryRuleDefinition): string {
@@ -294,6 +295,7 @@ export interface FormPFT2Model {
   readonly challanNumber: string;
   readonly noticeNumber: string;
   readonly pin: string;
+  challanStatus?: string | undefined;
   readonly formType?: string | undefined;
   readonly demandScope?: string | undefined;
   readonly paymentScope?: string | undefined;
@@ -1078,9 +1080,25 @@ export function generateFormPFT3Rows(units: readonly StoredUnit[]): readonly For
  * Maintained under Rule 6 of 1977 Rules for field tracking by Circle Inspector.
  */
 export function generateCircleDispatchRegister(
-  units: readonly StoredUnit[],
-  customDispatchDate: string = "2026-07-02"
+  unitsOrDistrict: readonly StoredUnit[] | string,
+  customDispatchDateOrCircle: string = "2026-07-02",
+  maybeUnits?: readonly StoredUnit[],
+  customDate?: string
 ): CircleDispatchRegisterModel {
+  let units: readonly StoredUnit[];
+  let customDispatchDate: string;
+
+  if (Array.isArray(unitsOrDistrict)) {
+    units = unitsOrDistrict;
+    customDispatchDate = customDispatchDateOrCircle || "2026-07-02";
+  } else if (Array.isArray(maybeUnits)) {
+    units = maybeUnits;
+    customDispatchDate = customDate || "2026-07-02";
+  } else {
+    units = [];
+    customDispatchDate = "2026-07-02";
+  }
+
   let totalAssessedSum = 0;
   let totalServed = 0;
   let totalPending = 0;

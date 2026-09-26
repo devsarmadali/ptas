@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { type StoredUnit, loadPilotState } from "../../../lib/pilot-store";
 import { generateFormPFT1 } from "../../../lib/statutory-forms";
 import { StatutoryQrCode } from "../../../components/StatutoryQrCode";
-import { downloadDocumentPdf } from "../../../lib/pdf-export";
+import { downloadOfficialPdf } from "../../../lib/pdf";
 
 function FormPft1NoticeContent() {
   const searchParams = useSearchParams();
@@ -112,15 +112,15 @@ function FormPft1NoticeContent() {
             type="button"
             className="btn-primary"
             onClick={() =>
-              downloadDocumentPdf(
-                "pft1-notice-document-target",
-                `Form_PFT1_Notice_${pft1Data.demandNumber.replace(/\//g, "_")}.pdf`,
-                { orientation: "portrait" }
-              )
+              downloadOfficialPdf({
+                type: "FORM_PFT1_NOTICE",
+                documentIdOrData: unit,
+                defaultFilename: `Form_PFT1_Notice_${pft1Data.demandNumber.replace(/\//g, "_")}.pdf`
+              })
             }
             title="Download official Form P.F.T-1 Notice of Tax Demand as PDF"
           >
-            📥 Download PDF
+            📥 Download Official PDF (A4 Portrait)
           </button>
           <a
             href="/assessment/pft3"

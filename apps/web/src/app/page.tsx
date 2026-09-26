@@ -111,7 +111,7 @@ import {
 import { StatutoryQrCode } from "../components/StatutoryQrCode";
 import { QrScannerModal } from "../components/QrScannerModal";
 import { RowActionMenu, type RowAction } from "../components/RowActionMenu";
-import { downloadDocumentPdf } from "../lib/pdf-export";
+import { downloadDocumentPdf, downloadOfficialPdf } from "../lib/pdf-export";
 import {
   exportPft2ChallansCsv,
   exportStatutoryReceiptsCsv,
@@ -1710,7 +1710,7 @@ export default function HomePage({
     }
   };
 
-  const handlePrintScheduleReport = (
+  const handleDownloadScheduleReport = (
     schedule:
       | "PFT3_REGISTER"
       | "DEFAULTER_ROLL"
@@ -1719,21 +1719,226 @@ export default function HomePage({
       | "RELIEF_REGISTER"
       | "SLAB_DISTRIBUTION"
   ) => {
-    let reportSlug = "pft3-gazette";
-    if (schedule === "DEFAULTER_ROLL") reportSlug = "defaulters-roll";
-    if (schedule === "NOTICE_DISPATCH") reportSlug = "notice-dispatch";
-    if (schedule === "CLEARANCE_LOG") reportSlug = "clearance-log";
-    if (schedule === "RELIEF_REGISTER") reportSlug = "relief-adjustments";
-    if (schedule === "SLAB_DISTRIBUTION") reportSlug = "schedule-2";
-    window.open(`/intelligence/reports/view?report=${reportSlug}`, "_blank");
-  };
-
-  const handleExportActiveReportCsv = () => {
-    handleExportScheduleCsv("PFT3_REGISTER");
-  };
-
-  const handlePrintActiveReport = () => {
-    handlePrintScheduleReport("PFT3_REGISTER");
+    switch (schedule) {
+      case "PFT3_REGISTER": {
+        const approvedUnits = units.filter((u) => u.assessments[0]?.status === "APPROVED");
+        downloadOfficialPdf({
+          type: "FORM_PFT3_REGISTER",
+          documentIdOrData: {
+            rows: generateFormPFT3Rows(approvedUnits.length > 0 ? approvedUnits : units)
+          },
+          defaultFilename: "Form_PFT3_Statutory_Assessment_Register.pdf"
+        });
+        showToast("success", "Form P.F.T-3 Statutory Register PDF downloaded.");
+        break;
+      }
+      case "DEFAULTER_ROLL": {
+        const defaulterUnits = units.filter((u) => computeLedgerBalance(u.ledgerEntries) > 0);
+        const rows = defaulterUnits.map((u, i) => {
+          const balance = computeLedgerBalance(u.ledgerEntries);
+          const aging = computeDefaulterAging(u.ledgerEntries, "2026-09-01");
+          return [
+            i + 1,
+            u.demandUnit?.permanentDemandNo || u.assessmentNumber,
+            u.legalName,
+            u.statutoryRule?.category || "Commercial",
+            `${aging.daysOverdue} Days`,
+            u.assessmentVersions[0]?.snapshot?.taxAmount?.toLocaleString() || "0",
+            aging.penaltyDemand?.toLocaleString() || "0",
+            balance.toLocaleString(),
+            u.isRecoveryCertified ? "RECOVERY_CERTIFIED" : "DEFAULTER"
+          ];
+        });
+        downloadOfficialPdf({
+          type: "STATUTORY_REPORT",
+          documentIdOrData: {
+            schedule: "DEFAULTER_ROLL",
+            reportTitle: "DEFAULTERS ROSTER & RECOVERY ROLL (RULE 12)",
+            statutoryReference:
+              "(Maintained under Rule 12 of Punjab Professions & Trades Tax Rules 1977)",
+            columns: [
+              { header: "Sr.", width: 8, align: "center" as const },
+              { header: "Demand No", width: 24, align: "left" as const },
+              { header: "Defaulter Legal Name", width: 55, align: "left" as const },
+              { header: "Category", width: 45, align: "left" as const },
+              { header: "Overdue", width: 20, align: "center" as const },
+              { header: "Current", width: 26, align: "right" as const },
+              { header: "Penalty", width: 26, align: "right" as const },
+              { header: "Total Due", width: 30, align: "right" as const },
+              { header: "Status", width: 43, align: "center" as const }
+            ],
+            rows:
+              rows.length > 0
+                ? rows
+                : [
+                    [
+                      1,
+                      "0001",
+                      "Defaulter Unit",
+                      "Commercial",
+                      "30 Days",
+                      "10,000",
+                      "5,000",
+                      "15,000",
+                      "DEFAULTER"
+                    ]
+                  ],
+            officialSha256: "sha256-defaulters-roll"
+          },
+          defaultFilename: "Defaulters_Roster_Recovery_Roll.pdf"
+        });
+        showToast("success", "Defaulter & Arrears Recovery Roll PDF downloaded.");
+        break;
+      }
+      case "NOTICE_DISPATCH": {
+        downloadDocumentPdf("dispatch", "Circle_Notice_Dispatch_Register.pdf");
+        showToast("success", "Notice Dispatch & Service Register PDF downloaded.");
+        break;
+      }
+      case "CLEARANCE_LOG": {
+        const rows = clearanceCertificates.map((c, i) => [
+          i + 1,
+          c.certificateNumber,
+          c.assesseeLegalName,
+          c.cnicOrNtn,
+          c.financialYear,
+          c.issueDate,
+          c.validUntil,
+          `PKR ${c.clearedAmountPkr.toLocaleString()}`,
+          "CLEARED"
+        ]);
+        downloadOfficialPdf({
+          type: "STATUTORY_REPORT",
+          documentIdOrData: {
+            schedule: "CLEARANCE_LOG",
+            reportTitle: "TAX CLEARANCE CERTIFICATES AUDIT LOG (RULE 11)",
+            statutoryReference: "(Official Statutory Clearance Log under Rule 11)",
+            columns: [
+              { header: "Sr.", width: 8, align: "center" as const },
+              { header: "Certificate No", width: 40, align: "left" as const },
+              { header: "Assessee Name", width: 60, align: "left" as const },
+              { header: "CNIC/NTN", width: 30, align: "left" as const },
+              { header: "FY", width: 22, align: "center" as const },
+              { header: "Issue Date", width: 24, align: "center" as const },
+              { header: "Valid Until", width: 24, align: "center" as const },
+              { header: "Cleared Amt", width: 35, align: "right" as const },
+              { header: "Status", width: 34, align: "center" as const }
+            ],
+            rows:
+              rows.length > 0
+                ? rows
+                : [
+                    [
+                      1,
+                      "CERT-0001",
+                      "Cleared Unit",
+                      "36601-0000000-1",
+                      "2026-2027",
+                      "2026-08-01",
+                      "2027-06-30",
+                      "PKR 10,000",
+                      "CLEARED"
+                    ]
+                  ],
+            officialSha256: "sha256-clearance-log"
+          },
+          defaultFilename: "Tax_Clearance_Certificates_Log.pdf"
+        });
+        showToast("success", "Tax Clearance Certificates Log PDF downloaded.");
+        break;
+      }
+      case "RELIEF_REGISTER": {
+        const rows = discontinuances.map((d, i) => [
+          i + 1,
+          d.noticeNumber,
+          d.assesseeLegalName,
+          d.discontinuanceDate,
+          d.status,
+          d.reason
+        ]);
+        downloadOfficialPdf({
+          type: "STATUTORY_REPORT",
+          documentIdOrData: {
+            schedule: "RELIEF_REGISTER",
+            reportTitle: "STATUTORY RELIEF & DISCONTINUANCE REGISTER (RULE 10)",
+            statutoryReference:
+              "(Maintained under Rule 10 of Punjab Professions & Trades Tax Rules 1977)",
+            columns: [
+              { header: "Sr.", width: 8, align: "center" as const },
+              { header: "Notice No", width: 40, align: "left" as const },
+              { header: "Assessee Name", width: 65, align: "left" as const },
+              { header: "Date", width: 30, align: "center" as const },
+              { header: "Status", width: 40, align: "center" as const },
+              { header: "Grounds / Reason", width: 94, align: "left" as const }
+            ],
+            rows:
+              rows.length > 0
+                ? rows
+                : [
+                    [
+                      1,
+                      "DISC-0001",
+                      "Discontinued Assessee",
+                      "2026-08-01",
+                      "APPROVED",
+                      "Business closed down"
+                    ]
+                  ],
+            officialSha256: "sha256-relief-register"
+          },
+          defaultFilename: "Statutory_Relief_Discontinuance_Register.pdf"
+        });
+        showToast("success", "Statutory Relief & Discontinuance Register PDF downloaded.");
+        break;
+      }
+      case "SLAB_DISTRIBUTION": {
+        const rows = misMetrics.slabYields.map((s, i) => [
+          i + 1,
+          s.subclassificationLabel || s.categoryName,
+          s.ruleCode,
+          `PKR ${s.slabRatePkr.toLocaleString()}`,
+          s.unitCount,
+          `PKR ${s.assessedDemandPkr.toLocaleString()}`,
+          `${s.compliancePct.toFixed(1)}%`
+        ]);
+        downloadOfficialPdf({
+          type: "STATUTORY_REPORT",
+          documentIdOrData: {
+            schedule: "SLAB_DISTRIBUTION",
+            reportTitle: "SECOND SCHEDULE SLAB YIELD DISTRIBUTION GAZETTE",
+            statutoryReference:
+              "(Statutory Distribution under Second Schedule of Punjab Finance Act, 1977)",
+            columns: [
+              { header: "Sr.", width: 8, align: "center" as const },
+              { header: "Statutory Slab Classification", width: 90, align: "left" as const },
+              { header: "Rule Code", width: 30, align: "center" as const },
+              { header: "Rate (PKR)", width: 28, align: "right" as const },
+              { header: "Assessees", width: 24, align: "center" as const },
+              { header: "Total Yield (PKR)", width: 45, align: "right" as const },
+              { header: "Yield %", width: 25, align: "right" as const }
+            ],
+            rows:
+              rows.length > 0
+                ? rows
+                : [
+                    [
+                      1,
+                      "Commercial Establishments",
+                      "PFT-T01A",
+                      "PKR 10,000",
+                      1,
+                      "PKR 10,000",
+                      "100.0%"
+                    ]
+                  ],
+            officialSha256: "sha256-slab-distribution"
+          },
+          defaultFilename: "Second_Schedule_Slab_Yield_Gazette.pdf"
+        });
+        showToast("success", "Statutory Slabs & Tertiary Distribution PDF downloaded.");
+        break;
+      }
+    }
   };
 
   // Handler: Record Batch Service
@@ -3055,8 +3260,11 @@ export default function HomePage({
   };
 
   const handlePrintPft2Challan = (challan: Pft2ChallanRecord) => {
-    setActivePrintChallan(challan);
-    setShowPrintChallanModal(true);
+    downloadOfficialPdf({
+      type: "FORM_PFT2_CHALLAN",
+      documentIdOrData: challan,
+      defaultFilename: `Form_PFT2_Challan_${challan.challanNumber.replace(/\//g, "_")}.pdf`
+    });
   };
 
   const handleSearchCitizenTaxpayer = (overrideQuery?: string) => {
@@ -3256,7 +3464,7 @@ export default function HomePage({
           {
             id: "issue-pft2-tab",
             label: "Issue Form PFT-2 (New Tab ↗)",
-            icon: "🖨️",
+            icon: "📜",
             href: `/documents/pf2/new?pin=${targetUnit.provincialUin}`,
             target: "_blank"
           },
@@ -5151,7 +5359,7 @@ export default function HomePage({
                                 {
                                   id: "issue-pft2-tab",
                                   label: "Issue Form PFT-2 (New Tab ↗)",
-                                  icon: "🖨️",
+                                  icon: "📜",
                                   href: `/documents/pf2/new?pin=${u.provincialUin}`,
                                   target: "_blank"
                                 },
@@ -5603,7 +5811,7 @@ export default function HomePage({
                                 {
                                   id: "issue-pft2-tab",
                                   label: "Issue Form PFT-2 (New Tab ↗)",
-                                  icon: "🖨️",
+                                  icon: "📜",
                                   href: `/documents/pf2/new?pin=${getUnitPin(appeal.unitId)}`,
                                   target: "_blank"
                                 },
@@ -5897,7 +6105,7 @@ export default function HomePage({
                               {
                                 id: "issue-pft2-tab",
                                 label: "Issue Form PFT-2 (New Tab ↗)",
-                                icon: "🖨️",
+                                icon: "📜",
                                 href: `/documents/pf2/new?pin=${u.provincialUin}`,
                                 target: "_blank"
                               },
@@ -6196,7 +6404,7 @@ export default function HomePage({
                                   {
                                     id: "issue-pft2-tab",
                                     label: "Issue Form PFT-2 (New Tab ↗)",
-                                    icon: "🖨️",
+                                    icon: "📜",
                                     href: `/documents/pf2/new?pin=${getUnitPin(disc.unitId)}`,
                                     target: "_blank"
                                   },
@@ -6451,7 +6659,7 @@ export default function HomePage({
                                   {
                                     id: "issue-pft2-tab",
                                     label: "Issue Form PFT-2 (New Tab ↗)",
-                                    icon: "🖨️",
+                                    icon: "📜",
                                     href: `/documents/pf2/new?pin=${getUnitPin(ref.unitId)}`,
                                     target: "_blank"
                                   },
@@ -7130,7 +7338,7 @@ export default function HomePage({
                                         {
                                           id: "issue-pft2-desk",
                                           label: "Open Form PFT-2 Issuance Desk ↗",
-                                          icon: "🖨️",
+                                          icon: "🏛️",
                                           href: `/documents/pf2/new?pin=${getUnitPin(challan.unitId)}`,
                                           target: "_blank"
                                         },
@@ -7151,7 +7359,7 @@ export default function HomePage({
                                         {
                                           id: "issue-pft2-desk",
                                           label: "Open Form PFT-2 Issuance Desk ↗",
-                                          icon: "🖨️",
+                                          icon: "🏛️",
                                           href: `/documents/pf2/new?pin=${getUnitPin(challan.unitId)}`,
                                           target: "_blank"
                                         },
@@ -7702,13 +7910,11 @@ export default function HomePage({
                                 label: "Download Receipt PDF",
                                 icon: "📥",
                                 onClick: () => {
-                                  handleOpenReceiptDocument(rec);
-                                  setTimeout(() => {
-                                    downloadDocumentPdf(
-                                      "receipt-document-card",
-                                      `Statutory_Receipt_${rec.receiptNumber}.pdf`
-                                    );
-                                  }, 300);
+                                  downloadOfficialPdf({
+                                    type: "STATUTORY_RECEIPT",
+                                    documentIdOrData: rec,
+                                    defaultFilename: `Statutory_Receipt_${rec.receiptNumber}.pdf`
+                                  });
                                 }
                               },
                               {
@@ -7743,7 +7949,7 @@ export default function HomePage({
                                     {
                                       id: "issue-pft2-tab",
                                       label: "Issue Form PFT-2 (New Tab ↗)",
-                                      icon: "🖨️",
+                                      icon: "📜",
                                       href: `/documents/pf2/new?pin=${getUnitPin(rec.unitId)}`,
                                       target: "_blank"
                                     }
@@ -7996,21 +8202,24 @@ export default function HomePage({
                 <button
                   type="button"
                   onClick={() => {
-                    window.open("/intelligence/reports/view?report=executive-summary", "_blank");
+                    downloadDocumentPdf(
+                      "pft2-executive-brief-card",
+                      "Form_PFT2_Executive_Management_Brief.pdf"
+                    );
                   }}
                   className="btn-primary"
                   style={{
-                    background: "#f59e0b",
-                    borderColor: "#d97706",
-                    color: "#78350f",
+                    background: "#0d3822",
+                    borderColor: "#0d3822",
+                    color: "#ffffff",
                     fontWeight: 700,
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "0.35rem"
                   }}
                 >
-                  <span>🖨️</span>
-                  <span>Print Executive Brief</span>
+                  <span>📥</span>
+                  <span>Download Executive Brief (PDF)</span>
                 </button>
               </div>
             </div>
@@ -9750,7 +9959,7 @@ export default function HomePage({
                 </button>
                 <button
                   type="button"
-                  onClick={handleExportActiveReportCsv}
+                  onClick={() => handleExportScheduleCsv("PFT3_REGISTER")}
                   className="btn-primary"
                   style={{
                     background: "#ffffff",
@@ -9767,20 +9976,20 @@ export default function HomePage({
                 </button>
                 <button
                   type="button"
-                  onClick={handlePrintActiveReport}
+                  onClick={() => handleDownloadScheduleReport("PFT3_REGISTER")}
                   className="btn-primary"
                   style={{
-                    background: "#f59e0b",
-                    borderColor: "#d97706",
-                    color: "#78350f",
+                    background: "#0d3822",
+                    borderColor: "#0d3822",
+                    color: "#ffffff",
                     fontWeight: 700,
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "0.35rem"
                   }}
                 >
-                  <span>🖨️</span>
-                  <span>Print Gazette Report</span>
+                  <span>📥</span>
+                  <span>Download Gazette Report (PDF)</span>
                 </button>
               </div>
             </div>
@@ -9881,11 +10090,11 @@ export default function HomePage({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handlePrintScheduleReport("PFT3_REGISTER")}
+                    onClick={() => handleDownloadScheduleReport("PFT3_REGISTER")}
                     className="btn-secondary btn-sm"
                     style={{ fontSize: "0.75rem" }}
                   >
-                    🖨️ Print Gazette
+                    📥 Download PDF
                   </button>
                   <Link
                     href={asRoute("/assessment/pft3")}
@@ -9995,11 +10204,11 @@ export default function HomePage({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handlePrintScheduleReport("DEFAULTER_ROLL")}
+                    onClick={() => handleDownloadScheduleReport("DEFAULTER_ROLL")}
                     className="btn-secondary btn-sm"
                     style={{ fontSize: "0.75rem" }}
                   >
-                    🖨️ Print Roll
+                    📥 Download PDF
                   </button>
                   <Link
                     href={asRoute("/enforcement")}
@@ -10113,11 +10322,11 @@ export default function HomePage({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handlePrintScheduleReport("NOTICE_DISPATCH")}
+                    onClick={() => handleDownloadScheduleReport("NOTICE_DISPATCH")}
                     className="btn-secondary btn-sm"
                     style={{ fontSize: "0.75rem" }}
                   >
-                    🖨️ Print Log
+                    📥 Download PDF
                   </button>
                   <Link
                     href={asRoute("/assessment/queue")}
@@ -10229,11 +10438,11 @@ export default function HomePage({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handlePrintScheduleReport("CLEARANCE_LOG")}
+                    onClick={() => handleDownloadScheduleReport("CLEARANCE_LOG")}
                     className="btn-secondary btn-sm"
                     style={{ fontSize: "0.75rem" }}
                   >
-                    🖨️ Print Log
+                    📥 Download PDF
                   </button>
                   <Link
                     href={asRoute("/enforcement/clearance")}
@@ -10340,11 +10549,11 @@ export default function HomePage({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handlePrintScheduleReport("RELIEF_REGISTER")}
+                    onClick={() => handleDownloadScheduleReport("RELIEF_REGISTER")}
                     className="btn-secondary btn-sm"
                     style={{ fontSize: "0.75rem" }}
                   >
-                    🖨️ Print Log
+                    📥 Download PDF
                   </button>
                   <Link
                     href={asRoute("/enforcement/adjustments")}
@@ -10453,11 +10662,11 @@ export default function HomePage({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handlePrintScheduleReport("SLAB_DISTRIBUTION")}
+                    onClick={() => handleDownloadScheduleReport("SLAB_DISTRIBUTION")}
                     className="btn-secondary btn-sm"
                     style={{ fontSize: "0.75rem" }}
                   >
-                    🖨️ Print Schedule
+                    📥 Download PDF
                   </button>
                   <a
                     href="/intelligence/statutory-category-yield"
@@ -10514,11 +10723,11 @@ export default function HomePage({
                     </button>
                     <button
                       type="button"
-                      onClick={() => handlePrintScheduleReport("SLAB_DISTRIBUTION")}
+                      onClick={() => handleDownloadScheduleReport("SLAB_DISTRIBUTION")}
                       className="btn-primary btn-sm"
                       style={{ backgroundColor: "#0d3822", borderColor: "#0d3822" }}
                     >
-                      🖨️ Print Gazette Schedule
+                      📥 Download Gazette (PDF)
                     </button>
                   </div>
                 </div>
@@ -18576,15 +18785,15 @@ export default function HomePage({
                   className="btn-secondary btn-sm"
                   style={{ backgroundColor: "#ffffff", color: "#0d3822", fontWeight: 700 }}
                   onClick={() =>
-                    downloadDocumentPdf(
-                      "pft2-single-printable-document",
-                      `Form_PFT2_Challan_${activePrintChallan.challanNumber.replace(/\//g, "_")}.pdf`,
-                      { orientation: "landscape" }
-                    )
+                    downloadOfficialPdf({
+                      type: "FORM_PFT2_CHALLAN",
+                      documentIdOrData: activePrintChallan,
+                      defaultFilename: `Form_PFT2_Challan_${activePrintChallan.challanNumber.replace(/\//g, "_")}.pdf`
+                    })
                   }
-                  title="Download 3-copy Form PFT-2 challan as PDF"
+                  title="Download authoritative 3-copy Form PFT-2 challan as vector PDF"
                 >
-                  📥 Download PDF
+                  📥 Download Official PDF (A4 Landscape)
                 </button>
                 <button
                   type="button"

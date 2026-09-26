@@ -8,7 +8,7 @@ import {
   type StatutoryReceiptRecord
 } from "../../../../lib/pilot-store";
 import { computeLedgerBalance } from "@ptas/domain";
-import { downloadDocumentPdf } from "../../../../lib/pdf-export";
+import { downloadOfficialPdf } from "../../../../lib/pdf";
 
 interface UnitDetailsPageProps {
   params: Promise<{ unitId: string }>;
@@ -272,17 +272,18 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
               alignItems: "center"
             }}
           >
-            🖨️ Form PFT-2 ↗
+            🏛️ Form PFT-2 Challan ↗
           </a>
           <button
             type="button"
             className="btn-secondary"
             style={{ backgroundColor: "#ffffff", color: "#0d3822", fontWeight: 700 }}
             onClick={() =>
-              downloadDocumentPdf(
-                "unit-dossier-document",
-                `Unit_${unit.demandUnit.permanentDemandNo}_Dossier.pdf`
-              )
+              downloadOfficialPdf({
+                type: "UNIT_DOSSIER",
+                documentIdOrData: unit,
+                defaultFilename: `Unit_${unit.demandUnit.permanentDemandNo}_Dossier.pdf`
+              })
             }
           >
             📥 Download Dossier (PDF)

@@ -50,9 +50,6 @@ importers:
       '@ptas/ui':
         specifier: workspace:*
         version: link:../../packages/ui
-      html2canvas:
-        specifier: ^1.4.1
-        version: 1.4.1
       jspdf:
         specifier: ^4.2.1
         version: 4.2.1
@@ -2272,7 +2269,8 @@ snapshots:
 
   balanced-match@4.0.4: {}
 
-  base64-arraybuffer@1.0.2: {}
+  base64-arraybuffer@1.0.2:
+    optional: true
 
   baseline-browser-mapping@2.11.24: {}
 
@@ -2326,6 +2324,7 @@ snapshots:
   css-line-break@2.1.0:
     dependencies:
       utrie: 1.0.2
+    optional: true
 
   csstype@3.2.3: {}
 
@@ -2508,6 +2507,7 @@ snapshots:
     dependencies:
       css-line-break: 2.1.0
       text-segmentation: 1.0.3
+    optional: true
 
   iceberg-js@0.8.1: {}
 
@@ -2852,6 +2852,7 @@ snapshots:
   text-segmentation@1.0.3:
     dependencies:
       utrie: 1.0.2
+    optional: true
 
   tinybench@2.9.0: {}
 
@@ -2911,6 +2912,7 @@ snapshots:
   utrie@1.0.2:
     dependencies:
       base64-arraybuffer: 1.0.2
+    optional: true
 
   vite@8.3.0(@types/node@24.10.9)(esbuild@0.28.2)(tsx@4.23.1):
     dependencies:

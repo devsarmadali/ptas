@@ -9,7 +9,7 @@ import {
   type CategoryYieldSummary,
   type SlabYieldSummary
 } from "../../../../lib/mis-analytics";
-import { downloadDocumentPdf } from "../../../../lib/pdf-export";
+import { downloadOfficialPdf } from "../../../../lib/pdf";
 
 function ReportViewContent() {
   const searchParams = useSearchParams();
@@ -135,13 +135,15 @@ function ReportViewContent() {
             type="button"
             className="btn-primary"
             onClick={() =>
-              downloadDocumentPdf("official-statutory-report-target", getReportFilename(), {
-                orientation: "landscape"
+              downloadOfficialPdf({
+                type: "FORM_PFT3_REGISTER",
+                documentIdOrData: "official-statutory-report",
+                defaultFilename: getReportFilename()
               })
             }
             title="Download this authoritative gazetted report as a PDF"
           >
-            📥 Download PDF (Landscape)
+            📥 Download Official PDF (A4 Landscape)
           </button>
           <a
             href="/intelligence/reports"

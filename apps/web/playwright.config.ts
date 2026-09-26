@@ -4,8 +4,8 @@ export default defineConfig({
   testDir: "./e2e",
   use: { baseURL: "http://127.0.0.1:3000" },
   webServer: {
-    command: "pnpm start",
+    command: process.platform === "win32" ? "pnpm.cmd start" : "pnpm start",
     url: "http://127.0.0.1:3000",
-    reuseExistingServer: !process.env.CI
+    reuseExistingServer: false
   }
 });

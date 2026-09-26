@@ -4,7 +4,7 @@ import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { type StoredUnit, loadPilotState } from "../../../lib/pilot-store";
 import { generateLandRevenueRecoveryCertificate } from "../../../lib/statutory-forms";
-import { downloadDocumentPdf } from "../../../lib/pdf-export";
+import { downloadOfficialPdf } from "../../../lib/pdf";
 
 function LandRevenueRecoveryContent() {
   const searchParams = useSearchParams();
@@ -116,15 +116,15 @@ function LandRevenueRecoveryContent() {
             type="button"
             className="btn-primary"
             onClick={() =>
-              downloadDocumentPdf(
-                "land-revenue-recovery-document-target",
-                `Recovery_Certificate_${certData.certificateNumber.replace(/\//g, "_")}.pdf`,
-                { orientation: "portrait" }
-              )
+              downloadOfficialPdf({
+                type: "LAND_REVENUE_RECOVERY",
+                documentIdOrData: certData,
+                defaultFilename: `Recovery_Certificate_${certData.certificateNumber.replace(/\//g, "_")}.pdf`
+              })
             }
             title="Download authoritative Land Revenue Recovery Certificate as PDF"
           >
-            📥 Download PDF
+            📥 Download Official PDF (A4 Portrait)
           </button>
           <a
             href="/enforcement"

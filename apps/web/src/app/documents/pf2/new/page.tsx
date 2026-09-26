@@ -14,7 +14,7 @@ import {
 import { generateFormPFT2, generatePft2NoticeNumber } from "../../../../lib/statutory-forms";
 import { generateDocumentPin } from "@ptas/domain";
 import { StatutoryQrCode } from "../../../../components/StatutoryQrCode";
-import { downloadDocumentPdf } from "../../../../lib/pdf-export";
+import { downloadOfficialPdf } from "../../../../lib/pdf";
 
 function DocumentIssuanceContent() {
   const searchParams = useSearchParams();
@@ -304,20 +304,37 @@ function DocumentIssuanceContent() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() =>
-              downloadDocumentPdf(
-                "issued-pft2-document-target",
-                `Form_PFT2_${activeNoticeNumber.replace(/\//g, "_")}.pdf`,
-                { orientation: "landscape" }
-              )
-            }
-            title="Download authoritative 3-copy Form PFT-2 payment instrument as PDF"
-          >
-            📥 Download PDF (Landscape)
-          </button>
+          {issuedChallan ? (
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() =>
+                downloadOfficialPdf({
+                  type: "FORM_PFT2_CHALLAN",
+                  documentIdOrData: issuedChallan,
+                  defaultFilename: `Form_PFT2_${issuedChallan.challanNumber.replace(/\//g, "_")}.pdf`
+                })
+              }
+              title="Download authoritative 3-copy Form PFT-2 payment instrument as PDF"
+            >
+              📥 Download Official PDF (A4 Landscape)
+            </button>
+          ) : (
+            <span
+              style={{
+                fontSize: "0.75rem",
+                color: "#94a3b8",
+                background: "#f1f5f9",
+                padding: "0.45rem 0.75rem",
+                borderRadius: "6px",
+                border: "1px dashed #cbd5e1",
+                fontWeight: 600
+              }}
+              title="Form PFT-2 must be officially issued before PDF download is authorized"
+            >
+              🔒 Issue Challan to Enable PDF Download
+            </span>
+          )}
           <a
             href="/"
             style={{

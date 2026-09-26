@@ -93,12 +93,12 @@ test("verifies statutory sub-class and tertiary slabs in Form P.F.T-1 and Form P
   await page.getByRole("link", { name: /Form PFT-2 Challans/i }).click();
   await expect(page.locator(".action-menu-trigger").first()).toBeVisible();
 
-  // Open single Form PFT-2 Challan modal
+  // Trigger single Form PFT-2 Challan PDF download
+  const downloadPromise = page.waitForEvent("download");
   await page.locator(".action-menu-trigger").first().click();
   await page.getByRole("menuitem", { name: /Download Challan PDF/i }).click();
-  await expect(page.getByText(/TAXPAYER'S COPY/i).first()).toBeVisible();
-  await expect(page.getByText(/BANK'S COPY/i).first()).toBeVisible();
-  await page.getByRole("button", { name: "✕", exact: true }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/Form_PFT2_Challan.*\.pdf/i);
 
   // Switch to ePay Punjab Reconciliation tab
   await page.getByRole("link", { name: /ePay Punjab Reconciliation/i }).click();
