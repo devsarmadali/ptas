@@ -21,7 +21,7 @@
  */
 
 import { jsPDF } from "jspdf";
-import { createBasePdf, generateQrDataUrl, PDF_COLORS } from "../base-document";
+import { createBasePdf, generateQrDataUrl } from "../base-document";
 import type { FormPFT2Model } from "../../statutory-forms";
 import type { DocumentGenerationOptions } from "../types";
 
@@ -63,7 +63,6 @@ const C = {
 
 // ── Page geometry ────────────────────────────────────────────────────────────
 const PAGE_H = 210;
-const PAGE_W = 297;
 const MARGIN_TOP = 5;
 const MARGIN_LEFT = 5;
 const COPY_W = 91; // 3 × 91 = 273 + 2 × 6.5 gap + 2 × 5 margin ≈ 297

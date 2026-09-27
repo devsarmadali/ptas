@@ -180,10 +180,10 @@ test("verifies sign out leads to secure credential sign-in without embedded pass
   // Selecting ETO fills only the approved account email; it never fills a password or signs in.
   await page.getByRole("button", { name: /Select ETO Account/i }).click();
   await expect(page.getByLabel(/Official Email/i)).toHaveValue("eto.vehari@punjab.gov.pk");
-  await expect(page.getByLabel(/^Password$/i)).toHaveValue("");
+  await expect(page.locator('input[type="password"]')).toHaveValue("");
   await expect(page).toHaveURL(/.*sign-in/);
 
   // Empty credentials fail closed and do not create a role session.
-  await page.getByRole("button", { name: /^Sign In as ETO$/i }).click();
+  await page.getByRole("button", { name: /Sign In as ETO/i }).click();
   await expect(page).toHaveURL(/.*sign-in/);
 });
