@@ -1,28 +1,74 @@
 /**
  * Form P.F.T - 2: Official Statutory Payment Instrument (Rule 9)
- * Renders an authentic 3-copy side-by-side challan on a single A4 Landscape sheet:
- * 1. Taxpayer Copy (برائے ٹیکس گزار)
- * 2. Bank / Treasury Copy (برائے بینک / خزانہ)
- * 3. Excise & Taxation Copy (برائے دفتر ایکسائز)
  *
- * Implements Section 6 of the Consolidated Implementation Specification:
- * - A4 Landscape (297mm x 210mm)
- * - Complete challan fitted onto 1 page without viewport clipping
- * - Vector sharp typography, clean boxes, embedded QR code
- * - Zero reliance on DOM / screen / html2canvas
+ * PDF VISUAL SPECIFICATION: This template faithfully reproduces the approved web
+ * layout from apps/web/src/app/documents/pf2/new/page.tsx.
+ *
+ * The same document structure, field order, labels, values, spacing, typography,
+ * and visual hierarchy are used in both the web and PDF renderings.
+ * The web rendering is the authoritative design specification.
+ *
+ * Section order per copy card (matches web exactly):
+ *   1. Top header row — QR code (left) + dept header (right, centred)
+ *   2. Metadata grid  — Notice No | PIN / Demand No | Provincial UIN | Circle / District | Tax Year / Due Date
+ *   3. Taxpayer info  — Class (slab) | Name | Trade (if set) | Address
+ *   4. Tax table      — Current Tax | Arrears | Penalty | Total Payable | [Remaining Balance]
+ *   5. Amount in words (italic footnote)
+ *   6. For Bank's Use Only block
+ *   7. Perforated cut line (between copies only)
+ *
+ * Layout: A4 Landscape (297 × 210 mm), 3 side-by-side copies, zero DOM/viewport dependency.
  */
 
 import { jsPDF } from "jspdf";
 import { createBasePdf, generateQrDataUrl, PDF_COLORS } from "../base-document";
 import type { FormPFT2Model } from "../../statutory-forms";
-import { numberToWordsPkr } from "../../statutory-forms";
 import type { DocumentGenerationOptions } from "../types";
 
-const COPY_TITLES = [
-  { en: "TAXPAYER'S COPY", ur: "برائے ٹیکس گزار" },
-  { en: "BANK / TREASURY COPY", ur: "برائے بینک / خزانہ" },
-  { en: "EXCISE OFFICE COPY", ur: "برائے دفتر ایکسائز" }
-];
+// ── Colour palette mirroring the web design tokens ──────────────────────────
+const C = {
+  // Greens
+  primary: [13, 56, 34] as [number, number, number], // #0d3822
+  primaryLight: [22, 101, 52] as [number, number, number], // #166534
+  primaryBg: [220, 252, 231] as [number, number, number], // #dcfce7 (copy title badge bg)
+  primaryMint: [240, 253, 244] as [number, number, number], // #f0fdf4 (total row bg)
+
+  // Slate / neutral
+  bgMeta: [248, 250, 252] as [number, number, number], // #f8fafc (metadata grid bg)
+  bgBank: [250, 250, 249] as [number, number, number], // #fafaf9 (bank section bg)
+  borderLight: [226, 232, 240] as [number, number, number], // #e2e8f0
+  borderMed: [203, 213, 225] as [number, number, number], // #cbd5e1
+  borderDark: [148, 163, 184] as [number, number, number], // #94a3b8 (dashed bank box)
+  textDark: [15, 23, 42] as [number, number, number], // #0f172a
+  textMid: [71, 85, 105] as [number, number, number], // #475569
+  textMuted: [100, 116, 139] as [number, number, number], // #64748b
+  white: [255, 255, 255] as [number, number, number],
+
+  // Blue (monospace references)
+  blueDeep: [30, 58, 138] as [number, number, number], // #1e3a8a  (Notice No)
+  blueBadgeBg: [224, 242, 254] as [number, number, number], // #e0f2fe (PIN badge bg)
+  blueBadgeBorder: [186, 230, 253] as [number, number, number], // #bae6fd
+  blueBadgeText: [3, 105, 161] as [number, number, number], // #0369a1
+  blueRef: [29, 78, 216] as [number, number, number], // #1d4ed8 (Provincial UIN)
+
+  // Amber (head of account + due date highlight)
+  amber: [180, 83, 9] as [number, number, number], // #b45309
+  amberDark: [120, 53, 15] as [number, number, number], // #78350f (bank header)
+  amberBg: [254, 243, 199] as [number, number, number], // #fef3c7 (partial balance)
+  amberText: [146, 64, 14] as [number, number, number], // #92400e
+
+  // Red (due date text)
+  red: [185, 28, 28] as [number, number, number] // #b91c1c
+} as const;
+
+// ── Page geometry ────────────────────────────────────────────────────────────
+const PAGE_H = 210;
+const PAGE_W = 297;
+const MARGIN_TOP = 5;
+const MARGIN_LEFT = 5;
+const COPY_W = 91; // 3 × 91 = 273 + 2 × 6.5 gap + 2 × 5 margin ≈ 297
+const GAP = 6;
+const COPY_H = PAGE_H - 10; // 200 mm
 
 export async function generatePft2ChallanPdf(
   challan: FormPFT2Model,
@@ -35,336 +81,443 @@ export async function generatePft2ChallanPdf(
     isProvisional: options?.isProvisional
   });
 
-  const pageHeight = 210;
-  const leftMargin = 6;
-  const topMargin = 6;
-  const copyWidth = 91; // 3 copies = 3 * 91 = 273mm. Gaps = 2 * 5.5 = 11mm. 6 + 273 + 11 + 7 = 297mm.
-  const gap = 5.5;
-  const copyHeight = pageHeight - 12; // 198mm
-
-  // Pre-generate QR Code as high-res PNG data URL
+  // Pre-render QR code as high-res PNG (shared payload, same across all 3 copies)
   const qrDataUrl = await generateQrDataUrl(challan.qrPayload);
 
-  // Render 3 Counterfoil Columns Side-by-Side
+  // ── Render 3 counterfoil columns side-by-side ─────────────────────────────
   for (let copyIdx = 0; copyIdx < 3; copyIdx++) {
-    const colX = leftMargin + copyIdx * (copyWidth + gap);
-    const copyMeta = COPY_TITLES[copyIdx]!;
-    const copyData = challan.copies[copyIdx] ?? challan.copies[0];
+    const colX = MARGIN_LEFT + copyIdx * (COPY_W + GAP);
+    const copy = challan.copies[copyIdx] ?? challan.copies[0];
 
-    // Column Outer Border
-    doc.setDrawColor(...PDF_COLORS.borderDark);
-    doc.setLineWidth(0.35);
-    doc.rect(colX, topMargin, copyWidth, copyHeight);
+    // Outer card border
+    doc.setDrawColor(...C.borderMed);
+    doc.setLineWidth(0.3);
+    doc.rect(colX, MARGIN_TOP, COPY_W, COPY_H);
 
-    // 1. Column Top Banner (Dark Green)
-    doc.setFillColor(...PDF_COLORS.primary);
-    doc.rect(colX, topMargin, copyWidth, 14, "F");
+    let curY = MARGIN_TOP;
+    const innerX = colX + 1.5; // 1.5 mm inner padding
+    const innerW = COPY_W - 3;
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
-    doc.setTextColor(...PDF_COLORS.white);
-    doc.text("GOVERNMENT OF THE PUNJAB", colX + copyWidth / 2, topMargin + 4.5, {
+    // ══════════════════════════════════════════════════════════════════════════
+    // SECTION 1 — TOP HEADER ROW: QR Code (left) + Dept header (right)
+    // Web: flex row, gap 0.5rem, alignItems center, borderBottom 2px #0d3822
+    // ══════════════════════════════════════════════════════════════════════════
+    const headerH = 26; // matches ~66px QR + label in web
+    const qrSize = 20;
+    const qrX = innerX + 1;
+    const qrY = curY + 2;
+
+    // QR image
+    doc.addImage(qrDataUrl, "PNG", qrX, qrY, qrSize, qrSize);
+
+    // "Scan to Verify" label under QR
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(4.2);
+    doc.setTextColor(...C.textMuted);
+    doc.text("Scan to Verify", qrX + qrSize / 2, qrY + qrSize + 1.5, { align: "center" });
+
+    // Challan serial subtitle under "Scan to Verify"
+    doc.setFontSize(3.8);
+    doc.text(copy.bankUse.challanSerial, qrX + qrSize / 2, qrY + qrSize + 3.5, {
       align: "center"
     });
 
-    doc.setFontSize(7);
-    doc.text("EXCISE & TAXATION DEPARTMENT", colX + copyWidth / 2, topMargin + 8.5, {
-      align: "center"
-    });
+    // Right side: copy title badge + dept header (centre-aligned in remaining width)
+    const deptX = innerX + qrSize + 3; // start of right region
+    const deptW = innerW - qrSize - 4; // remaining width
+    const deptCX = deptX + deptW / 2; // centre of right region
 
-    doc.setFontSize(6.5);
-    doc.text("CHALLAN FORM P.F.T - 2 (RULE 9)", colX + copyWidth / 2, topMargin + 12, {
-      align: "center"
-    });
-
-    // 2. Copy Title Strip
-    doc.setFillColor(...PDF_COLORS.bgHeader);
-    doc.rect(colX, topMargin + 14, copyWidth, 5.5, "F");
-    doc.setDrawColor(...PDF_COLORS.borderLight);
-    doc.setLineWidth(0.2);
-    doc.line(colX, topMargin + 19.5, colX + copyWidth, topMargin + 19.5);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.5);
-    doc.setTextColor(...PDF_COLORS.primary);
-    doc.text(`${copyMeta.en} • ${copyMeta.ur}`, colX + copyWidth / 2, topMargin + 18, {
-      align: "center"
-    });
-
-    // 3. Head of Account & Jurisdiction Subheader
-    let curY = topMargin + 20;
-    doc.setFillColor(...PDF_COLORS.bgLight);
-    doc.rect(colX, curY, copyWidth, 7, "F");
-    doc.line(colX, curY + 7, colX + copyWidth, curY + 7);
-
+    // Copy title badge (green pill: #dcfce7 bg, #166534 text)
+    const badgeText = copy.copyTitle;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(5.5);
-    doc.setTextColor(...PDF_COLORS.textDark);
-    doc.text(
-      "Head of Account: 0113-Taxes on Professions, Trades & Callings",
-      colX + copyWidth / 2,
-      curY + 3.2,
-      { align: "center" }
-    );
+    const badgeW = Math.min(deptW - 2, doc.getTextWidth(badgeText) + 4);
+    const badgeX = deptCX - badgeW / 2;
+    doc.setFillColor(...C.primaryBg);
+    doc.setDrawColor(...C.primaryLight);
+    doc.setLineWidth(0.15);
+    doc.roundedRect(badgeX, curY + 1.5, badgeW, 4, 0.8, 0.8, "FD");
+    doc.setTextColor(...C.primaryLight);
+    doc.text(badgeText, deptCX, curY + 4.5, { align: "center" });
 
-    doc.setFont("helvetica", "normal");
+    // GOVERNMENT OF THE PUNJAB (bold, #0d3822, 7pt equiv)
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.setTextColor(...C.primary);
+    doc.text("GOVERNMENT OF THE PUNJAB", deptCX, curY + 8.2, { align: "center" });
+
+    // EXCISE & TAXATION DEPARTMENT (bold, slightly smaller)
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(5.8);
+    doc.setTextColor(...C.textDark);
+    doc.text("EXCISE & TAXATION DEPARTMENT", deptCX, curY + 11.5, { align: "center" });
+
+    // PUNJAB PROFESSIONS & TRADES TAX
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(5.2);
-    doc.setTextColor(...PDF_COLORS.textMuted);
-    const distCircle = `District: ${copyData?.district || "Vehari"} | Circle: Circle-Vehari | FY: ${copyData?.taxYear || "2026-2027"}`;
-    doc.text(distCircle, colX + copyWidth / 2, curY + 5.8, { align: "center" });
+    doc.setTextColor(...C.textDark);
+    doc.text("PUNJAB PROFESSIONS & TRADES TAX", deptCX, curY + 14.2, { align: "center" });
 
-    // 4. Metadata Grid: Challan No, Demand No, Security PIN, Issue & Due Dates
-    curY += 8;
-    doc.setDrawColor(...PDF_COLORS.borderLight);
+    // PAYMENT CHALLAN • Rule 9 (muted)
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(4.8);
+    doc.setTextColor(...C.textMuted);
+    doc.text("PAYMENT CHALLAN \u2022 Rule 9", deptCX, curY + 16.8, { align: "center" });
+
+    // Head of Account (amber, bold — #b45309)
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(4.8);
+    doc.setTextColor(...C.amber);
+    const headText = `Head: ${copy.headOfAccount}`;
+    const headLines = doc.splitTextToSize(headText, deptW);
+    doc.text(headLines[0] ?? headText, deptCX, curY + 19.5, { align: "center" });
+
+    // Copy title Urdu (small, muted, below head)
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(4.2);
+    doc.setTextColor(...C.textMuted);
+    doc.text(copy.copyTitleUrdu, deptCX, curY + 22.5, { align: "center" });
+
+    curY += headerH;
+
+    // Bottom border of header section (2px solid #0d3822)
+    doc.setDrawColor(...C.primary);
+    doc.setLineWidth(0.5);
+    doc.line(innerX, curY, innerX + innerW, curY);
+
+    curY += 1.5;
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // SECTION 2 — METADATA GRID
+    // Web: 2-col grid, bg #f8fafc, border #e2e8f0, borderRadius 4px, 0.72rem
+    // Fields: Notice No (full) | PIN (left) / Demand No (right) |
+    //         Provincial UIN (full, if set) | Circle / District | Tax Year / Due Date
+    // ══════════════════════════════════════════════════════════════════════════
+    const metaGridH = copy.taxpayerInfo.provincialUin ? 26 : 22;
+    doc.setFillColor(...C.bgMeta);
+    doc.setDrawColor(...C.borderLight);
     doc.setLineWidth(0.2);
-    doc.rect(colX + 2, curY, copyWidth - 4, 13);
+    doc.roundedRect(innerX, curY, innerW, metaGridH, 0.8, 0.8, "FD");
 
+    let mY = curY + 3;
+    const metaL = innerX + 1.5;
+    const metaMid = innerX + innerW / 2;
+    const metaR = innerX + innerW - 1.5;
+
+    // Row A — Notice No (full width, monospace blue)
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(5.8);
-    doc.setTextColor(...PDF_COLORS.textDark);
-
-    doc.text("Challan No:", colX + 3.5, curY + 3.5);
+    doc.setFontSize(4.8);
+    doc.setTextColor(...C.textDark);
+    doc.text("Notice No:", metaL, mY);
     doc.setFont("helvetica", "normal");
-    doc.text(challan.challanNumber, colX + 22, curY + 3.5);
+    doc.setTextColor(...C.blueDeep);
+    const noticeText = copy.noticeNumber ?? challan.noticeNumber;
+    const noticeLines = doc.splitTextToSize(noticeText, innerW - 20);
+    doc.text(noticeLines[0] ?? noticeText, metaL + 15, mY);
+    if (noticeLines[1] as string | undefined) {
+      doc.text(noticeLines[1]!, metaL, mY + 3);
+      mY += 3;
+    }
+    mY += 4;
 
+    // Divider
+    doc.setDrawColor(...C.borderLight);
+    doc.setLineDashPattern([0.8, 0.8], 0);
+    doc.line(metaL, mY - 0.5, metaR, mY - 0.5);
+    doc.setLineDashPattern([], 0);
+
+    // Row B — PIN badge (left) | Demand No (right)
+    // PIN badge — #e0f2fe bg, #0369a1 text, #bae6fd border
+    const pinText = `\uD83D\uDD10 PIN: ${copy.pin ?? challan.pin}`;
+    const pinBadgeW = Math.min(innerW / 2 - 3, doc.getTextWidth(pinText) + 3);
     doc.setFont("helvetica", "bold");
-    doc.text("Demand No:", colX + 48, curY + 3.5);
-    doc.setFont("helvetica", "normal");
-    doc.text(copyData?.assessmentInfo.demandNo || "0001", colX + 66, curY + 3.5);
+    doc.setFontSize(4.8);
+    doc.setFillColor(...C.blueBadgeBg);
+    doc.setDrawColor(...C.blueBadgeBorder);
+    doc.setLineWidth(0.15);
+    doc.roundedRect(metaL, mY, pinBadgeW, 4, 0.6, 0.6, "FD");
+    doc.setTextColor(...C.blueBadgeText);
+    doc.text(pinText, metaL + pinBadgeW / 2, mY + 2.8, { align: "center" });
 
+    // Demand No (right, dark green monospace)
     doc.setFont("helvetica", "bold");
-    doc.text("Security PIN:", colX + 3.5, curY + 7.2);
+    doc.setFontSize(4.8);
+    doc.setTextColor(...C.textDark);
+    doc.text("Demand No:", metaMid + 1, mY + 2.8);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(...PDF_COLORS.primary);
-    doc.text(`🔒 ${challan.pin || "68000000"}`, colX + 22, curY + 7.2);
+    doc.setTextColor(...C.primary);
+    doc.text(copy.assessmentInfo.demandNo, metaR, mY + 2.8, { align: "right" });
+    mY += 5.5;
 
-    doc.setTextColor(...PDF_COLORS.textDark);
-    doc.setFont("helvetica", "bold");
-    doc.text("Issued On:", colX + 48, curY + 7.2);
-    doc.setFont("helvetica", "normal");
-    doc.text("2026-08-01", colX + 66, curY + 7.2);
+    // Row C — Provincial UIN (full width, if present)
+    if (copy.taxpayerInfo.provincialUin) {
+      doc.setDrawColor(...C.borderLight);
+      doc.setLineDashPattern([0.8, 0.8], 0);
+      doc.line(metaL, mY - 0.5, metaR, mY - 0.5);
+      doc.setLineDashPattern([], 0);
 
-    // Due Date Box (Highlighted)
-    doc.setFillColor(254, 243, 199); // Soft amber
-    doc.setDrawColor(217, 119, 6);
-    doc.rect(colX + 3.5, curY + 8.5, copyWidth - 7, 3.8, "FD");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(5.8);
-    doc.setTextColor(180, 83, 9);
-    doc.text(
-      `PAYABLE ON OR BEFORE: ${copyData?.dueDate || "31/08/2026"}`,
-      colX + copyWidth / 2,
-      curY + 11.2,
-      { align: "center" }
-    );
-
-    // 5. Assessee Particulars Box
-    curY += 15;
-    doc.setFillColor(...PDF_COLORS.bgHeader);
-    doc.rect(colX + 2, curY, copyWidth - 4, 3.8, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(5.8);
-    doc.setTextColor(...PDF_COLORS.primary);
-    doc.text("PARTICULARS OF ASSESSEE / TAXPAYER", colX + 4, curY + 2.8);
-
-    curY += 4.5;
-    doc.setFontSize(5.4);
-    doc.setTextColor(...PDF_COLORS.textDark);
-
-    doc.setFont("helvetica", "bold");
-    doc.text("Legal Name:", colX + 3.5, curY + 2.5);
-    doc.setFont("helvetica", "normal");
-    const nameLine =
-      doc.splitTextToSize(copyData?.taxpayerInfo.legalName || "", copyWidth - 28)[0] || "";
-    doc.text(nameLine, colX + 24, curY + 2.5);
-
-    if (copyData?.taxpayerInfo.tradeName) {
-      curY += 3.5;
       doc.setFont("helvetica", "bold");
-      doc.text("Trade Name:", colX + 3.5, curY + 2.5);
-      doc.setFont("helvetica", "normal");
-      const tradeLine =
-        doc.splitTextToSize(copyData.taxpayerInfo.tradeName, copyWidth - 28)[0] || "";
-      doc.text(tradeLine, colX + 24, curY + 2.5);
+      doc.setFontSize(4.5);
+      doc.setTextColor(...C.textDark);
+      doc.text("PIN (Professional Identification No):", metaL, mY + 3);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(...C.blueRef);
+      doc.text(copy.taxpayerInfo.provincialUin, metaR, mY + 3, { align: "right" });
+      mY += 5;
     }
 
-    curY += 3.5;
+    // Row D — Circle (left) | District (right)
+    doc.setDrawColor(...C.borderLight);
+    doc.setLineDashPattern([0.8, 0.8], 0);
+    doc.line(metaL, mY - 0.5, metaR, mY - 0.5);
+    doc.setLineDashPattern([], 0);
+
     doc.setFont("helvetica", "bold");
-    doc.text("CNIC / NTN:", colX + 3.5, curY + 2.5);
+    doc.setFontSize(4.8);
+    doc.setTextColor(...C.textDark);
+    doc.text("Circle:", metaL, mY + 3);
     doc.setFont("helvetica", "normal");
-    doc.text(copyData?.taxpayerInfo.taxNo || "N/A", colX + 24, curY + 2.5);
+    doc.text(copy.assessmentInfo.circleName, metaL + 10, mY + 3);
 
-    curY += 3.5;
     doc.setFont("helvetica", "bold");
-    doc.text("Category:", colX + 3.5, curY + 2.5);
+    doc.text("District:", metaMid + 1, mY + 3);
     doc.setFont("helvetica", "normal");
-    const catText = `${copyData?.taxpayerInfo.classification || ""} (${copyData?.taxpayerInfo.subclassificationCode || ""})`;
-    const catLine = doc.splitTextToSize(catText, copyWidth - 28)[0] || "";
-    doc.text(catLine, colX + 24, curY + 2.5);
+    doc.text(copy.district, metaR, mY + 3, { align: "right" });
+    mY += 4.5;
 
-    curY += 3.5;
+    // Row E — Tax Year (left) | Due Date (right, red)
     doc.setFont("helvetica", "bold");
-    doc.text("Address:", colX + 3.5, curY + 2.5);
+    doc.setFontSize(4.8);
+    doc.setTextColor(...C.textDark);
+    doc.text("Tax Year:", metaL, mY + 3);
     doc.setFont("helvetica", "normal");
-    const addrLine =
-      doc.splitTextToSize(copyData?.taxpayerInfo.address || "", copyWidth - 28)[0] || "";
-    doc.text(addrLine, colX + 24, curY + 2.5);
+    doc.text(copy.taxYear, metaL + 13, mY + 3);
 
-    // 6. Financial Breakdown Table
-    curY += 5.5;
-    doc.setDrawColor(...PDF_COLORS.primary);
-    doc.setLineWidth(0.25);
-    doc.line(colX + 2, curY, colX + copyWidth - 2, curY);
-
-    const rowH = 4.2;
-    const tableY = curY + 1;
-
-    // Table Header
-    doc.setFillColor(...PDF_COLORS.primary);
-    doc.rect(colX + 2, tableY, copyWidth - 4, rowH, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(5.5);
-    doc.setTextColor(...PDF_COLORS.white);
-    doc.text("HEAD / DESCRIPTION", colX + 4, tableY + 3);
-    doc.text("AMOUNT (PKR)", colX + copyWidth - 4, tableY + 3, { align: "right" });
+    doc.setTextColor(...C.red);
+    doc.text("Due Date:", metaMid + 1, mY + 3);
+    doc.setFont("helvetica", "normal");
+    doc.text(copy.dueDate, metaR, mY + 3, { align: "right" });
 
-    // Rows
-    const currentTax = copyData?.taxPayable.currentTax ?? 0;
-    const arrears = copyData?.taxPayable.arrears ?? 0;
-    const penalty = copyData?.taxPayable.penalty ?? 0;
-    const totalPayable = copyData?.taxPayable.totalPayable ?? challan.displayAmount;
+    curY += metaGridH + 2;
 
-    let rowY = tableY + rowH;
-    const financialRows = [
-      { label: "Annual Professional Tax (Current FY)", val: currentTax },
-      { label: "Arrears of Previous Financial Years", val: arrears },
-      { label: "Surcharge / Default Penalty", val: penalty }
+    // ══════════════════════════════════════════════════════════════════════════
+    // SECTION 3 — TAXPAYER DETAILS
+    // Web: Class (slab) | Name | Trade (if set) | Address
+    // ══════════════════════════════════════════════════════════════════════════
+    const lineH = 4;
+    doc.setFontSize(5);
+    doc.setTextColor(...C.textDark);
+
+    // Class: classification (PKR slabRatePkr)
+    doc.setFont("helvetica", "bold");
+    doc.text("Class:", innerX + 1.5, curY);
+    doc.setFont("helvetica", "normal");
+    const classLine =
+      doc.splitTextToSize(`${copy.taxpayerInfo.classification}`, innerW - 18)[0] ?? "";
+    doc.text(classLine, innerX + 11, curY);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...C.primaryLight);
+    doc.text(
+      `(PKR ${copy.taxpayerInfo.slabRatePkr.toLocaleString()})`,
+      innerX + innerW - 1.5,
+      curY,
+      { align: "right" }
+    );
+    doc.setTextColor(...C.textDark);
+    curY += lineH;
+
+    // Name: legalName
+    doc.setFont("helvetica", "bold");
+    doc.text("Name:", innerX + 1.5, curY);
+    doc.setFont("helvetica", "normal");
+    const nameLine = doc.splitTextToSize(copy.taxpayerInfo.legalName, innerW - 15)[0] ?? "";
+    doc.text(nameLine, innerX + 11, curY);
+    curY += lineH;
+
+    // Trade: tradeName (only if set)
+    if (copy.taxpayerInfo.tradeName) {
+      doc.setFont("helvetica", "bold");
+      doc.text("Trade:", innerX + 1.5, curY);
+      doc.setFont("helvetica", "normal");
+      const tradeLine = doc.splitTextToSize(copy.taxpayerInfo.tradeName, innerW - 15)[0] ?? "";
+      doc.text(tradeLine, innerX + 11, curY);
+      curY += lineH;
+    }
+
+    // Address: address
+    doc.setFont("helvetica", "bold");
+    doc.text("Address:", innerX + 1.5, curY);
+    doc.setFont("helvetica", "normal");
+    const addrLine = doc.splitTextToSize(copy.taxpayerInfo.address, innerW - 18)[0] ?? "";
+    doc.text(addrLine, innerX + 13, curY);
+    curY += lineH + 1;
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // SECTION 4 — DETAIL OF TAX PAYABLE TABLE
+    // Web: label → table rows: Current Tax / Arrears / Penalty / Total Payable /
+    //      [Remaining Balance] → italic amount-in-words footnote
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Section label
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(5);
+    doc.setTextColor(...C.primary);
+    doc.text("Detail of Tax Payable:", innerX + 1.5, curY);
+    curY += 2;
+
+    const tblL = innerX + 1;
+    const tblR = innerX + innerW - 1;
+    const tblW = innerW - 2;
+    const rowH = 4.5;
+
+    // Table outer border
+    doc.setDrawColor(...C.borderMed);
+    doc.setLineWidth(0.2);
+
+    const tableData: {
+      label: string;
+      value: string;
+      bold?: boolean;
+      green?: boolean;
+      amber?: boolean;
+    }[] = [
+      { label: "Current Tax", value: `Rs. ${copy.taxPayable.currentTax.toLocaleString()}` },
+      { label: "Arrears", value: `Rs. ${copy.taxPayable.arrears.toLocaleString()}` },
+      { label: "Penalty", value: `Rs. ${copy.taxPayable.penalty.toLocaleString()}` },
+      {
+        label: "Total Payable",
+        value: `Rs. ${copy.taxPayable.totalPayable.toLocaleString()}`,
+        bold: true,
+        green: true
+      }
     ];
 
-    financialRows.forEach((r, idx) => {
-      if (idx % 2 === 1) {
-        doc.setFillColor(...PDF_COLORS.bgLight);
-        doc.rect(colX + 2, rowY, copyWidth - 4, rowH, "F");
-      }
-      doc.setDrawColor(...PDF_COLORS.borderLight);
-      doc.setLineWidth(0.15);
-      doc.line(colX + 2, rowY + rowH, colX + copyWidth - 2, rowY + rowH);
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(5.2);
-      doc.setTextColor(...PDF_COLORS.textDark);
-      doc.text(r.label, colX + 4, rowY + 3);
-      doc.text(r.val.toLocaleString(), colX + copyWidth - 4, rowY + 3, { align: "right" });
-      rowY += rowH;
-    });
-
-    // Net Payable Box (Highlighted)
-    doc.setFillColor(240, 253, 244); // light mint green
-    doc.setDrawColor(...PDF_COLORS.primary);
-    doc.setLineWidth(0.3);
-    doc.rect(colX + 2, rowY, copyWidth - 4, 5.5, "FD");
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.2);
-    doc.setTextColor(...PDF_COLORS.primary);
-    doc.text("NET AMOUNT PAYABLE:", colX + 4, rowY + 3.8);
-    doc.setFontSize(7);
-    doc.text(`PKR ${totalPayable.toLocaleString()}`, colX + copyWidth - 4, rowY + 3.8, {
-      align: "right"
-    });
-
-    // Amount in Words
-    rowY += 6.5;
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(5);
-    doc.setTextColor(...PDF_COLORS.textDark);
-    const words = numberToWordsPkr(totalPayable);
-    const wordsLine = doc.splitTextToSize(`Amount in words: ${words}`, copyWidth - 4)[0] || "";
-    doc.text(wordsLine, colX + 3, rowY + 2);
-
-    // Partial note if partial scope
-    if (challan.isPartial && challan.remainingBalance && challan.remainingBalance > 0) {
-      rowY += 3.5;
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(4.8);
-      doc.setTextColor(180, 83, 9);
-      doc.text(
-        `* PARTIAL DEPOSIT. Remaining ledger balance: PKR ${challan.remainingBalance.toLocaleString()}`,
-        colX + 3,
-        rowY + 2
-      );
+    if (copy.isPartial && (copy.remainingBalance ?? 0) > 0) {
+      tableData.push({
+        label: "Remaining Balance",
+        value: `Rs. ${(copy.remainingBalance ?? 0).toLocaleString()}`,
+        bold: true,
+        amber: true
+      });
     }
 
-    // 7. QR Code and Bank Signature Blocks
-    const bottomY = topMargin + copyHeight - 34;
+    const tableH = tableData.length * rowH;
+    doc.rect(tblL, curY, tblW, tableH);
 
-    // QR Code Image
-    doc.addImage(qrDataUrl, "PNG", colX + 3, bottomY, 20, 20);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(4.5);
-    doc.setTextColor(...PDF_COLORS.primary);
-    doc.text(`🔒 ${challan.pin || ""}`, colX + 13, bottomY + 22.5, { align: "center" });
+    tableData.forEach((row, idx) => {
+      const rowY = curY + idx * rowH;
+      // Row background
+      if (row.green) {
+        doc.setFillColor(...C.primaryMint);
+        doc.rect(tblL, rowY, tblW, rowH, "F");
+      } else if (row.amber) {
+        doc.setFillColor(...C.amberBg);
+        doc.rect(tblL, rowY, tblW, rowH, "F");
+      } else if (idx % 2 === 1) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(tblL, rowY, tblW, rowH, "F");
+      }
+      // Row bottom divider
+      if (idx < tableData.length - 1) {
+        doc.setDrawColor(...C.borderLight);
+        doc.setLineWidth(0.15);
+        doc.line(tblL, rowY + rowH, tblR, rowY + rowH);
+      }
+      // Label
+      doc.setFont("helvetica", row.bold ? "bold" : "normal");
+      doc.setFontSize(4.8);
+      doc.setTextColor(...(row.green ? C.primaryLight : row.amber ? C.amberText : C.textDark));
+      doc.text(row.label, tblL + 1.5, rowY + rowH - 1.5);
+      // Value (right-aligned)
+      doc.text(row.value, tblR - 1, rowY + rowH - 1.5, { align: "right" });
+    });
 
-    // Bank Cashier & Officer Blocks
-    const bankX = colX + 26;
-    const bankW = copyWidth - 29;
+    curY += tableH + 1;
 
-    doc.setDrawColor(...PDF_COLORS.borderLight);
-    doc.setLineWidth(0.2);
-    doc.rect(bankX, bottomY, bankW, 20);
+    // Amount in words (italic footnote — muted, #475569)
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(4.2);
+    doc.setTextColor(...C.textMid);
+    const wordsText = `(in words) ${copy.taxPayable.totalPayableWords}`;
+    const wordsLines = doc.splitTextToSize(wordsText, innerW - 2);
+    doc.text(wordsLines.slice(0, 2), innerX + 1.5, curY + 2);
+    curY += Math.min(wordsLines.length, 2) * 3.5 + 1.5;
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // SECTION 5 — FOR BANK'S USE ONLY (pinned to bottom)
+    // Web: borderTop 2px #0d3822, bg #fafaf9, amber header, lines, dashed stamp box
+    // ══════════════════════════════════════════════════════════════════════════
+    const bankH = 24;
+    const bankY = MARGIN_TOP + COPY_H - bankH - 1;
+
+    // Fill bg
+    doc.setFillColor(...C.bgBank);
+    doc.rect(innerX, bankY, innerW, bankH, "F");
+
+    // Top border (2px #0d3822)
+    doc.setDrawColor(...C.primary);
+    doc.setLineWidth(0.5);
+    doc.line(innerX, bankY, innerX + innerW, bankY);
+
+    // "For Bank's Use Only:" label
     doc.setFont("helvetica", "bold");
     doc.setFontSize(5);
-    doc.setTextColor(...PDF_COLORS.textMuted);
-    doc.text("FOR USE OF RECEIVING BANK / TREASURY ONLY", bankX + bankW / 2, bottomY + 3, {
+    doc.setTextColor(...C.amberDark);
+    doc.text("For Bank's Use Only:", innerX + 1.5, bankY + 4);
+
+    // Fields
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(4.8);
+    doc.setTextColor(...C.textDark);
+    doc.text("Challan No: ______________________", innerX + 1.5, bankY + 8);
+    doc.text("Date: _____________________________", innerX + 1.5, bankY + 11.5);
+    doc.text(
+      `Amount: Rs. ${copy.taxPayable.totalPayable.toLocaleString()}`,
+      innerX + 1.5,
+      bankY + 15
+    );
+
+    // Dashed stamp / signature box
+    doc.setDrawColor(...C.borderDark);
+    doc.setLineWidth(0.2);
+    doc.setLineDashPattern([1, 1], 0);
+    doc.rect(innerX + 1, bankY + 16.5, innerW - 2, 6);
+    doc.setLineDashPattern([], 0);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(4);
+    doc.setTextColor(120, 113, 108); // #78716c
+    doc.text("Bank Officer's Signature & Bank Stamp", innerX + innerW / 2, bankY + 20.2, {
       align: "center"
     });
 
-    doc.line(bankX, bottomY + 4, bankX + bankW, bottomY + 4);
-
+    // SHA-256 integrity footer
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(4.6);
-    doc.text("Bank Scroll Ref: _______________________", bankX + 2, bottomY + 7.5);
-    doc.text("Deposit Date:   ____ / ____ / 2026", bankX + 2, bottomY + 11);
-
-    // Signature lines
-    doc.line(bankX + 3, bottomY + 17, bankX + 23, bottomY + 17);
-    doc.text("Cashier", bankX + 10, bottomY + 19, { align: "center" });
-
-    doc.line(bankX + 32, bottomY + 17, bankX + bankW - 3, bottomY + 17);
-    doc.text("Manager / Stamp", bankX + bankW - 14, bottomY + 19, { align: "center" });
-
-    // 8. Copy Footer Disclaimer
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(4.5);
-    doc.setTextColor(...PDF_COLORS.textMuted);
-    doc.text(
-      "Payable at any authorized NBP / SBP branch or via 1Link ePay.",
-      colX + copyWidth / 2,
-      topMargin + copyHeight - 6,
-      { align: "center" }
-    );
-
+    doc.setFontSize(3.5);
+    doc.setTextColor(...C.textMuted);
     const hashSlice = challan.officialSha256 ? challan.officialSha256.slice(0, 16) : "AUTHENTIC";
     doc.text(
-      `Official SHA-256: ${hashSlice} • PTAS Punjab`,
-      colX + copyWidth / 2,
-      topMargin + copyHeight - 2.5,
+      `SHA-256: ${hashSlice}\u2026 \u2022 PTAS Punjab \u2022 Rule 9`,
+      innerX + innerW / 2,
+      MARGIN_TOP + COPY_H - 0.5,
       { align: "center" }
     );
 
-    // Perforated Cut Line between copies
+    // ══════════════════════════════════════════════════════════════════════════
+    // Perforated cut line between copies (not after last copy)
+    // ══════════════════════════════════════════════════════════════════════════
     if (copyIdx < 2) {
-      const cutX = colX + copyWidth + gap / 2;
-      doc.setDrawColor(...PDF_COLORS.borderDark);
+      const cutX = colX + COPY_W + GAP / 2;
+      doc.setDrawColor(...C.textMuted);
+      doc.setLineWidth(0.2);
       doc.setLineDashPattern([1.5, 1.5], 0);
-      doc.line(cutX, topMargin, cutX, topMargin + copyHeight);
-      doc.setLineDashPattern([], 0); // reset line dash
+      doc.line(cutX, MARGIN_TOP, cutX, MARGIN_TOP + COPY_H);
+      doc.setLineDashPattern([], 0);
 
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(5);
-      doc.setTextColor(...PDF_COLORS.textMuted);
-      doc.text("✂ CUT", cutX, topMargin + copyHeight / 2, { angle: 90 });
+      doc.setFontSize(4.5);
+      doc.setTextColor(...C.textMuted);
+      doc.text("\u2702 CUT", cutX, MARGIN_TOP + COPY_H / 2, { angle: 90, align: "center" });
     }
   }
 

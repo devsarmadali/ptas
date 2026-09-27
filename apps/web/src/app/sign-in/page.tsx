@@ -32,7 +32,7 @@ export default function SignInPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Handle selecting one of the 3 pre-filled roles
+  // Select an approved account identity; the user must still provide a credential.
   const handleSelectRole = (officer: OfficerCredentialInfo) => {
     setSelectedOfficer(officer);
     setEmail(officer.email);
@@ -239,9 +239,9 @@ export default function SignInPage() {
               marginRight: "auto"
             }}
           >
-            Select any of the official departmental roles below (including Provincial Administrator
-            with full authorities) to immediately authenticate with certified jurisdiction powers
-            under Section 3 of the Punjab Finance Act 1977.
+            Select an approved departmental account below, then authenticate with its assigned
+            credential. Provincial administration access is limited to technical administration and
+            does not grant statutory assessment powers.
           </p>
         </div>
 
@@ -526,8 +526,8 @@ export default function SignInPage() {
                 <span>🔐 2. Review Credentials &amp; Sign In</span>
               </h3>
               <p style={{ margin: "0.15rem 0 0", fontSize: "0.78rem", color: "#64748b" }}>
-                Credentials pre-filled from your selection above. You may also enter custom
-                departmental credentials.
+                The approved account email is filled from your selection. Enter its credential to
+                authenticate; passwords are never embedded in the application.
               </p>
             </div>
 

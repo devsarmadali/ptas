@@ -93,12 +93,12 @@ test("verifies statutory sub-class and tertiary slabs in Form P.F.T-1 and Form P
   await page.getByRole("link", { name: /Form PFT-2 Challans/i }).click();
   await expect(page.locator(".action-menu-trigger").first()).toBeVisible();
 
-  // Trigger single Form PFT-2 Challan PDF download
-  const downloadPromise = page.waitForEvent("download");
+  // The action remains discoverable, but unauthenticated client state cannot generate a
+  // statutory document. Authorization must come from a verified server-side session.
   await page.locator(".action-menu-trigger").first().click();
+  await expect(page.getByRole("menuitem", { name: /Download Challan PDF/i })).toBeVisible();
   await page.getByRole("menuitem", { name: /Download Challan PDF/i }).click();
-  const download = await downloadPromise;
-  expect(download.suggestedFilename()).toMatch(/Form_PFT2_Challan.*\.pdf/i);
+  await page.waitForTimeout(250);
 
   // Switch to ePay Punjab Reconciliation tab
   await page.getByRole("link", { name: /ePay Punjab Reconciliation/i }).click();
@@ -150,7 +150,7 @@ test("verifies RowActionMenu popover interactions in Compliance & Recovery Hub",
   await expect(page.getByRole("menuitem", { name: /Clearance/i })).toBeVisible();
 });
 
-test("verifies sign out leads to sign-in page and role pre-filled sign-in works", async ({
+test("verifies sign out leads to secure credential sign-in without embedded passwords", async ({
   page
 }) => {
   await page.goto("/assessment");
@@ -169,36 +169,21 @@ test("verifies sign out leads to sign-in page and role pre-filled sign-in works"
     page.getByRole("heading", { name: /Statutory Role Sign In & Access Control/i })
   ).toBeVisible();
 
-  // Verify all 4 pre-filled roles exist (including Admin)
+  // Verify all approved pilot account identities exist (including technical administration).
   await expect(page.getByRole("heading", { name: "Muhammad Aslam" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Tariq Mahmood" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Shahid Nawaz" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Provincial Administrator" })).toBeVisible();
 
-  // Click one-click sign in as ETO
-  await page.getByRole("button", { name: /One-Click Sign In as ETO/i }).click();
+  await expect(page.getByRole("button", { name: /One-Click Sign In/i })).toHaveCount(0);
 
-  // Expect redirection back to dashboard with ETO session active
-  await expect(page).toHaveURL(/.*assessment/);
-  await expect(page.getByText(/Tariq Mahmood/i).first()).toBeVisible();
-
-  // Non-admin roles (ETO, Inspector, Director) must NOT see pilot/sync/auth buttons in app header
-  await expect(page.getByText(/PILOT READY/i)).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /Sync Supabase/i })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /Reset Demo/i })).toHaveCount(0);
-  await expect(page.getByText(/Supabase Auth/i)).toHaveCount(0);
-
-  // Sign out again and sign in as Admin
-  await page.getByRole("button", { name: /Sign Out/i }).click();
+  // Selecting ETO fills only the approved account email; it never fills a password or signs in.
+  await page.getByRole("button", { name: /Select ETO Account/i }).click();
+  await expect(page.getByLabel(/Official Email Address/i)).toHaveValue("eto.vehari@punjab.gov.pk");
+  await expect(page.getByLabel(/^Password$/i)).toHaveValue("");
   await expect(page).toHaveURL(/.*sign-in/);
 
-  // Click one-click sign in as ADMIN
-  await page.getByRole("button", { name: /One-Click Sign In as ADMIN/i }).click();
-  await expect(page).toHaveURL(/.*assessment/);
-  await expect(page.getByText(/Provincial Administrator/i).first()).toBeVisible();
-
-  // Admin MUST see the administration/system buttons in app header
-  await expect(page.getByText(/PILOT READY • VERCEL/i)).toBeVisible();
-  await expect(page.getByRole("button", { name: /Sync Supabase/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Reset Demo/i })).toBeVisible();
+  // Empty credentials fail closed and do not create a role session.
+  await page.getByRole("button", { name: /^Sign In as ETO$/i }).click();
+  await expect(page).toHaveURL(/.*sign-in/);
 });
