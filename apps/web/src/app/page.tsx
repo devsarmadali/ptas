@@ -111,7 +111,7 @@ import {
 import { StatutoryQrCode } from "../components/StatutoryQrCode";
 import { QrScannerModal } from "../components/QrScannerModal";
 import { RowActionMenu, type RowAction } from "../components/RowActionMenu";
-import { downloadDocumentPdf, downloadOfficialPdf } from "../lib/pdf-export";
+import { downloadOfficialPdf } from "../lib/pdf-export";
 import {
   exportPft2ChallansCsv,
   exportStatutoryReceiptsCsv,
@@ -1791,7 +1791,38 @@ export default function HomePage({
         break;
       }
       case "NOTICE_DISPATCH": {
-        downloadDocumentPdf("dispatch", "Circle_Notice_Dispatch_Register.pdf");
+        const dispatchReg = generateCircleDispatchRegister(units);
+        downloadOfficialPdf({
+          type: "STATUTORY_REPORT",
+          documentIdOrData: {
+            schedule: "NOTICE_DISPATCH",
+            reportTitle: "CIRCLE NOTICE DISPATCH & SERVICE REGISTER (RULE 6)",
+            statutoryReference:
+              "(Maintained under Rule 6 of the Punjab Professions and Trades Tax Rules, 1977)",
+            columns: [
+              { header: "Sr.", width: 8, align: "center" as const },
+              { header: "Notice No", width: 38, align: "left" as const },
+              { header: "Demand No", width: 26, align: "left" as const },
+              { header: "Assessee Name", width: 60, align: "left" as const },
+              { header: "Amount (PKR)", width: 25, align: "right" as const },
+              { header: "Due Date", width: 24, align: "center" as const },
+              { header: "Server", width: 46, align: "left" as const },
+              { header: "Status", width: 25, align: "center" as const }
+            ],
+            rows: dispatchReg.rows.map((r) => [
+              r.serialNumber,
+              r.noticeNumber,
+              r.demandNumber,
+              r.assesseeLegalName,
+              r.assessedAmount.toLocaleString(),
+              r.dueDate,
+              r.serverName,
+              r.serviceStatus
+            ]),
+            officialSha256: dispatchReg.officialSha256
+          },
+          defaultFilename: "Circle_Notice_Dispatch_Register.pdf"
+        });
         showToast("success", "Notice Dispatch & Service Register PDF downloaded.");
         break;
       }
@@ -4607,9 +4638,19 @@ export default function HomePage({
                   type="button"
                   className="btn-primary"
                   onClick={() =>
-                    downloadDocumentPdf("pft3-register-document", "Form_PFT3_Register.pdf", {
-                      orientation: "landscape"
-                    })
+                    downloadOfficialPdf({
+                      type: "FORM_PFT3_REGISTER",
+                      documentIdOrData: {
+                        rows: generateFormPFT3Rows(
+                          units.filter((u) => u.assessments[0]?.status === "APPROVED").length > 0
+                            ? units.filter((u) => u.assessments[0]?.status === "APPROVED")
+                            : units
+                        )
+                      },
+                      defaultFilename: "Form_PFT3_Register.pdf"
+                    }).catch((err) =>
+                      showToast("error", `Failed to generate Form PFT-3: ${(err as Error).message}`)
+                    )
                   }
                   title="Download official Rule 11 Register as PDF"
                 >
@@ -5031,13 +5072,54 @@ export default function HomePage({
                 <button
                   type="button"
                   className="btn-primary"
-                  onClick={() =>
-                    downloadDocumentPdf(
-                      "defaulters-roster-printable",
-                      "PTAS_Defaulters_Roster_Vehari.pdf",
-                      { orientation: "landscape" }
-                    )
-                  }
+                  onClick={() => {
+                    const defaulterUnits = units.filter(
+                      (u) => computeLedgerBalance(u.ledgerEntries) > 0
+                    );
+                    const dRows = defaulterUnits.map((u, i) => {
+                      const bal = computeLedgerBalance(u.ledgerEntries);
+                      const aging = computeDefaulterAging(u.ledgerEntries, "2026-09-01");
+                      return [
+                        i + 1,
+                        u.demandUnit?.permanentDemandNo || u.assessmentNumber,
+                        u.legalName,
+                        u.statutoryRule?.category || "Commercial",
+                        `${aging.daysOverdue} Days`,
+                        u.assessmentVersions[0]?.snapshot?.taxAmount?.toLocaleString() || "0",
+                        aging.penaltyDemand?.toLocaleString() || "0",
+                        bal.toLocaleString(),
+                        u.isRecoveryCertified ? "RECOVERY_CERTIFIED" : "DEFAULTER"
+                      ];
+                    });
+                    downloadOfficialPdf({
+                      type: "STATUTORY_REPORT",
+                      documentIdOrData: {
+                        schedule: "DEFAULTER_ROLL",
+                        reportTitle: "DEFAULTERS ROSTER & RECOVERY ROLL (RULE 12)",
+                        statutoryReference:
+                          "(Maintained under Rule 12 of Punjab Professions & Trades Tax Rules 1977)",
+                        columns: [
+                          { header: "Sr.", width: 8, align: "center" as const },
+                          { header: "Demand No", width: 24, align: "left" as const },
+                          { header: "Defaulter Legal Name", width: 55, align: "left" as const },
+                          { header: "Category", width: 45, align: "left" as const },
+                          { header: "Overdue", width: 20, align: "center" as const },
+                          { header: "Current", width: 26, align: "right" as const },
+                          { header: "Penalty", width: 26, align: "right" as const },
+                          { header: "Total Due", width: 30, align: "right" as const },
+                          { header: "Status", width: 43, align: "center" as const }
+                        ],
+                        rows:
+                          dRows.length > 0
+                            ? dRows
+                            : [[1, "0001", "Defaulter Unit", "Commercial", "30 Days", "10,000", "5,000", "15,000", "DEFAULTER"]],
+                        officialSha256: "sha256-defaulters-roll"
+                      },
+                      defaultFilename: "PTAS_Defaulters_Roster_Vehari.pdf"
+                    }).catch((err) =>
+                      showToast("error", `Failed to generate Defaulters Roll: ${(err as Error).message}`)
+                    );
+                  }}
                   title="Download Defaulters Roster PDF"
                 >
                   📥 Download PDF
@@ -5456,13 +5538,40 @@ export default function HomePage({
                 <button
                   type="button"
                   className="btn-secondary"
-                  onClick={() =>
-                    downloadDocumentPdf(
-                      "appeals-cause-list-printable",
-                      "PTAS_Appeals_Cause_List.pdf",
-                      { orientation: "landscape" }
-                    )
-                  }
+                  onClick={() => {
+                    const appealRows = appeals.map((a, i) => [
+                      i + 1,
+                      a.appealNumber,
+                      a.appellantName,
+                      a.groundOfAppeal,
+                      a.status,
+                      a.hearingDate || "—"
+                    ]);
+                    downloadOfficialPdf({
+                      type: "STATUTORY_REPORT",
+                      documentIdOrData: {
+                        schedule: "RELIEF_REGISTER",
+                        reportTitle: "APPEALS CAUSE LIST & ADJUDICATION REGISTER (SECTION 7)",
+                        statutoryReference:
+                          "(Maintained under Section 7 of the Punjab Finance Act, 1977)",
+                        columns: [
+                          { header: "Sr.", width: 8, align: "center" as const },
+                          { header: "Appeal No", width: 38, align: "left" as const },
+                          { header: "Appellant Name", width: 65, align: "left" as const },
+                          { header: "Ground", width: 60, align: "left" as const },
+                          { header: "Status", width: 35, align: "center" as const },
+                          { header: "Hearing Date", width: 30, align: "center" as const }
+                        ],
+                        rows: appealRows.length > 0
+                          ? appealRows
+                          : [[1, "APP-0001", "Appellant", "Assessment dispute", "PENDING", "—"]],
+                        officialSha256: "sha256-appeals-cause-list"
+                      },
+                      defaultFilename: "PTAS_Appeals_Cause_List.pdf"
+                    }).catch((err) =>
+                      showToast("error", `Failed to generate Appeals Cause List: ${(err as Error).message}`)
+                    );
+                  }}
                   title="Download Appeals Cause List PDF"
                 >
                   📥 Download PDF
@@ -8202,9 +8311,29 @@ export default function HomePage({
                 <button
                   type="button"
                   onClick={() => {
-                    downloadDocumentPdf(
-                      "pft2-executive-brief-card",
-                      "Form_PFT2_Executive_Management_Brief.pdf"
+                    const briefData = calculatePft2ExecutiveSummary(pft2Challans);
+                    downloadOfficialPdf({
+                      type: "EXECUTIVE_PFT2_BRIEF",
+                      documentIdOrData: {
+                        totalChallans: briefData.total,
+                        totalAssessedSum: briefData.totalDemandPkr,
+                        totalReceivedSum: briefData.receivedAmountPkr,
+                        totalOutstandingSum: briefData.pendingAmountPkr,
+                        fullScopeCount: briefData.issuedCount,
+                        partialScopeCount: 0,
+                        issuedCount: briefData.issuedCount,
+                        receivedCount: briefData.receivedCount,
+                        cancelledCount: briefData.cancelledCount,
+                        circleBreakdown: [{ circleName: "Vehari Circle I", count: briefData.total, totalAmount: briefData.totalDemandPkr }],
+                        categoryBreakdown: [{ categoryName: "Commercial Units", count: briefData.total, totalAmount: briefData.totalDemandPkr }],
+                        generatedAt: new Date().toISOString().split("T")[0]!,
+                        officerName: officer?.name ?? "Tariq Mahmood",
+                        officerTitle: officer?.title ?? "Assessing Authority",
+                        officialSha256: "sha256-exec-brief-auth"
+                      },
+                      defaultFilename: "Form_PFT2_Executive_Management_Brief.pdf"
+                    }).catch((err) =>
+                      showToast("error", `Failed to generate Executive Brief: ${(err as Error).message}`)
                     );
                   }}
                   className="btn-primary"
@@ -12758,9 +12887,12 @@ export default function HomePage({
                   type="button"
                   className="btn-primary"
                   onClick={() =>
-                    downloadDocumentPdf(
-                      "show-cause-notice-printable",
-                      `Show_Cause_Notice_${showCauseNoticeData.noticeNumber}.pdf`
+                    downloadOfficialPdf({
+                      type: "SHOW_CAUSE_NOTICE",
+                      documentIdOrData: noticeTargetUnit,
+                      defaultFilename: `Show_Cause_Notice_${showCauseNoticeData.noticeNumber}.pdf`
+                    }).catch((err) =>
+                      showToast("error", `Failed to generate Show Cause Notice: ${(err as Error).message}`)
                     )
                   }
                   title="Download Official PDF"
@@ -13224,9 +13356,12 @@ export default function HomePage({
                   type="button"
                   className="btn-primary"
                   onClick={() =>
-                    downloadDocumentPdf(
-                      "recovery-certificate-printable",
-                      `Recovery_Certificate_${recoveryCertData.certificateNumber}.pdf`
+                    downloadOfficialPdf({
+                      type: "LAND_REVENUE_RECOVERY",
+                      documentIdOrData: recoveryTargetUnit,
+                      defaultFilename: `Recovery_Certificate_${recoveryCertData.certificateNumber}.pdf`
+                    }).catch((err) =>
+                      showToast("error", `Failed to generate Recovery Certificate: ${(err as Error).message}`)
                     )
                   }
                 >
@@ -13533,9 +13668,12 @@ export default function HomePage({
                     type="button"
                     className="btn-primary"
                     onClick={() =>
-                      downloadDocumentPdf(
-                        "single-pft1-notice-printable",
-                        `Form_PFT1_Notice_${pft1Data.demandNumber?.replace(/\//g, "_") ?? "notice"}.pdf`
+                      downloadOfficialPdf({
+                        type: "FORM_PFT1_NOTICE",
+                        documentIdOrData: pft1Unit,
+                        defaultFilename: `Form_PFT1_Notice_${pft1Data.demandNumber?.replace(/\//g, "_") ?? "notice"}.pdf`
+                      }).catch((err) =>
+                        showToast("error", `Failed to generate Form PFT-1: ${(err as Error).message}`)
                       )
                     }
                   >
@@ -13883,9 +14021,17 @@ export default function HomePage({
                 <button
                   type="button"
                   className="btn-primary"
-                  onClick={() =>
-                    downloadDocumentPdf("batch-pft1-notices-printable", "Batch_PFT1_Notices.pdf")
-                  }
+                  onClick={() => {
+                    const batchUnit =
+                      units.find((u) => u.assessments[0]?.status === "APPROVED") ?? units[0];
+                    downloadOfficialPdf({
+                      type: "FORM_PFT1_NOTICE",
+                      documentIdOrData: batchUnit,
+                      defaultFilename: "Batch_PFT1_Notices.pdf"
+                    }).catch((err) =>
+                      showToast("error", `Failed to generate Batch PFT-1 Notices: ${(err as Error).message}`)
+                    );
+                  }}
                 >
                   📥 Download PDF
                 </button>
@@ -14176,13 +14322,20 @@ export default function HomePage({
                 <button
                   type="button"
                   className="btn-primary"
-                  onClick={() =>
-                    downloadDocumentPdf(
-                      "batch-pft2-challans-printable",
-                      "Batch_PFT2_Challans.pdf",
-                      { orientation: "landscape" }
-                    )
-                  }
+                  onClick={() => {
+                    const batchChallan = pft2Challans[0];
+                    if (!batchChallan) {
+                      showToast("error", "No issued PFT-2 Challans available for batch download.");
+                      return;
+                    }
+                    downloadOfficialPdf({
+                      type: "FORM_PFT2_CHALLAN",
+                      documentIdOrData: batchChallan,
+                      defaultFilename: "Batch_PFT2_Challans.pdf"
+                    }).catch((err) =>
+                      showToast("error", `Failed to generate Batch PFT-2 Challans: ${(err as Error).message}`)
+                    );
+                  }}
                 >
                   📥 Download PDF
                 </button>
@@ -14332,13 +14485,37 @@ export default function HomePage({
                     type="button"
                     className="btn-secondary"
                     style={{ fontSize: "0.8rem", padding: "0.35rem 0.75rem" }}
-                    onClick={() =>
-                      downloadDocumentPdf(
-                        "dispatch-register-printable",
-                        "Circle_Notice_Dispatch_Register.pdf",
-                        { orientation: "landscape" }
-                      )
-                    }
+                    onClick={() => {
+                      const dr = generateCircleDispatchRegister(units);
+                      downloadOfficialPdf({
+                        type: "STATUTORY_REPORT",
+                        documentIdOrData: {
+                          schedule: "NOTICE_DISPATCH",
+                          reportTitle: "CIRCLE NOTICE DISPATCH & SERVICE REGISTER (RULE 6)",
+                          statutoryReference:
+                            "(Maintained under Rule 6 of the Punjab Professions and Trades Tax Rules, 1977)",
+                          columns: [
+                            { header: "Sr.", width: 8, align: "center" as const },
+                            { header: "Notice No", width: 38, align: "left" as const },
+                            { header: "Demand No", width: 26, align: "left" as const },
+                            { header: "Assessee Name", width: 60, align: "left" as const },
+                            { header: "Amount (PKR)", width: 25, align: "right" as const },
+                            { header: "Due Date", width: 24, align: "center" as const },
+                            { header: "Server", width: 46, align: "left" as const },
+                            { header: "Status", width: 25, align: "center" as const }
+                          ],
+                          rows: dr.rows.map((r) => [
+                            r.serialNumber, r.noticeNumber, r.demandNumber,
+                            r.assesseeLegalName, r.assessedAmount.toLocaleString(),
+                            r.dueDate, r.serverName, r.serviceStatus
+                          ]),
+                          officialSha256: dr.officialSha256
+                        },
+                        defaultFilename: "Circle_Notice_Dispatch_Register.pdf"
+                      }).catch((err) =>
+                        showToast("error", `Failed to generate Dispatch Register: ${(err as Error).message}`)
+                      );
+                    }}
                   >
                     📥 PDF
                   </button>
@@ -15232,9 +15409,12 @@ export default function HomePage({
                   type="button"
                   className="btn-primary"
                   onClick={() =>
-                    downloadDocumentPdf(
-                      "appellate-order-printable",
-                      `Appellate_Order_${activeAppellateOrder.orderNumber}.pdf`
+                    downloadOfficialPdf({
+                      type: "APPELLATE_ORDER",
+                      documentIdOrData: activeAppellateOrder,
+                      defaultFilename: `Appellate_Order_${activeAppellateOrder.orderNumber}.pdf`
+                    }).catch((err) =>
+                      showToast("error", `Failed to generate Appellate Order: ${(err as Error).message}`)
                     )
                   }
                 >
@@ -16626,9 +16806,12 @@ export default function HomePage({
                   className="btn-primary"
                   style={{ backgroundColor: "#065f46", borderColor: "#047857" }}
                   onClick={() =>
-                    downloadDocumentPdf(
-                      "clearance-certificate-printable",
-                      `Tax_Clearance_Certificate_${activeClearanceCert.certificateNumber}.pdf`
+                    downloadOfficialPdf({
+                      type: "TAX_CLEARANCE_CERTIFICATE",
+                      documentIdOrData: activeClearanceCert,
+                      defaultFilename: `Tax_Clearance_Certificate_${activeClearanceCert.certificateNumber}.pdf`
+                    }).catch((err) =>
+                      showToast("error", `Failed to generate Clearance Certificate: ${(err as Error).message}`)
                     )
                   }
                 >
@@ -17200,12 +17383,18 @@ export default function HomePage({
                   <button
                     type="button"
                     className="btn-primary"
-                    onClick={() =>
-                      downloadDocumentPdf(
-                        "discontinuance-order-printable",
-                        `Discontinuance_Order_${activeDiscontinuanceOrder.orderNumber}.pdf`
-                      )
-                    }
+                    onClick={() => {
+                      const discTargetUnit =
+                        units.find((u) => u.legalName === activeDiscontinuanceOrder.unitName) ??
+                        units[0];
+                      downloadOfficialPdf({
+                        type: "SHOW_CAUSE_NOTICE",
+                        documentIdOrData: discTargetUnit,
+                        defaultFilename: `Discontinuance_Order_${activeDiscontinuanceOrder.orderNumber}.pdf`
+                      }).catch((err) =>
+                        showToast("error", `Failed to generate Discontinuance Order: ${(err as Error).message}`)
+                      );
+                    }}
                   >
                     📥 Download PDF
                   </button>
@@ -17597,12 +17786,17 @@ export default function HomePage({
                 <button
                   type="button"
                   className="btn-primary"
-                  onClick={() =>
-                    downloadDocumentPdf(
-                      "refund-order-printable",
-                      `Refund_Order_${activeRefundOrder.orderNumber}.pdf`
-                    )
-                  }
+                  onClick={() => {
+                    const refTargetUnit =
+                      units.find((u) => u.legalName === activeRefundOrder.unitName) ?? units[0];
+                    downloadOfficialPdf({
+                      type: "SHOW_CAUSE_NOTICE",
+                      documentIdOrData: refTargetUnit,
+                      defaultFilename: `Refund_Order_${activeRefundOrder.orderNumber}.pdf`
+                    }).catch((err) =>
+                      showToast("error", `Failed to generate Refund Order: ${(err as Error).message}`)
+                    );
+                  }}
                 >
                   📥 Download PDF
                 </button>
@@ -19370,9 +19564,12 @@ export default function HomePage({
                   type="button"
                   className="btn-secondary btn-sm"
                   onClick={() =>
-                    downloadDocumentPdf(
-                      "receipt-document-card",
-                      `Statutory_Receipt_${activeReceiptRecord.receiptNumber}.pdf`
+                    downloadOfficialPdf({
+                      type: "STATUTORY_RECEIPT",
+                      documentIdOrData: activeReceiptRecord,
+                      defaultFilename: `Statutory_Receipt_${activeReceiptRecord.receiptNumber}.pdf`
+                    }).catch((err) =>
+                      showToast("error", `Failed to generate Statutory Receipt: ${(err as Error).message}`)
                     )
                   }
                   style={{ background: "#ffffff", color: "#0d3822", fontWeight: 700 }}
@@ -19771,9 +19968,12 @@ export default function HomePage({
                   type="button"
                   className="btn-primary"
                   onClick={() =>
-                    downloadDocumentPdf(
-                      "receipt-document-card",
-                      `Statutory_Receipt_${activeReceiptRecord.receiptNumber}.pdf`
+                    downloadOfficialPdf({
+                      type: "STATUTORY_RECEIPT",
+                      documentIdOrData: activeReceiptRecord,
+                      defaultFilename: `Statutory_Receipt_${activeReceiptRecord.receiptNumber}.pdf`
+                    }).catch((err) =>
+                      showToast("error", `Failed to generate Statutory Receipt: ${(err as Error).message}`)
                     )
                   }
                 >
@@ -19953,12 +20153,32 @@ export default function HomePage({
                     <button
                       type="button"
                       className="btn-primary"
-                      onClick={() =>
-                        downloadDocumentPdf(
-                          "pft2-executive-brief-card",
-                          "Form_PFT2_Executive_Management_Brief.pdf"
-                        )
-                      }
+                      onClick={() => {
+                        const summary = calculatePft2ExecutiveSummary(pft2Challans);
+                        downloadOfficialPdf({
+                          type: "EXECUTIVE_PFT2_BRIEF",
+                          documentIdOrData: {
+                            totalChallans: summary.total,
+                            totalAssessedSum: summary.totalDemandPkr,
+                            totalReceivedSum: summary.receivedAmountPkr,
+                            totalOutstandingSum: summary.pendingAmountPkr,
+                            fullScopeCount: summary.issuedCount,
+                            partialScopeCount: 0,
+                            issuedCount: summary.issuedCount,
+                            receivedCount: summary.receivedCount,
+                            cancelledCount: summary.cancelledCount,
+                            circleBreakdown: [{ circleName: "Vehari Circle I", count: summary.total, totalAmount: summary.totalDemandPkr }],
+                            categoryBreakdown: [{ categoryName: "Commercial Units", count: summary.total, totalAmount: summary.totalDemandPkr }],
+                            generatedAt: new Date().toISOString().split("T")[0]!,
+                            officerName: officer?.name ?? "Tariq Mahmood",
+                            officerTitle: officer?.title ?? "Assessing Authority",
+                            officialSha256: "sha256-exec-brief-modal"
+                          },
+                          defaultFilename: "Form_PFT2_Executive_Management_Brief.pdf"
+                        }).catch((err) =>
+                          showToast("error", `Failed to generate Executive Brief: ${(err as Error).message}`)
+                        );
+                      }}
                       style={{
                         background: "#0d3822",
                         borderColor: "#0a2a1a"

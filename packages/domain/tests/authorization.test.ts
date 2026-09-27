@@ -270,4 +270,40 @@ describe("jurisdiction-based authorization policy", () => {
     });
     expect(etoApproveDecision.allowed).toBe(true);
   });
+
+  it("uses a default-deny role matrix instead of inheriting statutory authority", () => {
+    const adminSubject: AuthSubject = {
+      userId: "usr-admin",
+      assignments: [
+        {
+          id: "asgn-admin",
+          userId: "usr-admin",
+          roleCode: "ADMIN",
+          jurisdictionId: "reg-lahore",
+          validFrom: "2026-01-01T00:00:00.000Z",
+          validTo: null
+        }
+      ]
+    };
+
+    expect(
+      evaluateActionAccess({
+        subject: adminSubject,
+        targetJurisdictionId: "circ-a",
+        action: "ADMINISTER_USERS",
+        jurisdictions,
+        asOf
+      }).allowed
+    ).toBe(true);
+
+    const approval = evaluateActionAccess({
+      subject: adminSubject,
+      targetJurisdictionId: "circ-a",
+      action: "APPROVE",
+      jurisdictions,
+      asOf
+    });
+    expect(approval.allowed).toBe(false);
+    expect(approval.reason).toBe("INSUFFICIENT_ROLE");
+  });
 });

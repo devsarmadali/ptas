@@ -31,7 +31,6 @@ export interface OfficerCredentialInfo {
   readonly jurisdictionName: string;
   readonly jurisdictionTier: "REGION" | "OFFICE" | "CIRCLE";
   readonly badgeText: string;
-  readonly defaultPassword: string;
   readonly statutoryPowers: readonly string[];
 }
 
@@ -46,7 +45,6 @@ export const OFFICIAL_OFFICERS_REGISTRY: readonly OfficerCredentialInfo[] = [
     jurisdictionName: "Circle-Vehari",
     jurisdictionTier: "CIRCLE",
     badgeText: "Inspector (Maker / Survey / Payments)",
-    defaultPassword: "VehariInspector2026!",
     statutoryPowers: [
       "Rule 4 & 5: Field Market Survey across Circle-Vehari",
       "Form PFT-3: Commercial Taxpayer Registration",
@@ -65,7 +63,6 @@ export const OFFICIAL_OFFICERS_REGISTRY: readonly OfficerCredentialInfo[] = [
     jurisdictionName: "Tehsil Vehari",
     jurisdictionTier: "OFFICE",
     badgeText: "Assessing Authority (Review / Approval / Form PFT-2)",
-    defaultPassword: "VehariETO2026!",
     statutoryPowers: [
       "Section 3 & Rule 5(1): Statutory Assessment Approval",
       "Rule 5(1): Assessment Remand / Return with Reasons",
@@ -85,7 +82,6 @@ export const OFFICIAL_OFFICERS_REGISTRY: readonly OfficerCredentialInfo[] = [
     jurisdictionName: "Multan Region",
     jurisdictionTier: "REGION",
     badgeText: "Appellate Authority (Section 7 Appeals / Region Oversight)",
-    defaultPassword: "MultanDirector2026!",
     statutoryPowers: [
       "Section 7 & Rule 13: Statutory Appellate Authority",
       "Rule 13(2): Scrutiny of Undisputed Tax Pre-Deposit",
@@ -104,16 +100,11 @@ export const OFFICIAL_OFFICERS_REGISTRY: readonly OfficerCredentialInfo[] = [
     jurisdictionId: MULTAN_REGION_ID,
     jurisdictionName: "Punjab Provincial Apex (All Jurisdictions)",
     jurisdictionTier: "REGION",
-    badgeText: "System Administrator (Full Statutory Powers: Director, ETO, Inspector)",
-    defaultPassword: "PunjabAdmin2026!",
+    badgeText: "System Administrator (Technical Administration Only)",
     statutoryPowers: [
-      "Super-Administrator: Full Fledged Statutory Authority Across All Roles (Director, ETO, Inspector)",
-      "Director Appellate Authority: Section 7 & Rule 13 Judicial Review, Decrees & Remissions",
-      "ETO Assessing Authority: Section 3 & Rule 5(1) Assessment & Ledger Approval",
-      "Section 3(4) Penalty Imposition & Rule 12 Land Revenue Recovery Certification",
-      "Inspector Field Authority: Rule 4 & 5 Field Survey, Unit Registration & Form PFT-3",
-      "Rule 9: Form PFT-2 Challan Collections & Rule 10 Discontinuance Orders",
-      "System Administration: Supabase Cloud Synchronization & Data Seed Management"
+      "Technical user provisioning and configuration deployment",
+      "Operational support with audited, non-statutory access",
+      "Cannot assess, approve, penalize, decide appeals, or authorize financial adjustments"
     ]
   }
 ];
@@ -166,29 +157,12 @@ export function getOfficerProfileByEmail(email: string): MockOfficer {
     };
   }
 
-  // Derive dynamic officer profile from email (allows Vercel, Gmail, or custom deployment domain login)
-  const username = normalized.split("@")[0] || "Officer";
-  const formattedName = username
-    .split(/[._-]/)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-
-  return {
-    id: `user-${Date.now()}`,
-    name: formattedName || "Punjab Tax Officer",
-    email: normalized,
-    role: "INSPECTOR",
-    title: "Tax Officer (Vercel Deployment)",
-    jurisdictionId: CIRCLE_VEHARI_ID,
-    jurisdictionName: "Circle-Vehari",
-    jurisdictionTier: "CIRCLE",
-    badgeText: "Field Officer (Vercel Pilot)"
-  };
+  throw new Error("Authenticated account has no approved PTAS officer assignment");
 }
 
 /**
- * Authenticates an officer with Supabase Auth (or deterministic fallback if offline).
- * Supports any email domain (e.g. Vercel deployment domains, personal testing emails).
+ * Authenticates an officer with Supabase Auth. Authentication failures are fail-closed;
+ * offline/demo fallbacks must never create an authorized officer session.
  */
 export async function signInOfficer(email: string, password?: string): Promise<SignInResult> {
   const normalizedEmail = email.trim().toLowerCase();
@@ -202,12 +176,16 @@ export async function signInOfficer(email: string, password?: string): Promise<S
     };
   }
 
-  const expectedOfficer = OFFICIAL_OFFICERS_REGISTRY.find(
-    (o) => o.email.toLowerCase() === normalizedEmail
-  );
-
-  const effectivePassword =
-    password?.trim() || expectedOfficer?.defaultPassword || "PTAS_Vercel_2026!";
+  const effectivePassword = password?.trim();
+  if (!effectivePassword) {
+    return {
+      success: false,
+      officer: MOCK_OFFICERS[0],
+      isCloudAuth: false,
+      message: "Password is required.",
+      error: "PASSWORD_REQUIRED"
+    };
+  }
 
   try {
     const supabase = getSupabaseAuthClient();
@@ -226,33 +204,8 @@ export async function signInOfficer(email: string, password?: string): Promise<S
     ]);
 
     if (!error && data.user) {
-      const officer: MockOfficer = {
-        id: data.user.id,
-        name: String(
-          data.user.user_metadata["name"] ||
-            expectedOfficer?.name ||
-            normalizedEmail.split("@")[0] ||
-            "Officer"
-        ),
-        email: data.user.email || normalizedEmail,
-        role: (data.user.user_metadata["role"] as MockRole) || expectedOfficer?.role || "INSPECTOR",
-        title: String(data.user.user_metadata["title"] || expectedOfficer?.title || "Tax Officer"),
-        jurisdictionId: String(
-          data.user.user_metadata["jurisdictionId"] ||
-            expectedOfficer?.jurisdictionId ||
-            CIRCLE_VEHARI_ID
-        ),
-        jurisdictionName: String(
-          data.user.user_metadata["jurisdictionName"] ||
-            expectedOfficer?.jurisdictionName ||
-            "Circle-Vehari"
-        ),
-        jurisdictionTier:
-          (data.user.user_metadata["jurisdictionTier"] as MockOfficer["jurisdictionTier"]) ||
-          expectedOfficer?.jurisdictionTier ||
-          "CIRCLE",
-        badgeText: expectedOfficer?.badgeText || "Authenticated Officer (Vercel)"
-      };
+      const approvedProfile = getOfficerProfileByEmail(data.user.email || normalizedEmail);
+      const officer: MockOfficer = { ...approvedProfile, id: data.user.id };
 
       return {
         success: true,
@@ -263,22 +216,21 @@ export async function signInOfficer(email: string, password?: string): Promise<S
       };
     }
 
-    // Dynamic fallback officer profile
-    const officer = getOfficerProfileByEmail(normalizedEmail);
     return {
-      success: true,
-      officer,
+      success: false,
+      officer: MOCK_OFFICERS[0],
       isCloudAuth: false,
-      message: `Authenticated as ${officer.name} (${officer.badgeText})`
+      message: error?.message || "Authentication failed.",
+      error: "AUTHENTICATION_FAILED"
     };
   } catch (err: unknown) {
-    console.warn("Supabase Auth note:", err);
-    const officer = getOfficerProfileByEmail(normalizedEmail);
+    console.warn("Supabase Auth failure:", err);
     return {
-      success: true,
-      officer,
+      success: false,
+      officer: MOCK_OFFICERS[0],
       isCloudAuth: false,
-      message: `Authenticated as ${officer.name} (${officer.badgeText})`
+      message: "Authentication service is unavailable. No officer session was created.",
+      error: "AUTH_SERVICE_UNAVAILABLE"
     };
   }
 }
@@ -333,23 +285,19 @@ export function verifyOfficerAuthority(
   officer: MockOfficer,
   action: StatutoryAction
 ): { authorized: boolean; reason?: string } {
-  // Admin role possesses full-fledged authority across all statutory powers (Director, ETO, Inspector)
-  if (officer.role === "ADMIN") {
-    return { authorized: true };
-  }
-
   switch (action) {
     case "REGISTER_UNIT":
     case "SUBMIT_ASSESSMENT":
-      // All officers can register units / submit assessments
-      return { authorized: true };
+      return officer.role === "INSPECTOR"
+        ? { authorized: true }
+        : { authorized: false, reason: `Only an assigned Inspector may perform ${action}.` };
 
     case "APPROVE_ASSESSMENT":
     case "RETURN_ASSESSMENT":
-      if (officer.role !== "ETO" && officer.role !== "DIRECTOR") {
+      if (officer.role !== "ETO") {
         return {
           authorized: false,
-          reason: `Statutory Authority Violation: Rule 5(1) assessment approval or return strictly requires an Assessing Authority (ETO or higher). Current role: ${officer.role}.`
+          reason: `Statutory Authority Violation: assessment approval or return requires the assigned ETO. Current role: ${officer.role}.`
         };
       }
       return { authorized: true };
@@ -375,7 +323,7 @@ export function verifyOfficerAuthority(
       return { authorized: true };
 
     case "ISSUE_CLEARANCE_CERTIFICATE":
-      if (officer.role !== "ETO" && officer.role !== "DIRECTOR") {
+      if (officer.role !== "ETO") {
         return {
           authorized: false,
           reason: `Statutory Authority Violation: Form P.F.T-5 Tax Clearance Certificates must be issued under official seal by an Assessing Authority (ETO Tariq Mahmood). Inspectors cannot issue clearance certificates.`
@@ -384,7 +332,7 @@ export function verifyOfficerAuthority(
       return { authorized: true };
 
     case "SUBMIT_DISCONTINUANCE_INSPECTION":
-      if (officer.role !== "INSPECTOR" && officer.role !== "ETO") {
+      if (officer.role !== "INSPECTOR") {
         return {
           authorized: false,
           reason: `Statutory Authority Violation: Field inspections under Rule 10 are conducted by Circle Tax Inspectors.`
@@ -393,16 +341,24 @@ export function verifyOfficerAuthority(
       return { authorized: true };
 
     case "ADJUDICATE_DISCONTINUANCE":
+      if (officer.role !== "ETO") {
+        return {
+          authorized: false,
+          reason: `Statutory Authority Violation: discontinuance adjudication requires the assigned ETO.`
+        };
+      }
+      return { authorized: true };
+
     case "ADJUDICATE_REFUND":
       if (officer.role !== "ETO" && officer.role !== "DIRECTOR") {
         return {
           authorized: false,
-          reason: `Statutory Authority Violation: Statutory closure orders under Rule 10 and refund/adjustment orders under Rule 5 strictly require Assessing Authority (ETO) or Director approval.`
+          reason: `Statutory Authority Violation: refund/adjustment adjudication requires an ETO or Director acting under approved policy.`
         };
       }
       return { authorized: true };
 
     default:
-      return { authorized: true };
+      return { authorized: false, reason: "Action is not present in the approved role matrix." };
   }
 }

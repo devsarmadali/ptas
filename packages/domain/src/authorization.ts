@@ -57,13 +57,30 @@ export function evaluateJurisdictionAccess({
   };
 }
 
-export type DomainAction = "VIEW" | "DRAFT" | "SUBMIT" | "APPROVE" | "REVISE";
+export type DomainAction =
+  | "VIEW"
+  | "DRAFT"
+  | "SUBMIT"
+  | "RETURN"
+  | "APPROVE"
+  | "REVISE"
+  | "ADMINISTER_USERS"
+  | "VIEW_AUDIT";
 
 export interface EvaluateActionAccessParams extends EvaluateJurisdictionAccessParams {
   readonly action: DomainAction;
 }
 
-const STATUTORY_APPROVAL_ROLES = new Set(["ETO", "DIRECTOR", "ADMIN"]);
+const ACTION_ROLES: Readonly<Record<DomainAction, ReadonlySet<string>>> = {
+  VIEW: new Set(["INSPECTOR", "ETO", "DIRECTOR", "AUDITOR", "FINANCE"]),
+  DRAFT: new Set(["INSPECTOR"]),
+  SUBMIT: new Set(["INSPECTOR"]),
+  RETURN: new Set(["ETO"]),
+  APPROVE: new Set(["ETO"]),
+  REVISE: new Set(["INSPECTOR"]),
+  ADMINISTER_USERS: new Set(["ADMIN"]),
+  VIEW_AUDIT: new Set(["DIRECTOR", "AUDITOR"])
+};
 
 export function evaluateActionAccess(params: EvaluateActionAccessParams): AccessDecision {
   const jurisdictionDecision = evaluateJurisdictionAccess(params);
@@ -73,15 +90,14 @@ export function evaluateActionAccess(params: EvaluateActionAccessParams): Access
 
   const role = jurisdictionDecision.matchedAssignment?.roleCode;
 
-  if (params.action === "APPROVE") {
-    if (!role || !STATUTORY_APPROVAL_ROLES.has(role)) {
-      return {
-        allowed: false,
-        reason: "INSUFFICIENT_ROLE",
-        matchedAssignment: jurisdictionDecision.matchedAssignment,
-        message: `Role ${role} is not legally authorized to approve statutory decisions (requires assessing authority ETO or higher)`
-      };
-    }
+  const allowedRoles = ACTION_ROLES[params.action];
+  if (!role || !allowedRoles.has(role)) {
+    return {
+      allowed: false,
+      reason: "INSUFFICIENT_ROLE",
+      matchedAssignment: jurisdictionDecision.matchedAssignment,
+      message: `Role ${role ?? "UNASSIGNED"} is not authorized to perform ${params.action}`
+    };
   }
 
   return {

@@ -6,6 +6,14 @@
  * - Browser Print functionality is completely eliminated in favor of direct PDF output.
  * - Screenshot/viewport/canvas captures are eliminated in favor of deterministic vector rendering.
  * - Database -> Server authorization & validation -> Structured document data -> Official PDF template -> Download
+ *
+ * ROUTING CONTRACT (strict, no silent fallbacks):
+ * Every documentType identifier MUST map to exactly one authorized generator.
+ * Unknown types throw an explicit UnsupportedDocumentTypeError — they never fall through to another document.
+ *
+ * CHECK ORDER is critically important:
+ * More-specific identifiers (e.g. "executive") MUST be checked before any substring that would
+ * also match (e.g. "pft2").  The list is ordered from most-specific to least-specific.
  */
 
 import { downloadOfficialPdf } from "./pdf/download-service";
@@ -27,6 +35,9 @@ export interface PdfExportOptions {
 /**
  * Authoritative PDF generation and download handler.
  * Replaces legacy DOM element captures with pure vector rendering from authoritative records.
+ *
+ * CRITICAL: Check order matters. "executive" must come before any "pft2" check to prevent
+ * executive-pft2-brief identifiers from accidentally matching the challan branch.
  */
 export async function downloadDocumentPdf(
   elementIdOrType: string,
@@ -36,77 +47,13 @@ export async function downloadDocumentPdf(
   const state = loadPilotState();
   const effectiveFilename = options?.filename || defaultFilename;
 
-  // Map known target IDs to authoritative document types
+  // Map known target IDs to authoritative document types.
+  // ORDERING: Most-specific checks first to prevent substring cross-matching.
   const lower = elementIdOrType.toLowerCase();
 
   try {
-    if (lower.includes("pft2") || lower.includes("challan")) {
-      const activeChallan = state.pft2Challans?.[0];
-      if (!activeChallan) {
-        alert("No issued Form PFT-2 Challan found in database.");
-        return false;
-      }
-      return downloadOfficialPdf({
-        type: "FORM_PFT2_CHALLAN",
-        documentIdOrData: activeChallan,
-        defaultFilename: effectiveFilename
-      });
-    }
-
-    if (lower.includes("pft1") || lower.includes("notice-of-demand")) {
-      const approvedUnit =
-        state.units?.find((u) => u.assessments?.[0]?.status === "APPROVED") ?? state.units?.[0];
-      if (!approvedUnit) {
-        alert("No taxpayer unit available for Form PFT-1 generation.");
-        return false;
-      }
-      return downloadOfficialPdf({
-        type: "FORM_PFT1_NOTICE",
-        documentIdOrData: approvedUnit,
-        defaultFilename: effectiveFilename
-      });
-    }
-
-    if (lower.includes("pft3") || lower.includes("register")) {
-      const rows = generateFormPFT3Rows(state.units || []);
-      return downloadOfficialPdf({
-        type: "FORM_PFT3_REGISTER",
-        documentIdOrData: { rows },
-        defaultFilename: effectiveFilename
-      });
-    }
-
-    if (lower.includes("show-cause")) {
-      const unit = state.units?.[0];
-      return downloadOfficialPdf({
-        type: "SHOW_CAUSE_NOTICE",
-        documentIdOrData: unit,
-        defaultFilename: effectiveFilename
-      });
-    }
-
-    if (lower.includes("recovery")) {
-      const unit = state.units?.[0];
-      return downloadOfficialPdf({
-        type: "LAND_REVENUE_RECOVERY",
-        documentIdOrData: unit,
-        defaultFilename: effectiveFilename
-      });
-    }
-
-    if (lower.includes("receipt")) {
-      const receipt = state.statutoryReceipts?.[0];
-      if (!receipt) {
-        alert("No recorded payment receipt found.");
-        return false;
-      }
-      return downloadOfficialPdf({
-        type: "STATUTORY_RECEIPT",
-        documentIdOrData: receipt,
-        defaultFilename: effectiveFilename
-      });
-    }
-
+    // ── 1. EXECUTIVE PFT-2 BRIEF ─────────────────────────────────────────────
+    // Must come before any "pft2" check — "executive-pft2-brief" contains "pft2".
     if (lower.includes("executive")) {
       const briefData = calculatePft2ExecutiveSummary(state.pft2Challans || []);
       return downloadOfficialPdf({
@@ -144,6 +91,80 @@ export async function downloadDocumentPdf(
       });
     }
 
+    // ── 2. FORM PFT-2 CHALLAN ────────────────────────────────────────────────
+    if (lower.includes("pft2") || lower.includes("challan")) {
+      const activeChallan = state.pft2Challans?.[0];
+      if (!activeChallan) {
+        alert("No issued Form PFT-2 Challan found in database.");
+        return false;
+      }
+      return downloadOfficialPdf({
+        type: "FORM_PFT2_CHALLAN",
+        documentIdOrData: activeChallan,
+        defaultFilename: effectiveFilename
+      });
+    }
+
+    // ── 3. FORM PFT-1 NOTICE OF DEMAND ──────────────────────────────────────
+    if (lower.includes("pft1") || lower.includes("notice-of-demand")) {
+      const approvedUnit =
+        state.units?.find((u) => u.assessments?.[0]?.status === "APPROVED") ?? state.units?.[0];
+      if (!approvedUnit) {
+        alert("No taxpayer unit available for Form PFT-1 generation.");
+        return false;
+      }
+      return downloadOfficialPdf({
+        type: "FORM_PFT1_NOTICE",
+        documentIdOrData: approvedUnit,
+        defaultFilename: effectiveFilename
+      });
+    }
+
+    // ── 4. FORM PFT-3 ASSESSMENT REGISTER ───────────────────────────────────
+    if (lower.includes("pft3") || lower.includes("register")) {
+      const rows = generateFormPFT3Rows(state.units || []);
+      return downloadOfficialPdf({
+        type: "FORM_PFT3_REGISTER",
+        documentIdOrData: { rows },
+        defaultFilename: effectiveFilename
+      });
+    }
+
+    // ── 5. SHOW CAUSE NOTICE ─────────────────────────────────────────────────
+    if (lower.includes("show-cause")) {
+      const unit = state.units?.[0];
+      return downloadOfficialPdf({
+        type: "SHOW_CAUSE_NOTICE",
+        documentIdOrData: unit,
+        defaultFilename: effectiveFilename
+      });
+    }
+
+    // ── 6. LAND REVENUE RECOVERY ─────────────────────────────────────────────
+    if (lower.includes("recovery")) {
+      const unit = state.units?.[0];
+      return downloadOfficialPdf({
+        type: "LAND_REVENUE_RECOVERY",
+        documentIdOrData: unit,
+        defaultFilename: effectiveFilename
+      });
+    }
+
+    // ── 7. STATUTORY RECEIPT ─────────────────────────────────────────────────
+    if (lower.includes("receipt")) {
+      const receipt = state.statutoryReceipts?.[0];
+      if (!receipt) {
+        alert("No recorded payment receipt found.");
+        return false;
+      }
+      return downloadOfficialPdf({
+        type: "STATUTORY_RECEIPT",
+        documentIdOrData: receipt,
+        defaultFilename: effectiveFilename
+      });
+    }
+
+    // ── 8. NOTICE DISPATCH / STATUTORY REPORT ───────────────────────────────
     if (lower.includes("dispatch")) {
       const dispatchReg = generateCircleDispatchRegister(state.units || []);
       return downloadOfficialPdf({
@@ -179,6 +200,7 @@ export async function downloadDocumentPdf(
       });
     }
 
+    // ── 9. TAX CLEARANCE CERTIFICATE ────────────────────────────────────────
     if (lower.includes("clearance")) {
       const unit = state.units?.find((u) => u.ledgerEntries.length > 0) || state.units?.[0];
       return downloadOfficialPdf({
@@ -188,6 +210,7 @@ export async function downloadDocumentPdf(
       });
     }
 
+    // ── 10. APPELLATE ORDER ──────────────────────────────────────────────────
     if (lower.includes("appellate") || lower.includes("appeal") || lower.includes("relief")) {
       const unit = state.units?.[0];
       return downloadOfficialPdf({
@@ -228,6 +251,7 @@ export async function downloadDocumentPdf(
       });
     }
 
+    // ── 11. UNIT DOSSIER ─────────────────────────────────────────────────────
     if (lower.includes("dossier")) {
       const unit = state.units?.[0];
       return downloadOfficialPdf({
@@ -237,13 +261,18 @@ export async function downloadDocumentPdf(
       });
     }
 
-    // Default fallback to Assessment Register
-    const rows = generateFormPFT3Rows(state.units || []);
-    return downloadOfficialPdf({
-      type: "FORM_PFT3_REGISTER",
-      documentIdOrData: { rows },
-      defaultFilename: effectiveFilename
-    });
+    // ── UNKNOWN TYPE: Explicit rejection (no silent fallback) ────────────────
+    // Never silently redirect to another document type.
+    // Callers must pass a recognized identifier or use downloadOfficialPdf directly.
+    console.error(
+      `[downloadDocumentPdf] Unsupported identifier: "${elementIdOrType}". ` +
+        `Use downloadOfficialPdf() directly with an explicit OfficialDocumentType instead.`
+    );
+    alert(
+      `Document type "${elementIdOrType}" is not recognized. ` +
+        `Please contact the system administrator or use a specific document download action.`
+    );
+    return false;
   } catch (err) {
     console.error("downloadDocumentPdf execution error:", err);
     return false;

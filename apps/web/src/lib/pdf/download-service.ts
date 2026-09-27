@@ -5,6 +5,11 @@
  * Implements Section 4 & 12:
  * Reconstructs complete document from database values and saves vector PDF directly.
  * Deterministic output across all devices, viewports, zoom levels, and orientations.
+ *
+ * Error contract:
+ *   - Returns false on failure and throws the error so callers can catch and display toast feedback.
+ *   - Never swallows errors silently.
+ *   - Never alerts() directly — UI feedback is the caller's responsibility.
  */
 
 import { generateAuthoritativePdf } from "./document-engine";
@@ -25,6 +30,9 @@ export interface DownloadPdfParams {
 /**
  * Downloads an official statutory document as a vector PDF.
  * Never touches the DOM, never relies on viewport size, scroll position, or zoom.
+ *
+ * On failure: logs the error, re-throws it so callers can display toast/alert feedback.
+ * Returns true on success, false on failure.
  */
 export async function downloadOfficialPdf(params: DownloadPdfParams): Promise<boolean> {
   try {
@@ -49,8 +57,9 @@ export async function downloadOfficialPdf(params: DownloadPdfParams): Promise<bo
 
     return true;
   } catch (error) {
-    console.error(`downloadOfficialPdf failed for [${params.type}]:`, error);
-    alert(error instanceof Error ? error.message : String(error));
-    return false;
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[downloadOfficialPdf] Failed to generate [${params.type}]: ${message}`, error);
+    // Re-throw so callers (page.tsx handlers) can catch and display toast feedback
+    throw error;
   }
 }
