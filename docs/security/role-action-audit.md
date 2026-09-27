@@ -32,18 +32,18 @@ audited delegation/configuration record exists. UI role selection or client meta
 
 ## Audit findings and disposition
 
-| Finding                                        | Previous behavior                                                          | Required disposition                                                                   |
-| ---------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Technical admin inherited all statutory powers | `ADMIN` bypassed every action check                                        | Removed; admin is technical-only                                                       |
-| Unknown actions were allowed                   | Authority switch defaulted to success                                      | Changed to default-deny                                                                |
-| Any officer could submit assessments           | ETO, Director, and Admin could act as maker                                | Restricted to Inspector absent approved delegation                                     |
-| Director could approve assessments             | Oversight role inherited ETO approval                                      | Restricted to the assigned ETO                                                         |
-| Embedded officer passwords                     | Source and UI exposed reusable credentials                                 | Removed; passwords must be issued out-of-band                                          |
-| Offline auth fallback                          | Network/auth failure created a successful Inspector session                | Removed; authentication now fails closed                                               |
-| Client-editable metadata controlled authority  | `user_metadata` supplied role and jurisdiction                             | Removed; authenticated email maps only to an approved pilot assignment                 |
-| Browser state is treated as authoritative      | Material commands mutate `localStorage` and then sync with a public client | Open blocker: replace with authenticated server commands and transactional persistence |
-| Database has no RLS/grant policy migration     | Exposed tables may rely on deployment defaults                             | Open blocker: add and verify explicit grants/RLS before any live Supabase use          |
-| PDF endpoints accept role headers              | Caller-controlled request values influence document role context           | Open blocker: derive actor from the verified server session                            |
+| Finding                                        | Previous behavior                                                          | Required disposition                                                                    |
+| ---------------------------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Technical admin inherited all statutory powers | `ADMIN` bypassed every action check                                        | Removed; admin is technical-only                                                        |
+| Unknown actions were allowed                   | Authority switch defaulted to success                                      | Changed to default-deny                                                                 |
+| Any officer could submit assessments           | ETO, Director, and Admin could act as maker                                | Restricted to Inspector absent approved delegation                                      |
+| Director could approve assessments             | Oversight role inherited ETO approval                                      | Restricted to the assigned ETO                                                          |
+| Embedded officer passwords                     | Source and UI exposed reusable credentials                                 | Removed; passwords must be issued out-of-band                                           |
+| Offline auth fallback                          | Network/auth failure created a successful Inspector session                | Removed; authentication now fails closed                                                |
+| Client-editable metadata controlled authority  | `user_metadata` supplied role and jurisdiction                             | Removed; authenticated email maps only to an approved pilot assignment                  |
+| Browser state is treated as authoritative      | Material commands mutate `localStorage` and then sync with a public client | Open blocker: replace with authenticated server commands and transactional persistence  |
+| Database has no RLS/grant policy migration     | Exposed tables may rely on deployment defaults                             | Open blocker: add and verify explicit grants/RLS before any live Supabase use           |
+| PDF endpoints accepted role headers            | Caller-controlled request values influenced document role context          | Fixed: bearer session is verified server-side and authority comes from trusted metadata |
 
 ## Server enforcement requirements
 

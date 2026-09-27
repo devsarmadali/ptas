@@ -179,7 +179,7 @@ test("verifies sign out leads to secure credential sign-in without embedded pass
 
   // Selecting ETO fills only the approved account email; it never fills a password or signs in.
   await page.getByRole("button", { name: /Select ETO Account/i }).click();
-  await expect(page.getByLabel(/Official Email Address/i)).toHaveValue("eto.vehari@punjab.gov.pk");
+  await expect(page.getByLabel(/Official Email/i)).toHaveValue("eto.vehari@punjab.gov.pk");
   await expect(page.getByLabel(/^Password$/i)).toHaveValue("");
   await expect(page).toHaveURL(/.*sign-in/);
 
