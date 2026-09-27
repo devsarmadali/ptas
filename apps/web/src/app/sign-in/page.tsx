@@ -26,7 +26,7 @@ export default function SignInPage() {
     OFFICIAL_OFFICERS_REGISTRY[0]!
   );
   const [email, setEmail] = useState(OFFICIAL_OFFICERS_REGISTRY[0]!.email);
-  const [password, setPassword] = useState(OFFICIAL_OFFICERS_REGISTRY[0]!.defaultPassword);
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -36,7 +36,7 @@ export default function SignInPage() {
   const handleSelectRole = (officer: OfficerCredentialInfo) => {
     setSelectedOfficer(officer);
     setEmail(officer.email);
-    setPassword(officer.defaultPassword);
+    setPassword("");
     setErrorMessage(null);
   };
 
@@ -92,11 +92,6 @@ export default function SignInPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     void executeSignIn(email, password);
-  };
-
-  const handleInstantSignIn = (officer: OfficerCredentialInfo) => {
-    handleSelectRole(officer);
-    void executeSignIn(officer.email, officer.defaultPassword);
   };
 
   return (
@@ -312,10 +307,10 @@ export default function SignInPage() {
                 gap: "0.5rem"
               }}
             >
-              <span>1. Choose an Official Role (Pre-filled Credentials)</span>
+              <span>1. Choose an Official Account</span>
             </h3>
             <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
-              Click any card to select &amp; pre-fill credentials
+              Account selection fills the email only; enter the issued password separately
             </span>
           </div>
 
@@ -423,7 +418,7 @@ export default function SignInPage() {
                       {info.title} &bull; <strong>{info.jurisdictionName}</strong>
                     </p>
 
-                    {/* Credentials Preview Pill */}
+                    {/* Account Preview Pill */}
                     <div
                       style={{
                         background: isSelected ? "#ffffff" : "#f8fafc",
@@ -438,8 +433,8 @@ export default function SignInPage() {
                       <div style={{ color: "#334155", marginBottom: "0.2rem" }}>
                         <span style={{ color: "#64748b" }}>User:</span> {info.email}
                       </div>
-                      <div style={{ color: "#334155" }}>
-                        <span style={{ color: "#64748b" }}>Pass:</span> {info.defaultPassword}
+                      <div style={{ color: "#64748b" }}>
+                        Password is never embedded in the client.
                       </div>
                     </div>
 
@@ -454,7 +449,7 @@ export default function SignInPage() {
                     </div>
                   </div>
 
-                  {/* Instant Sign In Button */}
+                  {/* Account Selection Button */}
                   <div
                     style={{
                       marginTop: "1rem",
@@ -466,7 +461,7 @@ export default function SignInPage() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleInstantSignIn(info);
+                        handleSelectRole(info);
                       }}
                       disabled={isAuthenticating}
                       className="btn-primary btn-sm"
@@ -486,8 +481,8 @@ export default function SignInPage() {
                         color: "#ffffff"
                       }}
                     >
-                      <span>⚡</span>
-                      <span>One-Click Sign In as {info.role}</span>
+                      <span>🔐</span>
+                      <span>Select {info.role} Account</span>
                     </button>
                   </div>
                 </div>

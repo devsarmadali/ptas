@@ -106,18 +106,18 @@ describe("Phase 6: Tax Clearance Certificate (PFT-5) & Statutory Relief (Rules 5
   });
 
   it("enforces strict statutory authority matrix on Phase 6 relief actions", () => {
-    // 1. Tax Clearance Certificate: Only ETO or Director
+    // 1. Tax Clearance Certificate: assigned ETO only
     const inspCert = verifyOfficerAuthority(inspector!, "ISSUE_CLEARANCE_CERTIFICATE");
     expect(inspCert.authorized).toBe(false);
     expect(inspCert.reason).toContain("Statutory Authority Violation");
     expect(verifyOfficerAuthority(eto!, "ISSUE_CLEARANCE_CERTIFICATE").authorized).toBe(true);
-    expect(verifyOfficerAuthority(director!, "ISSUE_CLEARANCE_CERTIFICATE").authorized).toBe(true);
+    expect(verifyOfficerAuthority(director!, "ISSUE_CLEARANCE_CERTIFICATE").authorized).toBe(false);
 
-    // 2. Discontinuance Inspection: Inspector and ETO
+    // 2. Discontinuance Inspection: assigned Inspector only
     expect(verifyOfficerAuthority(inspector!, "SUBMIT_DISCONTINUANCE_INSPECTION").authorized).toBe(
       true
     );
-    expect(verifyOfficerAuthority(eto!, "SUBMIT_DISCONTINUANCE_INSPECTION").authorized).toBe(true);
+    expect(verifyOfficerAuthority(eto!, "SUBMIT_DISCONTINUANCE_INSPECTION").authorized).toBe(false);
 
     // 3. Discontinuance & Refund Adjudication: Exclusive to ETO / Director
     const inspDisc = verifyOfficerAuthority(inspector!, "ADJUDICATE_DISCONTINUANCE");

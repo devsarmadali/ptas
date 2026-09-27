@@ -58,14 +58,7 @@ export function evaluateJurisdictionAccess({
 }
 
 export type DomainAction =
-  | "VIEW"
-  | "DRAFT"
-  | "SUBMIT"
-  | "RETURN"
-  | "APPROVE"
-  | "REVISE"
-  | "ADMINISTER_USERS"
-  | "VIEW_AUDIT";
+  "VIEW" | "DRAFT" | "SUBMIT" | "RETURN" | "APPROVE" | "REVISE" | "ADMINISTER_USERS" | "VIEW_AUDIT";
 
 export interface EvaluateActionAccessParams extends EvaluateJurisdictionAccessParams {
   readonly action: DomainAction;

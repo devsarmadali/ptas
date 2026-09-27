@@ -203,7 +203,7 @@ export const ADMIN_OFFICER: MockOfficer = {
   jurisdictionId: MULTAN_REGION_ID,
   jurisdictionName: "Punjab Provincial Apex (All Jurisdictions)",
   jurisdictionTier: "REGION",
-  badgeText: "System Administrator (Full Statutory Powers: Director, ETO, Inspector)"
+  badgeText: "System Administrator (Technical Administration Only)"
 };
 
 export const MOCK_OFFICERS: readonly [MockOfficer, MockOfficer, MockOfficer, MockOfficer] = [

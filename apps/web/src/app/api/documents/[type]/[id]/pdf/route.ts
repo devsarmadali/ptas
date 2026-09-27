@@ -6,11 +6,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { generateAuthoritativePdf } from "../../../../../../lib/pdf/document-engine";
-import type {
-  OfficialDocumentType,
-  DocumentAuthorizationContext
-} from "../../../../../../lib/pdf/types";
-import type { MockRole } from "../../../../../../lib/pilot-store";
+import type { OfficialDocumentType } from "../../../../../../lib/pdf/types";
+import { resolveDocumentActor } from "../../../../../../lib/server-actor";
 
 export async function GET(
   request: NextRequest,
@@ -18,22 +15,10 @@ export async function GET(
 ) {
   const { type: rawType, id } = await context.params;
 
-  // Extract auth context from request headers or query params
-  const { searchParams } = new URL(request.url);
-  const officerRole = (request.headers.get("x-officer-role") ||
-    searchParams.get("role") ||
-    "INSPECTOR") as MockRole;
-  const jurisdictionId =
-    request.headers.get("x-jurisdiction-id") || searchParams.get("jurisdictionId") || undefined;
-
-  const authContext: DocumentAuthorizationContext = {
-    officerRole,
-    jurisdictionId
-  };
-
   const type = rawType.toUpperCase() as OfficialDocumentType;
 
   try {
+    const authContext = await resolveDocumentActor(request.headers.get("authorization"));
     const doc = await generateAuthoritativePdf(type, id, authContext);
     const pdfBuffer = doc.output("arraybuffer");
 

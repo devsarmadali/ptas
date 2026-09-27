@@ -111,7 +111,7 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
   // 2. SERVER-SIDE ROLE AND JURISDICTION AUTHORIZATION
   // ---------------------------------------------------------------------------
   describe("Security and Jurisdiction Authorization", () => {
-    it("allows SYSTEM_ADMIN to access any circle document", () => {
+    it("denies SYSTEM_ADMIN statutory document access", () => {
       const adminCtx: DocumentAuthorizationContext = {
         role: "SYSTEM_ADMIN",
         district: "Vehari",
@@ -122,7 +122,21 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
         district: "Multan",
         circle: "Circle-B"
       });
-      expect(result.authorized).toBe(true);
+      expect(result.authorized).toBe(false);
+      expect(result.reason).toBe("TECHNICAL_ADMIN_NO_STATUTORY_ACCESS");
+    });
+
+    it("denies document generation when actor context is missing", () => {
+      const result = validateDocumentAuthorization(
+        "PFT2_CHALLAN",
+        {},
+        {
+          district: "Vehari",
+          circle: "Circle-A"
+        }
+      );
+      expect(result.authorized).toBe(false);
+      expect(result.reason).toBe("AUTHENTICATED_ROLE_REQUIRED");
     });
 
     it("allows ETO within their own circle jurisdiction", () => {
@@ -542,11 +556,15 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
       const challan = generateFormPFT2(alMadina);
       challan.challanStatus = "ISSUED";
 
-      const pdf = await generateAuthoritativePdf({
-        documentType: "PFT2_CHALLAN",
-        entityId: alMadina.provincialUin,
-        data: challan
-      });
+      const pdf = await generateAuthoritativePdf(
+        {
+          documentType: "PFT2_CHALLAN",
+          entityId: alMadina.provincialUin,
+          data: challan
+        },
+        undefined,
+        { role: "ETO", district: "Vehari", circle: "Vehari Circle-I" }
+      );
 
       expect(pdf).toBeDefined();
       expect(Math.round(pdf.internal.pageSize.getWidth())).toBe(297);
@@ -554,11 +572,15 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
 
     it("routes PFT1 Demand Notice through authoritative generator", async () => {
       const pft1 = generateFormPFT1(alMadina);
-      const pdf = await generateAuthoritativePdf({
-        documentType: "PFT1_DEMAND_NOTICE",
-        entityId: alMadina.provincialUin,
-        data: pft1
-      });
+      const pdf = await generateAuthoritativePdf(
+        {
+          documentType: "PFT1_DEMAND_NOTICE",
+          entityId: alMadina.provincialUin,
+          data: pft1
+        },
+        undefined,
+        { role: "ETO", district: "Vehari", circle: "Vehari Circle-I" }
+      );
 
       expect(pdf).toBeDefined();
       expect(Math.round(pdf.internal.pageSize.getWidth())).toBe(210);

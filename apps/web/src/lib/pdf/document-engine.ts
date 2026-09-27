@@ -99,14 +99,18 @@ export function validateDocumentAuthorization(
 
   const role = (context.role || context.officerRole || "").toUpperCase();
 
-  // If no auth context provided, default to authorized for backwards-compatible pilot sessions
+  // Missing actor context is never an authorized session.
   if (!role) {
-    return { allowed: true, authorized: true, reason: "AUTHORIZED_PILOT_SESSION" };
+    return { allowed: false, authorized: false, reason: "AUTHENTICATED_ROLE_REQUIRED" };
   }
 
-  // System Admin and Directors have province-wide / unconstrained jurisdiction
-  if (role === "SYSTEM_ADMIN" || role === "ADMIN" || role === "DIRECTOR") {
+  // Director access is oversight/appellate access. Technical admins do not inherit it.
+  if (role === "DIRECTOR") {
     return { allowed: true, authorized: true, reason: `AUTHORIZED_${role}` };
+  }
+
+  if (role === "SYSTEM_ADMIN" || role === "ADMIN") {
+    return { allowed: false, authorized: false, reason: "TECHNICAL_ADMIN_NO_STATUTORY_ACCESS" };
   }
 
   // Excise & Taxation Officer (Assessing Authority)

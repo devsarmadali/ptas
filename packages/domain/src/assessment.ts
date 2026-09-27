@@ -33,7 +33,7 @@ export interface CreateAssessmentInput<TSnapshot = Record<string, unknown>> {
   readonly snapshot: TSnapshot;
 }
 
-const STATUTORY_APPROVAL_ROLES = new Set(["ETO", "DIRECTOR", "ADMIN"]);
+const STATUTORY_APPROVAL_ROLES = new Set(["ETO"]);
 
 export function createAssessment<TSnapshot = Record<string, unknown>>(
   input: CreateAssessmentInput<TSnapshot>,

@@ -27,7 +27,7 @@ export async function computeFileSha256(file: File): Promise<string> {
 
 /**
  * Uploads a Challan 32-A payment slip scan to Supabase Storage bucket 'receipts-challan32a'.
- * Falls back gracefully to local blob preview if cloud credentials are unset.
+ * Fails closed when cloud storage is unavailable; a local preview is not evidence of receipt.
  */
 export async function uploadReceiptScan(
   file: File,
@@ -39,10 +39,11 @@ export async function uploadReceiptScan(
   const sanitizedReceipt = receiptNumber.replace(/[^a-zA-Z0-9_-]/g, "_");
   const storagePath = `receipts/${unitId}/${sanitizedReceipt}-${Date.now()}.${ext}`;
 
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL || "https://zvadxmxasutvqpltszim.supabase.co";
-  const supabaseKey =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "sb_publishable_aTqvnS7QhGZq95GwtPW8Ig_vjPV76i5";
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Supabase receipt storage is not configured");
+  }
 
   try {
     const supabase = createPtasSupabaseClient({
@@ -56,14 +57,7 @@ export async function uploadReceiptScan(
     });
 
     if (error) {
-      console.warn("Supabase Storage upload note (using local preview fallback):", error.message);
-      const localUrl = URL.createObjectURL(file);
-      return {
-        url: localUrl,
-        sha256,
-        fileName: file.name,
-        fileSize: file.size
-      };
+      throw new Error(`Receipt evidence upload failed: ${error.message}`);
     }
 
     const { data: publicData } = supabase.storage
@@ -77,13 +71,6 @@ export async function uploadReceiptScan(
       fileSize: file.size
     };
   } catch (err) {
-    console.warn("Storage upload fallback error:", err);
-    const localUrl = URL.createObjectURL(file);
-    return {
-      url: localUrl,
-      sha256,
-      fileName: file.name,
-      fileSize: file.size
-    };
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }

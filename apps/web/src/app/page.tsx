@@ -753,7 +753,7 @@ export default function HomePage({
           target: `${result.officer.name} (${result.officer.email})`,
           timestamp: new Date().toISOString(),
           correlationId: `corr-auth-${Date.now()}`,
-          details: `Authenticated session via ${result.isCloudAuth ? "Supabase Real Auth (JWT)" : "Offline Officer Keystore"} for ${result.officer.title} (${result.officer.jurisdictionName}). Enforced tier: ${result.officer.jurisdictionTier}.`
+          details: `Authenticated session via Supabase Auth for ${result.officer.title} (${result.officer.jurisdictionName}). Enforced tier: ${result.officer.jurisdictionTier}.`
         };
         syncState(units, [auditItem, ...auditLogs], result.officer);
         showToast("success", `🔑 ${result.message}`);
@@ -2329,11 +2329,9 @@ export default function HomePage({
   // Handler: Submit Statutory Penalty
   const handleImposePenalty = (e: React.FormEvent) => {
     e.preventDefault();
-    if (officer.role !== "ETO" && officer.role !== "ADMIN") {
-      showToast(
-        "error",
-        "Statutory violation: Only Assessing Authority (ETO) or Provincial Admin can impose penalties under Section 3(4)."
-      );
+    const authCheck = verifyOfficerAuthority(officer, "IMPOSE_PENALTY");
+    if (!authCheck.authorized) {
+      showToast("error", authCheck.reason || "Unauthorized to impose a penalty.");
       return;
     }
     const targetUnit = units.find((u) => u.id === penaltyTargetUnitId);
@@ -2403,11 +2401,9 @@ export default function HomePage({
 
   // Handler: Confirm Land Revenue Certification
   const handleConfirmRecoveryCertification = () => {
-    if (officer.role !== "ETO" && officer.role !== "ADMIN") {
-      showToast(
-        "error",
-        "Statutory violation: Only Assessing Authority (ETO) or Provincial Admin can certify recovery under Rule 12."
-      );
+    const authCheck = verifyOfficerAuthority(officer, "ISSUE_RECOVERY_CERTIFICATE");
+    if (!authCheck.authorized) {
+      showToast("error", authCheck.reason || "Unauthorized to certify recovery.");
       return;
     }
     const targetUnit = units.find((u) => u.id === recoveryTargetUnitId);
@@ -3406,7 +3402,7 @@ export default function HomePage({
   const renderSurveyUnitActions = (targetUnit: StoredUnit) => {
     const latestAsm = targetUnit.assessments[0];
     const status = latestAsm?.status ?? "DRAFT";
-    const isEto = officer.role === "ETO" || officer.role === "DIRECTOR" || officer.role === "ADMIN";
+    const isEto = officer.role === "ETO";
 
     const actions: RowAction[] = [
       {
@@ -4539,9 +4535,7 @@ export default function HomePage({
 
                           {status === "SUBMITTED" && (
                             <div style={{ display: "flex", gap: "0.5rem" }}>
-                              {officer.role === "ETO" ||
-                              officer.role === "DIRECTOR" ||
-                              officer.role === "ADMIN" ? (
+                              {officer.role === "ETO" ? (
                                 <>
                                   <button
                                     onClick={() => handleApproveAssessment(u.id)}
@@ -5112,12 +5106,27 @@ export default function HomePage({
                         rows:
                           dRows.length > 0
                             ? dRows
-                            : [[1, "0001", "Defaulter Unit", "Commercial", "30 Days", "10,000", "5,000", "15,000", "DEFAULTER"]],
+                            : [
+                                [
+                                  1,
+                                  "0001",
+                                  "Defaulter Unit",
+                                  "Commercial",
+                                  "30 Days",
+                                  "10,000",
+                                  "5,000",
+                                  "15,000",
+                                  "DEFAULTER"
+                                ]
+                              ],
                         officialSha256: "sha256-defaulters-roll"
                       },
                       defaultFilename: "PTAS_Defaulters_Roster_Vehari.pdf"
                     }).catch((err) =>
-                      showToast("error", `Failed to generate Defaulters Roll: ${(err as Error).message}`)
+                      showToast(
+                        "error",
+                        `Failed to generate Defaulters Roll: ${(err as Error).message}`
+                      )
                     );
                   }}
                   title="Download Defaulters Roster PDF"
@@ -5462,32 +5471,28 @@ export default function HomePage({
                                   id: "impose-penalty",
                                   label: "Impose Statutory Penalty (Section 3(4))",
                                   icon: "⚠️",
-                                  disabled:
-                                    officer.role !== "ETO" &&
-                                    officer.role !== "DIRECTOR" &&
-                                    officer.role !== "ADMIN",
-                                  title:
-                                    officer.role === "ETO" ||
-                                    officer.role === "DIRECTOR" ||
-                                    officer.role === "ADMIN"
-                                      ? "Impose Statutory Penalty under Section 3(4)"
-                                      : "ETO Role Required to Impose Penalty",
+                                  disabled: !verifyOfficerAuthority(officer, "IMPOSE_PENALTY")
+                                    .authorized,
+                                  title: verifyOfficerAuthority(officer, "IMPOSE_PENALTY")
+                                    .authorized
+                                    ? "Impose Statutory Penalty under Section 3(4)"
+                                    : "ETO Role Required to Impose Penalty",
                                   onClick: () => handleOpenPenaltyModal(u.id)
                                 },
                                 {
                                   id: "land-revenue",
                                   label: "Certify Arrears (Punjab Land Revenue Act, Rule 12)",
                                   icon: "🏛️",
-                                  disabled:
-                                    officer.role !== "ETO" &&
-                                    officer.role !== "DIRECTOR" &&
-                                    officer.role !== "ADMIN",
-                                  title:
-                                    officer.role === "ETO" ||
-                                    officer.role === "DIRECTOR" ||
-                                    officer.role === "ADMIN"
-                                      ? "Certify Arrears under Punjab Land Revenue Act (Rule 12)"
-                                      : "ETO Role Required to Certify Recovery",
+                                  disabled: !verifyOfficerAuthority(
+                                    officer,
+                                    "ISSUE_RECOVERY_CERTIFICATE"
+                                  ).authorized,
+                                  title: verifyOfficerAuthority(
+                                    officer,
+                                    "ISSUE_RECOVERY_CERTIFICATE"
+                                  ).authorized
+                                    ? "Certify Arrears under Punjab Land Revenue Act (Rule 12)"
+                                    : "ETO Role Required to Certify Recovery",
                                   onClick: () => handleOpenRecoveryModal(u.id)
                                 },
                                 {
@@ -5562,14 +5567,18 @@ export default function HomePage({
                           { header: "Status", width: 35, align: "center" as const },
                           { header: "Hearing Date", width: 30, align: "center" as const }
                         ],
-                        rows: appealRows.length > 0
-                          ? appealRows
-                          : [[1, "APP-0001", "Appellant", "Assessment dispute", "PENDING", "—"]],
+                        rows:
+                          appealRows.length > 0
+                            ? appealRows
+                            : [[1, "APP-0001", "Appellant", "Assessment dispute", "PENDING", "—"]],
                         officialSha256: "sha256-appeals-cause-list"
                       },
                       defaultFilename: "PTAS_Appeals_Cause_List.pdf"
                     }).catch((err) =>
-                      showToast("error", `Failed to generate Appeals Cause List: ${(err as Error).message}`)
+                      showToast(
+                        "error",
+                        `Failed to generate Appeals Cause List: ${(err as Error).message}`
+                      )
                     );
                   }}
                   title="Download Appeals Cause List PDF"
@@ -5860,8 +5869,7 @@ export default function HomePage({
                             <RowActionMenu
                               align="right"
                               actions={[
-                                ...(appeal.status === "FILED" &&
-                                (officer.role === "DIRECTOR" || officer.role === "ADMIN")
+                                ...(appeal.status === "FILED" && officer.role === "DIRECTOR"
                                   ? [
                                       {
                                         id: "fix-hearing",
@@ -5876,7 +5884,7 @@ export default function HomePage({
                                   : []),
                                 ...((appeal.status === "FILED" ||
                                   appeal.status === "HEARING_SCHEDULED") &&
-                                (officer.role === "DIRECTOR" || officer.role === "ADMIN")
+                                officer.role === "DIRECTOR"
                                   ? [
                                       {
                                         id: "adjudicate-appeal",
@@ -6449,10 +6457,7 @@ export default function HomePage({
                                         }
                                       ]
                                     : []),
-                                  ...(isInspected &&
-                                  (officer.role === "ETO" ||
-                                    officer.role === "DIRECTOR" ||
-                                    officer.role === "ADMIN")
+                                  ...(isInspected && officer.role === "ETO"
                                     ? [
                                         {
                                           id: "issue-closure-order",
@@ -6693,9 +6698,7 @@ export default function HomePage({
                                 align="right"
                                 actions={[
                                   ...(isPending &&
-                                  (officer.role === "ETO" ||
-                                    officer.role === "DIRECTOR" ||
-                                    officer.role === "ADMIN")
+                                  (officer.role === "ETO" || officer.role === "DIRECTOR")
                                     ? [
                                         {
                                           id: "approve-refund",
@@ -8324,8 +8327,20 @@ export default function HomePage({
                         issuedCount: briefData.issuedCount,
                         receivedCount: briefData.receivedCount,
                         cancelledCount: briefData.cancelledCount,
-                        circleBreakdown: [{ circleName: "Vehari Circle I", count: briefData.total, totalAmount: briefData.totalDemandPkr }],
-                        categoryBreakdown: [{ categoryName: "Commercial Units", count: briefData.total, totalAmount: briefData.totalDemandPkr }],
+                        circleBreakdown: [
+                          {
+                            circleName: "Vehari Circle I",
+                            count: briefData.total,
+                            totalAmount: briefData.totalDemandPkr
+                          }
+                        ],
+                        categoryBreakdown: [
+                          {
+                            categoryName: "Commercial Units",
+                            count: briefData.total,
+                            totalAmount: briefData.totalDemandPkr
+                          }
+                        ],
                         generatedAt: new Date().toISOString().split("T")[0]!,
                         officerName: officer?.name ?? "Tariq Mahmood",
                         officerTitle: officer?.title ?? "Assessing Authority",
@@ -8333,7 +8348,10 @@ export default function HomePage({
                       },
                       defaultFilename: "Form_PFT2_Executive_Management_Brief.pdf"
                     }).catch((err) =>
-                      showToast("error", `Failed to generate Executive Brief: ${(err as Error).message}`)
+                      showToast(
+                        "error",
+                        `Failed to generate Executive Brief: ${(err as Error).message}`
+                      )
                     );
                   }}
                   className="btn-primary"
@@ -12892,7 +12910,10 @@ export default function HomePage({
                       documentIdOrData: noticeTargetUnit,
                       defaultFilename: `Show_Cause_Notice_${showCauseNoticeData.noticeNumber}.pdf`
                     }).catch((err) =>
-                      showToast("error", `Failed to generate Show Cause Notice: ${(err as Error).message}`)
+                      showToast(
+                        "error",
+                        `Failed to generate Show Cause Notice: ${(err as Error).message}`
+                      )
                     )
                   }
                   title="Download Official PDF"
@@ -13361,7 +13382,10 @@ export default function HomePage({
                       documentIdOrData: recoveryTargetUnit,
                       defaultFilename: `Recovery_Certificate_${recoveryCertData.certificateNumber}.pdf`
                     }).catch((err) =>
-                      showToast("error", `Failed to generate Recovery Certificate: ${(err as Error).message}`)
+                      showToast(
+                        "error",
+                        `Failed to generate Recovery Certificate: ${(err as Error).message}`
+                      )
                     )
                   }
                 >
@@ -13673,7 +13697,10 @@ export default function HomePage({
                         documentIdOrData: pft1Unit,
                         defaultFilename: `Form_PFT1_Notice_${pft1Data.demandNumber?.replace(/\//g, "_") ?? "notice"}.pdf`
                       }).catch((err) =>
-                        showToast("error", `Failed to generate Form PFT-1: ${(err as Error).message}`)
+                        showToast(
+                          "error",
+                          `Failed to generate Form PFT-1: ${(err as Error).message}`
+                        )
                       )
                     }
                   >
@@ -14029,7 +14056,10 @@ export default function HomePage({
                       documentIdOrData: batchUnit,
                       defaultFilename: "Batch_PFT1_Notices.pdf"
                     }).catch((err) =>
-                      showToast("error", `Failed to generate Batch PFT-1 Notices: ${(err as Error).message}`)
+                      showToast(
+                        "error",
+                        `Failed to generate Batch PFT-1 Notices: ${(err as Error).message}`
+                      )
                     );
                   }}
                 >
@@ -14333,7 +14363,10 @@ export default function HomePage({
                       documentIdOrData: batchChallan,
                       defaultFilename: "Batch_PFT2_Challans.pdf"
                     }).catch((err) =>
-                      showToast("error", `Failed to generate Batch PFT-2 Challans: ${(err as Error).message}`)
+                      showToast(
+                        "error",
+                        `Failed to generate Batch PFT-2 Challans: ${(err as Error).message}`
+                      )
                     );
                   }}
                 >
@@ -14505,15 +14538,23 @@ export default function HomePage({
                             { header: "Status", width: 25, align: "center" as const }
                           ],
                           rows: dr.rows.map((r) => [
-                            r.serialNumber, r.noticeNumber, r.demandNumber,
-                            r.assesseeLegalName, r.assessedAmount.toLocaleString(),
-                            r.dueDate, r.serverName, r.serviceStatus
+                            r.serialNumber,
+                            r.noticeNumber,
+                            r.demandNumber,
+                            r.assesseeLegalName,
+                            r.assessedAmount.toLocaleString(),
+                            r.dueDate,
+                            r.serverName,
+                            r.serviceStatus
                           ]),
                           officialSha256: dr.officialSha256
                         },
                         defaultFilename: "Circle_Notice_Dispatch_Register.pdf"
                       }).catch((err) =>
-                        showToast("error", `Failed to generate Dispatch Register: ${(err as Error).message}`)
+                        showToast(
+                          "error",
+                          `Failed to generate Dispatch Register: ${(err as Error).message}`
+                        )
                       );
                     }}
                   >
@@ -15414,7 +15455,10 @@ export default function HomePage({
                       documentIdOrData: activeAppellateOrder,
                       defaultFilename: `Appellate_Order_${activeAppellateOrder.orderNumber}.pdf`
                     }).catch((err) =>
-                      showToast("error", `Failed to generate Appellate Order: ${(err as Error).message}`)
+                      showToast(
+                        "error",
+                        `Failed to generate Appellate Order: ${(err as Error).message}`
+                      )
                     )
                   }
                 >
@@ -16209,9 +16253,11 @@ export default function HomePage({
                               <button
                                 type="button"
                                 disabled={isAuthenticating}
-                                onClick={() =>
-                                  handleAuthenticateOfficer(info.email, info.defaultPassword)
-                                }
+                                onClick={() => {
+                                  setAuthEmailInput(info.email);
+                                  setAuthPasswordInput("");
+                                  setAuthModeTab("CREDENTIALS");
+                                }}
                                 className="btn-primary btn-sm"
                                 style={{
                                   width: "100%",
@@ -16220,9 +16266,7 @@ export default function HomePage({
                                   borderColor: "#0d3822"
                                 }}
                               >
-                                {isAuthenticating
-                                  ? "Authenticating..."
-                                  : `🔐 Authenticate as ${info.name.split(" ")[0]}`}
+                                {`🔐 Enter credentials for ${info.name.split(" ")[0]}`}
                               </button>
                             )}
                           </div>
@@ -16247,8 +16291,8 @@ export default function HomePage({
                       color: "#166534"
                     }}
                   >
-                    <strong>Deployment Note:</strong> Sign in using any official Punjab Excise
-                    account or custom testing email on Vercel.
+                    <strong>Deployment Note:</strong> Sign in using an authenticated account that
+                    has an approved PTAS role and jurisdiction assignment.
                   </div>
 
                   <form
@@ -16282,8 +16326,7 @@ export default function HomePage({
                         onChange={(e) => setAuthPasswordInput(e.target.value)}
                       />
                       <span style={{ fontSize: "0.725rem", color: "#64748b", marginTop: "0.2rem" }}>
-                        Default passwords: <code>VehariInspector2026!</code> &bull;{" "}
-                        <code>VehariETO2026!</code> &bull; <code>MultanDirector2026!</code>
+                        Credentials are issued out-of-band and are never stored in the client.
                       </span>
                     </div>
 
@@ -16811,7 +16854,10 @@ export default function HomePage({
                       documentIdOrData: activeClearanceCert,
                       defaultFilename: `Tax_Clearance_Certificate_${activeClearanceCert.certificateNumber}.pdf`
                     }).catch((err) =>
-                      showToast("error", `Failed to generate Clearance Certificate: ${(err as Error).message}`)
+                      showToast(
+                        "error",
+                        `Failed to generate Clearance Certificate: ${(err as Error).message}`
+                      )
                     )
                   }
                 >
@@ -17392,7 +17438,10 @@ export default function HomePage({
                         documentIdOrData: discTargetUnit,
                         defaultFilename: `Discontinuance_Order_${activeDiscontinuanceOrder.orderNumber}.pdf`
                       }).catch((err) =>
-                        showToast("error", `Failed to generate Discontinuance Order: ${(err as Error).message}`)
+                        showToast(
+                          "error",
+                          `Failed to generate Discontinuance Order: ${(err as Error).message}`
+                        )
                       );
                     }}
                   >
@@ -17794,7 +17843,10 @@ export default function HomePage({
                       documentIdOrData: refTargetUnit,
                       defaultFilename: `Refund_Order_${activeRefundOrder.orderNumber}.pdf`
                     }).catch((err) =>
-                      showToast("error", `Failed to generate Refund Order: ${(err as Error).message}`)
+                      showToast(
+                        "error",
+                        `Failed to generate Refund Order: ${(err as Error).message}`
+                      )
                     );
                   }}
                 >
@@ -19569,7 +19621,10 @@ export default function HomePage({
                       documentIdOrData: activeReceiptRecord,
                       defaultFilename: `Statutory_Receipt_${activeReceiptRecord.receiptNumber}.pdf`
                     }).catch((err) =>
-                      showToast("error", `Failed to generate Statutory Receipt: ${(err as Error).message}`)
+                      showToast(
+                        "error",
+                        `Failed to generate Statutory Receipt: ${(err as Error).message}`
+                      )
                     )
                   }
                   style={{ background: "#ffffff", color: "#0d3822", fontWeight: 700 }}
@@ -19973,7 +20028,10 @@ export default function HomePage({
                       documentIdOrData: activeReceiptRecord,
                       defaultFilename: `Statutory_Receipt_${activeReceiptRecord.receiptNumber}.pdf`
                     }).catch((err) =>
-                      showToast("error", `Failed to generate Statutory Receipt: ${(err as Error).message}`)
+                      showToast(
+                        "error",
+                        `Failed to generate Statutory Receipt: ${(err as Error).message}`
+                      )
                     )
                   }
                 >
@@ -20167,8 +20225,20 @@ export default function HomePage({
                             issuedCount: summary.issuedCount,
                             receivedCount: summary.receivedCount,
                             cancelledCount: summary.cancelledCount,
-                            circleBreakdown: [{ circleName: "Vehari Circle I", count: summary.total, totalAmount: summary.totalDemandPkr }],
-                            categoryBreakdown: [{ categoryName: "Commercial Units", count: summary.total, totalAmount: summary.totalDemandPkr }],
+                            circleBreakdown: [
+                              {
+                                circleName: "Vehari Circle I",
+                                count: summary.total,
+                                totalAmount: summary.totalDemandPkr
+                              }
+                            ],
+                            categoryBreakdown: [
+                              {
+                                categoryName: "Commercial Units",
+                                count: summary.total,
+                                totalAmount: summary.totalDemandPkr
+                              }
+                            ],
                             generatedAt: new Date().toISOString().split("T")[0]!,
                             officerName: officer?.name ?? "Tariq Mahmood",
                             officerTitle: officer?.title ?? "Assessing Authority",
@@ -20176,7 +20246,10 @@ export default function HomePage({
                           },
                           defaultFilename: "Form_PFT2_Executive_Management_Brief.pdf"
                         }).catch((err) =>
-                          showToast("error", `Failed to generate Executive Brief: ${(err as Error).message}`)
+                          showToast(
+                            "error",
+                            `Failed to generate Executive Brief: ${(err as Error).message}`
+                          )
                         );
                       }}
                       style={{

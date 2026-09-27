@@ -8,10 +8,8 @@ import { createPtasSupabaseClient } from "@ptas/database/client";
 import type { Json } from "@ptas/database/types";
 import type { StoredUnit, PilotAuditItem } from "./pilot-store";
 
-const SUPABASE_URL =
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://zvadxmxasutvqpltszim.supabase.co";
-const SUPABASE_KEY =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "sb_publishable_aTqvnS7QhGZq95GwtPW8Ig_vjPV76i5";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export interface SyncResult {
   readonly success: boolean;
@@ -22,6 +20,9 @@ export interface SyncResult {
 }
 
 export function getSupabaseClient() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error("Supabase synchronization is not configured");
+  }
   return createPtasSupabaseClient({
     url: SUPABASE_URL,
     key: SUPABASE_KEY

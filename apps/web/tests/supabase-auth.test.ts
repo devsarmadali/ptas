@@ -104,7 +104,9 @@ describe("Phase 5: Supabase Real Auth & Statutory Authority Enforcement", () => 
     // 5. Technical admin has no statutory authority
     expect(verifyOfficerAuthority(admin, "ISSUE_CLEARANCE_CERTIFICATE").authorized).toBe(false);
     expect(verifyOfficerAuthority(admin, "ISSUE_RECOVERY_CERTIFICATE").authorized).toBe(false);
-    expect(verifyOfficerAuthority(admin, "SUBMIT_DISCONTINUANCE_INSPECTION").authorized).toBe(false);
+    expect(verifyOfficerAuthority(admin, "SUBMIT_DISCONTINUANCE_INSPECTION").authorized).toBe(
+      false
+    );
     expect(verifyOfficerAuthority(admin, "ADJUDICATE_DISCONTINUANCE").authorized).toBe(false);
     expect(verifyOfficerAuthority(admin, "ADJUDICATE_REFUND").authorized).toBe(false);
   });

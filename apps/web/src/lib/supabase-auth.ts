@@ -109,14 +109,15 @@ export const OFFICIAL_OFFICERS_REGISTRY: readonly OfficerCredentialInfo[] = [
   }
 ];
 
-const SUPABASE_URL =
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://zvadxmxasutvqpltszim.supabase.co";
-const SUPABASE_KEY =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "sb_publishable_aTqvnS7QhGZq95GwtPW8Ig_vjPV76i5";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 let browserClientInstance: ReturnType<typeof createBrowserSupabaseClient> | null = null;
 
 export function getSupabaseAuthClient() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error("Supabase browser authentication is not configured");
+  }
   if (!browserClientInstance) {
     browserClientInstance = createBrowserSupabaseClient({
       url: SUPABASE_URL,
