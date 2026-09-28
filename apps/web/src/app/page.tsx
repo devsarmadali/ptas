@@ -650,7 +650,8 @@ export default function HomePage({
     };
   }, []);
 
-  // Synchronize state changes to localStorage
+  // Pilot-only state projection. Authenticated cloud sessions must use the transactional
+  // workflow command API; they may never create a second client-side source of truth.
   const syncState = (
     updatedUnits: StoredUnit[],
     updatedAudits: PilotAuditItem[],
@@ -662,6 +663,13 @@ export default function HomePage({
     updatedPft2Challans?: Pft2ChallanRecord[],
     updatedReceipts?: StatutoryReceiptRecord[]
   ) => {
+    if (authenticatedSessionType === "CLOUD") {
+      showToast(
+        "error",
+        "This legacy pilot action is disabled for authenticated sessions. Use the server workflow command."
+      );
+      return;
+    }
     setUnits(updatedUnits);
     setAuditLogs(updatedAudits);
     if (updatedOfficer) setOfficer(updatedOfficer);

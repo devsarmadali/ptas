@@ -40,6 +40,7 @@ function DocumentIssuanceContent() {
   const [issuedChallan, setIssuedChallan] = useState<Pft2ChallanRecord | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [isIssuing, setIsIssuing] = useState(false);
+  const [isPdfLoading, setIsPdfLoading] = useState(false);
   const [showConfigPanel, setShowConfigPanel] = useState(true);
 
   useEffect(() => {
@@ -308,16 +309,47 @@ function DocumentIssuanceContent() {
             <button
               type="button"
               className="btn-primary"
-              onClick={() =>
-                downloadOfficialPdf({
-                  type: "FORM_PFT2_CHALLAN",
-                  documentIdOrData: issuedChallan,
-                  defaultFilename: `Form_PFT2_${issuedChallan.challanNumber.replace(/\//g, "_")}.pdf`
-                })
-              }
+              disabled={isPdfLoading}
+              onClick={async () => {
+                if (!unit) {
+                  setErrorMessage("No taxpayer unit loaded. Cannot generate PDF.");
+                  return;
+                }
+                setIsPdfLoading(true);
+                setErrorMessage("");
+                try {
+                  // Pre-resolve the FormPFT2Model here where unit is already in scope.
+                  // This avoids the engine reconstruction path which requires a fresh
+                  // loadPilotState() lookup that may fail in the standalone document page.
+                  const challanModel = generateFormPFT2(unit, {
+                    dueDate: issuedChallan.dueDate,
+                    issueDate: issuedChallan.issueDate,
+                    formType: issuedChallan.formType,
+                    demandScope: issuedChallan.demandScope,
+                    paymentScope: issuedChallan.paymentScope,
+                    customAmount: issuedChallan.amountPayable,
+                    isPartial: issuedChallan.paymentScope === "PARTIAL",
+                    remainingBalance: issuedChallan.remainingBalance ?? 0,
+                    noticeNumber: issuedChallan.noticeNumber,
+                    pin: issuedChallan.pin
+                  });
+                  await downloadOfficialPdf({
+                    type: "FORM_PFT2_CHALLAN",
+                    // Pass the resolved FormPFT2Model directly (has "copies" field)
+                    // so the engine skips the reconstruction step entirely.
+                    documentIdOrData: challanModel,
+                    defaultFilename: `Form_PFT2_${issuedChallan.challanNumber.replace(/\//g, "_")}.pdf`
+                  });
+                } catch (err: unknown) {
+                  const msg = err instanceof Error ? err.message : String(err);
+                  setErrorMessage(`PDF generation failed: ${msg}`);
+                } finally {
+                  setIsPdfLoading(false);
+                }
+              }}
               title="Download authoritative 3-copy Form PFT-2 payment instrument as PDF"
             >
-              📥 Download Official PDF (A4 Landscape)
+              {isPdfLoading ? "⏳ Generating PDF…" : "📥 Download Official PDF (A4 Landscape)"}
             </button>
           ) : (
             <span

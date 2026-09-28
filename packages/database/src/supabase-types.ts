@@ -412,7 +412,75 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      resolve_my_ptas_actor: {
+        Args: Record<PropertyKey, never>;
+        Returns: Json;
+      };
+      transition_survey_unit: {
+        Args: {
+          p_unit_id: string;
+          p_action: string;
+          p_expected_version: number;
+          p_idempotency_key: string;
+          p_correlation_id: string;
+          p_reason?: string | null;
+        };
+        Returns: Json;
+      };
+      request_demand_deletion: {
+        Args: {
+          p_demand_unit_id: string;
+          p_jurisdiction_id: string;
+          p_reason: string;
+          p_idempotency_key: string;
+          p_correlation_id: string;
+        };
+        Returns: Json;
+      };
+      review_demand_deletion: {
+        Args: {
+          p_request_id: string;
+          p_decision: string;
+          p_expected_version: number;
+          p_reason: string;
+          p_idempotency_key: string;
+          p_correlation_id: string;
+        };
+        Returns: Json;
+      };
+      receive_pft2_payment: {
+        Args: {
+          p_challan_id: string;
+          p_bank_transaction_id: string;
+          p_amount: number;
+          p_idempotency_key: string;
+          p_correlation_id: string;
+        };
+        Returns: Json;
+      };
+      transition_show_cause: {
+        Args: {
+          p_case_id: string;
+          p_action: string;
+          p_expected_version: number;
+          p_reason: string | null;
+          p_document_id: string | null;
+          p_idempotency_key: string;
+          p_correlation_id: string;
+        };
+        Returns: Json;
+      };
+      transition_pft2_challan: {
+        Args: {
+          p_challan_id: string;
+          p_action: string;
+          p_expected_version: number;
+          p_reason: string | null;
+          p_idempotency_key: string;
+          p_correlation_id: string;
+        };
+        Returns: Json;
+      };
     };
     Enums: {
       [_ in never]: never;

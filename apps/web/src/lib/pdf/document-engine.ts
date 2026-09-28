@@ -374,10 +374,18 @@ export async function generateAuthoritativePdf(
       }
 
       const freshUnit =
-        (state.units || []).find((u) => u.id === challanRecord?.unitId) || state.units[0];
+        (state.units || []).find((u) => u.id === challanRecord?.unitId) ??
+        (state.units && state.units.length > 0 ? state.units[0] : undefined);
+
+      if (!freshUnit) {
+        throw new Error(
+          "Cannot generate Form PFT-2 PDF: no taxpayer unit found in the authoritative database. " +
+            "Ensure the pilot state is initialised and the challan's unitId is valid."
+        );
+      }
 
       // Reconstruct structured Form PFT2 Model from database
-      const challanModel = generateFormPFT2(freshUnit!, {
+      const challanModel = generateFormPFT2(freshUnit, {
         dueDate: challanRecord?.dueDate,
         issueDate: challanRecord?.issueDate,
         formType: challanRecord?.formType,

@@ -137,8 +137,8 @@ export interface SignInResult {
 }
 
 /**
- * Maps a Supabase user or email to its official MockOfficer profile.
- * Supports official Punjab accounts as well as any Vercel/demo domain email.
+ * Maps only legacy pilot identities. Production authorization is resolved from
+ * app_user/user_role after Supabase authentication and does not depend on email domains.
  */
 export function getOfficerProfileByEmail(email: string): MockOfficer {
   const normalized = email.trim().toLowerCase();
@@ -193,7 +193,7 @@ export async function signInOfficer(email: string, password?: string): Promise<S
     const networkTimeout = new Promise<{ data: { user: null }; error: Error }>((resolve) =>
       setTimeout(
         () => resolve({ data: { user: null }, error: new Error("Auth network timeout") }),
-        1200
+        10000
       )
     );
     const { data, error } = await Promise.race([
@@ -205,8 +205,44 @@ export async function signInOfficer(email: string, password?: string): Promise<S
     ]);
 
     if (!error && data.user) {
-      const approvedProfile = getOfficerProfileByEmail(data.user.email || normalizedEmail);
-      const officer: MockOfficer = { ...approvedProfile, id: data.user.id };
+      const { data: assignment, error: assignmentError } =
+        await supabase.rpc("resolve_my_ptas_actor");
+      if (
+        assignmentError ||
+        !assignment ||
+        typeof assignment !== "object" ||
+        Array.isArray(assignment)
+      ) {
+        await supabase.auth.signOut();
+        throw new Error("Authenticated account has no active PTAS role assignment");
+      }
+      const actor = assignment as {
+        user_id?: unknown;
+        display_name?: unknown;
+        role?: unknown;
+        jurisdiction_id?: unknown;
+        jurisdiction_name?: unknown;
+        jurisdiction_tier?: unknown;
+      };
+      const role = String(actor.role ?? "") as MockRole;
+      const allowedRoles: readonly MockRole[] = ["INSPECTOR", "ETO", "DIRECTOR", "ADMIN"];
+      if (!allowedRoles.includes(role)) {
+        await supabase.auth.signOut();
+        throw new Error("PTAS role assignment is not supported by this application");
+      }
+      const officer: MockOfficer = {
+        id: String(actor.user_id ?? data.user.id),
+        name: String(actor.display_name ?? data.user.email ?? "PTAS Officer"),
+        email: data.user.email ?? normalizedEmail,
+        role,
+        title: role === "ETO" ? "Excise & Taxation Officer" : role.replaceAll("_", " "),
+        jurisdictionId: String(actor.jurisdiction_id ?? ""),
+        jurisdictionName: String(actor.jurisdiction_name ?? "Assigned Jurisdiction"),
+        jurisdictionTier: String(
+          actor.jurisdiction_tier ?? "CIRCLE"
+        ) as MockOfficer["jurisdictionTier"],
+        badgeText: `${role} — authenticated database assignment`
+      };
 
       return {
         success: true,
