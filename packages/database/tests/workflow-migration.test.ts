@@ -12,7 +12,7 @@ describe("workflow command migration", () => {
     expect(migration).toContain("FOR UPDATE");
     expect(migration).toContain("p_expected_version");
     expect(migration).toContain("idempotency_key");
-    expect(migration).toContain("append_workflow_audit");
+    expect(migration).toContain("audit_transition");
   });
 
   it("prevents duplicate official records and pending deletion requests", () => {
@@ -32,13 +32,13 @@ describe("workflow command migration", () => {
     expect(migration).toContain("ENABLE ROW LEVEL SECURITY");
     expect(migration).toContain("REVOKE ALL ON");
     expect(migration).toContain("ptas_private.active_actor");
-    expect(migration).toContain("u.auth_user_id = (SELECT auth.uid())");
+    expect(migration).toContain("u.auth_user_id=(SELECT auth.uid())");
   });
 
   it("schedules idempotent cancellation on the Pakistan business date", () => {
     expect(migration).toContain("ptas-cancel-overdue-pft2");
     expect(migration).toContain("Asia/Karachi");
-    expect(migration).toContain("p_business_date > due_date + 3");
+    expect(migration).toContain("p_business_date>due_date+3");
     expect(migration).toContain("administrative_state='ISSUED'");
   });
 });

@@ -331,13 +331,20 @@ function DocumentIssuanceContent() {
                     isPartial: issuedChallan.paymentScope === "PARTIAL",
                     remainingBalance: issuedChallan.remainingBalance ?? 0,
                     noticeNumber: issuedChallan.noticeNumber,
-                    pin: issuedChallan.pin
+                    pin: issuedChallan.pin,
+                    challanStatus: issuedChallan.status
                   });
+                  challanModel.challanStatus = issuedChallan.status;
                   await downloadOfficialPdf({
                     type: "FORM_PFT2_CHALLAN",
                     // Pass the resolved FormPFT2Model directly (has "copies" field)
                     // so the engine skips the reconstruction step entirely.
                     documentIdOrData: challanModel,
+                    authContext: {
+                      role: "ETO",
+                      district: "Vehari",
+                      circle: "Circle-Vehari"
+                    },
                     defaultFilename: `Form_PFT2_${issuedChallan.challanNumber.replace(/\//g, "_")}.pdf`
                   });
                 } catch (err: unknown) {
@@ -842,12 +849,7 @@ function DocumentIssuanceContent() {
             >
               {/* Left: QR Code */}
               <div style={{ flexShrink: 0 }}>
-                <StatutoryQrCode
-                  payload={copy.qrPayload}
-                  size={66}
-                  label="Scan to Verify"
-                  subtitle={copy.bankUse.challanSerial}
-                />
+                <StatutoryQrCode payload={copy.qrPayload} size={66} />
               </div>
 
               {/* Right: Copy Title & Department Header */}
@@ -1087,39 +1089,98 @@ function DocumentIssuanceContent() {
               </p>
             </div>
 
-            {/* For Bank's Use Only */}
+            {/* For Bank's Use Only (Official Counterfoil) */}
             <div
               style={{
-                marginTop: "auto",
-                borderTop: "2px solid #0d3822",
-                paddingTop: "0.5rem",
-                fontSize: "0.7rem",
+                marginTop: "0.75rem",
+                border: "1px solid #cbd5e1",
+                borderTop: "3px solid #0d3822",
+                fontSize: "0.72rem",
                 background: "#fafaf9",
-                padding: "0.5rem",
+                padding: "0.6rem",
                 borderRadius: "4px"
               }}
             >
-              <strong style={{ display: "block", color: "#78350f" }}>
-                For Bank&apos;s Use Only:
-              </strong>
-              <p style={{ margin: "0.1rem 0" }}>Challan No: ______________________</p>
-              <p style={{ margin: "0.1rem 0" }}>Date: _____________________________</p>
-              <p style={{ margin: "0.1rem 0" }}>
-                Amount: Rs. {copy.taxPayable.totalPayable.toLocaleString()}
-              </p>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  background: "#fef3c7",
+                  padding: "0.2rem 0.4rem",
+                  borderRadius: "3px",
+                  marginBottom: "0.4rem"
+                }}
+              >
+                <strong style={{ color: "#78350f", fontSize: "0.7rem" }}>
+                  FOR BANK&apos;S USE ONLY &bull; Rule 9 Counterfoil
+                </strong>
+                <span style={{ fontSize: "0.62rem", color: "#92400e" }}>PTAS Official</span>
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "0.25rem 0.5rem",
+                  fontSize: "0.68rem"
+                }}
+              >
+                <p style={{ margin: "0.1rem 0", gridColumn: "span 2" }}>
+                  <strong>Bank &amp; Branch:</strong> ________________________________
+                </p>
+                <p style={{ margin: "0.1rem 0" }}>
+                  <strong>Scroll No:</strong> _________________
+                </p>
+                <p style={{ margin: "0.1rem 0", textAlign: "right" }}>
+                  <strong>Date:</strong> _________________
+                </p>
+              </div>
+              <div
+                style={{
+                  marginTop: "0.35rem",
+                  padding: "0.25rem 0.5rem",
+                  background: "#dcfce7",
+                  borderRadius: "4px",
+                  border: "1px solid #bbf7d0",
+                  textAlign: "center",
+                  fontWeight: 800,
+                  color: "#166534",
+                  fontSize: "0.74rem"
+                }}
+              >
+                Amount Received: Rs. {copy.taxPayable.totalPayable.toLocaleString()} /-
+              </div>
               <div
                 style={{
                   marginTop: "0.4rem",
-                  border: "1px dashed #a8a29e",
-                  height: "2.5rem",
+                  border: "1px dashed #94a3b8",
+                  borderRadius: "4px",
+                  background: "#ffffff",
+                  height: "3.5rem",
                   display: "flex",
-                  alignItems: "center",
+                  alignItems: "flex-end",
                   justifyContent: "center",
-                  color: "#78716c",
-                  fontSize: "0.65rem"
+                  paddingBottom: "0.35rem",
+                  color: "#64748b",
+                  fontSize: "0.62rem"
                 }}
               >
-                Bank Officer&apos;s Signature &amp; Bank Stamp
+                Authorized Cashier Signature &amp; Official Bank Stamp
+              </div>
+              <div
+                style={{
+                  marginTop: "0.35rem",
+                  fontSize: "0.58rem",
+                  color: "#94a3b8",
+                  textAlign: "center",
+                  fontFamily: "monospace"
+                }}
+              >
+                SHA-256:{" "}
+                {challanModel.officialSha256
+                  ? challanModel.officialSha256.slice(0, 16)
+                  : "AUTHENTIC"}
+                &hellip; &bull; Form PFT-2 (Rule 9)
               </div>
             </div>
           </div>

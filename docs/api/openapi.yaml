@@ -8,6 +8,78 @@ servers:
 security:
   - sessionAuth: []
 paths:
+  /survey-imports/stage:
+    post:
+      operationId: stageSurveyImport
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StageSurveyImport" }
+      responses:
+        "200":
+          description: Import rows staged and validated against actor jurisdiction and approved configuration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SurveyImportBatch" }
+        default: { $ref: "#/components/responses/Problem" }
+  /survey-imports/{surveyImportId}/promote:
+    post:
+      operationId: promoteSurveyImport
+      parameters:
+        - $ref: "#/components/parameters/SurveyImportId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: All validated rows atomically promoted into Feeded survey units
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SurveyImportBatch" }
+        default: { $ref: "#/components/responses/Problem" }
+  /survey-imports/actionable:
+    get:
+      operationId: listActionableSurveyImports
+      responses:
+        "200":
+          description: Role- and jurisdiction-filtered imported batches awaiting Inspector or ETO action
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ActionableSurveyImportBatch" }
+        default: { $ref: "#/components/responses/Problem" }
+  /survey-imports/{surveyImportId}/submit:
+    post:
+      operationId: bulkSubmitSurveyImport
+      parameters:
+        - $ref: "#/components/parameters/SurveyImportId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Assigned Inspector atomically submits every eligible Feeded unit to ETO review
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkSurveyTransitionResult" }
+        default: { $ref: "#/components/responses/Problem" }
+  /survey-imports/{surveyImportId}/approve:
+    post:
+      operationId: bulkApproveSurveyImport
+      parameters:
+        - $ref: "#/components/parameters/SurveyImportId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Assigned ETO atomically approves eligible Submitted units and finalizes PFT-3 entries
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkSurveyTransitionResult" }
+        default: { $ref: "#/components/responses/Problem" }
   /health:
     get:
       security: []
@@ -333,6 +405,11 @@ components:
       in: cookie
       name: ptas_session
   parameters:
+    SurveyImportId:
+      name: surveyImportId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     JurisdictionId:
       name: jurisdictionId
       in: path
@@ -365,6 +442,63 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    StageSurveyImport:
+      type: object
+      required: [sourceFilename, fileSha256, headers, rows]
+      properties:
+        sourceFilename: { type: string, minLength: 1 }
+        fileSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        headers:
+          type: array
+          minItems: 30
+          maxItems: 30
+          items: { type: string }
+        rows:
+          type: array
+          minItems: 1
+          maxItems: 10000
+          items: { type: object, additionalProperties: { type: string } }
+    SurveyImportBatch:
+      type: object
+      required: [id, status, totalRows, readyRows, invalidRows]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [STAGED, NEEDS_CORRECTION, VALIDATED, IMPORTED] }
+        totalRows: { type: integer, minimum: 0 }
+        readyRows: { type: integer, minimum: 0 }
+        invalidRows: { type: integer, minimum: 0 }
+    ActionableSurveyImportBatch:
+      type: object
+      required:
+        [
+          batchId,
+          sourceFilename,
+          financialYearCode,
+          importedRows,
+          feededRows,
+          submittedRows,
+          approvedRows,
+          pendingReviewRows,
+          createdAt
+        ]
+      properties:
+        batchId: { type: string, format: uuid }
+        sourceFilename: { type: string }
+        financialYearCode: { type: string }
+        importedRows: { type: integer, minimum: 0 }
+        feededRows: { type: integer, minimum: 0 }
+        submittedRows: { type: integer, minimum: 0 }
+        approvedRows: { type: integer, minimum: 0 }
+        pendingReviewRows: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+    BulkSurveyTransitionResult:
+      type: object
+      required: [batchId, idempotentReplay]
+      properties:
+        batchId: { type: string, format: uuid }
+        submittedRows: { type: integer, minimum: 0 }
+        approvedRows: { type: integer, minimum: 0 }
+        idempotentReplay: { type: boolean }
     Health:
       type: object
       required: [status]

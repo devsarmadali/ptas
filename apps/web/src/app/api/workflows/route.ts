@@ -7,7 +7,11 @@ type WorkflowCommand =
   | { type: "REVIEW_DEMAND_DELETION"; payload: Record<string, unknown> }
   | { type: "SHOW_CAUSE_TRANSITION"; payload: Record<string, unknown> }
   | { type: "PFT2_TRANSITION"; payload: Record<string, unknown> }
-  | { type: "RECEIVE_PFT2_PAYMENT"; payload: Record<string, unknown> };
+  | { type: "RECEIVE_PFT2_PAYMENT"; payload: Record<string, unknown> }
+  | { type: "STAGE_SURVEY_IMPORT"; payload: Record<string, unknown> }
+  | { type: "PROMOTE_SURVEY_IMPORT"; payload: Record<string, unknown> }
+  | { type: "BULK_SUBMIT_SURVEY_IMPORT"; payload: Record<string, unknown> }
+  | { type: "BULK_APPROVE_SURVEY_IMPORT"; payload: Record<string, unknown> };
 
 const RPC_BY_COMMAND = {
   SURVEY_TRANSITION: "transition_survey_unit",
@@ -15,7 +19,11 @@ const RPC_BY_COMMAND = {
   REVIEW_DEMAND_DELETION: "review_demand_deletion",
   SHOW_CAUSE_TRANSITION: "transition_show_cause",
   PFT2_TRANSITION: "transition_pft2_challan",
-  RECEIVE_PFT2_PAYMENT: "receive_pft2_payment"
+  RECEIVE_PFT2_PAYMENT: "receive_pft2_payment",
+  STAGE_SURVEY_IMPORT: "stage_survey_import_current",
+  PROMOTE_SURVEY_IMPORT: "promote_survey_import",
+  BULK_SUBMIT_SURVEY_IMPORT: "bulk_submit_survey_import",
+  BULK_APPROVE_SURVEY_IMPORT: "bulk_approve_survey_import"
 } as const;
 
 export async function POST(request: Request): Promise<NextResponse> {

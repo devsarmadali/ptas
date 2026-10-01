@@ -41,3 +41,11 @@ Users
 - External callbacks are authenticated, replay-protected and persisted before processing.
 - Database and storage credentials are environment-specific.
 - Production data is prohibited in preview and development environments.
+
+## Organization and jurisdiction inheritance
+
+The enforced hierarchy is `Division or Region -> District or Zone -> optional Tehsil -> Circle`.
+Circles may be direct children of a District/Zone when no Tehsil layer is configured. Role scope is
+inherited downward in PostgreSQL: Inspector is restricted to one Circle, ETO covers one assigned
+District/Zone and descendants, Director covers one assigned Division/Region and descendants, and
+technical Admin has global visibility without statutory transition authority.

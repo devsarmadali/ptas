@@ -12,15 +12,9 @@ import {
   type User,
   createBrowserSupabaseClient
 } from "@ptas/database/client";
-import {
-  CIRCLE_VEHARI_ID,
-  MOCK_OFFICERS,
-  MULTAN_REGION_ID,
-  TEHSIL_VEHARI_ID,
-  type MockOfficer,
-  type MockRole
-} from "./pilot-store";
+import type { MockOfficer, MockRole } from "./pilot-store";
 
+/** @deprecated Login identities are provisioned in Supabase Auth and are never embedded here. */
 export interface OfficerCredentialInfo {
   readonly id: string;
   readonly name: string;
@@ -29,88 +23,29 @@ export interface OfficerCredentialInfo {
   readonly title: string;
   readonly jurisdictionId: string;
   readonly jurisdictionName: string;
-  readonly jurisdictionTier: "REGION" | "OFFICE" | "CIRCLE";
+  readonly jurisdictionTier: MockOfficer["jurisdictionTier"];
   readonly badgeText: string;
   readonly statutoryPowers: readonly string[];
 }
 
-export const OFFICIAL_OFFICERS_REGISTRY: readonly OfficerCredentialInfo[] = [
-  {
-    id: "a0000000-0000-4000-8000-000000000001",
-    name: "Muhammad Aslam",
-    email: "inspector.vehari@punjab.gov.pk",
-    role: "INSPECTOR",
-    title: "Tax Inspector",
-    jurisdictionId: CIRCLE_VEHARI_ID,
-    jurisdictionName: "Circle-Vehari",
-    jurisdictionTier: "CIRCLE",
-    badgeText: "Inspector (Maker / Survey / Payments)",
-    statutoryPowers: [
-      "Rule 4 & 5: Field Market Survey across Circle-Vehari",
-      "Form PFT-3: Commercial Taxpayer Registration",
-      "Rule 4: Draft Assessment Preparation",
-      "Rule 6: Delivery of Form PFT-1 Notice of Demand",
-      "Rule 9: Form PFT-2 & Challan 32-A Payment Receipt Collection"
-    ]
-  },
-  {
-    id: "a0000000-0000-4000-8000-000000000002",
-    name: "Tariq Mahmood",
-    email: "eto.vehari@punjab.gov.pk",
-    role: "ETO",
-    title: "Excise & Taxation Officer (Assessing Authority)",
-    jurisdictionId: TEHSIL_VEHARI_ID,
-    jurisdictionName: "Tehsil Vehari",
-    jurisdictionTier: "OFFICE",
-    badgeText: "Assessing Authority (Review / Approval / Form PFT-2)",
-    statutoryPowers: [
-      "Section 3 & Rule 5(1): Statutory Assessment Approval",
-      "Rule 5(1): Assessment Remand / Return with Reasons",
-      "Append-Only Demand Ledger Entry Authorization",
-      "Rule 9: Issuance of Form PFT-2 Treasury Payment Challans",
-      "Section 3(4): Imposition of Statutory Penalties (up to 100% ceiling)",
-      "Rule 12: Recovery Certificate for Arrears of Land Revenue"
-    ]
-  },
-  {
-    id: "a0000000-0000-4000-8000-000000000003",
-    name: "Shahid Nawaz",
-    email: "director.multan@punjab.gov.pk",
-    role: "DIRECTOR",
-    title: "Director Excise & Taxation",
-    jurisdictionId: MULTAN_REGION_ID,
-    jurisdictionName: "Multan Region",
-    jurisdictionTier: "REGION",
-    badgeText: "Appellate Authority (Section 7 Appeals / Region Oversight)",
-    statutoryPowers: [
-      "Section 7 & Rule 13: Statutory Appellate Authority",
-      "Rule 13(2): Scrutiny of Undisputed Tax Pre-Deposit",
-      "Rule 13: Scheduling Court Hearings & Summons",
-      "Judicial Decrees: Confirm, Reduce, Annul, Remand, or Remit Penalty",
-      "Demand Ledger Revision & Relief Adjustments",
-      "Regional Division Oversight & ePay Exception Desk"
-    ]
-  },
-  {
-    id: "a0000000-0000-4000-8000-000000000000",
-    name: "Provincial Administrator",
-    email: "admin.ptas@punjab.gov.pk",
-    role: "ADMIN",
-    title: "Provincial System Administrator",
-    jurisdictionId: MULTAN_REGION_ID,
-    jurisdictionName: "Punjab Provincial Apex (All Jurisdictions)",
-    jurisdictionTier: "REGION",
-    badgeText: "System Administrator (Technical Administration Only)",
-    statutoryPowers: [
-      "Technical user provisioning and configuration deployment",
-      "Operational support with audited, non-statutory access",
-      "Cannot assess, approve, penalize, decide appeals, or authorize financial adjustments"
-    ]
-  }
-];
+/** @deprecated Kept temporarily for legacy UI compatibility; production accounts are server-side. */
+export const OFFICIAL_OFFICERS_REGISTRY: readonly OfficerCredentialInfo[] = [];
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+export function getPasswordResetRedirectUrl(
+  browserOrigin: string,
+  configuredOrigin = process.env.NEXT_PUBLIC_APP_URL
+): string {
+  const localOrigin = browserOrigin.replace(/\/$/, "");
+  const productionOrigin = configuredOrigin?.trim().replace(/\/$/, "");
+  // Password setup is an externally delivered workflow. Prefer the configured canonical
+  // application URL even when the request originates from a local administrator session.
+  // Local-only development remains available by leaving NEXT_PUBLIC_APP_URL unset.
+  const origin = productionOrigin || localOrigin;
+  return `${origin}/account/update-password`;
+}
 
 let browserClientInstance: ReturnType<typeof createBrowserSupabaseClient> | null = null;
 
@@ -127,38 +62,84 @@ export function getSupabaseAuthClient() {
   return browserClientInstance;
 }
 
-export interface SignInResult {
-  readonly success: boolean;
-  readonly officer: MockOfficer;
-  readonly user?: User | undefined;
-  readonly isCloudAuth: boolean;
-  readonly message: string;
-  readonly error?: string | undefined;
-}
-
-/**
- * Maps only legacy pilot identities. Production authorization is resolved from
- * app_user/user_role after Supabase authentication and does not depend on email domains.
- */
-export function getOfficerProfileByEmail(email: string): MockOfficer {
-  const normalized = email.trim().toLowerCase();
-  const registered = OFFICIAL_OFFICERS_REGISTRY.find((o) => o.email.toLowerCase() === normalized);
-
-  if (registered) {
-    return {
-      id: registered.id,
-      name: registered.name,
-      email: registered.email,
-      role: registered.role,
-      title: registered.title,
-      jurisdictionId: registered.jurisdictionId,
-      jurisdictionName: registered.jurisdictionName,
-      jurisdictionTier: registered.jurisdictionTier,
-      badgeText: registered.badgeText
+export type SignInResult =
+  | {
+      readonly success: true;
+      readonly officer: MockOfficer;
+      readonly user: User;
+      readonly isCloudAuth: true;
+      readonly message: string;
+      readonly error?: undefined;
+    }
+  | {
+      readonly success: false;
+      readonly isCloudAuth: false;
+      readonly message: string;
+      readonly error: string;
     };
+
+type ActorAssignment = {
+  user_id?: unknown;
+  display_name?: unknown;
+  role?: unknown;
+  jurisdiction_id?: unknown;
+  jurisdiction_name?: unknown;
+  jurisdiction_tier?: unknown;
+};
+
+const ALLOWED_ROLES: readonly MockRole[] = ["INSPECTOR", "ETO", "DIRECTOR", "ADMIN"];
+const ALLOWED_JURISDICTION_TIERS: readonly MockOfficer["jurisdictionTier"][] = [
+  "REGION",
+  "DISTRICT",
+  "OFFICE",
+  "CIRCLE"
+];
+
+export function mapActorAssignmentToOfficer(
+  assignment: ActorAssignment,
+  user: Pick<User, "id" | "email">
+): MockOfficer {
+  const role = String(assignment.role ?? "").toUpperCase() as MockRole;
+  const jurisdictionTier = String(
+    assignment.jurisdiction_tier ?? ""
+  ).toUpperCase() as MockOfficer["jurisdictionTier"];
+  const jurisdictionId = String(assignment.jurisdiction_id ?? "").trim();
+
+  if (!ALLOWED_ROLES.includes(role) || !ALLOWED_JURISDICTION_TIERS.includes(jurisdictionTier)) {
+    throw new Error("Authenticated account has an unsupported PTAS role or jurisdiction tier");
+  }
+  if (!jurisdictionId) {
+    throw new Error("Authenticated account has no active PTAS jurisdiction assignment");
   }
 
-  throw new Error("Authenticated account has no approved PTAS officer assignment");
+  return {
+    id: String(assignment.user_id ?? user.id),
+    name: String(assignment.display_name ?? user.email ?? "PTAS Officer"),
+    email: user.email ?? "",
+    role,
+    title:
+      role === "ETO"
+        ? "Excise & Taxation Officer"
+        : role === "INSPECTOR"
+          ? "Excise & Taxation Inspector"
+          : role === "DIRECTOR"
+            ? "Director Excise & Taxation"
+            : "System Administrator",
+    jurisdictionId,
+    jurisdictionName: String(assignment.jurisdiction_name ?? "Assigned Jurisdiction"),
+    jurisdictionTier,
+    badgeText: `${role} — authenticated database assignment`
+  };
+}
+
+/** Resolve the current authenticated identity through server-controlled PTAS assignments. */
+export async function resolveAuthenticatedOfficer(user: User): Promise<MockOfficer> {
+  const supabase = getSupabaseAuthClient();
+  const { data: assignment, error } = await supabase.rpc("resolve_my_ptas_actor");
+  if (error || !assignment || typeof assignment !== "object" || Array.isArray(assignment)) {
+    throw new Error("Authenticated account has no active PTAS role assignment");
+  }
+  return mapActorAssignmentToOfficer(assignment as ActorAssignment, user);
 }
 
 /**
@@ -170,7 +151,6 @@ export async function signInOfficer(email: string, password?: string): Promise<S
   if (!normalizedEmail || !normalizedEmail.includes("@")) {
     return {
       success: false,
-      officer: MOCK_OFFICERS[0],
       isCloudAuth: false,
       message: "Please enter a valid email address.",
       error: "INVALID_EMAIL"
@@ -181,7 +161,6 @@ export async function signInOfficer(email: string, password?: string): Promise<S
   if (!effectivePassword) {
     return {
       success: false,
-      officer: MOCK_OFFICERS[0],
       isCloudAuth: false,
       message: "Password is required.",
       error: "PASSWORD_REQUIRED"
@@ -205,57 +184,23 @@ export async function signInOfficer(email: string, password?: string): Promise<S
     ]);
 
     if (!error && data.user) {
-      const { data: assignment, error: assignmentError } =
-        await supabase.rpc("resolve_my_ptas_actor");
-      if (
-        assignmentError ||
-        !assignment ||
-        typeof assignment !== "object" ||
-        Array.isArray(assignment)
-      ) {
+      try {
+        const officer = await resolveAuthenticatedOfficer(data.user);
+        return {
+          success: true,
+          officer,
+          user: data.user,
+          isCloudAuth: true,
+          message: `Authenticated via Supabase Auth as ${officer.name} (${officer.role})`
+        };
+      } catch (assignmentError) {
         await supabase.auth.signOut();
-        throw new Error("Authenticated account has no active PTAS role assignment");
+        throw assignmentError;
       }
-      const actor = assignment as {
-        user_id?: unknown;
-        display_name?: unknown;
-        role?: unknown;
-        jurisdiction_id?: unknown;
-        jurisdiction_name?: unknown;
-        jurisdiction_tier?: unknown;
-      };
-      const role = String(actor.role ?? "") as MockRole;
-      const allowedRoles: readonly MockRole[] = ["INSPECTOR", "ETO", "DIRECTOR", "ADMIN"];
-      if (!allowedRoles.includes(role)) {
-        await supabase.auth.signOut();
-        throw new Error("PTAS role assignment is not supported by this application");
-      }
-      const officer: MockOfficer = {
-        id: String(actor.user_id ?? data.user.id),
-        name: String(actor.display_name ?? data.user.email ?? "PTAS Officer"),
-        email: data.user.email ?? normalizedEmail,
-        role,
-        title: role === "ETO" ? "Excise & Taxation Officer" : role.replaceAll("_", " "),
-        jurisdictionId: String(actor.jurisdiction_id ?? ""),
-        jurisdictionName: String(actor.jurisdiction_name ?? "Assigned Jurisdiction"),
-        jurisdictionTier: String(
-          actor.jurisdiction_tier ?? "CIRCLE"
-        ) as MockOfficer["jurisdictionTier"],
-        badgeText: `${role} — authenticated database assignment`
-      };
-
-      return {
-        success: true,
-        officer,
-        user: data.user,
-        isCloudAuth: true,
-        message: `Authenticated via Supabase Auth as ${officer.name} (${officer.role})`
-      };
     }
 
     return {
       success: false,
-      officer: MOCK_OFFICERS[0],
       isCloudAuth: false,
       message: error?.message || "Authentication failed.",
       error: "AUTHENTICATION_FAILED"
@@ -264,7 +209,6 @@ export async function signInOfficer(email: string, password?: string): Promise<S
     console.warn("Supabase Auth failure:", err);
     return {
       success: false,
-      officer: MOCK_OFFICERS[0],
       isCloudAuth: false,
       message: "Authentication service is unavailable. No officer session was created.",
       error: "AUTH_SERVICE_UNAVAILABLE"
@@ -344,7 +288,7 @@ export function verifyOfficerAuthority(
       if (officer.role !== "ETO") {
         return {
           authorized: false,
-          reason: `Statutory Authority Violation: Section 3(4) penalty imposition and Rule 12 Land Revenue Recovery certification are exclusive statutory powers of the Assessing Authority (ETO Tariq Mahmood). Current role: ${officer.role}.`
+          reason: `Statutory Authority Violation: Section 3(4) penalty imposition and Rule 12 Land Revenue Recovery certification require the assigned Assessing Authority (ETO). Current role: ${officer.role}.`
         };
       }
       return { authorized: true };
@@ -354,7 +298,7 @@ export function verifyOfficerAuthority(
       if (officer.role !== "DIRECTOR") {
         return {
           authorized: false,
-          reason: `Statutory Authority Violation: Under Section 7 & Rule 13, only the Appellate Authority (Director Shahid Nawaz) has judicial jurisdiction to hear and decide appeals. Current role: ${officer.role}.`
+          reason: `Statutory Authority Violation: Under Section 7 and Rule 13, only the assigned Appellate Authority (Director) may hear and decide appeals. Current role: ${officer.role}.`
         };
       }
       return { authorized: true };
@@ -363,7 +307,7 @@ export function verifyOfficerAuthority(
       if (officer.role !== "ETO") {
         return {
           authorized: false,
-          reason: `Statutory Authority Violation: Form P.F.T-5 Tax Clearance Certificates must be issued under official seal by an Assessing Authority (ETO Tariq Mahmood). Inspectors cannot issue clearance certificates.`
+          reason: `Statutory Authority Violation: Form P.F.T-5 Tax Clearance Certificates must be issued under official seal by the assigned Assessing Authority (ETO). Inspectors cannot issue clearance certificates.`
         };
       }
       return { authorized: true };

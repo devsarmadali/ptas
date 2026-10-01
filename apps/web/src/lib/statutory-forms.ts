@@ -681,6 +681,7 @@ export interface GenerateFormPFT2Options {
   readonly paymentScope?: string | undefined;
   readonly noticeNumber?: string | undefined;
   readonly pin?: string | undefined;
+  readonly challanStatus?: string | undefined;
   readonly isTampered?: boolean | undefined;
   readonly tamperedAmount?: number | undefined;
 }
@@ -869,6 +870,7 @@ export function generateFormPFT2(
 
   return {
     isApproved,
+    challanStatus: opts.challanStatus ?? (isApproved ? "ISSUED" : undefined),
     displayAmount: totalPayable,
     challanNumber,
     noticeNumber,

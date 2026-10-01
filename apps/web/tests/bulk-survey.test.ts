@@ -3,24 +3,73 @@ import {
   convertValidSurveyUnitsToStoredUnits,
   generateSurveyCsvTemplate,
   parseBulkSurveyCsv,
-  parseCsvContent
+  parseCsvContent,
+  parseSurveyImportPayloadRows
 } from "../src/lib/bulk-survey.js";
 import { MOCK_OFFICERS, createInitialPilotUnits } from "../src/lib/pilot-store.js";
+import { SURVEY_IMPORT_HEADERS } from "@ptas/domain";
 
 describe("Phase 4: Bulk Survey Import & PFT-3 Register Ingestion", () => {
   it("generates a valid, download-ready blank survey CSV template", () => {
     const template = generateSurveyCsvTemplate();
-    expect(template).toContain("Legal Name");
-    expect(template).toContain("Trade Name");
+    expect(template).toContain("Legal Name / Entity Name");
+    expect(template).toContain("Taxpayer Name / Proprietor");
     expect(template).toContain("Identifier Type");
     expect(template).toContain("Identifier Value");
     expect(template).toContain("Commercial Address");
-    expect(template).toContain("Statutory Rule ID");
+    expect(template).toContain("Statutory Rule ID (Auto)");
     expect(template).toContain("Phone");
 
     const parsed = parseCsvContent(template);
     expect(parsed.length).toBe(1); // 1 header row, zero sample units
-    expect(parsed[0]).toContain("Legal Name");
+    expect(parsed[0]).toEqual(SURVEY_IMPORT_HEADERS);
+  });
+
+  it("maps the 30-column workbook contract to server import keys", () => {
+    const template = generateSurveyCsvTemplate();
+    const row = SURVEY_IMPORT_HEADERS.map((header) => {
+      if (header === "Division" || header === "Region") return "Multan";
+      if (header === "District" || header === "Zone") return "Vehari";
+      if (header === "Legal Name / Entity Name") return "Example Entity";
+      return "";
+    });
+    const payloadRows = parseSurveyImportPayloadRows(`${template}${row.join(",")}\r\n`);
+    expect(payloadRows).toEqual([
+      expect.objectContaining({
+        division: "Multan",
+        region: "Multan",
+        district: "Vehari",
+        zone: "Vehari",
+        legal_name: "Example Entity"
+      })
+    ]);
+  });
+
+  it("accepts an explicitly under-review survey row without treating it as an assessment", () => {
+    const values = Object.fromEntries(SURVEY_IMPORT_HEADERS.map((header) => [header, ""]));
+    Object.assign(values, {
+      Division: "Multan",
+      Region: "Multan",
+      District: "Vehari",
+      Zone: "Vehari",
+      Circle: "Circle 1",
+      "Commercial Address": "Main Bazar Vehari",
+      "Legal Name / Entity Name": "Pending Classification Shop",
+      "Tax Class (Select)": "Persons other than companies owning commercial establishments",
+      "Financial Year (Auto)": "2026-2027",
+      "Survey Date (Auto)": "2026-09-27",
+      "Taxpayer Status": "Active",
+      Remarks: "Under review"
+    });
+    const row = SURVEY_IMPORT_HEADERS.map((header) => values[header]);
+    const csv = `${generateSurveyCsvTemplate()}${row.join(",")}\r\n`;
+
+    const result = parseBulkSurveyCsv(csv, []);
+
+    expect(result.validRowsCount).toBe(1);
+    expect(result.errorRowsCount).toBe(0);
+    expect(result.validUnits).toHaveLength(0);
+    expect(result.rows[0]?.warnings[0]).toContain("outside PFT-3");
   });
 
   it("handles RFC-4180 CSV parsing with commas, quotes, and CRLF line endings", () => {

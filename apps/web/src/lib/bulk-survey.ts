@@ -10,6 +10,8 @@
 import {
   type AuditActor,
   type StatutoryRuleDefinition,
+  SURVEY_IMPORT_COLUMNS,
+  createSurveyImportCsvTemplate,
   type Taxpayer,
   VEHARI_PILOT_JURISDICTION,
   createAssessment,
@@ -63,21 +65,74 @@ export interface BulkSurveyParseResult {
   readonly validUnits: readonly ValidSurveyUnit[];
 }
 
+export type SurveyImportPayloadRow = Record<string, string>;
+
+function escapeCsvCell(value: string): string {
+  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+/**
+ * Reads the exact survey-import worksheet contract from an Excel workbook and
+ * converts it to RFC-4180 CSV for the existing validation and RPC pipeline.
+ * The source workbook itself is never uploaded by this helper.
+ */
+export async function convertSurveyWorkbookToCsv(file: File): Promise<string> {
+  const { Workbook } = await import("exceljs");
+  const workbook = new Workbook();
+  const source = await file.arrayBuffer();
+  await workbook.xlsx.load(source as Parameters<typeof workbook.xlsx.load>[0]);
+
+  const expectedHeaders = SURVEY_IMPORT_COLUMNS.map((column) => column.header);
+  const worksheet = workbook.worksheets.find((candidate) =>
+    expectedHeaders.every(
+      (header, index) =>
+        candidate
+          .getRow(1)
+          .getCell(index + 1)
+          .text.trim() === header
+    )
+  );
+  if (!worksheet) {
+    throw new Error("No worksheet matches the approved Survey_Import_Filled column contract.");
+  }
+
+  const rows: string[][] = [expectedHeaders];
+  for (let rowNumber = 2; rowNumber <= worksheet.actualRowCount; rowNumber += 1) {
+    const row = worksheet.getRow(rowNumber);
+    const values = expectedHeaders.map((header, index) => {
+      const cell = row.getCell(index + 1);
+      if (header === "Survey Date (Auto)" && cell.value instanceof Date) {
+        return cell.value.toISOString().slice(0, 10);
+      }
+      return cell.text.trim();
+    });
+    if (values.some((value) => value.length > 0)) rows.push(values);
+  }
+
+  return rows.map((row) => row.map(escapeCsvCell).join(",")).join("\r\n");
+}
+
+export function parseSurveyImportPayloadRows(csvText: string): SurveyImportPayloadRow[] {
+  const rows = parseCsvContent(csvText);
+  const headers = rows[0] ?? [];
+  const keyByHeader = new Map<string, string>(
+    SURVEY_IMPORT_COLUMNS.map((column) => [column.header, column.key])
+  );
+  return rows.slice(1).map((row) => {
+    const result: SurveyImportPayloadRow = {};
+    for (let index = 0; index < headers.length; index++) {
+      const key = keyByHeader.get(headers[index] ?? "");
+      if (key) result[key] = (row[index] ?? "").trim();
+    }
+    return result;
+  });
+}
+
 /**
  * Standard CSV Template with realistic Vehari commercial survey records.
  */
 export function generateSurveyCsvTemplate(): string {
-  const headers = [
-    "Legal Name",
-    "Trade Name",
-    "Identifier Type",
-    "Identifier Value",
-    "Commercial Address",
-    "Statutory Rule ID",
-    "Phone"
-  ];
-
-  return headers.join(",") + "\r\n";
+  return createSurveyImportCsvTemplate();
 }
 
 /**
@@ -143,6 +198,19 @@ function normalizeHeaderName(header: string): string {
   if (h.includes("legalname") || h === "legal" || h === "businessname" || h === "assessee") {
     return "legalName";
   }
+  if (h.includes("taxpayername") || h.includes("proprietor")) return "tradeName";
+  if (h === "division") return "division";
+  if (h === "region") return "region";
+  if (h === "district") return "district";
+  if (h === "zone") return "zone";
+  if (h === "tehsil") return "tehsil";
+  if (h === "circle") return "circle";
+  if (h === "locality") return "locality";
+  if (h.includes("taxclass")) return "taxClass";
+  if (h.includes("taxassessmentoption")) return "taxAssessmentOption";
+  if (h.includes("financialyear")) return "financialYear";
+  if (h.includes("taxpayerstatus")) return "taxpayerStatus";
+  if (h === "remarks" || h === "remark") return "remarks";
   if (h.includes("tradename") || h === "trade" || h === "shopname" || h === "brand") {
     return "tradeName";
   }
@@ -270,6 +338,9 @@ export function parseBulkSurveyCsv(
     const address = rowMap["address"] ?? "";
     const statutoryRuleIdRaw = rowMap["statutoryRuleId"] ?? "";
     const phone = rowMap["phone"] || undefined;
+    const isPendingClassificationReview =
+      !rowMap["taxAssessmentOption"] &&
+      (rowMap["remarks"] ?? "").trim().toLowerCase() === "under review";
 
     // 1. Validate Legal Name
     if (!legalName) {
@@ -281,9 +352,9 @@ export function parseBulkSurveyCsv(
     let normalizedId = "";
     let maskedId = "";
 
-    if (!identifierValueRaw) {
-      errors.push("Missing required field: Identifier Value (CNIC or NTN)");
-    } else {
+    if (!identifierValueRaw && identifierTypeRaw) {
+      errors.push("Identifier Value is required when Identifier Type is supplied");
+    } else if (identifierValueRaw) {
       // Auto-infer identifier type if missing or ambiguous
       const digitsOnly = identifierValueRaw.replace(/\D/g, "");
       if (!identifierTypeRaw || (identifierTypeRaw !== "CNIC" && identifierTypeRaw !== "NTN")) {
@@ -315,9 +386,7 @@ export function parseBulkSurveyCsv(
 
     // 4. Validate Statutory Rule ID / Schedule Code
     let resolvedRule: StatutoryRuleDefinition | undefined;
-    if (!statutoryRuleIdRaw) {
-      errors.push("Missing required field: Statutory Rule ID or Subclassification");
-    } else {
+    if (statutoryRuleIdRaw) {
       // Try direct rule ID lookup (e.g. "PFT-6.x", "PFT-3.i.b", "PFT-10")
       resolvedRule = getStatutoryRuleById(statutoryRuleIdRaw);
       // Fallback: try subclassification code (e.g. "6(x)", "3(i)(b)", "10")
@@ -329,6 +398,31 @@ export function parseBulkSurveyCsv(
           `Unrecognized Statutory Rule "${statutoryRuleIdRaw}". Must match Second Schedule (e.g., "PFT-6.x", "PFT-3.i.b", "PFT-10", "PFT-8", etc.)`
         );
       }
+    }
+
+    for (const [key, label] of [
+      ["division", "Division"],
+      ["region", "Region"],
+      ["district", "District"],
+      ["zone", "Zone"],
+      ["taxClass", "Tax Class"],
+      ["taxAssessmentOption", "Tax Assessment Option"],
+      ["financialYear", "Financial Year"],
+      ["taxpayerStatus", "Taxpayer Status"]
+    ] as const) {
+      if (
+        normalizedHeaders.length === SURVEY_IMPORT_COLUMNS.length &&
+        !rowMap[key] &&
+        !(key === "taxAssessmentOption" && isPendingClassificationReview)
+      ) {
+        errors.push(`Missing required field: ${label}`);
+      }
+    }
+
+    if (isPendingClassificationReview) {
+      warnings.push(
+        "Assessment classification is pending Inspector review; this row remains outside PFT-3 until classified, submitted, and approved."
+      );
     }
 
     // 5. Duplicate Identification Checks
@@ -371,7 +465,7 @@ export function parseBulkSurveyCsv(
       }
     }
 
-    const isValid = errors.length === 0 && resolvedRule !== undefined;
+    const isValid = errors.length === 0;
 
     let parsedUnit: ValidSurveyUnit | undefined;
     if (isValid && resolvedRule) {

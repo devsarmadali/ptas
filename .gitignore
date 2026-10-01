@@ -14,9 +14,9 @@ test-results/
 .vercel/
 local-data/
 artifacts/
+outputs/
 *.zip
 *.pdf
+PTAS_Statutory_Slab_Distribution_Vehari_2026.csv
+Vehari CIrcle 1.xlsx
 *.tsbuildinfo
-
-.vercel
-.env*

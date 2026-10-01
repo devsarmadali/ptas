@@ -7,7 +7,11 @@ export async function executeWorkflowCommand<T>(
     | "REVIEW_DEMAND_DELETION"
     | "SHOW_CAUSE_TRANSITION"
     | "PFT2_TRANSITION"
-    | "RECEIVE_PFT2_PAYMENT",
+    | "RECEIVE_PFT2_PAYMENT"
+    | "STAGE_SURVEY_IMPORT"
+    | "PROMOTE_SURVEY_IMPORT"
+    | "BULK_SUBMIT_SURVEY_IMPORT"
+    | "BULK_APPROVE_SURVEY_IMPORT",
   payload: Readonly<Record<string, unknown>>
 ): Promise<T> {
   const supabase = getSupabaseAuthClient();

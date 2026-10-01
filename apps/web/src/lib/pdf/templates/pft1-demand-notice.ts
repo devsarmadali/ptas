@@ -71,7 +71,7 @@ export async function generatePft1DemandNoticePdf(
   doc.text("Security PIN:", left + 4, curY + 10.5);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`🔒 ${notice.pin || "68000000"}`, left + 24, curY + 10.5);
+  doc.text(`[PIN] ${notice.pin || "68000000"}`, left + 24, curY + 10.5);
 
   doc.setTextColor(...PDF_COLORS.textDark);
   doc.setFont("helvetica", "bold");

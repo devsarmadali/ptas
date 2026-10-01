@@ -35,7 +35,6 @@ import {
 import {
   CIRCLE_VEHARI_ID,
   FINANCIAL_YEAR_2026_27,
-  MOCK_OFFICERS,
   VEHARI_LOCALITIES,
   type AppealRecord,
   type ClearanceCertificateRecord,
@@ -63,7 +62,6 @@ import {
   RECEIPT_SOURCE_CONFIG
 } from "../lib/pilot-store";
 import { computeFileSha256, uploadReceiptScan } from "../lib/storage";
-import { pushPilotStateToSupabase } from "../lib/supabase-sync";
 import {
   type AppellateOrderModel,
   type DiscontinuanceOrderModel,
@@ -85,13 +83,17 @@ import {
 } from "../lib/statutory-forms";
 import {
   type BulkSurveyParseResult,
-  convertValidSurveyUnitsToStoredUnits,
+  convertSurveyWorkbookToCsv,
   generateSurveyCsvTemplate,
-  parseBulkSurveyCsv
+  parseBulkSurveyCsv,
+  parseCsvContent,
+  parseSurveyImportPayloadRows
 } from "../lib/bulk-survey";
+import { executeWorkflowCommand } from "../lib/workflow-command-client";
 import {
   OFFICIAL_OFFICERS_REGISTRY,
-  getOfficerProfileByEmail,
+  getSupabaseAuthClient,
+  resolveAuthenticatedOfficer,
   signInOfficer,
   signOutOfficer,
   subscribeToAuthChanges,
@@ -132,6 +134,18 @@ import {
 } from "../lib/public-portal";
 
 export type RouteHubId = "assessment" | "enforcement" | "revenue" | "intelligence" | "admin";
+
+type ActionableSurveyImportBatch = {
+  batch_id: string;
+  source_filename: string;
+  financial_year_code: string;
+  imported_rows: number;
+  feeded_rows: number;
+  submitted_rows: number;
+  approved_rows: number;
+  pending_review_rows: number;
+  created_at: string;
+};
 
 export type TabId =
   | "UNITS"
@@ -215,6 +229,18 @@ export const PATH_TO_TAB: Record<string, { hub: RouteHubId; tab: TabId }> = {
   "/intelligence/audit": { hub: "intelligence", tab: "AUDIT" }
 };
 
+const UNAUTHENTICATED_OFFICER_CONTEXT: MockOfficer = {
+  id: "",
+  name: "",
+  email: "",
+  role: "ADMIN",
+  title: "",
+  jurisdictionId: "",
+  jurisdictionName: "",
+  jurisdictionTier: "REGION",
+  badgeText: ""
+};
+
 export default function HomePage({
   initialRouteHub,
   initialTab
@@ -225,7 +251,10 @@ export default function HomePage({
   const pathname = usePathname();
   const router = useRouter();
 
-  const [officer, setOfficer] = useState<MockOfficer>(MOCK_OFFICERS[0]);
+  const [officer, setOfficer] = useState<MockOfficer>(UNAUTHENTICATED_OFFICER_CONTEXT);
+  const [authStatus, setAuthStatus] = useState<"CHECKING" | "AUTHENTICATED" | "UNAUTHENTICATED">(
+    "CHECKING"
+  );
   const [units, setUnits] = useState<StoredUnit[]>(() => createInitialPilotUnits());
   const [auditLogs, setAuditLogs] = useState<PilotAuditItem[]>(() => createInitialAuditLogs());
 
@@ -420,12 +449,18 @@ export default function HomePage({
   const [showBulkSurveyModal, setShowBulkSurveyModal] = useState(false);
   const [bulkSurveyRawCsv, setBulkSurveyRawCsv] = useState("");
   const [bulkSurveyFileName, setBulkSurveyFileName] = useState("");
+  const [bulkSurveyFileSha256, setBulkSurveyFileSha256] = useState("");
   const [bulkSurveyParseResult, setBulkSurveyParseResult] = useState<BulkSurveyParseResult | null>(
     null
   );
   const [bulkSurveyFilter, setBulkSurveyFilter] = useState<"ALL" | "VALID" | "ERROR">("ALL");
   const [bulkInputMode, setBulkInputMode] = useState<"FILE" | "PASTE">("FILE");
   const [isImportingSurvey, setIsImportingSurvey] = useState(false);
+  const [actionableSurveyImportBatches, setActionableSurveyImportBatches] = useState<
+    ActionableSurveyImportBatch[]
+  >([]);
+  const [isLoadingSurveyImportBatches, setIsLoadingSurveyImportBatches] = useState(false);
+  const [activeBulkWorkflowBatchId, setActiveBulkWorkflowBatchId] = useState<string | null>(null);
 
   // PFT-3 Search & Filter Controls
   const [pft3SearchQuery, setPft3SearchQuery] = useState("");
@@ -439,10 +474,10 @@ export default function HomePage({
 
   // Supabase Real Auth & Session State (Phase 5)
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authEmailInput, setAuthEmailInput] = useState("inspector.vehari@punjab.gov.pk");
-  const [authPasswordInput, setAuthPasswordInput] = useState("VehariInspector2026!");
+  const [authEmailInput, setAuthEmailInput] = useState("");
+  const [authPasswordInput, setAuthPasswordInput] = useState("");
   const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [authModeTab, setAuthModeTab] = useState<"QUICK" | "CREDENTIALS">("QUICK");
+  const [authModeTab, setAuthModeTab] = useState<"QUICK" | "CREDENTIALS">("CREDENTIALS");
   const [authenticatedSessionType, setAuthenticatedSessionType] = useState<"CLOUD" | "OFFLINE">(
     "CLOUD"
   );
@@ -483,10 +518,6 @@ export default function HomePage({
   const [previewScanHash, setPreviewScanHash] = useState<string>("");
   const [previewScanTitle, setPreviewScanTitle] = useState<string>("");
   const [previewScanFileName, setPreviewScanFileName] = useState<string>("");
-
-  // Supabase Cloud Sync State
-  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
 
   // Phase 8 State: Public Assessee Portal & Real-Time QR Verification Desk
   const [portalVerificationInput, setPortalVerificationInput] = useState("");
@@ -604,7 +635,6 @@ export default function HomePage({
     let sub: { unsubscribe: () => void } | undefined;
     try {
       const state = loadPilotState();
-      setOfficer(state.currentOfficer);
       setUnits(state.units);
       setAuditLogs(state.auditLogs);
       setAppeals(state.appeals ?? []);
@@ -633,16 +663,52 @@ export default function HomePage({
         }
       }
 
-      // Subscribe to real Supabase Auth session updates
-      sub = subscribeToAuthChanges((event, session) => {
-        if (session?.user?.email) {
-          const matching = getOfficerProfileByEmail(session.user.email);
+      const rejectUnauthenticatedSession = () => {
+        setOfficer(UNAUTHENTICATED_OFFICER_CONTEXT);
+        setAuthenticatedSessionType("OFFLINE");
+        setAuthStatus("UNAUTHENTICATED");
+        router.replace(asRoute("/sign-in"));
+      };
+
+      const acceptAuthenticatedUser = async (
+        user: Parameters<typeof resolveAuthenticatedOfficer>[0]
+      ) => {
+        try {
+          const matching = await resolveAuthenticatedOfficer(user);
           setOfficer(matching);
           setAuthenticatedSessionType("CLOUD");
+          setAuthStatus("AUTHENTICATED");
+        } catch {
+          await signOutOfficer();
+          rejectUnauthenticatedSession();
+        }
+      };
+
+      // Verify the current user with Supabase before rendering any protected pilot state.
+      void getSupabaseAuthClient()
+        .auth.getUser()
+        .then(({ data, error }) => {
+          if (error || !data.user) {
+            rejectUnauthenticatedSession();
+            return;
+          }
+          void acceptAuthenticatedUser(data.user);
+        })
+        .catch(rejectUnauthenticatedSession);
+
+      // Keep the protected shell synchronized with later session changes.
+      sub = subscribeToAuthChanges((_event, session) => {
+        if (session?.user?.email) {
+          void acceptAuthenticatedUser(session.user);
+        } else {
+          rejectUnauthenticatedSession();
         }
       });
     } catch (err) {
       console.error("Critical error in HomePage mount useEffect:", err);
+      setOfficer(UNAUTHENTICATED_OFFICER_CONTEXT);
+      setAuthStatus("UNAUTHENTICATED");
+      router.replace(asRoute("/sign-in"));
     }
 
     return () => {
@@ -704,7 +770,6 @@ export default function HomePage({
   const handleResetDemo = () => {
     if (confirm("Reset pilot dataset to clean factory seed state?")) {
       const clean = resetPilotState();
-      setOfficer(clean.currentOfficer);
       setUnits(clean.units);
       setAuditLogs(clean.auditLogs);
       setAppeals(clean.appeals ?? []);
@@ -725,26 +790,6 @@ export default function HomePage({
     }
   };
 
-  // Sync to Supabase Cloud
-  const handleSyncCloud = async () => {
-    try {
-      setIsSyncingCloud(true);
-      const result = await pushPilotStateToSupabase(units, auditLogs);
-      setIsSyncingCloud(false);
-      if (result.success) {
-        const time = new Date().toLocaleTimeString();
-        setLastSyncTime(time);
-        showToast("success", `☁️ ${result.message}`);
-      } else {
-        showToast("error", result.message);
-      }
-    } catch (err: unknown) {
-      setIsSyncingCloud(false);
-      const msg = err instanceof Error ? err.message : String(err);
-      showToast("error", `Cloud synchronization failed: ${msg}`);
-    }
-  };
-
   // Handler: Authenticate Officer via Supabase Auth (Phase 5)
   const handleAuthenticateOfficer = async (email: string, password?: string) => {
     setIsAuthenticating(true);
@@ -753,6 +798,7 @@ export default function HomePage({
       if (result.success) {
         setOfficer(result.officer);
         setAuthenticatedSessionType(result.isCloudAuth ? "CLOUD" : "OFFLINE");
+        setAuthStatus("AUTHENTICATED");
         const auditItem: PilotAuditItem = {
           id: `audit-auth-${Date.now()}`,
           eventType: "OFFICER_SESSION_AUTHENTICATED",
@@ -790,6 +836,9 @@ export default function HomePage({
       details: `Official session terminated for ${officer.name} (${officer.title}).`
     };
     syncState(units, [auditItem, ...auditLogs]);
+    setOfficer(UNAUTHENTICATED_OFFICER_CONTEXT);
+    setAuthenticatedSessionType("OFFLINE");
+    setAuthStatus("UNAUTHENTICATED");
     showToast("info", `Signed out of ${officer.name}'s session.`);
     router.push(asRoute("/sign-in"));
   };
@@ -1190,59 +1239,6 @@ export default function HomePage({
       const updatedUnits = units.map((u) => (u.id === unitId ? updatedUnit : u));
       syncState(updatedUnits, [auditItem, ...auditLogs]);
       showToast("success", `Assessment submitted to ETO Review Queue.`);
-    } catch (err: unknown) {
-      showToast("error", (err as Error).message);
-    }
-  };
-
-  // Handler: Bulk Submit all Feeded / Draft Survey Units to ETO
-  const handleBulkSubmitDraftUnits = () => {
-    const draftUnits = units.filter((u) => (u.assessments[0]?.status ?? "DRAFT") === "DRAFT");
-    if (draftUnits.length === 0) {
-      showToast("info", "No feeded / draft units available for submission.");
-      return;
-    }
-
-    try {
-      let submitCount = 0;
-      let newUnits = [...units];
-
-      for (const targetUnit of draftUnits) {
-        const currentAssessment = targetUnit.assessments[0];
-        const currentVersion = targetUnit.assessmentVersions[0];
-        if (!currentAssessment || !currentVersion) continue;
-
-        const { assessment: submittedAsm, version: submittedVer } = submitAssessmentVersion(
-          currentAssessment,
-          currentVersion
-        );
-
-        const updatedUnit: StoredUnit = {
-          ...targetUnit,
-          assessments: [submittedAsm, ...targetUnit.assessments.slice(1)],
-          assessmentVersions: [submittedVer, ...targetUnit.assessmentVersions.slice(1)]
-        };
-
-        newUnits = newUnits.map((u) => (u.id === targetUnit.id ? updatedUnit : u));
-        submitCount++;
-      }
-
-      const auditItem: PilotAuditItem = {
-        id: `audit-bulk-sub-${Date.now()}`,
-        eventType: "ASSESSMENT_SUBMITTED",
-        actorName: officer.name,
-        actorRole: officer.role,
-        target: `Bulk Survey Batch (${submitCount} Units)`,
-        timestamp: new Date().toISOString(),
-        correlationId: `corr-bulk-sub-${Date.now()}`,
-        details: `Inspector bulk submitted ${submitCount} feeded survey units to ETO review queue (FY-2026-2027)`
-      };
-
-      syncState(newUnits, [auditItem, ...auditLogs]);
-      showToast(
-        "success",
-        `Successfully submitted ${submitCount} survey units to ETO Review Queue.`
-      );
     } catch (err: unknown) {
       showToast("error", (err as Error).message);
     }
@@ -2449,6 +2445,81 @@ export default function HomePage({
   };
 
   // Handler: Download Survey CSV Template
+  const refreshActionableSurveyImportBatches = async () => {
+    setIsLoadingSurveyImportBatches(true);
+    try {
+      const { data, error } = await getSupabaseAuthClient().rpc(
+        "list_actionable_survey_import_batches"
+      );
+      if (error) throw error;
+      setActionableSurveyImportBatches((data ?? []) as ActionableSurveyImportBatch[]);
+    } catch (error) {
+      setActionableSurveyImportBatches([]);
+      showToast(
+        "error",
+        error instanceof Error
+          ? `Could not load imported batch workflow: ${error.message}`
+          : "Could not load imported batch workflow."
+      );
+    } finally {
+      setIsLoadingSurveyImportBatches(false);
+    }
+  };
+
+  const handleBulkSurveyWorkflow = async (
+    batch: ActionableSurveyImportBatch,
+    action: "SUBMIT" | "APPROVE"
+  ) => {
+    if (action === "SUBMIT" && officer.role !== "INSPECTOR") {
+      showToast("error", "Only the assigned Inspector may submit an imported survey batch.");
+      return;
+    }
+    if (action === "APPROVE" && officer.role !== "ETO") {
+      showToast("error", "Only the assigned ETO may approve an imported survey batch.");
+      return;
+    }
+    if (action === "APPROVE" && batch.pending_review_rows > 0) {
+      showToast(
+        "error",
+        `${batch.pending_review_rows} unit(s) still require statutory classification and cannot be approved.`
+      );
+      return;
+    }
+
+    setActiveBulkWorkflowBatchId(batch.batch_id);
+    try {
+      const result = await executeWorkflowCommand<{
+        submitted_rows?: number;
+        approved_rows?: number;
+        idempotent_replay: boolean;
+      }>(action === "SUBMIT" ? "BULK_SUBMIT_SURVEY_IMPORT" : "BULK_APPROVE_SURVEY_IMPORT", {
+        p_batch_id: batch.batch_id,
+        p_idempotency_key: `survey-bulk-${action.toLowerCase()}:${officer.id}:${batch.batch_id}`,
+        p_correlation_id: `survey-bulk:${crypto.randomUUID()}`,
+        p_reason:
+          action === "SUBMIT"
+            ? "Inspector bulk submission of imported survey units for ETO review"
+            : "ETO bulk approval of eligible imported survey units"
+      });
+      const affected =
+        action === "SUBMIT" ? (result.submitted_rows ?? 0) : (result.approved_rows ?? 0);
+      showToast(
+        "success",
+        action === "SUBMIT"
+          ? `${affected} imported unit(s) submitted to the ETO review queue.`
+          : `${affected} eligible unit(s) approved and finalized in PFT-3.`
+      );
+      await refreshActionableSurveyImportBatches();
+    } catch (error) {
+      showToast(
+        "error",
+        error instanceof Error ? error.message : `Bulk ${action.toLowerCase()} failed.`
+      );
+    } finally {
+      setActiveBulkWorkflowBatchId(null);
+    }
+  };
+
   const handleDownloadSurveyTemplate = () => {
     const csv = generateSurveyCsvTemplate();
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -2463,22 +2534,30 @@ export default function HomePage({
     showToast("info", "Official Punjab Field Survey CSV template downloaded.");
   };
 
-  // Handler: Upload and Parse Survey CSV
-  const handleSurveyFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handler: Upload and parse an approved survey CSV or XLSX workbook.
+  const handleSurveyFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setBulkSurveyFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = String(event.target?.result ?? "");
+    try {
+      const sourceBytes = await file.arrayBuffer();
+      const sourceDigest = await crypto.subtle.digest("SHA-256", sourceBytes);
+      setBulkSurveyFileSha256(
+        Array.from(new Uint8Array(sourceDigest))
+          .map((value) => value.toString(16).padStart(2, "0"))
+          .join("")
+      );
+      const content = file.name.toLowerCase().endsWith(".xlsx")
+        ? await convertSurveyWorkbookToCsv(file)
+        : new TextDecoder("utf-8").decode(sourceBytes).replace(/^\uFEFF/, "");
       setBulkSurveyRawCsv(content);
       const result = parseBulkSurveyCsv(content, units);
       setBulkSurveyParseResult(result);
       if (result.validRowsCount > 0 && result.errorRowsCount === 0) {
         showToast(
           "success",
-          `Validated ${result.totalRows} survey rows: All ${result.validRowsCount} rows are valid and ready for Form PFT-3 ingestion!`
+          `Validated ${result.totalRows} survey rows: all ${result.validRowsCount} rows are ready for server staging.`
         );
       } else if (result.validRowsCount > 0) {
         showToast(
@@ -2488,15 +2567,23 @@ export default function HomePage({
       } else {
         showToast(
           "error",
-          `CSV validation failed: 0 valid rows found, ${result.errorRowsCount} error(s).`
+          `Survey import validation failed: 0 valid rows found, ${result.errorRowsCount} error(s).`
         );
       }
-    };
-    reader.readAsText(file, "UTF-8");
+    } catch (error) {
+      setBulkSurveyRawCsv("");
+      setBulkSurveyParseResult(null);
+      setBulkSurveyFileSha256("");
+      showToast(
+        "error",
+        error instanceof Error ? error.message : "The survey file could not be read."
+      );
+    }
   };
 
   // Handler: Direct Paste Survey Text
   const handleSurveyTextChange = (text: string) => {
+    setBulkSurveyFileSha256("");
     setBulkSurveyRawCsv(text);
     if (!text.trim()) {
       setBulkSurveyParseResult(null);
@@ -2506,33 +2593,65 @@ export default function HomePage({
     setBulkSurveyParseResult(result);
   };
 
-  // Handler: Execute Bulk Survey Import into Form P.F.T-3 Register
-  const handleExecuteBulkSurveyImport = () => {
-    if (!bulkSurveyParseResult || bulkSurveyParseResult.validUnits.length === 0) {
+  // Handler: Stage and atomically promote bulk survey rows into the controlled survey workflow.
+  const handleExecuteBulkSurveyImport = async () => {
+    if (officer.role !== "INSPECTOR" && officer.role !== "ETO") {
+      showToast(
+        "error",
+        "Only an assigned Inspector or ETO may import survey records for their jurisdiction."
+      );
+      return;
+    }
+    if (!bulkSurveyParseResult || bulkSurveyParseResult.validRowsCount === 0) {
       showToast("error", "No valid survey records available for ingestion.");
       return;
     }
 
     setIsImportingSurvey(true);
     try {
-      const { newUnits, auditItems } = convertValidSurveyUnitsToStoredUnits(
-        bulkSurveyParseResult.validUnits,
-        officer,
-        units.length
+      const fileSha256 =
+        bulkSurveyFileSha256 ||
+        Array.from(
+          new Uint8Array(
+            await crypto.subtle.digest("SHA-256", new TextEncoder().encode(bulkSurveyRawCsv))
+          )
+        )
+          .map((value) => value.toString(16).padStart(2, "0"))
+          .join("");
+      const parsedRows = parseCsvContent(bulkSurveyRawCsv);
+      const payloadRows = parseSurveyImportPayloadRows(bulkSurveyRawCsv);
+      const staged = await executeWorkflowCommand<{ id: string; status: string }>(
+        "STAGE_SURVEY_IMPORT",
+        {
+          p_source_filename: bulkSurveyFileName || "survey-import.csv",
+          p_file_sha256: fileSha256,
+          p_headers: parsedRows[0] ?? [],
+          p_rows: payloadRows,
+          p_idempotency_key: `survey-stage:${officer.id}:${fileSha256}`,
+          p_correlation_id: `survey-import:${crypto.randomUUID()}`
+        }
       );
-
-      const updatedUnits = [...newUnits, ...units];
-      const updatedAudits = [...auditItems, ...auditLogs];
-      syncState(updatedUnits, updatedAudits);
+      if (staged.status !== "VALIDATED") {
+        throw new Error("The server found invalid rows. Correct the file and upload it again.");
+      }
+      const promoted = await executeWorkflowCommand<{ imported_rows: number }>(
+        "PROMOTE_SURVEY_IMPORT",
+        {
+          p_batch_id: staged.id,
+          p_idempotency_key: `survey-promote:${staged.id}`,
+          p_correlation_id: `survey-import:${crypto.randomUUID()}`
+        }
+      );
 
       showToast(
         "success",
-        `Successfully imported ${newUnits.length} field survey units into Circle-Vehari Form P.F.T-3 Assessment Register!`
+        `Successfully imported ${promoted.imported_rows} field survey units in Feeded state for Inspector review.`
       );
-      setShowBulkSurveyModal(false);
       setBulkSurveyParseResult(null);
       setBulkSurveyRawCsv("");
       setBulkSurveyFileName("");
+      setBulkSurveyFileSha256("");
+      await refreshActionableSurveyImportBatches();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       showToast("error", `Bulk survey import failed: ${msg}`);
@@ -3297,9 +3416,20 @@ export default function HomePage({
   const handlePrintPft2Challan = (challan: Pft2ChallanRecord) => {
     downloadOfficialPdf({
       type: "FORM_PFT2_CHALLAN",
-      documentIdOrData: challan,
+      documentIdOrData: {
+        ...challan,
+        status: challan.status || "ISSUED",
+        challanStatus: challan.status || "ISSUED"
+      },
+      authContext: {
+        role: officer.role || "ETO",
+        district: "Vehari",
+        circle: "Circle-Vehari"
+      },
       defaultFilename: `Form_PFT2_Challan_${challan.challanNumber.replace(/\//g, "_")}.pdf`
-    });
+    }).catch((err) =>
+      showToast("error", `Failed to generate Form PFT-2 Challan: ${(err as Error).message}`)
+    );
   };
 
   const handleSearchCitizenTaxpayer = (overrideQuery?: string) => {
@@ -3582,6 +3712,23 @@ export default function HomePage({
     );
   };
 
+  if (authStatus !== "AUTHENTICATED") {
+    return (
+      <main
+        aria-live="polite"
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          background: "#f8fafc",
+          color: "#334155"
+        }}
+      >
+        <p>{authStatus === "CHECKING" ? "Verifying secure PTAS session…" : "Redirecting…"}</p>
+      </main>
+    );
+  }
+
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       {/* Toast Notification */}
@@ -3639,36 +3786,6 @@ export default function HomePage({
                 >
                   PILOT READY &bull; VERCEL
                 </span>
-                <button
-                  onClick={handleSyncCloud}
-                  disabled={isSyncingCloud}
-                  className="btn-reset"
-                  style={{
-                    background: "#047857",
-                    borderColor: "#10b981",
-                    color: "#ffffff",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.35rem"
-                  }}
-                  title="Synchronize pilot units, assessments, and ledgers to live Supabase PostgreSQL"
-                >
-                  <span>{isSyncingCloud ? "⏳" : "☁️"}</span>
-                  <span>{isSyncingCloud ? "Syncing..." : "Sync Supabase"}</span>
-                </button>
-                {lastSyncTime && (
-                  <span
-                    style={{
-                      fontSize: "0.7rem",
-                      background: "rgba(16, 185, 129, 0.25)",
-                      color: "#d1fae5",
-                      padding: "0.25rem 0.5rem",
-                      borderRadius: "4px"
-                    }}
-                  >
-                    ✓ Synced {lastSyncTime}
-                  </span>
-                )}
                 <button
                   onClick={handleResetDemo}
                   className="btn-reset"
@@ -4130,35 +4247,24 @@ export default function HomePage({
                     className="panel-actions"
                     style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
                   >
-                    {draftUnitsCount > 0 && (
+                    {(officer.role === "INSPECTOR" || officer.role === "ETO") && (
                       <button
                         type="button"
-                        onClick={handleBulkSubmitDraftUnits}
-                        className="btn-success"
-                        style={{
-                          backgroundColor: "#15803d",
-                          color: "#ffffff",
-                          borderColor: "#166534",
-                          fontWeight: 700
+                        onClick={() => {
+                          setShowBulkSurveyModal(true);
+                          void refreshActionableSurveyImportBatches();
                         }}
-                        title={`Bulk submit all ${draftUnitsCount} feeded survey units to ETO review queue`}
+                        className="btn-secondary"
+                        style={{
+                          backgroundColor: "#065f46",
+                          color: "#ffffff",
+                          borderColor: "#047857"
+                        }}
+                        title="Import field survey records within the assigned Circle or ETO District/Zone"
                       >
-                        ⚡ Bulk Submit Feeded Units ({draftUnitsCount})
+                        📥 Bulk Import Survey
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => setShowBulkSurveyModal(true)}
-                      className="btn-secondary"
-                      style={{
-                        backgroundColor: "#065f46",
-                        color: "#ffffff",
-                        borderColor: "#047857"
-                      }}
-                      title="Batch upload field survey records via CSV into Form P.F.T-3 Register"
-                    >
-                      📥 Bulk Import Survey (CSV)
-                    </button>
                     <button
                       onClick={() => setShowAddUnitModal(true)}
                       className="btn-primary"
@@ -14136,12 +14242,7 @@ export default function HomePage({
                             }}
                           >
                             <div style={{ flexShrink: 0 }}>
-                              <StatutoryQrCode
-                                payload={copy.qrPayload}
-                                size={56}
-                                label="Verify"
-                                subtitle={copy.bankUse.challanSerial}
-                              />
+                              <StatutoryQrCode payload={copy.qrPayload} size={56} />
                             </div>
                             <div style={{ flex: 1, textAlign: "center" }}>
                               <div style={{ fontSize: "0.72rem", fontWeight: 700 }}>
@@ -15531,6 +15632,139 @@ export default function HomePage({
             </div>
 
             <div className="modal-body" style={{ overflowY: "auto", padding: "1.25rem" }}>
+              <section
+                aria-labelledby="survey-import-workflow-heading"
+                style={{
+                  marginBottom: "1rem",
+                  padding: "1rem",
+                  border: "1px solid #bbf7d0",
+                  borderRadius: "8px",
+                  background: "#f0fdf4"
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "1rem",
+                    alignItems: "center",
+                    marginBottom: "0.75rem"
+                  }}
+                >
+                  <div>
+                    <h4
+                      id="survey-import-workflow-heading"
+                      style={{ margin: 0, color: "#14532d", fontSize: "0.95rem" }}
+                    >
+                      Imported Batch Workflow
+                    </h4>
+                    <p style={{ margin: "0.2rem 0 0", color: "#475569", fontSize: "0.78rem" }}>
+                      Inspector submission and ETO approval are separate, audited server
+                      transactions. Approval creates the eligible PFT-3 records.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-secondary btn-sm"
+                    disabled={isLoadingSurveyImportBatches}
+                    onClick={() => void refreshActionableSurveyImportBatches()}
+                  >
+                    {isLoadingSurveyImportBatches ? "Refreshing…" : "Refresh batches"}
+                  </button>
+                </div>
+
+                {isLoadingSurveyImportBatches && actionableSurveyImportBatches.length === 0 ? (
+                  <p role="status" style={{ margin: 0, color: "#475569", fontSize: "0.8rem" }}>
+                    Loading assigned imported batches…
+                  </p>
+                ) : actionableSurveyImportBatches.length === 0 ? (
+                  <p style={{ margin: 0, color: "#475569", fontSize: "0.8rem" }}>
+                    No imported batch currently requires action for this role and jurisdiction.
+                  </p>
+                ) : (
+                  <div style={{ display: "grid", gap: "0.65rem" }}>
+                    {actionableSurveyImportBatches.map((batch) => {
+                      const isBusy = activeBulkWorkflowBatchId === batch.batch_id;
+                      const action = officer.role === "ETO" ? "APPROVE" : "SUBMIT";
+                      const actionCount =
+                        action === "APPROVE" ? batch.submitted_rows : batch.feeded_rows;
+                      const approvalBlocked =
+                        action === "APPROVE" &&
+                        (batch.feeded_rows > 0 || batch.pending_review_rows > 0);
+                      return (
+                        <article
+                          key={batch.batch_id}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            gap: "1rem",
+                            padding: "0.75rem",
+                            borderRadius: "6px",
+                            border: "1px solid #d1d5db",
+                            background: "#ffffff"
+                          }}
+                        >
+                          <div style={{ minWidth: 0 }}>
+                            <strong style={{ color: "#0f172a", fontSize: "0.85rem" }}>
+                              {batch.source_filename}
+                            </strong>
+                            <div style={{ color: "#64748b", fontSize: "0.75rem" }}>
+                              FY {batch.financial_year_code} · Imported {batch.imported_rows} ·
+                              Feeded {batch.feeded_rows} · Submitted {batch.submitted_rows} ·
+                              Approved {batch.approved_rows}
+                            </div>
+                            {batch.pending_review_rows > 0 && (
+                              <div
+                                role="alert"
+                                style={{
+                                  color: "#92400e",
+                                  fontSize: "0.75rem",
+                                  marginTop: "0.2rem"
+                                }}
+                              >
+                                {batch.pending_review_rows} unit(s) are under classification review.
+                                They may be submitted but cannot be approved yet.
+                              </div>
+                            )}
+                            {action === "APPROVE" && batch.feeded_rows > 0 && (
+                              <div
+                                role="alert"
+                                style={{
+                                  color: "#92400e",
+                                  fontSize: "0.75rem",
+                                  marginTop: "0.2rem"
+                                }}
+                              >
+                                Waiting for assigned Inspector submission of {batch.feeded_rows}
+                                unit(s).
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className={
+                              action === "APPROVE" ? "btn-primary btn-sm" : "btn-success btn-sm"
+                            }
+                            disabled={isBusy || actionCount === 0 || approvalBlocked}
+                            onClick={() => void handleBulkSurveyWorkflow(batch, action)}
+                            title={
+                              approvalBlocked
+                                ? "Wait for all Inspector submissions and resolve every pending statutory classification before ETO approval"
+                                : `${action === "APPROVE" ? "Approve" : "Submit"} ${actionCount} imported unit(s)`
+                            }
+                          >
+                            {isBusy
+                              ? `${action === "APPROVE" ? "Approving" : "Submitting"}…`
+                              : `${action === "APPROVE" ? "Bulk Approve" : "Bulk Submit"} (${actionCount})`}
+                          </button>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
               {/* Step 1 & 2 Toolbar Cards */}
               <div
                 style={{
@@ -15629,8 +15863,8 @@ export default function HomePage({
                       <input
                         type="file"
                         id="bulkSurveyFileInput"
-                        accept=".csv,text/csv"
-                        onChange={handleSurveyFileUpload}
+                        accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        onChange={(event) => void handleSurveyFileUpload(event)}
                         style={{ display: "none" }}
                       />
                       <label
@@ -15655,7 +15889,7 @@ export default function HomePage({
                         <span>
                           {bulkSurveyFileName
                             ? `File: ${bulkSurveyFileName}`
-                            : "Click to browse & upload field survey (.csv)"}
+                            : "Click to browse & upload field survey (.csv or .xlsx)"}
                         </span>
                       </label>
                     </div>
@@ -15895,8 +16129,18 @@ export default function HomePage({
                                     </span>
                                   </div>
                                 ) : (
-                                  <span style={{ color: "#b91c1c", fontWeight: 600 }}>
-                                    {row.rawData["statutoryRuleId"] || "(None)"}
+                                  <span
+                                    style={{
+                                      color:
+                                        row.rawData["remarks"]?.toLowerCase() === "under review"
+                                          ? "#92400e"
+                                          : "#b91c1c",
+                                      fontWeight: 600
+                                    }}
+                                  >
+                                    {row.rawData["remarks"]?.toLowerCase() === "under review"
+                                      ? "Under review"
+                                      : row.rawData["statutoryRuleId"] || "(None)"}
                                   </span>
                                 )}
                               </td>
@@ -15980,7 +16224,8 @@ export default function HomePage({
                 {bulkSurveyParseResult && bulkSurveyParseResult.validRowsCount > 0 ? (
                   <span>
                     Ready to import <strong>{bulkSurveyParseResult.validRowsCount}</strong> valid
-                    unit(s) into Form PFT-3 Register.
+                    unit(s) into the controlled survey workflow. Unclassified units remain outside
+                    PFT-3.
                   </span>
                 ) : (
                   <span>Select and validate survey spreadsheet to continue.</span>
@@ -16015,7 +16260,7 @@ export default function HomePage({
                 >
                   {isImportingSurvey
                     ? "Importing Units..."
-                    : `📥 Ingest Valid Units (${bulkSurveyParseResult ? bulkSurveyParseResult.validRowsCount : 0})`}
+                    : `📥 Import Feeded Units (${bulkSurveyParseResult ? bulkSurveyParseResult.validRowsCount : 0})`}
                 </button>
               </div>
             </div>
@@ -16077,19 +16322,6 @@ export default function HomePage({
               >
                 <button
                   type="button"
-                  onClick={() => setAuthModeTab("QUICK")}
-                  className="btn-secondary btn-sm"
-                  style={{
-                    backgroundColor: authModeTab === "QUICK" ? "#0d3822" : "#ffffff",
-                    color: authModeTab === "QUICK" ? "#ffffff" : "#334155",
-                    borderColor: authModeTab === "QUICK" ? "#0d3822" : "#cbd5e1",
-                    fontWeight: 600
-                  }}
-                >
-                  ⚡ Quick Switch Official Officer
-                </button>
-                <button
-                  type="button"
                   onClick={() => setAuthModeTab("CREDENTIALS")}
                   className="btn-secondary btn-sm"
                   style={{
@@ -16099,7 +16331,7 @@ export default function HomePage({
                     fontWeight: 600
                   }}
                 >
-                  🔐 Email &amp; Password Sign In
+                  🔐 Supabase Email &amp; Password Sign In
                 </button>
               </div>
 
@@ -19041,9 +19273,23 @@ export default function HomePage({
                   onClick={() =>
                     downloadOfficialPdf({
                       type: "FORM_PFT2_CHALLAN",
-                      documentIdOrData: activePrintChallan,
+                      documentIdOrData: {
+                        ...activePrintChallan,
+                        status: activePrintChallan.status || "ISSUED",
+                        challanStatus: activePrintChallan.status || "ISSUED"
+                      },
+                      authContext: {
+                        role: officer.role || "ETO",
+                        district: "Vehari",
+                        circle: "Circle-Vehari"
+                      },
                       defaultFilename: `Form_PFT2_Challan_${activePrintChallan.challanNumber.replace(/\//g, "_")}.pdf`
-                    })
+                    }).catch((err) =>
+                      showToast(
+                        "error",
+                        `Failed to generate Form PFT-2 Challan: ${(err as Error).message}`
+                      )
+                    )
                   }
                   title="Download authoritative 3-copy Form PFT-2 challan as vector PDF"
                 >
@@ -19151,8 +19397,6 @@ export default function HomePage({
                               <StatutoryQrCode
                                 payload={copy.qrPayload}
                                 size={66}
-                                label="Scan to Verify"
-                                subtitle={copy.bankUse.challanSerial}
                                 onScanOrClick={(payload) => {
                                   setPortalVerificationInput(payload);
                                   handleVerifyDocument(payload);
@@ -19411,41 +19655,101 @@ export default function HomePage({
                             </p>
                           </div>
 
-                          {/* For Bank's Use Only */}
+                          {/* For Bank's Use Only (Official Counterfoil) */}
                           <div
                             style={{
-                              marginTop: "auto",
-                              borderTop: "2px solid #0d3822",
-                              paddingTop: "0.5rem",
-                              fontSize: "0.7rem",
+                              marginTop: "0.75rem",
+                              border: "1px solid #cbd5e1",
+                              borderTop: "3px solid #0d3822",
+                              fontSize: "0.72rem",
                               background: "#fafaf9",
-                              padding: "0.5rem",
+                              padding: "0.6rem",
                               borderRadius: "4px"
                             }}
                           >
-                            <strong style={{ display: "block", color: "#78350f" }}>
-                              For Bank&apos;s Use Only:
-                            </strong>
-                            <p style={{ margin: "0.1rem 0" }}>Challan No: ______________________</p>
-                            <p style={{ margin: "0.1rem 0" }}>
-                              Date: _____________________________
-                            </p>
-                            <p style={{ margin: "0.1rem 0" }}>
-                              Amount: Rs. {copy.taxPayable.totalPayable.toLocaleString()}
-                            </p>
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                background: "#fef3c7",
+                                padding: "0.2rem 0.4rem",
+                                borderRadius: "3px",
+                                marginBottom: "0.4rem"
+                              }}
+                            >
+                              <strong style={{ color: "#78350f", fontSize: "0.7rem" }}>
+                                FOR BANK&apos;S USE ONLY &bull; Rule 9 Counterfoil
+                              </strong>
+                              <span style={{ fontSize: "0.62rem", color: "#92400e" }}>
+                                PTAS Official
+                              </span>
+                            </div>
+                            <div
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "1fr 1fr",
+                                gap: "0.25rem 0.5rem",
+                                fontSize: "0.68rem"
+                              }}
+                            >
+                              <p style={{ margin: "0.1rem 0", gridColumn: "span 2" }}>
+                                <strong>Bank &amp; Branch:</strong> ________________________________
+                              </p>
+                              <p style={{ margin: "0.1rem 0" }}>
+                                <strong>Scroll No:</strong> _________________
+                              </p>
+                              <p style={{ margin: "0.1rem 0", textAlign: "right" }}>
+                                <strong>Date:</strong> _________________
+                              </p>
+                            </div>
+                            <div
+                              style={{
+                                marginTop: "0.35rem",
+                                padding: "0.25rem 0.5rem",
+                                background: "#dcfce7",
+                                borderRadius: "4px",
+                                border: "1px solid #bbf7d0",
+                                textAlign: "center",
+                                fontWeight: 800,
+                                color: "#166534",
+                                fontSize: "0.74rem"
+                              }}
+                            >
+                              Amount Received: Rs. {copy.taxPayable.totalPayable.toLocaleString()}{" "}
+                              /-
+                            </div>
                             <div
                               style={{
                                 marginTop: "0.4rem",
-                                border: "1px dashed #a8a29e",
-                                height: "2.5rem",
+                                border: "1px dashed #94a3b8",
+                                borderRadius: "4px",
+                                background: "#ffffff",
+                                height: "3.5rem",
                                 display: "flex",
-                                alignItems: "center",
+                                alignItems: "flex-end",
                                 justifyContent: "center",
-                                color: "#78716c",
-                                fontSize: "0.65rem"
+                                paddingBottom: "0.35rem",
+                                color: "#64748b",
+                                fontSize: "0.62rem"
                               }}
                             >
-                              Bank Officer&apos;s Signature &amp; Bank Stamp
+                              Authorized Cashier Signature &amp; Official Bank Stamp
+                            </div>
+                            <div
+                              style={{
+                                marginTop: "0.35rem",
+                                fontSize: "0.58rem",
+                                color: "#94a3b8",
+                                textAlign: "center",
+                                fontFamily: "monospace"
+                              }}
+                            >
+                              SHA-256:{" "}
+                              {challanModel.officialSha256
+                                ? challanModel.officialSha256.slice(0, 16)
+                                : "AUTHENTIC"}
+                              &hellip; &bull; Form PFT-2 (Rule 9)
                             </div>
                           </div>
                         </div>

@@ -412,6 +412,57 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      bulk_submit_survey_import: {
+        Args: {
+          p_batch_id: string;
+          p_idempotency_key: string;
+          p_correlation_id: string;
+          p_reason?: string | null;
+        };
+        Returns: Json;
+      };
+      bulk_approve_survey_import: {
+        Args: {
+          p_batch_id: string;
+          p_idempotency_key: string;
+          p_correlation_id: string;
+          p_reason?: string | null;
+        };
+        Returns: Json;
+      };
+      list_actionable_survey_import_batches: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          batch_id: string;
+          source_filename: string;
+          financial_year_code: string;
+          imported_rows: number;
+          feeded_rows: number;
+          submitted_rows: number;
+          approved_rows: number;
+          pending_review_rows: number;
+          created_at: string;
+        }[];
+      };
+      stage_survey_import_current: {
+        Args: {
+          p_source_filename: string;
+          p_file_sha256: string;
+          p_headers: Json;
+          p_rows: Json;
+          p_idempotency_key: string;
+          p_correlation_id: string;
+        };
+        Returns: Json;
+      };
+      promote_survey_import: {
+        Args: {
+          p_batch_id: string;
+          p_idempotency_key: string;
+          p_correlation_id: string;
+        };
+        Returns: Json;
+      };
       resolve_my_ptas_actor: {
         Args: Record<PropertyKey, never>;
         Returns: Json;

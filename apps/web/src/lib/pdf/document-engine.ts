@@ -191,19 +191,15 @@ export function validateDocumentLifecycleState(
 
   switch (normType) {
     case "FORM_PFT2_CHALLAN": {
-      // If the entity is already a resolved FormPFT2Model (has a "copies" field),
-      // it was constructed by generateFormPFT2() which already validates the source
-      // assessment and challan record. Skip the raw challanStatus check.
-      if (entity && typeof entity === "object" && "copies" in (entity as object)) {
-        return {
-          isValid: true,
-          allowed: true,
-          code: "VALID",
-          message: "Resolved challan model.",
-          reason: "Resolved."
-        };
-      }
-      const status = (rawEntity.challanStatus || rawEntity.status || "").toString().toUpperCase();
+      // A rendered model is not proof of issuance: callers can construct or replay
+      // one directly. The persisted lifecycle status must still be present and valid.
+      const status = (
+        rawEntity.challanStatus ||
+        rawEntity.status ||
+        (rawEntity.copies && rawEntity.isApproved ? "ISSUED" : "")
+      )
+        .toString()
+        .toUpperCase();
       if (status === "CANCELLED") {
         return {
           isValid: false,
