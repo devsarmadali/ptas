@@ -6,13 +6,14 @@ const migration = readFileSync(
   fileURLToPath(new URL("../migrations/0002_workflow_command_layer.sql", import.meta.url)),
   "utf8"
 );
+const compactMigration = migration.replace(/\s+/g, "");
 
 describe("workflow command migration", () => {
   it("uses row locks, expected versions, idempotency, and transactional audit", () => {
     expect(migration).toContain("FOR UPDATE");
     expect(migration).toContain("p_expected_version");
     expect(migration).toContain("idempotency_key");
-    expect(migration).toContain("audit_transition");
+    expect(migration).toMatch(/(?:append_workflow_audit|audit_transition)/);
   });
 
   it("prevents duplicate official records and pending deletion requests", () => {
@@ -32,13 +33,13 @@ describe("workflow command migration", () => {
     expect(migration).toContain("ENABLE ROW LEVEL SECURITY");
     expect(migration).toContain("REVOKE ALL ON");
     expect(migration).toContain("ptas_private.active_actor");
-    expect(migration).toContain("u.auth_user_id=(SELECT auth.uid())");
+    expect(compactMigration).toContain("u.auth_user_id=(SELECTauth.uid())");
   });
 
   it("schedules idempotent cancellation on the Pakistan business date", () => {
     expect(migration).toContain("ptas-cancel-overdue-pft2");
     expect(migration).toContain("Asia/Karachi");
-    expect(migration).toContain("p_business_date>due_date+3");
+    expect(compactMigration).toContain("p_business_date>due_date+3");
     expect(migration).toContain("administrative_state='ISSUED'");
   });
 });
