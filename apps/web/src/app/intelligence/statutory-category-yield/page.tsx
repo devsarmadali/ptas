@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { loadPilotState } from "../../../lib/pilot-store";
+import { loadOperationalSurveyUnits } from "../../../lib/operational-survey";
 import {
   computeExecutiveMetrics,
   type ExecutiveMetrics,
@@ -14,13 +14,28 @@ export default function StatutoryCategoryYieldPage() {
   const [metrics, setMetrics] = useState<ExecutiveMetrics | null>(null);
   const [selectedCategoryCode, setSelectedCategoryCode] = useState<string>("ALL");
   const [isLoaded, setIsLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    const state = loadPilotState();
-    const m = computeExecutiveMetrics(state.units);
-    setMetrics(m);
-    setIsLoaded(true);
+    let cancelled = false;
+    void loadOperationalSurveyUnits()
+      .then((units) => {
+        if (!cancelled) setMetrics(computeExecutiveMetrics(units));
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  if (loadError) {
+    return <div style={{ padding: "3rem", color: "#991b1b" }}>{loadError}</div>;
+  }
 
   if (!isLoaded || !metrics) {
     return (

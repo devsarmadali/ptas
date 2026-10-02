@@ -13,11 +13,13 @@
  */
 
 import { generateAuthoritativePdf } from "./document-engine";
+import { getSupabaseAuthClient, resolveAuthenticatedOfficer } from "../supabase-auth";
 import type {
   OfficialDocumentType,
   DocumentAuthorizationContext,
   DocumentGenerationOptions
 } from "./types";
+import type { MockOfficer } from "../pilot-store";
 
 export interface DownloadPdfParams {
   readonly type: OfficialDocumentType;
@@ -25,6 +27,32 @@ export interface DownloadPdfParams {
   readonly defaultFilename?: string;
   readonly authContext?: DocumentAuthorizationContext;
   readonly options?: DocumentGenerationOptions;
+}
+
+async function resolveBrowserDocumentActor(): Promise<{
+  readonly authContext: DocumentAuthorizationContext;
+  readonly officer: MockOfficer;
+}> {
+  const supabase = getSupabaseAuthClient();
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) {
+    throw new Error("Authorization required: authenticated PTAS session missing");
+  }
+
+  const officer = await resolveAuthenticatedOfficer(data.user);
+  return {
+    officer,
+    authContext: {
+      officerId: officer.id,
+      role: officer.role,
+      officerRole: officer.role,
+      jurisdictionId: officer.jurisdictionId,
+      jurisdictionTier: officer.jurisdictionTier,
+      ...(officer.jurisdictionTier === "CIRCLE"
+        ? { circle: officer.jurisdictionName }
+        : { district: officer.jurisdictionName })
+    }
+  };
 }
 
 /**
@@ -36,11 +64,17 @@ export interface DownloadPdfParams {
  */
 export async function downloadOfficialPdf(params: DownloadPdfParams): Promise<boolean> {
   try {
+    // Browser callers cannot self-assert their role. Resolve it from the active
+    // Supabase session and the server-controlled PTAS assignment RPC.
+    const browserActor =
+      typeof window !== "undefined" ? await resolveBrowserDocumentActor() : undefined;
+    const verifiedAuthContext = browserActor?.authContext ?? params.authContext;
+
     const doc = await generateAuthoritativePdf(
       params.type,
       params.documentIdOrData,
-      params.authContext,
-      params.options
+      verifiedAuthContext,
+      browserActor ? { ...params.options, officer: browserActor.officer } : params.options
     );
 
     const filename =

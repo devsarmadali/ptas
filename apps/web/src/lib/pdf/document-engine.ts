@@ -11,7 +11,6 @@
 import { jsPDF } from "jspdf";
 import { computeLedgerBalance } from "@ptas/domain";
 import {
-  loadPilotState,
   type StoredUnit,
   type Pft2ChallanRecord,
   type StatutoryReceiptRecord
@@ -28,6 +27,7 @@ import {
   type FormPFT3RowModel
 } from "../statutory-forms";
 import { buildStatutoryReceiptDocument } from "../receipt-generator";
+import { loadOperationalSurveyUnits } from "../operational-survey";
 import type {
   OfficialDocumentType,
   DocumentAuthorizationContext,
@@ -163,7 +163,7 @@ export function validateDocumentAuthorization(
     return { allowed: true, authorized: true, reason: "AUTHORIZED_INSPECTOR_CIRCLE" };
   }
 
-  return { allowed: true, authorized: true, reason: "AUTHORIZED" };
+  return { allowed: false, authorized: false, reason: "UNSUPPORTED_ROLE" };
 }
 
 /**
@@ -348,23 +348,13 @@ export async function generateAuthoritativePdf(
     targetData = documentIdOrData;
   }
 
-  const state = loadPilotState();
-
-  // Build effective auth context: prefer explicit caller-supplied context;
-  // fall back to the active pilot session officer so callers in page.tsx
-  // don't need to thread auth through every download button.
-  const currentOfficer = state.currentOfficer;
-  const effectiveAuth: DocumentAuthorizationContext = {
-    ...(currentOfficer
-      ? {
-          role: currentOfficer.role,
-          officerRole: currentOfficer.role,
-          district: currentOfficer.jurisdictionName,
-          circle: currentOfficer.jurisdictionName,
-          jurisdictionId: currentOfficer.jurisdictionId
-        }
-      : {}),
-    ...(authContext ?? {})
+  // Actor identity is resolved by the server route or the browser download
+  // service from Supabase Auth. Never fall back to local/mock officer state.
+  const effectiveAuth: DocumentAuthorizationContext = authContext ?? {};
+  let operationalUnits: StoredUnit[] | undefined;
+  const getOperationalUnits = async (): Promise<StoredUnit[]> => {
+    operationalUnits ??= await loadOperationalSurveyUnits();
+    return operationalUnits;
   };
 
   // Lifecycle check
@@ -391,21 +381,20 @@ export async function generateAuthoritativePdf(
 
       let challanRecord: Pft2ChallanRecord | undefined;
       if (typeof targetData === "string") {
-        challanRecord = (state.pft2Challans || []).find(
-          (c) => c.id === targetData || c.challanNumber === targetData
+        throw new Error(
+          "Cannot generate Form PFT-2 PDF from an identifier alone; an authorized challan record is required."
         );
       } else {
         challanRecord = targetData as Pft2ChallanRecord;
       }
 
-      const freshUnit =
-        (state.units || []).find((u) => u.id === challanRecord?.unitId) ??
-        (state.units && state.units.length > 0 ? state.units[0] : undefined);
+      const units = await getOperationalUnits();
+      const freshUnit = units.find((unit) => unit.id === challanRecord?.unitId);
 
       if (!freshUnit) {
         throw new Error(
           "Cannot generate Form PFT-2 PDF: no taxpayer unit found in the authoritative database. " +
-            "Ensure the pilot state is initialised and the challan's unitId is valid."
+            "Ensure the challan belongs to a taxpayer unit in the authenticated officer's jurisdiction."
         );
       }
 
@@ -434,7 +423,7 @@ export async function generateAuthoritativePdf(
 
       let unit: StoredUnit | undefined;
       if (typeof targetData === "string") {
-        unit = (state.units || []).find(
+        unit = (await getOperationalUnits()).find(
           (u) =>
             u.id === targetData ||
             u.demandUnit?.permanentDemandNo === targetData ||
@@ -444,7 +433,10 @@ export async function generateAuthoritativePdf(
         unit = targetData as StoredUnit;
       }
 
-      const pft1Model = generateFormPFT1((unit || state.units[0])!);
+      if (!unit) {
+        throw new Error("Cannot generate Form PFT-1 PDF: authorized taxpayer unit not found.");
+      }
+      const pft1Model = generateFormPFT1(unit);
       return generatePft1DemandNoticePdf(pft1Model, options);
     }
 
@@ -452,14 +444,13 @@ export async function generateAuthoritativePdf(
       const rows =
         typeof targetData === "object" && targetData !== null && "rows" in targetData
           ? (targetData as { rows: FormPFT3RowModel[] }).rows
-          : generateFormPFT3Rows(state.units || []);
+          : generateFormPFT3Rows(await getOperationalUnits());
 
       return generatePft3RegisterPdf(
         {
           rows,
-          district: "Vehari",
-          circle: "Circle-Vehari",
-          financialYear: "2026-2027",
+          district: effectiveAuth.district,
+          circle: effectiveAuth.circle,
           officialSha256: "sha256-pft3-register-authenticated"
         },
         options
@@ -480,12 +471,15 @@ export async function generateAuthoritativePdf(
 
       let unit: StoredUnit | undefined;
       if (typeof targetData === "string") {
-        unit = (state.units || []).find((u) => u.id === targetData);
+        unit = (await getOperationalUnits()).find((candidate) => candidate.id === targetData);
       } else {
         unit = targetData as StoredUnit;
       }
 
-      const notice = generateShowCausePenaltyNotice((unit || state.units[0])!);
+      if (!unit) {
+        throw new Error("Cannot generate Show Cause Notice: authorized taxpayer unit not found.");
+      }
+      const notice = generateShowCausePenaltyNotice(unit);
       return generateShowCauseNoticePdf(notice, options);
     }
 
@@ -504,8 +498,8 @@ export async function generateAuthoritativePdf(
 
       let receiptRecord: StatutoryReceiptRecord | undefined;
       if (typeof targetData === "string") {
-        receiptRecord = (state.statutoryReceipts || []).find(
-          (r) => r.id === targetData || r.receiptNumber === targetData
+        throw new Error(
+          "Cannot generate a statutory receipt from an identifier alone; an authorized receipt record is required."
         );
       } else if (
         typeof targetData === "object" &&
@@ -548,7 +542,7 @@ export async function generateAuthoritativePdf(
 
       let unit: StoredUnit | undefined;
       if (typeof targetData === "string") {
-        unit = (state.units || []).find((u) => u.id === targetData);
+        unit = (await getOperationalUnits()).find((candidate) => candidate.id === targetData);
       } else if (typeof targetData === "object" && targetData !== null && "unit" in targetData) {
         unit = (targetData as { unit: StoredUnit }).unit;
       } else {
@@ -567,7 +561,12 @@ export async function generateAuthoritativePdf(
         badgeText: "Assessing Authority"
       };
 
-      const certModel = generateTaxClearanceCertificate((unit || state.units[0])!, officer);
+      if (!unit) {
+        throw new Error(
+          "Cannot generate tax clearance certificate: authorized taxpayer unit not found."
+        );
+      }
+      const certModel = generateTaxClearanceCertificate(unit, officer);
       return generateTaxClearanceCertificatePdf(certModel, options);
     }
 
@@ -585,12 +584,17 @@ export async function generateAuthoritativePdf(
 
       let unit: StoredUnit | undefined;
       if (typeof targetData === "string") {
-        unit = (state.units || []).find((u) => u.id === targetData);
+        unit = (await getOperationalUnits()).find((candidate) => candidate.id === targetData);
       } else {
         unit = targetData as StoredUnit;
       }
 
-      const cert = generateLandRevenueRecoveryCertificate((unit || state.units[0])!);
+      if (!unit) {
+        throw new Error(
+          "Cannot generate land revenue recovery certificate: authorized taxpayer unit not found."
+        );
+      }
+      const cert = generateLandRevenueRecoveryCertificate(unit);
       return generateLandRevenueRecoveryPdf(cert, options);
     }
 
@@ -611,12 +615,15 @@ export async function generateAuthoritativePdf(
 
       let unit: StoredUnit | undefined;
       if (typeof targetData === "string") {
-        unit = (state.units || []).find((u) => u.id === targetData);
+        unit = (await getOperationalUnits()).find((candidate) => candidate.id === targetData);
       } else {
         unit = targetData as StoredUnit;
       }
 
-      const effectiveUnit = (unit || state.units[0])!;
+      if (!unit) {
+        throw new Error("Cannot generate unit dossier: authorized taxpayer unit not found.");
+      }
+      const effectiveUnit = unit;
       const dossierData: UnitDossierData = {
         unit: effectiveUnit,
         generatedAt: new Date().toISOString(),

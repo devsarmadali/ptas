@@ -308,6 +308,7 @@ export interface FormPFT2Model {
 }
 
 export interface FormPFT3RowModel {
+  readonly sourceUnitId: string;
   readonly serialNumber: number;
   readonly permanentDemandNo: string;
   readonly provincialUin?: string | undefined;
@@ -1052,10 +1053,11 @@ export function generateFormPFT3Rows(units: readonly StoredUnit[]): readonly For
     }
 
     return {
+      sourceUnitId: u.id,
       serialNumber: idx + 1,
-      permanentDemandNo: formatDemandNumber(u.demandUnit.permanentDemandNo),
-      provincialUin: u.provincialUin,
-      assessmentNo: `ASM-VEH-2026-${u.id.slice(-4)}`,
+      permanentDemandNo: u.demandUnit.permanentDemandNo || u.demandNumber || "Not assigned",
+      provincialUin: u.pinNumber || u.provincialUin || undefined,
+      assessmentNo: u.assessmentNumber || "Not assigned",
       legalName: u.legalName,
       tradeName: u.tradeName,
       identifier: `${u.identifierType}: ${u.identifierValue}`,

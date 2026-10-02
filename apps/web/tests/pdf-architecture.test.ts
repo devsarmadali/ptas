@@ -586,6 +586,37 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
       expect(Math.round(pdf.internal.pageSize.getWidth())).toBe(210);
     });
 
+    it("allows an authenticated Inspector to generate a jurisdiction-scoped executive brief", async () => {
+      const pdf = await generateAuthoritativePdf(
+        "EXECUTIVE_PFT2_BRIEF",
+        {
+          totalChallans: 0,
+          totalAssessedSum: 0,
+          totalReceivedSum: 0,
+          totalOutstandingSum: 0,
+          fullScopeCount: 0,
+          partialScopeCount: 0,
+          issuedCount: 0,
+          receivedCount: 0,
+          cancelledCount: 0,
+          circleBreakdown: [],
+          categoryBreakdown: [],
+          generatedAt: "2026-10-02",
+          officerName: "Muhammad Nasir Khan",
+          officerTitle: "Excise & Taxation Inspector",
+          officialSha256: "test-executive-brief"
+        },
+        {
+          role: "INSPECTOR",
+          jurisdictionId: alMadina.circleId,
+          circle: alMadina.circleName ?? "Circle 1"
+        }
+      );
+
+      expect(pdf).toBeDefined();
+      expect(Math.round(pdf.internal.pageSize.getWidth())).toBe(210);
+    });
+
     it("rejects unauthorized lifecycle state when invoked through central dispatcher", async () => {
       const unissuedChallan = generateFormPFT2(alMadina);
       unissuedChallan.challanStatus = "PENDING_REVIEW";

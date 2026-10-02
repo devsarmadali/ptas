@@ -83,6 +83,19 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     expect(alMadinaRow.slabRatePkr).toBe(4000);
   });
 
+  it("preserves imported demand identifiers and source-unit identity in P.F.T-3", () => {
+    const importedUnit = {
+      ...alMadinaUnit,
+      id: "unit-imported-d-16",
+      demandNumber: "D-16",
+      demandUnit: { ...alMadinaUnit.demandUnit, permanentDemandNo: "D-16" }
+    };
+
+    const [row] = generateFormPFT3Rows([importedUnit]);
+    expect(row?.sourceUnitId).toBe("unit-imported-d-16");
+    expect(row?.permanentDemandNo).toBe("D-16");
+  });
+
   it("generates Show Cause Notice for Imposition of Penalty (Rule 10 & Sec 3(4))", () => {
     const scn = generateShowCausePenaltyNotice(alMadinaUnit, 45);
     expect(scn.noticeNumber).toMatch(/PB\/ET\/VHR\/CIR-1\/SCN\/2026-27\/\d{5}/);

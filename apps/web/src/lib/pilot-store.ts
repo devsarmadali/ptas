@@ -75,6 +75,8 @@ export interface StoredUnit {
   /** Dedicated locality field separated from address for area-based operations & reporting */
   readonly locality?: string | undefined;
   readonly circleId: string;
+  /** Human-readable Circle label returned by the jurisdiction-scoped database read model. */
+  readonly circleName?: string | undefined;
   readonly categoryCode: string;
   readonly subclassificationCode?: string | null | undefined;
   readonly statutoryTertiaryCode?: string | null | undefined;
@@ -89,6 +91,8 @@ export interface StoredUnit {
   readonly pinNumber?: string | undefined;
   /** Province-wide Unique Identification Number (format: DDD-TTT-CC-SS-UU-RR-NNNNN-VV) */
   readonly provincialUin: string;
+  /** True only when ETO approval created the immutable PFT-3 register entry. */
+  readonly pft3Registered?: boolean | undefined;
   readonly demandUnit: DemandUnit;
   readonly assessments: Assessment[];
   readonly assessmentVersions: AssessmentVersion<StoredUnitSnapshot>[];

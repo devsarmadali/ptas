@@ -7,7 +7,8 @@ import type {
 } from "@ptas/domain";
 import type { Json } from "@ptas/database/types";
 import type { StoredUnit, StoredUnitSnapshot } from "./pilot-store";
-import { getSupabaseAuthClient } from "./supabase-auth";
+import { getSupabaseAuthClient, resolveAuthenticatedOfficer } from "./supabase-auth";
+import type { MockOfficer } from "./pilot-store";
 
 const ASSESSMENT_STATUSES = new Set([
   "DRAFT",
@@ -43,6 +44,13 @@ function asString(value: unknown, fallback = ""): string {
 
 function asOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function asPublicBusinessIdentifier(value: unknown): string | undefined {
+  const identifier = asOptionalString(value)?.trim();
+  return identifier && !UUID_PATTERN.test(identifier) ? identifier : undefined;
 }
 
 function asNumber(value: unknown, fallback = 0): number {
@@ -125,11 +133,12 @@ function mapLedgerEntry(value: unknown): DemandLedgerEntry | null {
   };
 }
 
-function mapOperationalUnit(value: unknown): StoredUnit {
+export function mapOperationalUnit(value: unknown): StoredUnit {
   const row = asRecord(value);
   const taxpayer = asRecord(row.taxpayer);
   const identifier = asRecord(row.identifier);
   const profile = asRecord(row.profile);
+  const jurisdiction = asRecord(row.jurisdiction);
   const assessmentRow = asRecord(row.assessment);
   const versionRow = asRecord(row.assessment_version);
   const demandRow = asRecord(row.demand_unit);
@@ -206,10 +215,15 @@ function mapOperationalUnit(value: unknown): StoredUnit {
     statutoryTertiaryCode: rule.statutory_tertiary_code,
     statutoryRuleId: rule.rule_id,
     statutoryRule: rule,
-    assessmentNumber: assessmentRow.id ? assessmentId : asString(profile.survey_no),
+    assessmentNumber:
+      asPublicBusinessIdentifier(assessmentRow.assessment_number) ??
+      asPublicBusinessIdentifier(profile.assessment_number) ??
+      "",
     demandNumber: legacyDemandNo,
-    pinNumber: asOptionalString(taxpayer.permanent_demand_no),
-    provincialUin: asString(profile.survey_no, unitId),
+    pinNumber: asPublicBusinessIdentifier(taxpayer.permanent_demand_no),
+    provincialUin: asPublicBusinessIdentifier(taxpayer.permanent_demand_no) ?? "",
+    circleName: asOptionalString(jurisdiction.name),
+    pft3Registered: row.pft3_registered === true,
     demandUnit: {
       id: demandUnitId,
       taxpayerId,
@@ -234,4 +248,21 @@ export async function loadOperationalSurveyUnits(): Promise<StoredUnit[]> {
     throw new Error("Operational survey query returned an invalid response");
   }
   return (data as Json[]).map(mapOperationalUnit);
+}
+
+export async function loadOperationalContext(): Promise<{
+  readonly officer: MockOfficer;
+  readonly units: StoredUnit[];
+}> {
+  const supabase = getSupabaseAuthClient();
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) {
+    throw new Error("Unable to load operational context: authenticated PTAS session required");
+  }
+
+  const [officer, units] = await Promise.all([
+    resolveAuthenticatedOfficer(data.user),
+    loadOperationalSurveyUnits()
+  ]);
+  return { officer, units };
 }

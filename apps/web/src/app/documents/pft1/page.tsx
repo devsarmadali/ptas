@@ -2,7 +2,8 @@
 
 import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { type StoredUnit, loadPilotState } from "../../../lib/pilot-store";
+import { type StoredUnit } from "../../../lib/pilot-store";
+import { loadOperationalSurveyUnits } from "../../../lib/operational-survey";
 import { generateFormPFT1 } from "../../../lib/statutory-forms";
 import { StatutoryQrCode } from "../../../components/StatutoryQrCode";
 import { downloadOfficialPdf } from "../../../lib/pdf";
@@ -14,27 +15,35 @@ function FormPft1NoticeContent() {
 
   const [unit, setUnit] = useState<StoredUnit | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    const state = loadPilotState();
-    const available = state.units || [];
+    let cancelled = false;
+    void loadOperationalSurveyUnits()
+      .then((available) => {
+        if (cancelled) return;
 
-    const found =
-      available.find(
-        (u) =>
-          u.provincialUin === unitParam ||
-          u.demandUnit?.permanentDemandNo === unitParam ||
-          u.id === unitParam ||
-          (unitParam && u.legalName.toLowerCase().includes(unitParam.toLowerCase()))
-      ) ??
-      available.find((u) => u.assessments[0]?.status === "APPROVED") ??
-      available[0] ??
-      null;
+        const found =
+          available.find(
+            (u) =>
+              u.pinNumber === unitParam ||
+              u.demandUnit?.permanentDemandNo === unitParam ||
+              u.id === unitParam
+          ) ??
+          available.find((u) => u.assessments[0]?.status === "APPROVED") ??
+          null;
 
-    if (found) {
-      setUnit(found);
-    }
-    setIsLoaded(true);
+        setUnit(found);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [unitParam]);
 
   if (!isLoaded) {
@@ -60,7 +69,7 @@ function FormPft1NoticeContent() {
       >
         <h2 style={{ color: "#991b1b", margin: "0 0 0.5rem" }}>Taxpayer Unit Not Found</h2>
         <p style={{ color: "#475569" }}>
-          Unable to locate the specified unit for Form P.F.T-1 Notice generation.
+          {loadError ?? "Unable to locate an approved unit in your jurisdiction."}
         </p>
         <a
           href="/assessment/pft3"
@@ -139,7 +148,7 @@ function FormPft1NoticeContent() {
             ← P.F.T-3 Register
           </a>
           <a
-            href={`/units/${unit.provincialUin}/details`}
+            href={`/units/${unit.id}/details`}
             style={{
               fontSize: "0.8rem",
               fontWeight: 600,
@@ -197,7 +206,7 @@ function FormPft1NoticeContent() {
         >
           <span>🔒 {unit.legalName}</span>
           <span style={{ color: "#64748b" }}>•</span>
-          <span>PIN: {unit.provincialUin}</span>
+          <span>PIN: {unit.pinNumber || "Not assigned"}</span>
           <span style={{ color: "#64748b" }}>•</span>
           <span>PDN: {unit.demandUnit.permanentDemandNo}</span>
           <span style={{ color: "#64748b" }}>•</span>

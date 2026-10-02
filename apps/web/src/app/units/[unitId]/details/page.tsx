@@ -3,10 +3,10 @@
 import React, { use, useEffect, useState } from "react";
 import {
   type StoredUnit,
-  loadPilotState,
   type Pft2ChallanRecord,
   type StatutoryReceiptRecord
 } from "../../../../lib/pilot-store";
+import { loadOperationalSurveyUnits } from "../../../../lib/operational-survey";
 import { computeLedgerBalance } from "@ptas/domain";
 import { downloadOfficialPdf } from "../../../../lib/pdf";
 
@@ -25,49 +25,45 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    const state = loadPilotState();
-    const available = state.units && state.units.length > 0 ? state.units : [];
-    setAllUnits(available);
+    let cancelled = false;
+    void loadOperationalSurveyUnits()
+      .then((available) => {
+        if (cancelled) return;
+        setAllUnits(available);
 
-    const found =
-      available.find(
-        (u) =>
-          u.provincialUin === unitId ||
-          u.demandUnit?.permanentDemandNo === unitId ||
-          u.id === unitId ||
-          (unitId && u.legalName.toLowerCase().includes(unitId.toLowerCase()))
-      ) ??
-      available[0] ??
-      null;
+        const found =
+          available.find(
+            (u) =>
+              u.pinNumber === unitId ||
+              u.demandUnit?.permanentDemandNo === unitId ||
+              u.id === unitId ||
+              (unitId && u.legalName.toLowerCase().includes(unitId.toLowerCase()))
+          ) ?? null;
 
-    if (found) {
-      setUnit(found);
-      const unitChallans = (state.pft2Challans ?? []).filter((c) => c.unitId === found.id);
-      const unitReceipts = (state.statutoryReceipts ?? []).filter((r) => r.unitId === found.id);
-      setChallans(unitChallans);
-      setReceipts(unitReceipts);
-      // Automatically sanitize and standardize URL using the statutory PIN
-      if (typeof window !== "undefined" && unitId !== found.provincialUin) {
-        window.history.replaceState(null, "", `/units/${found.provincialUin}/details`);
-      }
-    }
-    setIsLoaded(true);
+        if (found) {
+          setUnit(found);
+          setChallans([]);
+          setReceipts([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [unitId]);
 
   const handleSelectUnit = (newPin: string) => {
-    const state = loadPilotState();
     const selected = allUnits.find(
-      (u) =>
-        u.provincialUin === newPin || u.id === newPin || u.demandUnit?.permanentDemandNo === newPin
+      (u) => u.pinNumber === newPin || u.id === newPin || u.demandUnit?.permanentDemandNo === newPin
     );
     if (selected) {
       setUnit(selected);
-      const unitChallans = (state.pft2Challans ?? []).filter((c) => c.unitId === selected.id);
-      const unitReceipts = (state.statutoryReceipts ?? []).filter((r) => r.unitId === selected.id);
-      setChallans(unitChallans);
-      setReceipts(unitReceipts);
+      setChallans([]);
+      setReceipts([]);
       if (typeof window !== "undefined") {
-        window.history.replaceState(null, "", `/units/${selected.provincialUin}/details`);
+        window.history.replaceState(null, "", `/units/${selected.id}/details`);
       }
     }
   };

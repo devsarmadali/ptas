@@ -1470,42 +1470,42 @@ export default function HomePage({
   }, []);
 
   const pft3Circles = useMemo(() => {
-    return ["Circle-Vehari"];
-  }, []);
+    return Array.from(
+      new Set(units.map((unit) => unit.circleName).filter((name): name is string => Boolean(name)))
+    ).sort();
+  }, [units]);
 
   const pft3Localities = useMemo(() => {
     return Array.from(
       new Set(
         units
-          .map((u) => u.address.split(",")[0]?.trim())
+          .map((u) => u.locality?.trim() || u.address.split(",")[0]?.trim())
           .filter((loc): loc is string => Boolean(loc))
       )
     );
   }, [units]);
 
   const formPFT3Rows = useMemo(() => {
-    return generateFormPFT3Rows(units.filter((u) => u.assessments[0]?.status === "APPROVED"));
+    return generateFormPFT3Rows(
+      units.filter(
+        (unit) => unit.assessments[0]?.status === "APPROVED" && unit.pft3Registered !== false
+      )
+    );
   }, [units]);
 
   const filteredFormPFT3Rows = useMemo(() => {
     return formPFT3Rows.filter((row) => {
-      const targetUnit = units.find(
-        (u) => u.demandUnit.permanentDemandNo === row.permanentDemandNo
-      );
+      const targetUnit = units.find((unit) => unit.id === row.sourceUnitId);
       if (!targetUnit) return false;
 
       if (pft3DistrictFilter !== "ALL" && pft3DistrictFilter !== "Vehari") {
         return false;
       }
-      if (
-        pft3CircleFilter !== "ALL" &&
-        pft3CircleFilter !== "Circle-Vehari" &&
-        targetUnit.circleId !== pft3CircleFilter
-      ) {
+      if (pft3CircleFilter !== "ALL" && targetUnit.circleName !== pft3CircleFilter) {
         return false;
       }
       if (pft3LocalityFilter !== "ALL") {
-        const loc = targetUnit.address.split(",")[0]?.trim();
+        const loc = targetUnit.locality?.trim() || targetUnit.address.split(",")[0]?.trim();
         if (loc !== pft3LocalityFilter) {
           return false;
         }
@@ -4263,7 +4263,6 @@ export default function HomePage({
                       ) : (
                         filteredSurveyUnits.map((u) => {
                           const latestAsm = u.assessments[0];
-                          const isApproved = latestAsm?.status === "APPROVED";
                           const rawStatus = latestAsm?.status ?? "DRAFT";
                           const balance = computeLedgerBalance(u.ledgerEntries);
                           return (
@@ -4277,11 +4276,11 @@ export default function HomePage({
                                     fontWeight: 600
                                   }}
                                 >
-                                  {u.assessmentNumber || `ASM-2026-${u.id.slice(-4)}`}
+                                  {u.assessmentNumber || "— Not assigned"}
                                 </span>
                               </td>
                               <td style={{ whiteSpace: "nowrap" }}>
-                                {isApproved || u.demandNumber ? (
+                                {u.demandNumber || u.demandUnit.permanentDemandNo ? (
                                   <strong style={{ fontSize: "0.78rem" }}>
                                     {u.demandNumber || u.demandUnit.permanentDemandNo}
                                   </strong>
@@ -4293,12 +4292,12 @@ export default function HomePage({
                                       fontStyle: "italic"
                                     }}
                                   >
-                                    — Pending
+                                    — Not assigned
                                   </span>
                                 )}
                               </td>
                               <td style={{ whiteSpace: "nowrap" }}>
-                                {isApproved || u.pinNumber ? (
+                                {u.pinNumber ? (
                                   <span
                                     style={{
                                       fontFamily: "monospace",
@@ -4307,7 +4306,7 @@ export default function HomePage({
                                       fontWeight: 600
                                     }}
                                   >
-                                    {u.pinNumber || u.provincialUin}
+                                    {u.pinNumber}
                                   </span>
                                 ) : (
                                   <span
@@ -4317,7 +4316,7 @@ export default function HomePage({
                                       fontStyle: "italic"
                                     }}
                                   >
-                                    — Pending
+                                    — Not assigned
                                   </span>
                                 )}
                               </td>
@@ -4596,7 +4595,8 @@ export default function HomePage({
                 <h2>Form P.F.T-3: Assessment &amp; Demand Register</h2>
                 <p>
                   Official statutory register of assessed persons maintained under Rule 11 of the
-                  Punjab Professions and Trades Tax Rules, 1977 for Circle-Vehari.
+                  Punjab Professions and Trades Tax Rules, 1977 for the authenticated officer&apos;s
+                  jurisdiction.
                 </p>
               </div>
 
@@ -4607,13 +4607,7 @@ export default function HomePage({
                   onClick={() =>
                     downloadOfficialPdf({
                       type: "FORM_PFT3_REGISTER",
-                      documentIdOrData: {
-                        rows: generateFormPFT3Rows(
-                          units.filter((u) => u.assessments[0]?.status === "APPROVED").length > 0
-                            ? units.filter((u) => u.assessments[0]?.status === "APPROVED")
-                            : units
-                        )
-                      },
+                      documentIdOrData: { rows: filteredFormPFT3Rows },
                       defaultFilename: "Form_PFT3_Register.pdf"
                     }).catch((err) =>
                       showToast("error", `Failed to generate Form PFT-3: ${(err as Error).message}`)
@@ -4929,7 +4923,7 @@ export default function HomePage({
                     </tr>
                   ) : (
                     filteredFormPFT3Rows.map((row) => (
-                      <tr key={row.permanentDemandNo}>
+                      <tr key={row.sourceUnitId}>
                         <td style={{ textAlign: "center", color: "#64748b" }}>
                           {row.serialNumber}
                         </td>
@@ -4945,7 +4939,7 @@ export default function HomePage({
                               fontWeight: 600
                             }}
                           >
-                            {row.provincialUin}
+                            {row.provincialUin || "— Not assigned"}
                           </span>
                         </td>
                         <td style={{ maxWidth: "14rem" }}>

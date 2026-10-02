@@ -3,6 +3,7 @@
 import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { loadPilotState, type PilotState } from "../../../../lib/pilot-store";
+import { loadOperationalContext } from "../../../../lib/operational-survey";
 import { computeLedgerBalance, computeDefaulterAging } from "@ptas/domain";
 import {
   computeExecutiveMetrics,
@@ -10,6 +11,7 @@ import {
   type SlabYieldSummary
 } from "../../../../lib/mis-analytics";
 import { downloadOfficialPdf } from "../../../../lib/pdf";
+import { generateFormPFT3Rows } from "../../../../lib/statutory-forms";
 
 function ReportViewContent() {
   const searchParams = useSearchParams();
@@ -31,12 +33,28 @@ function ReportViewContent() {
 
   const [pilotState, setPilotState] = useState<PilotState | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    const state = loadPilotState();
-    setPilotState(state);
-    setIsLoaded(true);
+    let cancelled = false;
+    void loadOperationalContext()
+      .then(({ officer, units }) => {
+        if (!cancelled) setPilotState({ ...loadPilotState(), currentOfficer: officer, units });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  if (loadError) {
+    return <div style={{ padding: "3rem", color: "#991b1b" }}>{loadError}</div>;
+  }
 
   if (!isLoaded || !pilotState) {
     return (
@@ -47,6 +65,9 @@ function ReportViewContent() {
   }
 
   const units = pilotState.units || [];
+  const pft3Units = units.filter(
+    (unit) => unit.assessments[0]?.status === "APPROVED" && unit.pft3Registered !== false
+  );
   const clearanceCertificates = pilotState.clearanceCertificates || [];
   const discontinuances = pilotState.discontinuances || [];
   const refundAdjustments = pilotState.refundAdjustments || [];
@@ -137,7 +158,7 @@ function ReportViewContent() {
             onClick={() =>
               downloadOfficialPdf({
                 type: "FORM_PFT3_REGISTER",
-                documentIdOrData: "official-statutory-report",
+                documentIdOrData: { rows: generateFormPFT3Rows(pft3Units) },
                 defaultFilename: getReportFilename()
               })
             }
@@ -387,7 +408,7 @@ function ReportViewContent() {
               </tr>
             </thead>
             <tbody>
-              {units.map((u) => {
+              {pft3Units.map((u) => {
                 const baseTax = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
                 let penalty = 0;
                 let paid = 0;

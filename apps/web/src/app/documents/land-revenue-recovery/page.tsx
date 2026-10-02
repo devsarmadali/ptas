@@ -2,7 +2,8 @@
 
 import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { type StoredUnit, loadPilotState } from "../../../lib/pilot-store";
+import { type StoredUnit } from "../../../lib/pilot-store";
+import { loadOperationalSurveyUnits } from "../../../lib/operational-survey";
 import { generateLandRevenueRecoveryCertificate } from "../../../lib/statutory-forms";
 import { downloadOfficialPdf } from "../../../lib/pdf";
 
@@ -17,28 +18,36 @@ function LandRevenueRecoveryContent() {
 
   const [unit, setUnit] = useState<StoredUnit | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const collectorDesignation = "The Collector / Tehsildar (Recovery), District Vehari";
 
   useEffect(() => {
-    const state = loadPilotState();
-    const available = state.units || [];
+    let cancelled = false;
+    void loadOperationalSurveyUnits()
+      .then((available) => {
+        if (cancelled) return;
 
-    const found =
-      available.find(
-        (u) =>
-          u.provincialUin === unitParam ||
-          u.id === unitParam ||
-          u.demandUnit?.permanentDemandNo === unitParam ||
-          (unitParam && u.legalName.toLowerCase().includes(unitParam.toLowerCase()))
-      ) ??
-      available.find((u) => u.assessments[0]?.status === "APPROVED") ??
-      available[0] ??
-      null;
+        const found =
+          available.find(
+            (u) =>
+              u.pinNumber === unitParam ||
+              u.id === unitParam ||
+              u.demandUnit?.permanentDemandNo === unitParam
+          ) ??
+          available.find((u) => u.assessments[0]?.status === "APPROVED") ??
+          null;
 
-    if (found) {
-      setUnit(found);
-    }
-    setIsLoaded(true);
+        setUnit(found);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [unitParam]);
 
   if (!isLoaded) {
@@ -64,7 +73,7 @@ function LandRevenueRecoveryContent() {
       >
         <h2 style={{ color: "#991b1b", margin: "0 0 0.5rem" }}>Taxpayer Unit Not Found</h2>
         <p style={{ color: "#475569" }}>
-          Unable to locate the specified unit for Land Revenue Recovery Certificate issuance.
+          {loadError ?? "Unable to locate an approved unit in your jurisdiction."}
         </p>
         <a
           href="/enforcement"
@@ -143,7 +152,7 @@ function LandRevenueRecoveryContent() {
             ← Defaulter Roll
           </a>
           <a
-            href={`/units/${unit.provincialUin}/details`}
+            href={`/units/${unit.id}/details`}
             style={{
               fontSize: "0.8rem",
               fontWeight: 600,
