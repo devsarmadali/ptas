@@ -674,6 +674,35 @@ export interface PilotState {
 
 const STORAGE_KEY = "ptas_pilot_vehari_v3";
 
+const EMPTY_OFFICER: MockOfficer = {
+  id: "",
+  name: "",
+  email: "",
+  role: "ADMIN",
+  title: "",
+  jurisdictionId: "",
+  jurisdictionName: "",
+  jurisdictionTier: "REGION",
+  badgeText: ""
+};
+
+function createEmptyOperationalState(): PilotState {
+  return {
+    currentOfficer: EMPTY_OFFICER,
+    units: [],
+    auditLogs: [],
+    reconciliations: [],
+    appeals: [],
+    discontinuances: [],
+    refundAdjustments: [],
+    clearanceCertificates: [],
+    pft2Challans: [],
+    statutoryReceipts: [],
+    users: [],
+    userAuditLogs: []
+  };
+}
+
 export function createInitialPilotUnits(): StoredUnit[] {
   const inspectorActor: AuditActor = {
     userId: MOCK_OFFICERS[0].id,
@@ -1413,132 +1442,20 @@ export function createInitialUserAuditLogs(): UserManagementAuditRecord[] {
 }
 
 export function loadPilotState(): PilotState {
-  const initialUnits = createInitialPilotUnits();
-
-  if (typeof window === "undefined") {
-    return {
-      currentOfficer: MOCK_OFFICERS[0],
-      units: initialUnits,
-      auditLogs: createInitialAuditLogs(),
-      reconciliations: createInitialReconciliations(),
-      appeals: createInitialAppeals(),
-      discontinuances: createInitialDiscontinuances(),
-      refundAdjustments: createInitialRefundAdjustments(),
-      clearanceCertificates: createInitialClearanceCertificates(),
-      pft2Challans: createInitialPft2Challans(initialUnits),
-      statutoryReceipts: createInitialStatutoryReceipts(initialUnits),
-      users: createInitialUserAccounts(),
-      userAuditLogs: createInitialUserAuditLogs()
-    };
-  }
-
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      const initial: PilotState = {
-        currentOfficer: MOCK_OFFICERS[0],
-        units: initialUnits,
-        auditLogs: createInitialAuditLogs(),
-        reconciliations: createInitialReconciliations(),
-        appeals: createInitialAppeals(),
-        discontinuances: createInitialDiscontinuances(),
-        refundAdjustments: createInitialRefundAdjustments(),
-        clearanceCertificates: createInitialClearanceCertificates(),
-        pft2Challans: createInitialPft2Challans(initialUnits),
-        statutoryReceipts: createInitialStatutoryReceipts(initialUnits),
-        users: createInitialUserAccounts(),
-        userAuditLogs: createInitialUserAuditLogs()
-      };
-      savePilotState(initial);
-      return initial;
-    }
-    const parsed = JSON.parse(raw) as PilotState;
-    const matchingOfficer =
-      MOCK_OFFICERS.find(
-        (o) =>
-          o.id === parsed.currentOfficer?.id ||
-          o.email.toLowerCase() === parsed.currentOfficer?.email?.toLowerCase()
-      ) ??
-      parsed.currentOfficer ??
-      MOCK_OFFICERS[0];
-    const rawUnits = parsed.units && parsed.units.length > 0 ? parsed.units : initialUnits;
-    const safeUnits: StoredUnit[] = rawUnits.map((u, idx) => ({
-      ...u,
-      assessmentNumber: u.assessmentNumber || `ASM-2026-${String(idx + 1).padStart(4, "0")}`,
-      demandNumber:
-        u.demandNumber ??
-        (u.demandUnit?.permanentDemandNo ? u.demandUnit.permanentDemandNo : undefined),
-      pinNumber: u.pinNumber ?? (u.provincialUin ? u.provincialUin : undefined)
-    }));
-    return {
-      ...parsed,
-      units: safeUnits,
-      appeals: parsed.appeals ?? createInitialAppeals(),
-      discontinuances: parsed.discontinuances ?? createInitialDiscontinuances(),
-      refundAdjustments: parsed.refundAdjustments ?? createInitialRefundAdjustments(),
-      clearanceCertificates: parsed.clearanceCertificates ?? createInitialClearanceCertificates(),
-      pft2Challans: parsed.pft2Challans ?? createInitialPft2Challans(safeUnits),
-      statutoryReceipts: parsed.statutoryReceipts ?? createInitialStatutoryReceipts(safeUnits),
-      users: parsed.users ?? createInitialUserAccounts(),
-      userAuditLogs: parsed.userAuditLogs ?? createInitialUserAuditLogs(),
-      currentOfficer: matchingOfficer
-    };
-  } catch {
-    return {
-      currentOfficer: MOCK_OFFICERS[0],
-      units: initialUnits,
-      auditLogs: createInitialAuditLogs(),
-      reconciliations: createInitialReconciliations(),
-      appeals: createInitialAppeals(),
-      discontinuances: createInitialDiscontinuances(),
-      refundAdjustments: createInitialRefundAdjustments(),
-      clearanceCertificates: createInitialClearanceCertificates(),
-      pft2Challans: createInitialPft2Challans(initialUnits),
-      statutoryReceipts: createInitialStatutoryReceipts(initialUnits),
-      users: createInitialUserAccounts(),
-      userAuditLogs: createInitialUserAuditLogs()
-    };
-  }
+  if (typeof window !== "undefined") localStorage.removeItem(STORAGE_KEY);
+  return createEmptyOperationalState();
 }
 
 export function savePilotState(state: PilotState): void {
-  if (typeof window !== "undefined") {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (e) {
-      console.error("Failed to persist pilot state to localStorage", e);
-    }
-  }
+  void state;
+  if (typeof window !== "undefined") localStorage.removeItem(STORAGE_KEY);
 }
 
 export function resetPilotState(): PilotState {
-  const initialUnits = createInitialPilotUnits();
-  const cleanState: PilotState = {
-    currentOfficer: MOCK_OFFICERS[0],
-    units: initialUnits,
-    auditLogs: createInitialAuditLogs(),
-    reconciliations: createInitialReconciliations(),
-    appeals: createInitialAppeals(),
-    discontinuances: createInitialDiscontinuances(),
-    refundAdjustments: createInitialRefundAdjustments(),
-    clearanceCertificates: createInitialClearanceCertificates(),
-    pft2Challans: createInitialPft2Challans(initialUnits),
-    statutoryReceipts: createInitialStatutoryReceipts(initialUnits),
-    users: createInitialUserAccounts(),
-    userAuditLogs: createInitialUserAuditLogs()
-  };
-  savePilotState(cleanState);
-  return cleanState;
+  return createEmptyOperationalState();
 }
 
 export function setCurrentOfficerInStore(officer: MockOfficer): void {
-  if (typeof window !== "undefined") {
-    try {
-      const state = loadPilotState();
-      state.currentOfficer = officer;
-      savePilotState(state);
-    } catch (e) {
-      console.error("Failed to update current officer in pilot state", e);
-    }
-  }
+  void officer;
+  if (typeof window !== "undefined") localStorage.removeItem(STORAGE_KEY);
 }

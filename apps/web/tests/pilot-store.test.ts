@@ -5,11 +5,21 @@ import {
   createInitialAuditLogs,
   createInitialReconciliations,
   createInitialAppeals,
-  createInitialPft2Challans
+  createInitialPft2Challans,
+  loadPilotState
 } from "../src/lib/pilot-store.js";
 import { computeLedgerBalance } from "@ptas/domain";
 
 describe("Vehari Pilot Store & Statutory Seed Verification", () => {
+  it("never exposes the legacy seed as operational runtime state", () => {
+    const state = loadPilotState();
+    expect(state.units).toEqual([]);
+    expect(state.auditLogs).toEqual([]);
+    expect(state.appeals).toEqual([]);
+    expect(state.pft2Challans).toEqual([]);
+    expect(state.statutoryReceipts).toEqual([]);
+  });
+
   it("provides exactly 4 distinct mock authority roles (including Admin)", () => {
     expect(MOCK_OFFICERS).toHaveLength(4);
 

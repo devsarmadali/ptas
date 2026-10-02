@@ -412,6 +412,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      list_operational_survey_units: {
+        Args: Record<PropertyKey, never>;
+        Returns: Json;
+      };
       bulk_submit_survey_import: {
         Args: {
           p_batch_id: string;

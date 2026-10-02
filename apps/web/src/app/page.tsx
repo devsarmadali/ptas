@@ -48,17 +48,6 @@ import {
   type Pft2ChallanRecord,
   type StatutoryReceiptRecord,
   type Pft2Status,
-  createInitialPilotUnits,
-  createInitialAuditLogs,
-  createInitialAppeals,
-  createInitialClearanceCertificates,
-  createInitialDiscontinuances,
-  createInitialRefundAdjustments,
-  createInitialPft2Challans,
-  createInitialStatutoryReceipts,
-  loadPilotState,
-  resetPilotState,
-  savePilotState,
   RECEIPT_SOURCE_CONFIG
 } from "../lib/pilot-store";
 import { computeFileSha256, uploadReceiptScan } from "../lib/storage";
@@ -90,6 +79,7 @@ import {
   parseSurveyImportPayloadRows
 } from "../lib/bulk-survey";
 import { executeWorkflowCommand } from "../lib/workflow-command-client";
+import { loadOperationalSurveyUnits } from "../lib/operational-survey";
 import {
   OFFICIAL_OFFICERS_REGISTRY,
   getSupabaseAuthClient,
@@ -129,7 +119,6 @@ import {
   calculateRule4SelfAssessment,
   generate17DigitEPayPsid,
   lookupTaxpayerLiability,
-  simulateCitizenPayment,
   verifyStatutoryDocument
 } from "../lib/public-portal";
 
@@ -255,8 +244,10 @@ export default function HomePage({
   const [authStatus, setAuthStatus] = useState<"CHECKING" | "AUTHENTICATED" | "UNAUTHENTICATED">(
     "CHECKING"
   );
-  const [units, setUnits] = useState<StoredUnit[]>(() => createInitialPilotUnits());
-  const [auditLogs, setAuditLogs] = useState<PilotAuditItem[]>(() => createInitialAuditLogs());
+  const [units, setUnits] = useState<StoredUnit[]>([]);
+  const [auditLogs, setAuditLogs] = useState<PilotAuditItem[]>([]);
+  const [isLoadingOperationalUnits, setIsLoadingOperationalUnits] = useState(true);
+  const [operationalUnitsError, setOperationalUnitsError] = useState<string | null>(null);
 
   // Resolve active hub and tab directly from URL pathname with fallback to props
   const resolvedFromPath = pathname ? PATH_TO_TAB[pathname] : null;
@@ -296,14 +287,10 @@ export default function HomePage({
   const [selectedUnitId, setSelectedUnitId] = useState<string>("");
 
   // Phase 6 State: Clearance Certificates, Discontinuance (Rule 10), and Statutory Refunds (Rule 5)
-  const [discontinuances, setDiscontinuances] = useState<DiscontinuanceRecord[]>(() =>
-    createInitialDiscontinuances()
-  );
-  const [refundAdjustments, setRefundAdjustments] = useState<RefundAdjustmentRecord[]>(() =>
-    createInitialRefundAdjustments()
-  );
+  const [discontinuances, setDiscontinuances] = useState<DiscontinuanceRecord[]>([]);
+  const [refundAdjustments, setRefundAdjustments] = useState<RefundAdjustmentRecord[]>([]);
   const [clearanceCertificates, setClearanceCertificates] = useState<ClearanceCertificateRecord[]>(
-    () => createInitialClearanceCertificates()
+    []
   );
 
   // Clearance Certificate Modal State
@@ -354,7 +341,7 @@ export default function HomePage({
   );
 
   // Appeals & Revisions (Section 7) State
-  const [appeals, setAppeals] = useState<AppealRecord[]>(() => createInitialAppeals());
+  const [appeals, setAppeals] = useState<AppealRecord[]>([]);
   const [showFileAppealModal, setShowFileAppealModal] = useState(false);
   const [showScheduleHearingModal, setShowScheduleHearingModal] = useState(false);
   const [showAdjudicateAppealModal, setShowAdjudicateAppealModal] = useState(false);
@@ -550,12 +537,8 @@ export default function HomePage({
     useState<CitizenPaymentSimulationResult | null>(null);
 
   // Phase 10 State: PFT-2 Challan Management & Statutory Receipts Desk
-  const [pft2Challans, setPft2Challans] = useState<Pft2ChallanRecord[]>(() =>
-    createInitialPft2Challans(createInitialPilotUnits())
-  );
-  const [statutoryReceipts, setStatutoryReceipts] = useState<StatutoryReceiptRecord[]>(() =>
-    createInitialStatutoryReceipts(createInitialPilotUnits())
-  );
+  const [pft2Challans, setPft2Challans] = useState<Pft2ChallanRecord[]>([]);
+  const [statutoryReceipts, setStatutoryReceipts] = useState<StatutoryReceiptRecord[]>([]);
 
   // Tax Units & Survey Filters
   const [unitsSearchQuery, setUnitsSearchQuery] = useState("");
@@ -630,27 +613,34 @@ export default function HomePage({
     setTimeout(() => setNotification(null), 5000);
   };
 
-  // Load from local storage / seed on mount
+  const refreshOperationalSurveyUnits = async () => {
+    setIsLoadingOperationalUnits(true);
+    setOperationalUnitsError(null);
+    try {
+      const liveUnits = await loadOperationalSurveyUnits();
+      setUnits(liveUnits);
+      const firstId = liveUnits[0]?.id ?? "";
+      setSelectedUnitId(firstId);
+      setPaymentUnitId(firstId);
+      setAppealUnitId(firstId);
+      setDiscUnitId(firstId);
+      setRefUnitId(firstId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load operational units";
+      setUnits([]);
+      setOperationalUnitsError(message);
+      throw error;
+    } finally {
+      setIsLoadingOperationalUnits(false);
+    }
+  };
+
+  // Resolve the Supabase session first, then load only the database rows allowed
+  // by the authenticated officer's active role and jurisdiction assignment.
   useEffect(() => {
     let sub: { unsubscribe: () => void } | undefined;
     try {
-      const state = loadPilotState();
-      setUnits(state.units);
-      setAuditLogs(state.auditLogs);
-      setAppeals(state.appeals ?? []);
-      setDiscontinuances(state.discontinuances ?? createInitialDiscontinuances());
-      setRefundAdjustments(state.refundAdjustments ?? createInitialRefundAdjustments());
-      setClearanceCertificates(state.clearanceCertificates ?? createInitialClearanceCertificates());
-      setPft2Challans(state.pft2Challans ?? createInitialPft2Challans(state.units));
-      setStatutoryReceipts(state.statutoryReceipts ?? createInitialStatutoryReceipts(state.units));
-      if (state.units.length > 0) {
-        const firstId = state.units[0]?.id ?? "";
-        setSelectedUnitId(firstId);
-        setPaymentUnitId(firstId);
-        setAppealUnitId(firstId);
-        setDiscUnitId(firstId);
-        setRefUnitId(firstId);
-      }
+      localStorage.removeItem("ptas_pilot_vehari_v3");
       // Check URL search parameters on mount for backward-compatible deep links
       if (typeof window !== "undefined") {
         const sp = new URLSearchParams(window.location.search);
@@ -666,6 +656,8 @@ export default function HomePage({
       const rejectUnauthenticatedSession = () => {
         setOfficer(UNAUTHENTICATED_OFFICER_CONTEXT);
         setAuthenticatedSessionType("OFFLINE");
+        setUnits([]);
+        setIsLoadingOperationalUnits(false);
         setAuthStatus("UNAUTHENTICATED");
         router.replace(asRoute("/sign-in"));
       };
@@ -678,13 +670,21 @@ export default function HomePage({
           setOfficer(matching);
           setAuthenticatedSessionType("CLOUD");
           setAuthStatus("AUTHENTICATED");
+          try {
+            await refreshOperationalSurveyUnits();
+          } catch (error) {
+            showToast(
+              "error",
+              error instanceof Error ? error.message : "Unable to load operational survey units"
+            );
+          }
         } catch {
           await signOutOfficer();
           rejectUnauthenticatedSession();
         }
       };
 
-      // Verify the current user with Supabase before rendering any protected pilot state.
+      // Verify the current user with Supabase before rendering protected operational data.
       void getSupabaseAuthClient()
         .auth.getUser()
         .then(({ data, error }) => {
@@ -716,8 +716,8 @@ export default function HomePage({
     };
   }, []);
 
-  // Pilot-only state projection. Authenticated cloud sessions must use the transactional
-  // workflow command API; they may never create a second client-side source of truth.
+  // Legacy client-side mutations are permanently disabled. Operational changes must use
+  // authenticated transactional commands and refresh the Supabase read model.
   const syncState = (
     updatedUnits: StoredUnit[],
     updatedAudits: PilotAuditItem[],
@@ -729,65 +729,19 @@ export default function HomePage({
     updatedPft2Challans?: Pft2ChallanRecord[],
     updatedReceipts?: StatutoryReceiptRecord[]
   ) => {
-    if (authenticatedSessionType === "CLOUD") {
-      showToast(
-        "error",
-        "This legacy pilot action is disabled for authenticated sessions. Use the server workflow command."
-      );
-      return;
-    }
-    setUnits(updatedUnits);
-    setAuditLogs(updatedAudits);
-    if (updatedOfficer) setOfficer(updatedOfficer);
-    const nextAppeals = updatedAppeals ?? appeals;
-    if (updatedAppeals) setAppeals(nextAppeals);
-    const nextDiscontinuances = updatedDiscontinuances ?? discontinuances;
-    if (updatedDiscontinuances) setDiscontinuances(nextDiscontinuances);
-    const nextRefunds = updatedRefunds ?? refundAdjustments;
-    if (updatedRefunds) setRefundAdjustments(nextRefunds);
-    const nextClearanceCerts = updatedClearanceCerts ?? clearanceCertificates;
-    if (updatedClearanceCerts) setClearanceCertificates(nextClearanceCerts);
-    const nextPft2 = updatedPft2Challans ?? pft2Challans;
-    if (updatedPft2Challans) setPft2Challans(nextPft2);
-    const nextRecs = updatedReceipts ?? statutoryReceipts;
-    if (updatedReceipts) setStatutoryReceipts(nextRecs);
-
-    savePilotState({
-      currentOfficer: updatedOfficer ?? officer,
-      units: updatedUnits,
-      auditLogs: updatedAudits,
-      reconciliations: [],
-      appeals: nextAppeals,
-      discontinuances: nextDiscontinuances,
-      refundAdjustments: nextRefunds,
-      clearanceCertificates: nextClearanceCerts,
-      pft2Challans: nextPft2,
-      statutoryReceipts: nextRecs
-    });
-  };
-
-  // Reset demo
-  const handleResetDemo = () => {
-    if (confirm("Reset pilot dataset to clean factory seed state?")) {
-      const clean = resetPilotState();
-      setUnits(clean.units);
-      setAuditLogs(clean.auditLogs);
-      setAppeals(clean.appeals ?? []);
-      setDiscontinuances(clean.discontinuances ?? createInitialDiscontinuances());
-      setRefundAdjustments(clean.refundAdjustments ?? createInitialRefundAdjustments());
-      setClearanceCertificates(clean.clearanceCertificates ?? createInitialClearanceCertificates());
-      setPft2Challans(clean.pft2Challans ?? []);
-      setStatutoryReceipts(clean.statutoryReceipts ?? []);
-      if (clean.units.length > 0) {
-        const firstId = clean.units[0]?.id ?? "";
-        setSelectedUnitId(firstId);
-        setPaymentUnitId(firstId);
-        setAppealUnitId(firstId);
-        setDiscUnitId(firstId);
-        setRefUnitId(firstId);
-      }
-      showToast("info", "Vehari pilot dataset reset to statutory factory baseline.");
-    }
+    void updatedUnits;
+    void updatedAudits;
+    void updatedOfficer;
+    void updatedAppeals;
+    void updatedDiscontinuances;
+    void updatedRefunds;
+    void updatedClearanceCerts;
+    void updatedPft2Challans;
+    void updatedReceipts;
+    showToast(
+      "error",
+      "This retired browser-only action is unavailable. Use an authorized server workflow command."
+    );
   };
 
   // Handler: Authenticate Officer via Supabase Auth (Phase 5)
@@ -2510,6 +2464,7 @@ export default function HomePage({
           : `${affected} eligible unit(s) approved and finalized in PFT-3.`
       );
       await refreshActionableSurveyImportBatches();
+      await refreshOperationalSurveyUnits();
     } catch (error) {
       showToast(
         "error",
@@ -2652,6 +2607,7 @@ export default function HomePage({
       setBulkSurveyFileName("");
       setBulkSurveyFileSha256("");
       await refreshActionableSurveyImportBatches();
+      await refreshOperationalSurveyUnits();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       showToast("error", `Bulk survey import failed: ${msg}`);
@@ -3476,46 +3432,10 @@ export default function HomePage({
       return;
     }
 
-    try {
-      const currentState = loadPilotState();
-      currentState.currentOfficer = officer;
-      currentState.units = units;
-      currentState.auditLogs = auditLogs;
-      currentState.clearanceCertificates = clearanceCertificates;
-      currentState.discontinuances = discontinuances;
-      currentState.refundAdjustments = refundAdjustments;
-
-      const { result, updatedUnits, updatedAudits, updatedClearanceCerts } = simulateCitizenPayment(
-        citizenPayUnitId,
-        citizenPayAmount,
-        citizenPayChannel,
-        currentState
-      );
-
-      syncState(
-        updatedUnits,
-        updatedAudits,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        updatedClearanceCerts
-      );
-      setCitizenPaymentSuccess(result);
-
-      if (portalSearchResult && portalSearchResult.unit.id === citizenPayUnitId) {
-        const refreshed = lookupTaxpayerLiability(portalSearchResult.identifierValue, updatedUnits);
-        setPortalSearchResult(refreshed);
-      }
-
-      showToast(
-        "success",
-        `Payment of PKR ${citizenPayAmount.toLocaleString()} settled under PSID ${result.psid}!`
-      );
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      showToast("error", `Payment simulation failed: ${errMsg}`);
-    }
+    showToast(
+      "error",
+      "The retired browser payment simulator is unavailable in production. Use an authorized server payment workflow."
+    );
   };
 
   const handleOpenEditSurveyUnit = (u: StoredUnit) => {
@@ -3536,11 +3456,25 @@ export default function HomePage({
     showToast("info", `Draft survey record for '${target?.legalName ?? unitId}' closed.`);
   };
 
+  // These browser-only handlers remain isolated for the legacy prototype modals, but no
+  // production navigation or row action exposes them. All operational mutations use RPCs.
+  void handleSubmitAssessment;
+  void handleApproveAssessment;
+  void handleOpenReturnModal;
+  void handleOpenEditSurveyUnit;
+  void handleCloseDraftSurvey;
+  void setAuditLogs;
+  void setDiscontinuances;
+  void setRefundAdjustments;
+  void setClearanceCertificates;
+  void setAppeals;
+  void setPft2Challans;
+  void setStatutoryReceipts;
+
   // Row actions for Survey Register (UNITS tab) - strictly draft mode only
   const renderSurveyUnitActions = (targetUnit: StoredUnit) => {
     const latestAsm = targetUnit.assessments[0];
     const status = latestAsm?.status ?? "DRAFT";
-    const isEto = officer.role === "ETO";
 
     const actions: RowAction[] = [
       {
@@ -3552,60 +3486,7 @@ export default function HomePage({
       }
     ];
 
-    if (status === "DRAFT") {
-      actions.push({
-        id: "submit-survey",
-        label: "Submit Survey to ETO",
-        icon: "📤",
-        onClick: () => handleSubmitAssessment(targetUnit.id)
-      });
-      actions.push({
-        id: "edit-survey",
-        label: "Edit Survey Data",
-        icon: "✏️",
-        onClick: () => handleOpenEditSurveyUnit(targetUnit)
-      });
-      actions.push({
-        id: "close-draft",
-        label: "Close / Archive Draft",
-        icon: "✖️",
-        onClick: () => handleCloseDraftSurvey(targetUnit.id)
-      });
-    } else if (status === "SUBMITTED") {
-      if (isEto) {
-        actions.push({
-          id: "approve-survey",
-          label: "Statutory Approval (ETO)",
-          icon: "✓",
-          onClick: () => handleApproveAssessment(targetUnit.id)
-        });
-        actions.push({
-          id: "return-survey",
-          label: "Return for Correction",
-          icon: "↩️",
-          onClick: () => handleOpenReturnModal(targetUnit.id)
-        });
-      }
-    } else if (status === "RETURNED") {
-      actions.push({
-        id: "resubmit-survey",
-        label: "Resubmit to ETO",
-        icon: "📤",
-        onClick: () => handleSubmitAssessment(targetUnit.id)
-      });
-      actions.push({
-        id: "edit-survey",
-        label: "Edit Survey Data",
-        icon: "✏️",
-        onClick: () => handleOpenEditSurveyUnit(targetUnit)
-      });
-      actions.push({
-        id: "close-draft",
-        label: "Close Draft",
-        icon: "✖️",
-        onClick: () => handleCloseDraftSurvey(targetUnit.id)
-      });
-    } else if (status === "APPROVED") {
+    if (status === "APPROVED") {
       actions.push({
         id: "view-in-pft3",
         label: "Enrolled in Form PFT-3 Register ↗",
@@ -3766,34 +3647,25 @@ export default function HomePage({
             <div className="gov-titles">
               <h1>Government of the Punjab — Professional Tax Administration (PTAS)</h1>
               <p className="gov-subtitle">
-                Pilot Deployment: Multan Region &bull; Vehari District &bull; Tehsil Vehari &bull;
-                Circle-Vehari
+                Production Deployment &bull; Authenticated Supabase Records &bull;{" "}
+                {officer.jurisdictionName || "Assigned Jurisdiction"}
               </p>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             {officer.role === "ADMIN" && (
-              <>
-                <span
-                  style={{
-                    background: "rgba(255, 255, 255, 0.2)",
-                    padding: "0.3rem 0.75rem",
-                    borderRadius: "9999px",
-                    fontSize: "0.75rem",
-                    fontWeight: 700,
-                    letterSpacing: "0.05em"
-                  }}
-                >
-                  PILOT READY &bull; VERCEL
-                </span>
-                <button
-                  onClick={handleResetDemo}
-                  className="btn-reset"
-                  title="Reset all data to baseline seed state"
-                >
-                  Reset Demo
-                </button>
-              </>
+              <span
+                style={{
+                  background: "rgba(255, 255, 255, 0.2)",
+                  padding: "0.3rem 0.75rem",
+                  borderRadius: "9999px",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.05em"
+                }}
+              >
+                PRODUCTION &bull; SUPABASE
+              </span>
             )}
           </div>
         </div>
@@ -4237,7 +4109,7 @@ export default function HomePage({
               <section className="content-panel">
                 <div className="panel-header">
                   <div>
-                    <h2>Circle-Vehari Taxpayer Units</h2>
+                    <h2>{officer.jurisdictionName} Taxpayer Units</h2>
                     <p>
                       Official registry of commercial establishments, companies, and professions
                       governed by Section 3 of the Punjab Finance Act 1977.
@@ -4265,13 +4137,6 @@ export default function HomePage({
                         📥 Bulk Import Survey
                       </button>
                     )}
-                    <button
-                      onClick={() => setShowAddUnitModal(true)}
-                      className="btn-primary"
-                      title="Capture and register a new tax unit in Circle-Vehari"
-                    >
-                      + Add a New Unit
-                    </button>
                   </div>
                 </div>
 
@@ -4371,7 +4236,22 @@ export default function HomePage({
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredSurveyUnits.length === 0 ? (
+                      {isLoadingOperationalUnits ? (
+                        <tr>
+                          <td colSpan={10} style={{ textAlign: "center", padding: "2.5rem" }}>
+                            Loading authorized survey units from Supabase…
+                          </td>
+                        </tr>
+                      ) : operationalUnitsError ? (
+                        <tr>
+                          <td
+                            colSpan={10}
+                            style={{ textAlign: "center", padding: "2.5rem", color: "#991b1b" }}
+                          >
+                            {operationalUnitsError}
+                          </td>
+                        </tr>
+                      ) : filteredSurveyUnits.length === 0 ? (
                         <tr>
                           <td
                             colSpan={10}
@@ -4553,9 +4433,9 @@ export default function HomePage({
               <div>
                 <h2>Statutory Assessment &amp; Approval Queue</h2>
                 <p>
-                  Maker-Checker workflow: Tax Inspectors survey and submit draft assessments;
-                  Assessing Authorities (ETO Tariq Mahmood) grant statutory approval under Rule
-                  5(1).
+                  Maker-Checker workflow for authenticated Inspectors and the assigned Assessing
+                  Authority. Records shown here come directly from the jurisdiction-filtered
+                  Supabase workflow.
                 </p>
               </div>
             </div>
@@ -4573,154 +4453,133 @@ export default function HomePage({
                   </tr>
                 </thead>
                 <tbody>
-                  {units.map((u) => {
-                    const currentAsm = u.assessments[0];
-                    const currentVer = u.assessmentVersions[0];
-                    const status = currentAsm?.status ?? "DRAFT";
-                    const displayAmount =
-                      currentVer?.snapshot.taxAmount ?? u.statutoryRule.annual_rate_pkr;
+                  {isLoadingOperationalUnits ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: "center", padding: "2.5rem" }}>
+                        Loading authorized assessment records from Supabase…
+                      </td>
+                    </tr>
+                  ) : operationalUnitsError ? (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        style={{ textAlign: "center", padding: "2.5rem", color: "#991b1b" }}
+                      >
+                        {operationalUnitsError}
+                      </td>
+                    </tr>
+                  ) : units.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: "center", padding: "2.5rem" }}>
+                        No imported survey units are available in this jurisdiction.
+                      </td>
+                    </tr>
+                  ) : (
+                    units.map((u) => {
+                      const currentAsm = u.assessments[0];
+                      const currentVer = u.assessmentVersions[0];
+                      const status = currentAsm?.status ?? "DRAFT";
+                      const displayAmount =
+                        currentVer?.snapshot.taxAmount ?? u.statutoryRule.annual_rate_pkr;
 
-                    return (
-                      <tr key={u.id}>
-                        <td style={{ maxWidth: "16rem" }}>
-                          <strong>{u.legalName}</strong>
-                          <span
-                            style={{ display: "block", fontSize: "0.725rem", color: "#64748b" }}
-                          >
-                            {u.demandUnit.permanentDemandNo}
-                            {u.provincialUin ? ` • PIN: ${u.provincialUin}` : ""} &bull; {u.address}
-                          </span>
-                        </td>
-                        <td style={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
-                          {FINANCIAL_YEAR_2026_27}
-                        </td>
-                        <td style={{ maxWidth: "18rem" }}>
-                          <strong>
-                            Class {u.statutoryRule.rule_code} ({u.statutoryRule.category})
-                          </strong>
-                          <span
-                            style={{
-                              display: "block",
-                              fontSize: "0.725rem",
-                              color: "#64748b",
-                              marginTop: "0.15rem",
-                              lineHeight: 1.25
-                            }}
-                          >
-                            {u.statutoryRule.statutory_tertiary_classification
-                              ? `${u.statutoryRule.subclassification_label ?? u.statutoryRule.subcategory} (${u.statutoryRule.statutory_tertiary_classification})`
-                              : (u.statutoryRule.subclassification_label ??
-                                (u.statutoryRule.subclassification_code
-                                  ? u.statutoryRule.subcategory
-                                  : "Direct Category Rate"))}
-                          </span>
-                        </td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                          <strong style={{ fontSize: "0.95rem", color: "#0d3822" }}>
-                            PKR {displayAmount.toLocaleString()}
-                          </strong>
-                        </td>
-                        <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-                          <span
-                            className={`badge badge-${
-                              status === "APPROVED"
-                                ? "approved"
-                                : status === "SUBMITTED"
-                                  ? "submitted"
-                                  : status === "RETURNED"
-                                    ? "returned"
-                                    : "draft"
-                            }`}
-                            style={{ fontSize: "0.72rem" }}
-                          >
-                            {status === "DRAFT" ? "FEEDED" : status}
-                          </span>
-                        </td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                          {status === "DRAFT" && (
-                            <button
-                              onClick={() => handleSubmitAssessment(u.id)}
-                              className="btn-primary btn-sm"
-                              title="Submit draft assessment to ETO for legal review"
+                      return (
+                        <tr key={u.id}>
+                          <td style={{ maxWidth: "16rem" }}>
+                            <strong>{u.legalName}</strong>
+                            <span
+                              style={{ display: "block", fontSize: "0.725rem", color: "#64748b" }}
                             >
-                              Submit to ETO
-                            </button>
-                          )}
-
-                          {status === "SUBMITTED" && (
-                            <div style={{ display: "flex", gap: "0.5rem" }}>
-                              {officer.role === "ETO" ? (
-                                <>
-                                  <button
-                                    onClick={() => handleApproveAssessment(u.id)}
-                                    className="btn-success btn-sm"
-                                    title="Grant legally authorized approval as ETO Tariq Mahmood"
-                                  >
-                                    ✓ Statutory Approval
-                                  </button>
-                                  <button
-                                    onClick={() => handleOpenReturnModal(u.id)}
-                                    className="btn-danger btn-sm"
-                                    title="Return assessment with legal remarks"
-                                  >
-                                    Return
-                                  </button>
-                                </>
-                              ) : (
-                                <span
-                                  style={{
-                                    fontSize: "0.75rem",
-                                    color: "#64748b",
-                                    fontStyle: "italic"
-                                  }}
-                                >
-                                  Pending ETO Tariq Mahmood review
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          {status === "APPROVED" && (
-                            <span style={{ fontSize: "0.8rem", color: "#166534", fontWeight: 700 }}>
-                              ✓ Approved by ETO &bull; Ledger Debited
+                              {u.demandUnit.permanentDemandNo}
+                              {u.provincialUin ? ` • PIN: ${u.provincialUin}` : ""} &bull;{" "}
+                              {u.address}
                             </span>
-                          )}
-
-                          {status === "RETURNED" && (
-                            <div
-                              style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}
+                          </td>
+                          <td style={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
+                            {currentAsm?.financialYearId ?? FINANCIAL_YEAR_2026_27}
+                          </td>
+                          <td style={{ maxWidth: "18rem" }}>
+                            <strong>
+                              Class {u.statutoryRule.rule_code} ({u.statutoryRule.category})
+                            </strong>
+                            <span
+                              style={{
+                                display: "block",
+                                fontSize: "0.725rem",
+                                color: "#64748b",
+                                marginTop: "0.15rem",
+                                lineHeight: 1.25
+                              }}
                             >
+                              {u.statutoryRule.statutory_tertiary_classification
+                                ? `${u.statutoryRule.subclassification_label ?? u.statutoryRule.subcategory} (${u.statutoryRule.statutory_tertiary_classification})`
+                                : (u.statutoryRule.subclassification_label ??
+                                  (u.statutoryRule.subclassification_code
+                                    ? u.statutoryRule.subcategory
+                                    : "Direct Category Rate"))}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                            <strong style={{ fontSize: "0.95rem", color: "#0d3822" }}>
+                              PKR {displayAmount.toLocaleString()}
+                            </strong>
+                          </td>
+                          <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                            <span
+                              className={`badge badge-${
+                                status === "APPROVED"
+                                  ? "approved"
+                                  : status === "SUBMITTED"
+                                    ? "submitted"
+                                    : status === "RETURNED"
+                                      ? "returned"
+                                      : "draft"
+                              }`}
+                              style={{ fontSize: "0.72rem" }}
+                            >
+                              {status === "DRAFT" ? "FEEDED" : status}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                            {status === "DRAFT" && (
+                              <span style={{ fontSize: "0.75rem", color: "#475569" }}>
+                                Use Bulk Survey Workflow
+                              </span>
+                            )}
+
+                            {status === "SUBMITTED" && (
+                              <span
+                                style={{
+                                  fontSize: "0.75rem",
+                                  color: "#64748b",
+                                  fontStyle: "italic"
+                                }}
+                              >
+                                {officer.role === "ETO"
+                                  ? "Use Bulk Survey Workflow"
+                                  : "Pending assigned ETO review"}
+                              </span>
+                            )}
+
+                            {status === "APPROVED" && (
+                              <span
+                                style={{ fontSize: "0.8rem", color: "#166534", fontWeight: 700 }}
+                              >
+                                ✓ Approved by ETO &bull; Ledger Debited
+                              </span>
+                            )}
+
+                            {status === "RETURNED" && (
                               <span
                                 style={{ fontSize: "0.75rem", color: "#991b1b", fontWeight: 700 }}
                               >
                                 ↩ Returned: {currentVer?.reason || "Reclassification requested"}
                               </span>
-                              <div style={{ display: "flex", gap: "0.35rem" }}>
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenEditSurveyUnit(u)}
-                                  className="btn-secondary btn-sm"
-                                  style={{ fontSize: "0.725rem", padding: "0.2rem 0.45rem" }}
-                                  title="Edit survey data to address ETO remarks"
-                                >
-                                  ✏️ Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleSubmitAssessment(u.id)}
-                                  className="btn-primary btn-sm"
-                                  style={{ fontSize: "0.725rem", padding: "0.2rem 0.45rem" }}
-                                  title="Resubmit to ETO"
-                                >
-                                  📤 Resubmit
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
