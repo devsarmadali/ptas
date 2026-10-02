@@ -107,42 +107,61 @@ export async function generatePft2ChallanPdf(
     const deptW = innerW - QR_SIZE - 3.5;
     const deptCX = deptX + deptW / 2;
 
-    // 1. Copy title badge (pill)
-    const badgeText = copy.copyTitle;
+    // 1. Copy title badge (pill) with prominent PFT-2 Challan Demand Scope
+    const scopeLabel =
+      copy.pft2TypeLabel ||
+      (copy.demandScope === "ARREAR" || copy.demandScope === "ARREARS"
+        ? "ARREARS DEMAND"
+        : copy.demandScope === "COMBINED"
+          ? "COMBINED DEMAND (CURRENT + ARREARS)"
+          : "CURRENT DEMAND");
+
+    const badgeText = `${copy.copyTitle} \u2014 ${scopeLabel}`;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.5);
-    const badgeW = Math.min(deptW - 1, doc.getTextWidth(badgeText) + 7);
+    doc.setFontSize(6.4);
+    const badgeW = Math.min(deptW - 1, doc.getTextWidth(badgeText) + 6);
     const badgeX = deptCX - badgeW / 2;
     doc.setFillColor(...C.primaryBg);
     doc.setDrawColor(...C.primaryLight);
     doc.setLineWidth(0.2);
-    doc.roundedRect(badgeX, curY + 1.2, badgeW, 4.6, 0.8, 0.8, "FD");
+    doc.roundedRect(badgeX, curY + 1.2, badgeW, 4.4, 0.8, 0.8, "FD");
     doc.setTextColor(...C.primaryLight);
-    doc.text(badgeText, deptCX, curY + 4.5, { align: "center" });
+    doc.text(badgeText, deptCX, curY + 4.2, { align: "center" });
 
     // 2. GOVERNMENT OF THE PUNJAB
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
     doc.setTextColor(...C.primary);
-    doc.text("GOVERNMENT OF THE PUNJAB", deptCX, curY + 9.5, { align: "center" });
+    doc.text("GOVERNMENT OF THE PUNJAB", deptCX, curY + 9.2, { align: "center" });
 
     // 3. EXCISE & TAXATION DEPARTMENT
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.5);
     doc.setTextColor(...C.textDark);
-    doc.text("EXCISE & TAXATION DEPARTMENT", deptCX, curY + 13.0, { align: "center" });
+    doc.text("EXCISE & TAXATION DEPARTMENT", deptCX, curY + 12.6, { align: "center" });
 
     // 4. PUNJAB PROFESSIONS & TRADES TAX
     doc.setFont("helvetica", "bold");
     doc.setFontSize(6.8);
     doc.setTextColor(...C.textDark);
-    doc.text("PUNJAB PROFESSIONS & TRADES TAX", deptCX, curY + 16.2, { align: "center" });
+    doc.text("PUNJAB PROFESSIONS & TRADES TAX", deptCX, curY + 15.8, { align: "center" });
 
-    // 5. PAYMENT CHALLAN • Rule 9
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(5.8);
-    doc.setTextColor(...C.textMuted);
-    doc.text("PAYMENT CHALLAN \u2022 Rule 9", deptCX, curY + 19.0, { align: "center" });
+    // 5. PAYMENT CHALLAN • Rule 9 [Scope]
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.0);
+    const scopeColor =
+      copy.demandScope === "ARREAR" || copy.demandScope === "ARREARS"
+        ? C.amber
+        : copy.demandScope === "COMBINED"
+          ? C.blueDeep
+          : C.primaryLight;
+    doc.setTextColor(...scopeColor);
+    doc.text(
+      `FORM P.F.T-2 \u2022 PAYMENT CHALLAN (Rule 9) \u2022 [${scopeLabel}]`,
+      deptCX,
+      curY + 18.8,
+      { align: "center" }
+    );
 
     // 6. Head of Account (Amber)
     doc.setFont("helvetica", "bold");
@@ -150,13 +169,13 @@ export async function generatePft2ChallanPdf(
     doc.setTextColor(...C.amber);
     const headText = `Head: ${copy.headOfAccount}`;
     const headLines = doc.splitTextToSize(headText, deptW - 1);
-    doc.text(headLines[0] ?? headText, deptCX, curY + 22.2, { align: "center" });
+    doc.text(headLines[0] ?? headText, deptCX, curY + 22.0, { align: "center" });
 
     // 7. Urdu copy title
     doc.setFont("helvetica", "normal");
     doc.setFontSize(5.5);
     doc.setTextColor(...C.textMuted);
-    doc.text(copy.copyTitleUrdu, deptCX, curY + 25.4, { align: "center" });
+    doc.text(copy.copyTitleUrdu, deptCX, curY + 25.2, { align: "center" });
 
     curY += HEADER_H;
 
@@ -302,23 +321,41 @@ export async function generatePft2ChallanPdf(
     doc.setFontSize(TP_FS);
     doc.setTextColor(...C.textDark);
 
-    // Class: classification (PKR slab)
-    doc.setFont("helvetica", "bold");
-    doc.text("Class:", innerX + 1.5, curY + TP_LINE_H * 0.72);
-    doc.setFont("helvetica", "normal");
-    const classDisplay =
-      doc.splitTextToSize(copy.taxpayerInfo.classification, innerW - labelColW - 22)[0] ?? "";
-    doc.text(classDisplay, innerX + 1.5 + labelColW, curY + TP_LINE_H * 0.72);
+    // Class: classification (PKR slab) with full multiline text wrapping
+    const slabText = `(PKR ${copy.taxpayerInfo.slabRatePkr.toLocaleString()})`;
     doc.setFont("helvetica", "bold");
     doc.setTextColor(...C.primaryLight);
-    doc.text(
-      `(PKR ${copy.taxpayerInfo.slabRatePkr.toLocaleString()})`,
-      innerX + innerW - 1.5,
-      curY + TP_LINE_H * 0.72,
-      { align: "right" }
-    );
+    const slabW = doc.getTextWidth(slabText) + 2;
+    doc.text(slabText, innerX + innerW - 1.5, curY + TP_LINE_H * 0.72, { align: "right" });
+
     doc.setTextColor(...C.textDark);
-    curY += TP_LINE_H;
+    doc.setFont("helvetica", "bold");
+    doc.text("Class:", innerX + 1.5, curY + TP_LINE_H * 0.72);
+
+    doc.setFont("helvetica", "normal");
+    const classText = copy.taxpayerInfo.classification;
+    const line1MaxW = innerW - labelColW - slabW - 1.0;
+    const fullMaxW = innerW - labelColW - 1.5;
+
+    const l1Split = doc.splitTextToSize(classText, line1MaxW);
+    if (l1Split.length <= 1) {
+      doc.text(l1Split[0] ?? classText, innerX + 1.5 + labelColW, curY + TP_LINE_H * 0.72);
+      curY += TP_LINE_H;
+    } else {
+      // First line rendered left of slab rate badge
+      const firstLine = l1Split[0];
+      doc.text(firstLine, innerX + 1.5 + labelColW, curY + TP_LINE_H * 0.72);
+      curY += TP_LINE_H * 0.85;
+
+      // Subsequent lines rendered using full column width without clipping
+      const restText = classText.slice(firstLine.length).trim();
+      const restLines = doc.splitTextToSize(restText, fullMaxW);
+      for (const line of restLines) {
+        doc.text(line, innerX + 1.5 + labelColW, curY + TP_LINE_H * 0.72);
+        curY += TP_LINE_H * 0.85;
+      }
+      curY += 0.5;
+    }
 
     // Name:
     doc.setFont("helvetica", "bold");
@@ -340,14 +377,20 @@ export async function generatePft2ChallanPdf(
       curY += TP_LINE_H;
     }
 
-    // Address:
+    // Address: (with multi-line wrapping support)
     doc.setFont("helvetica", "bold");
     doc.text("Address:", innerX + 1.5, curY + TP_LINE_H * 0.72);
     doc.setFont("helvetica", "normal");
-    const addrDisplay =
-      doc.splitTextToSize(copy.taxpayerInfo.address, innerW - labelColW - 2)[0] ?? "";
-    doc.text(addrDisplay, innerX + 1.5 + labelColW, curY + TP_LINE_H * 0.72);
-    curY += TP_LINE_H + 2.0;
+    const addrLines = doc.splitTextToSize(copy.taxpayerInfo.address, innerW - labelColW - 2);
+    if (addrLines.length <= 1) {
+      doc.text(addrLines[0] ?? "", innerX + 1.5 + labelColW, curY + TP_LINE_H * 0.72);
+      curY += TP_LINE_H + 1.5;
+    } else {
+      doc.text(addrLines[0], innerX + 1.5 + labelColW, curY + TP_LINE_H * 0.72);
+      curY += TP_LINE_H * 0.85;
+      doc.text(addrLines[1], innerX + 1.5 + labelColW, curY + TP_LINE_H * 0.72);
+      curY += TP_LINE_H + 1.5;
+    }
 
     // ══════════════════════════════════════════════════════════════════════════
     // SECTION 4 — DETAIL OF TAX PAYABLE TABLE

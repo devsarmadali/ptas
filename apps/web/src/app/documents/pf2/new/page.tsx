@@ -315,7 +315,14 @@ function DocumentIssuanceContent() {
             <span
               style={{ fontSize: "0.9rem", fontWeight: 700, color: "#0d3822", display: "block" }}
             >
-              PTAS Punjab &bull; Circle-Vehari
+              PTAS Punjab &bull; Circle-Vehari &bull;{" "}
+              <span style={{ color: "#15803d" }}>
+                {demandScope === "ARREAR"
+                  ? "ARREARS DEMAND"
+                  : demandScope === "COMBINED"
+                    ? "COMBINED DEMAND (CURRENT + ARREARS)"
+                    : "CURRENT YEAR DEMAND"}
+              </span>
             </span>
             <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
               Form P.F.T-2 Statutory Payment Instrument &bull; Rule 9
@@ -612,7 +619,10 @@ function DocumentIssuanceContent() {
                       setErrorMessage("");
                     }}
                   />
-                  <span>01 - Current Year Demand</span>
+                  <span>
+                    01 - Current Year Demand (PKR{" "}
+                    {(validation.currentOutstanding ?? 0).toLocaleString()})
+                  </span>
                 </label>
 
                 <label
@@ -635,7 +645,9 @@ function DocumentIssuanceContent() {
                       setErrorMessage("");
                     }}
                   />
-                  <span>02 - Arrears Demand</span>
+                  <span>
+                    02 - Arrears Demand (PKR {(validation.arrearBalance ?? 0).toLocaleString()})
+                  </span>
                 </label>
 
                 <label
@@ -658,7 +670,15 @@ function DocumentIssuanceContent() {
                       setErrorMessage("");
                     }}
                   />
-                  <span>03 - Combined (Current + Arrear)</span>
+                  <span>
+                    03 - Combined Current &amp; Arrears (PKR{" "}
+                    {(
+                      (validation.currentOutstanding ?? 0) +
+                      (validation.arrearBalance ?? 0) +
+                      (validation.penalties ?? 0)
+                    ).toLocaleString()}
+                    )
+                  </span>
                 </label>
               </div>
             </div>
@@ -873,20 +893,66 @@ function DocumentIssuanceContent() {
 
               {/* Right: Copy Title & Department Header */}
               <div style={{ flex: 1, textAlign: "center" }}>
-                <span
+                <div
                   style={{
-                    fontSize: "0.75rem",
-                    fontWeight: 800,
-                    color: "#166534",
-                    background: "#dcfce7",
-                    padding: "0.15rem 0.5rem",
-                    borderRadius: "4px",
-                    display: "inline-block",
+                    display: "flex",
+                    gap: "0.35rem",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    flexWrap: "wrap",
                     marginBottom: "0.2rem"
                   }}
                 >
-                  {copy.copyTitle}
-                </span>
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      fontWeight: 800,
+                      color: "#166534",
+                      background: "#dcfce7",
+                      padding: "0.15rem 0.5rem",
+                      borderRadius: "4px",
+                      display: "inline-block"
+                    }}
+                  >
+                    {copy.copyTitle}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      fontWeight: 800,
+                      color:
+                        copy.demandScope === "ARREAR"
+                          ? "#9a3412"
+                          : copy.demandScope === "COMBINED"
+                            ? "#1e40af"
+                            : "#166534",
+                      background:
+                        copy.demandScope === "ARREAR"
+                          ? "#ffedd5"
+                          : copy.demandScope === "COMBINED"
+                            ? "#dbeafe"
+                            : "#dcfce7",
+                      border: `1px solid ${
+                        copy.demandScope === "ARREAR"
+                          ? "#fdba74"
+                          : copy.demandScope === "COMBINED"
+                            ? "#bfdbfe"
+                            : "#bbf7d0"
+                      }`,
+                      padding: "0.15rem 0.5rem",
+                      borderRadius: "4px",
+                      display: "inline-block",
+                      letterSpacing: "0.3px"
+                    }}
+                  >
+                    {copy.pft2TypeLabel ||
+                      (copy.demandScope === "ARREAR"
+                        ? "ARREARS DEMAND"
+                        : copy.demandScope === "COMBINED"
+                          ? "COMBINED DEMAND (CURRENT + ARREARS)"
+                          : "CURRENT DEMAND")}
+                  </span>
+                </div>
                 <h4
                   style={{
                     margin: "0.1rem 0 0.05rem",
@@ -1004,7 +1070,15 @@ function DocumentIssuanceContent() {
 
             {/* Taxpayer Details */}
             <div style={{ fontSize: "0.75rem", lineHeight: 1.4 }}>
-              <p style={{ margin: "0.15rem 0" }}>
+              <p
+                style={{
+                  margin: "0.15rem 0",
+                  whiteSpace: "normal",
+                  wordBreak: "break-word",
+                  overflowWrap: "break-word",
+                  lineHeight: 1.35
+                }}
+              >
                 <strong>Class:</strong> {copy.taxpayerInfo.classification}{" "}
                 <span style={{ fontWeight: 700, color: "#166534" }}>
                   (PKR {copy.taxpayerInfo.slabRatePkr.toLocaleString()})
@@ -1018,7 +1092,7 @@ function DocumentIssuanceContent() {
                   <strong>Trade:</strong> {copy.taxpayerInfo.tradeName}
                 </p>
               )}
-              <p style={{ margin: "0.15rem 0" }}>
+              <p style={{ margin: "0.15rem 0", whiteSpace: "normal", wordBreak: "break-word" }}>
                 <strong>Address:</strong> {copy.taxpayerInfo.address}
               </p>
             </div>
@@ -1052,11 +1126,15 @@ function DocumentIssuanceContent() {
                   </tr>
                   <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
                     <td style={{ padding: "0.25rem 0.4rem" }}>Arrears</td>
-                    <td style={{ padding: "0.25rem 0.4rem", textAlign: "right" }}>Rs. 0</td>
+                    <td style={{ padding: "0.25rem 0.4rem", textAlign: "right" }}>
+                      Rs. {copy.taxPayable.arrears.toLocaleString()}
+                    </td>
                   </tr>
                   <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
                     <td style={{ padding: "0.25rem 0.4rem" }}>Penalty</td>
-                    <td style={{ padding: "0.25rem 0.4rem", textAlign: "right" }}>Rs. 0</td>
+                    <td style={{ padding: "0.25rem 0.4rem", textAlign: "right" }}>
+                      Rs. {copy.taxPayable.penalty.toLocaleString()}
+                    </td>
                   </tr>
                   <tr style={{ fontWeight: 800, background: "#f0fdf4" }}>
                     <td style={{ padding: "0.3rem 0.4rem", color: "#166534" }}>Total Payable</td>

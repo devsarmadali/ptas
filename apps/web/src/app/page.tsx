@@ -3277,13 +3277,33 @@ export default function HomePage({
 
     const latestVersion = targetUnit.assessmentVersions[0];
     const baseTax = latestVersion?.snapshot.taxAmount ?? 0;
+    const arrears = targetUnit.openingArrears ?? 0;
     let penalty = 0;
     for (const entry of targetUnit.ledgerEntries) {
       if (entry.entryType === "PENALTY_DEMAND") {
         penalty += entry.amount;
       }
     }
-    const fullAssessed = baseTax + penalty;
+
+    let fullAssessed: number;
+    if (issuePft2DemandScope === "ARREAR") {
+      if (arrears <= 0) {
+        showToast(
+          "error",
+          "This taxpayer establishment has no outstanding arrears to issue an arrears challan."
+        );
+        return;
+      }
+      fullAssessed = arrears;
+    } else if (issuePft2DemandScope === "COMBINED") {
+      fullAssessed = baseTax + arrears + penalty;
+      if (fullAssessed <= 0) {
+        showToast("error", "Total combined demand cannot be zero.");
+        return;
+      }
+    } else {
+      fullAssessed = baseTax;
+    }
 
     const isPartial = issuePft2PaymentScope === "PARTIAL";
     if (isPartial && (issuePft2PartialAmount <= 0 || issuePft2PartialAmount > fullAssessed)) {
@@ -14234,7 +14254,12 @@ export default function HomePage({
                             }}
                           >
                             <div>
-                              <strong>Class:</strong> {copy.taxpayerInfo.classification}{" "}
+                              <strong style={{ whiteSpace: "normal", wordBreak: "break-word" }}>
+                                Class:
+                              </strong>{" "}
+                              <span style={{ whiteSpace: "normal", wordBreak: "break-word" }}>
+                                {copy.taxpayerInfo.classification}{" "}
+                              </span>
                               <span style={{ fontWeight: 700, color: "#166534" }}>
                                 (PKR {copy.taxpayerInfo.slabRatePkr.toLocaleString()})
                               </span>
@@ -14259,6 +14284,18 @@ export default function HomePage({
                               <span>Current Tax:</span>
                               <strong>PKR {copy.taxPayable.currentTax.toLocaleString()}</strong>
                             </div>
+                            {copy.taxPayable.arrears > 0 && (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  color: "#b45309"
+                                }}
+                              >
+                                <span>Arrears Demand:</span>
+                                <strong>PKR {copy.taxPayable.arrears.toLocaleString()}</strong>
+                              </div>
+                            )}
                             {copy.taxPayable.penalty > 0 && (
                               <div
                                 style={{
@@ -18617,6 +18654,7 @@ export default function HomePage({
                 const selectedUnit = units.find((u) => u.id === issuePft2UnitId) ?? units[0];
                 const latestVersion = selectedUnit?.assessmentVersions[0];
                 const baseTax = latestVersion?.snapshot.taxAmount ?? 0;
+                const arrears = selectedUnit?.openingArrears ?? 0;
                 let penalty = 0;
                 if (selectedUnit) {
                   for (const entry of selectedUnit.ledgerEntries) {
@@ -18625,7 +18663,12 @@ export default function HomePage({
                     }
                   }
                 }
-                const fullAssessed = baseTax + penalty;
+                const fullAssessed =
+                  issuePft2DemandScope === "ARREAR"
+                    ? arrears
+                    : issuePft2DemandScope === "COMBINED"
+                      ? baseTax + arrears + penalty
+                      : baseTax;
                 const isPartial = issuePft2PaymentScope === "PARTIAL";
                 const effectiveAmount = isPartial ? issuePft2PartialAmount : fullAssessed;
                 const remainingBalance = isPartial
@@ -18677,7 +18720,11 @@ export default function HomePage({
                               {u.statutoryRule.subclassification_code ??
                                 u.statutoryRule.category_code}{" "}
                               - PKR{" "}
-                              {u.assessmentVersions[0]?.snapshot.taxAmount?.toLocaleString() ?? 0})
+                              {u.assessmentVersions[0]?.snapshot.taxAmount?.toLocaleString() ?? 0}
+                              {(u.openingArrears ?? 0) > 0
+                                ? ` + Arrears PKR ${(u.openingArrears ?? 0).toLocaleString()}`
+                                : ""}
+                              )
                             </option>
                           ))}
                       </select>
@@ -18703,14 +18750,31 @@ export default function HomePage({
                         <div>
                           <strong>CNIC / NTN:</strong> {selectedUnit.identifierValue}
                         </div>
-                        <div>
+                        <div
+                          style={{
+                            gridColumn: "span 2",
+                            whiteSpace: "normal",
+                            wordBreak: "break-word"
+                          }}
+                        >
                           <strong>Classification:</strong> Class{" "}
                           {selectedUnit.statutoryRule.subclassification_code ??
-                            selectedUnit.statutoryRule.category_code}
+                            selectedUnit.statutoryRule.category_code}{" "}
+                          — {selectedUnit.statutoryRule.category}
                         </div>
                         <div>
-                          <strong>Assessed Annual Demand:</strong> PKR{" "}
-                          {fullAssessed.toLocaleString()}
+                          <strong>Current Tax:</strong> PKR {baseTax.toLocaleString()}
+                        </div>
+                        <div>
+                          <strong>Opening Arrears:</strong> PKR {arrears.toLocaleString()}
+                        </div>
+                        {penalty > 0 && (
+                          <div style={{ color: "#dc2626" }}>
+                            <strong>Imposed Penalty:</strong> PKR {penalty.toLocaleString()}
+                          </div>
+                        )}
+                        <div style={{ color: "#166534", fontWeight: 700 }}>
+                          <strong>Scope Payable Demand:</strong> PKR {fullAssessed.toLocaleString()}
                         </div>
                       </div>
                     )}
@@ -18754,7 +18818,7 @@ export default function HomePage({
                             checked={issuePft2DemandScope === "CURRENT"}
                             onChange={() => setIssuePft2DemandScope("CURRENT")}
                           />
-                          <span>01 - Current Year Demand</span>
+                          <span>01 - Current Year Demand (PKR {baseTax.toLocaleString()})</span>
                         </label>
 
                         <label
@@ -18775,7 +18839,7 @@ export default function HomePage({
                             checked={issuePft2DemandScope === "ARREAR"}
                             onChange={() => setIssuePft2DemandScope("ARREAR")}
                           />
-                          <span>02 - Arrears Demand</span>
+                          <span>02 - Arrears Demand (PKR {arrears.toLocaleString()})</span>
                         </label>
 
                         <label
@@ -18796,7 +18860,10 @@ export default function HomePage({
                             checked={issuePft2DemandScope === "COMBINED"}
                             onChange={() => setIssuePft2DemandScope("COMBINED")}
                           />
-                          <span>03 - Combined Current &amp; Arrears</span>
+                          <span>
+                            03 - Combined Current &amp; Arrears (PKR{" "}
+                            {(baseTax + arrears + penalty).toLocaleString()})
+                          </span>
                         </label>
                       </div>
                     </div>
@@ -19130,7 +19197,14 @@ export default function HomePage({
             >
               <div>
                 <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700 }}>
-                  📑 Form P.F.T-2: Punjab Professional Tax Payment Challan
+                  📑 Form P.F.T-2: Punjab Professional Tax Payment Challan &bull;{" "}
+                  <span style={{ color: "#86efac" }}>
+                    {activePrintChallan.demandScope === "ARREAR"
+                      ? "ARREARS DEMAND"
+                      : activePrintChallan.demandScope === "COMBINED"
+                        ? "COMBINED DEMAND (CURRENT + ARREARS)"
+                        : "CURRENT DEMAND"}
+                  </span>
                 </h3>
                 <span style={{ fontSize: "0.8rem", color: "#bbf7d0" }}>
                   Notice No: {activePrintChallan.noticeNumber} &bull; Security PIN: 🔐{" "}
@@ -19280,20 +19354,66 @@ export default function HomePage({
                             </div>
                             {/* Right: Copy Title & Department Header */}
                             <div style={{ flex: 1, textAlign: "center" }}>
-                              <span
+                              <div
                                 style={{
-                                  fontSize: "0.75rem",
-                                  fontWeight: 800,
-                                  color: "#166534",
-                                  background: "#dcfce7",
-                                  padding: "0.15rem 0.5rem",
-                                  borderRadius: "4px",
-                                  display: "inline-block",
+                                  display: "flex",
+                                  gap: "0.35rem",
+                                  justifyContent: "center",
+                                  alignItems: "center",
+                                  flexWrap: "wrap",
                                   marginBottom: "0.2rem"
                                 }}
                               >
-                                {copy.copyTitle}
-                              </span>
+                                <span
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    fontWeight: 800,
+                                    color: "#166534",
+                                    background: "#dcfce7",
+                                    padding: "0.15rem 0.5rem",
+                                    borderRadius: "4px",
+                                    display: "inline-block"
+                                  }}
+                                >
+                                  {copy.copyTitle}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: "0.72rem",
+                                    fontWeight: 800,
+                                    color:
+                                      copy.demandScope === "ARREAR"
+                                        ? "#9a3412"
+                                        : copy.demandScope === "COMBINED"
+                                          ? "#1e40af"
+                                          : "#166534",
+                                    background:
+                                      copy.demandScope === "ARREAR"
+                                        ? "#ffedd5"
+                                        : copy.demandScope === "COMBINED"
+                                          ? "#dbeafe"
+                                          : "#dcfce7",
+                                    border: `1px solid ${
+                                      copy.demandScope === "ARREAR"
+                                        ? "#fdba74"
+                                        : copy.demandScope === "COMBINED"
+                                          ? "#bfdbfe"
+                                          : "#bbf7d0"
+                                    }`,
+                                    padding: "0.15rem 0.5rem",
+                                    borderRadius: "4px",
+                                    display: "inline-block",
+                                    letterSpacing: "0.3px"
+                                  }}
+                                >
+                                  {copy.pft2TypeLabel ||
+                                    (copy.demandScope === "ARREAR"
+                                      ? "ARREARS DEMAND"
+                                      : copy.demandScope === "COMBINED"
+                                        ? "COMBINED DEMAND (CURRENT + ARREARS)"
+                                        : "CURRENT DEMAND")}
+                                </span>
+                              </div>
                               <h4
                                 style={{
                                   margin: "0.1rem 0 0.05rem",
@@ -19418,7 +19538,15 @@ export default function HomePage({
 
                           {/* Taxpayer Details */}
                           <div style={{ fontSize: "0.75rem", lineHeight: 1.4 }}>
-                            <p style={{ margin: "0.15rem 0" }}>
+                            <p
+                              style={{
+                                margin: "0.15rem 0",
+                                whiteSpace: "normal",
+                                wordBreak: "break-word",
+                                overflowWrap: "break-word",
+                                lineHeight: 1.35
+                              }}
+                            >
                               <strong>Class:</strong> {copy.taxpayerInfo.classification}{" "}
                               <span style={{ fontWeight: 700, color: "#166534" }}>
                                 (PKR {copy.taxpayerInfo.slabRatePkr.toLocaleString()})
@@ -19432,7 +19560,13 @@ export default function HomePage({
                                 <strong>Trade:</strong> {copy.taxpayerInfo.tradeName}
                               </p>
                             )}
-                            <p style={{ margin: "0.15rem 0" }}>
+                            <p
+                              style={{
+                                margin: "0.15rem 0",
+                                whiteSpace: "normal",
+                                wordBreak: "break-word"
+                              }}
+                            >
                               <strong>Address:</strong> {copy.taxpayerInfo.address}
                             </p>
                           </div>
@@ -19467,13 +19601,13 @@ export default function HomePage({
                                 <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
                                   <td style={{ padding: "0.25rem 0.4rem" }}>Arrears</td>
                                   <td style={{ padding: "0.25rem 0.4rem", textAlign: "right" }}>
-                                    Rs. 0
+                                    Rs. {copy.taxPayable.arrears.toLocaleString()}
                                   </td>
                                 </tr>
                                 <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
                                   <td style={{ padding: "0.25rem 0.4rem" }}>Penalty</td>
                                   <td style={{ padding: "0.25rem 0.4rem", textAlign: "right" }}>
-                                    Rs. 0
+                                    Rs. {copy.taxPayable.penalty.toLocaleString()}
                                   </td>
                                 </tr>
                                 <tr style={{ fontWeight: 800, background: "#f0fdf4" }}>

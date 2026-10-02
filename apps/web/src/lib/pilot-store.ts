@@ -549,13 +549,16 @@ export interface Pft2IssuanceValidationResult {
   readonly error?: string | undefined;
   readonly issueDate: string;
   readonly dueDate: string;
+  readonly currentOutstanding?: number | undefined;
+  readonly arrearBalance?: number | undefined;
+  readonly penalties?: number | undefined;
 }
 
 /**
  * Authoritative financial validation for Form PFT-2 Challan issuance (Sections 8 & 9).
  * - Current-Year Demand: outstanding current-year demand only (if <= 0, rejects).
- * - Arrear Challan: outstanding arrear balance only (if <= 0, rejects).
- * - Combined Challan: current demand + arrear balance (negative arrear acts as adjustment). If net <= 0, rejects.
+ * - Arrear Challan: outstanding arrear balance only (including openingArrears, if <= 0, rejects).
+ * - Combined Challan: current demand + arrear balance + penalties (if net <= 0, rejects).
  * - Due date: strictly bounded within the current calendar month.
  */
 export function validatePft2IssuanceAmount(params: {
@@ -580,29 +583,31 @@ export function validatePft2IssuanceAmount(params: {
 
   const currentAssessed = unit.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
   let currentPaid = 0;
-  let arrearDemand = 0;
+  let arrearDemand = unit.openingArrears ?? 0;
   let arrearPaid = 0;
+  let penalties = 0;
 
   for (const entry of unit.ledgerEntries) {
-    if (entry.financialYearId === FINANCIAL_YEAR_2026_27) {
-      if (entry.entryType === "PAYMENT_CREDIT") {
+    if (entry.entryType === "PENALTY_DEMAND") {
+      penalties += entry.amount;
+    } else if (entry.entryType === "PAYMENT_CREDIT" || entry.amount < 0) {
+      if (entry.financialYearId === FINANCIAL_YEAR_2026_27) {
         currentPaid += Math.abs(entry.amount);
-      }
-    } else {
-      if (
-        entry.entryType === "ASSESSMENT_DEMAND" ||
-        entry.entryType === "PENALTY_DEMAND" ||
-        entry.entryType === "REVISION_ADJUSTMENT"
-      ) {
-        arrearDemand += entry.amount;
-      } else if (entry.entryType === "PAYMENT_CREDIT") {
+      } else {
         arrearPaid += Math.abs(entry.amount);
+      }
+    } else if (
+      entry.entryType === "ASSESSMENT_DEMAND" ||
+      entry.entryType === "REVISION_ADJUSTMENT"
+    ) {
+      if (entry.financialYearId !== FINANCIAL_YEAR_2026_27) {
+        arrearDemand += entry.amount;
       }
     }
   }
 
   const currentOutstanding = Math.max(0, currentAssessed - currentPaid);
-  const arrearBalance = arrearDemand - arrearPaid;
+  const arrearBalance = Math.max(0, arrearDemand - arrearPaid);
 
   if (demandScope === "CURRENT") {
     if (currentOutstanding <= 0) {
@@ -611,6 +616,9 @@ export function validatePft2IssuanceAmount(params: {
         calculatedAmount: 0,
         issueDate,
         dueDate,
+        currentOutstanding,
+        arrearBalance,
+        penalties,
         error:
           "No Current-Year Demand Pending: There is no outstanding current-year amount available for challan issuance."
       };
@@ -619,17 +627,23 @@ export function validatePft2IssuanceAmount(params: {
       canIssue: true,
       calculatedAmount: currentOutstanding,
       issueDate,
-      dueDate
+      dueDate,
+      currentOutstanding,
+      arrearBalance,
+      penalties
     };
   }
 
-  if (demandScope === "ARREAR") {
+  if (demandScope === "ARREAR" || demandScope === "ARREARS") {
     if (arrearBalance <= 0) {
       return {
         canIssue: false,
         calculatedAmount: 0,
         issueDate,
         dueDate,
+        currentOutstanding,
+        arrearBalance,
+        penalties,
         error:
           "No Arrear Pending: There is currently no outstanding arrear amount available for challan issuance."
       };
@@ -638,18 +652,24 @@ export function validatePft2IssuanceAmount(params: {
       canIssue: true,
       calculatedAmount: arrearBalance,
       issueDate,
-      dueDate
+      dueDate,
+      currentOutstanding,
+      arrearBalance,
+      penalties
     };
   }
 
-  // COMBINED
-  const netPayable = currentOutstanding + arrearBalance;
+  // COMBINED: current outstanding demand + arrear balance + imposed penalty
+  const netPayable = currentOutstanding + arrearBalance + penalties;
   if (netPayable <= 0) {
     return {
       canIssue: false,
       calculatedAmount: 0,
       issueDate,
       dueDate,
+      currentOutstanding,
+      arrearBalance,
+      penalties,
       error:
         "No Amount Payable: After adjusting the applicable arrear balance against the current-year demand, there is no outstanding amount available for combined challan issuance."
     };
@@ -659,7 +679,10 @@ export function validatePft2IssuanceAmount(params: {
     canIssue: true,
     calculatedAmount: netPayable,
     issueDate,
-    dueDate
+    dueDate,
+    currentOutstanding,
+    arrearBalance,
+    penalties
   };
 }
 

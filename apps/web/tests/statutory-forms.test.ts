@@ -251,4 +251,62 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     const lrc = generateLandRevenueRecoveryCertificate(alMadinaUnit);
     expect(lrc.pin).toMatch(/^\d{6}$/);
   });
+
+  it("correctly handles Form PFT-2 demand scopes (CURRENT, ARREAR, COMBINED) with arrears and penalty", () => {
+    const unitWithArrearsAndPenalty = {
+      ...alMadinaUnit,
+      openingArrears: 5000,
+      ledgerEntries: [
+        ...alMadinaUnit.ledgerEntries,
+        {
+          id: "ledger-pen-1",
+          demandUnitId: alMadinaUnit.demandUnit.id,
+          financialYearId: "2026-2027",
+          entryType: "PENALTY_DEMAND" as const,
+          amount: 1000,
+          sourceType: "ASSESSMENT",
+          sourceId: "penalty-1",
+          idempotencyKey: "idem-pen-1",
+          correlationId: "pen-corr-1",
+          postedBy: "officer-eto-1",
+          postedAt: "2026-08-01T10:00:00Z",
+          metadata: { description: "Late default statutory penalty" }
+        }
+      ]
+    };
+
+    // 1. Current Demand Scope: only current assessed tax
+    const currentChallan = generateFormPFT2(unitWithArrearsAndPenalty, {
+      demandScope: "CURRENT"
+    });
+    expect(currentChallan.pft2TypeLabel).toBe("CURRENT DEMAND");
+    expect(currentChallan.displayAmount).toBe(4000);
+    expect(currentChallan.copies[0].taxPayable.currentTax).toBe(4000);
+    expect(currentChallan.copies[0].taxPayable.arrears).toBe(0);
+    expect(currentChallan.copies[0].taxPayable.penalty).toBe(0);
+    expect(currentChallan.copies[0].taxPayable.totalPayable).toBe(4000);
+
+    // 2. Arrear Demand Scope: only opening arrears
+    const arrearChallan = generateFormPFT2(unitWithArrearsAndPenalty, {
+      demandScope: "ARREAR"
+    });
+    expect(arrearChallan.pft2TypeLabel).toBe("ARREARS DEMAND");
+    expect(arrearChallan.displayAmount).toBe(5000);
+    expect(arrearChallan.copies[0].taxPayable.currentTax).toBe(0);
+    expect(arrearChallan.copies[0].taxPayable.arrears).toBe(5000);
+    expect(arrearChallan.copies[0].taxPayable.penalty).toBe(0);
+    expect(arrearChallan.copies[0].taxPayable.totalPayable).toBe(5000);
+
+    // 3. Combined Demand Scope: current tax (4000) + arrears (5000) + penalty (1000) = 10000
+    const combinedChallan = generateFormPFT2(unitWithArrearsAndPenalty, {
+      demandScope: "COMBINED"
+    });
+    expect(combinedChallan.pft2TypeLabel).toBe("COMBINED DEMAND (CURRENT + ARREARS)");
+    expect(combinedChallan.displayAmount).toBe(10000);
+    expect(combinedChallan.copies[0].taxPayable.currentTax).toBe(4000);
+    expect(combinedChallan.copies[0].taxPayable.arrears).toBe(5000);
+    expect(combinedChallan.copies[0].taxPayable.penalty).toBe(1000);
+    expect(combinedChallan.copies[0].taxPayable.totalPayable).toBe(10000);
+    expect(combinedChallan.copies[0].taxPayable.totalPayableWords).toBe("Ten Thousand Rupees Only");
+  });
 });

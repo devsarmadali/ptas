@@ -240,6 +240,8 @@ export interface FormPFT2CopyModel {
   readonly pin?: string | undefined;
   readonly formType?: string | undefined;
   readonly demandScope?: string | undefined;
+  readonly pft2TypeLabel?: string | undefined;
+  readonly demandScopeLabel?: string | undefined;
   readonly paymentScope?: string | undefined;
   readonly isPartial?: boolean | undefined;
   readonly remainingBalance?: number | undefined;
@@ -298,6 +300,8 @@ export interface FormPFT2Model {
   challanStatus?: string | undefined;
   readonly formType?: string | undefined;
   readonly demandScope?: string | undefined;
+  readonly pft2TypeLabel?: string | undefined;
+  readonly demandScopeLabel?: string | undefined;
   readonly paymentScope?: string | undefined;
   readonly isPartial?: boolean | undefined;
   readonly remainingBalance?: number | undefined;
@@ -718,7 +722,25 @@ export function generateFormPFT2(
   const demandScope = opts.demandScope ?? (arrears > 0 ? "COMBINED" : "CURRENT");
   const formType = opts.formType ?? "STD";
 
-  const totalAssessed = baseTax + arrears + penalty;
+  const isArrearScope = demandScope === "ARREAR" || demandScope === "ARREARS";
+  const isCombinedScope = demandScope === "COMBINED";
+
+  const pft2TypeLabel = isArrearScope
+    ? "ARREARS DEMAND"
+    : isCombinedScope
+      ? "COMBINED DEMAND (CURRENT + ARREARS)"
+      : "CURRENT DEMAND";
+
+  const scopeCurrentTax = isArrearScope ? 0 : baseTax;
+  const scopeArrears = isArrearScope ? arrears : isCombinedScope ? arrears : 0;
+  const scopePenalty = isCombinedScope ? penalty : 0;
+
+  const totalAssessed = isArrearScope
+    ? arrears
+    : isCombinedScope
+      ? baseTax + arrears + penalty
+      : baseTax;
+
   const totalPayable = opts.isTampered
     ? (opts.tamperedAmount ?? 100)
     : opts.customAmount !== undefined
@@ -778,17 +800,17 @@ export function generateFormPFT2(
 
   const canonicalChallanText = [
     "GOVERNMENT OF THE PUNJAB - EXCISE & TAXATION DEPARTMENT",
-    "FORM P.F.T-2: PUNJAB PROFESSIONS & TRADES TAX PAYMENT CHALLAN",
+    `FORM P.F.T-2: PUNJAB PROFESSIONS & TRADES TAX PAYMENT CHALLAN [${pft2TypeLabel}]`,
     "(Section 3 of Punjab Finance Act 1977 read with rule 9 of the Punjab Professions & Trades Tax Rules, 1977)",
     `Head of Account: ${headOfAccount}`,
     `Challan No: ${challanNumber} | Notice No: ${noticeNumber} | Security PIN: ${pin}`,
     `District: ${district} | Tax Year: ${taxYear} | Due Date: ${dueDate}`,
-    `Form Type: ${formType} | Scope: ${demandScope} (${paymentScope})${isPartial ? ` | Remaining Balance: PKR ${remainingBalance}` : ""}`,
+    `Form Type: ${formType} | Scope: ${demandScope} (${pft2TypeLabel}) (${paymentScope})${isPartial ? ` | Remaining Balance: PKR ${remainingBalance}` : ""}`,
     `Taxpayer: ${unit.legalName} | Trade Name: ${unit.tradeName ?? unit.legalName}`,
     `Identifier: ${unit.identifierType}: ${unit.identifierValue}`,
     `Address: ${unit.address}`,
     `Classification: ${classificationFull}`,
-    `Detail of Tax: Current Tax: Rs. ${baseTax} | Arrears: Rs. ${arrears} | Penalty: Rs. ${penalty} | Total Payable: Rs. ${totalPayable}`,
+    `Detail of Tax: Current Tax: Rs. ${scopeCurrentTax} | Arrears: Rs. ${scopeArrears} | Penalty: Rs. ${scopePenalty} | Total Payable: Rs. ${totalPayable}`,
     `Amount in Words: ${totalPayableWords}`,
     `Assessment Information: Demand No: ${demandNo} | Circle: Circle-Vehari`,
     "Assessing Authority: Tariq Mahmood, ETO Tehsil Vehari",
@@ -803,6 +825,8 @@ export function generateFormPFT2(
     pin,
     formType,
     demandScope,
+    pft2TypeLabel,
+    demandScopeLabel: pft2TypeLabel,
     paymentScope,
     isPartial,
     remainingBalance,
@@ -830,9 +854,9 @@ export function generateFormPFT2(
       email: "info@punjab-taxpayer.gov.pk"
     },
     taxPayable: {
-      currentTax: baseTax,
-      arrears,
-      penalty,
+      currentTax: scopeCurrentTax,
+      arrears: scopeArrears,
+      penalty: scopePenalty,
       totalPayable,
       totalPayableWords,
       isPartial,
@@ -879,6 +903,8 @@ export function generateFormPFT2(
     pin,
     formType,
     demandScope,
+    pft2TypeLabel,
+    demandScopeLabel: pft2TypeLabel,
     paymentScope,
     isPartial,
     remainingBalance,

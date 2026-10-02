@@ -886,6 +886,8 @@ textarea {
   flex-direction: column;
   gap: 0.75rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .counterfoil-box {

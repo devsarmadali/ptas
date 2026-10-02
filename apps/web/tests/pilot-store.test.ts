@@ -6,7 +6,8 @@ import {
   createInitialReconciliations,
   createInitialAppeals,
   createInitialPft2Challans,
-  loadPilotState
+  loadPilotState,
+  validatePft2IssuanceAmount
 } from "../src/lib/pilot-store.js";
 import { computeLedgerBalance } from "@ptas/domain";
 
@@ -99,5 +100,55 @@ describe("Vehari Pilot Store & Statutory Seed Verification", () => {
       expect(c.noticeNumber).toMatch(/^PFT2-/);
       expect(c.pin).toMatch(/^\d{6}$/);
     }
+  });
+
+  it("validates PFT-2 issuance correctly for CURRENT, ARREAR, and COMBINED scopes with opening arrears and penalties", () => {
+    const units = createInitialPilotUnits();
+    const alMadina = units.find((u) => u.legalName.includes("Al-Madina"))!;
+
+    // Case 1: Unit with no arrears fails ARREAR issuance
+    const resNoArrears = validatePft2IssuanceAmount({
+      unit: { ...alMadina, openingArrears: 0 },
+      demandScope: "ARREAR"
+    });
+    expect(resNoArrears.canIssue).toBe(false);
+    expect(resNoArrears.error).toContain("No Arrear Pending");
+
+    // Case 2: Unit with openingArrears allows ARREAR issuance
+    const resWithArrears = validatePft2IssuanceAmount({
+      unit: { ...alMadina, openingArrears: 3500 },
+      demandScope: "ARREAR"
+    });
+    expect(resWithArrears.canIssue).toBe(true);
+    expect(resWithArrears.calculatedAmount).toBe(3500);
+
+    // Case 3: Unit with COMBINED scope incorporates current assessed + opening arrears + penalties
+    const resCombined = validatePft2IssuanceAmount({
+      unit: {
+        ...alMadina,
+        openingArrears: 3500,
+        ledgerEntries: [
+          ...alMadina.ledgerEntries,
+          {
+            id: "pen-entry-1",
+            demandUnitId: alMadina.demandUnit.id,
+            financialYearId: "2026-2027",
+            entryType: "PENALTY_DEMAND",
+            amount: 500,
+            sourceType: "ASSESSMENT",
+            sourceId: "pen-1",
+            idempotencyKey: "idem-pen-1",
+            correlationId: "corr-pen-1",
+            postedBy: "officer-eto-1",
+            postedAt: "2026-08-15T00:00:00Z",
+            metadata: { description: "Late fee penalty" }
+          }
+        ]
+      },
+      demandScope: "COMBINED"
+    });
+    expect(resCombined.canIssue).toBe(true);
+    // current (4000) + arrears (3500) + penalty (500) = 8000
+    expect(resCombined.calculatedAmount).toBe(8000);
   });
 });
