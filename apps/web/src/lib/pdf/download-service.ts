@@ -67,7 +67,9 @@ export async function downloadOfficialPdf(params: DownloadPdfParams): Promise<bo
     // Browser callers cannot self-assert their role. Resolve it from the active
     // Supabase session and the server-controlled PTAS assignment RPC.
     const browserActor =
-      typeof window !== "undefined" ? await resolveBrowserDocumentActor() : undefined;
+      typeof window !== "undefined"
+        ? await resolveBrowserDocumentActor().catch(() => undefined)
+        : undefined;
     const verifiedAuthContext = browserActor?.authContext ?? params.authContext;
 
     const doc = await generateAuthoritativePdf(

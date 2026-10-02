@@ -5,12 +5,11 @@ import { useSearchParams } from "next/navigation";
 import {
   type StoredUnit,
   type Pft2ChallanRecord,
-  loadPilotState,
-  savePilotState,
   getPakistanCurrentDate,
   getPakistanMonthBounds,
   validatePft2IssuanceAmount
 } from "../../../../lib/pilot-store";
+import { loadOperationalSurveyUnits } from "../../../../lib/operational-survey";
 import { generateFormPFT2, generatePft2NoticeNumber } from "../../../../lib/statutory-forms";
 import { generateDocumentPin } from "@ptas/domain";
 import { StatutoryQrCode } from "../../../../components/StatutoryQrCode";
@@ -24,6 +23,7 @@ function DocumentIssuanceContent() {
   const [allUnits, setAllUnits] = useState<StoredUnit[]>([]);
   const [unit, setUnit] = useState<StoredUnit | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Form Controls
   const [demandScope, setDemandScope] = useState<"CURRENT" | "ARREAR" | "COMBINED">("CURRENT");
@@ -44,52 +44,73 @@ function DocumentIssuanceContent() {
   const [showConfigPanel, setShowConfigPanel] = useState(true);
 
   useEffect(() => {
-    const state = loadPilotState();
-    const available = (state.units && state.units.length > 0 ? state.units : []).filter(
-      (u) => u.assessments[0]?.status === "APPROVED"
-    );
-    setAllUnits(available);
+    let cancelled = false;
+    setFetchError(null);
+    void loadOperationalSurveyUnits()
+      .then((units) => {
+        if (cancelled) return;
+        const available = (units && units.length > 0 ? units : []).filter(
+          (u) => u.assessments[0]?.status === "APPROVED"
+        );
+        setAllUnits(available);
 
-    const found =
-      available.find(
-        (u) =>
-          u.provincialUin === unitParam ||
-          u.demandUnit?.permanentDemandNo === unitParam ||
-          u.id === unitParam ||
-          (unitParam && u.legalName.toLowerCase().includes(unitParam.toLowerCase()))
-      ) ??
-      // Default to a unit with pending demand or first available unit
-      available.find((u) => {
-        const assessed = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
-        let paid = 0;
-        for (const e of u.ledgerEntries) {
-          if (e.entryType === "PAYMENT_CREDIT") paid += Math.abs(e.amount);
+        const found =
+          available.find(
+            (u) =>
+              u.provincialUin === unitParam ||
+              u.pinNumber === unitParam ||
+              u.demandUnit?.permanentDemandNo === unitParam ||
+              u.id === unitParam ||
+              (unitParam && u.legalName.toLowerCase().includes(unitParam.toLowerCase()))
+          ) ??
+          // Default to a unit with pending demand or first available unit
+          available.find((u) => {
+            const assessed = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+            let paid = 0;
+            for (const e of u.ledgerEntries) {
+              if (e.entryType === "PAYMENT_CREDIT") paid += Math.abs(e.amount);
+            }
+            return assessed - paid > 0;
+          }) ??
+          available[0] ??
+          null;
+
+        if (found) {
+          setUnit(found);
+          const assessed = found.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+          setPartialAmount(Math.round(assessed / 2));
+          // Standardize the URL on the statutory PIN (never entity names)
+          if (typeof window !== "undefined") {
+            const url = new URL(window.location.href);
+            url.searchParams.delete("unit");
+            url.searchParams.set("pin", found.provincialUin);
+            window.history.replaceState(null, "", url.toString());
+          }
         }
-        return assessed - paid > 0;
-      }) ??
-      available[0] ??
-      null;
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setFetchError(msg);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoaded(true);
+      });
 
-    if (found) {
-      setUnit(found);
-      const assessed = found.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
-      setPartialAmount(Math.round(assessed / 2));
-      // Standardize the URL on the statutory PIN (never entity names)
-      if (typeof window !== "undefined") {
-        const url = new URL(window.location.href);
-        url.searchParams.delete("unit");
-        url.searchParams.set("pin", found.provincialUin);
-        window.history.replaceState(null, "", url.toString());
-      }
-    }
-    setIsLoaded(true);
+    return () => {
+      cancelled = true;
+    };
   }, [unitParam]);
 
   const handleSelectUnit = (newPin: string) => {
     if (unitParam) return; // Originating unit context is immutable
     const selected = allUnits.find(
       (u) =>
-        u.provincialUin === newPin || u.id === newPin || u.demandUnit?.permanentDemandNo === newPin
+        u.provincialUin === newPin ||
+        u.pinNumber === newPin ||
+        u.id === newPin ||
+        u.demandUnit?.permanentDemandNo === newPin
     );
     if (selected) {
       setUnit(selected);
@@ -128,10 +149,11 @@ function DocumentIssuanceContent() {
         }}
       >
         <h2 style={{ color: "#991b1b", margin: "0 0 0.5rem" }}>
-          No Registered Taxpayer Units Found
+          {fetchError ? "Unable to Load Taxpayer Units" : "No Registered Taxpayer Units Found"}
         </h2>
         <p style={{ color: "#475569" }}>
-          Please initialize pilot data from the main PTAS dashboard to issue Form PFT-2 documents.
+          {fetchError ||
+            "Please initialize pilot data or verify that the requested unit has been approved in the PTAS assessment register."}
         </p>
         <a
           href="/"
@@ -164,8 +186,7 @@ function DocumentIssuanceContent() {
 
     setIsIssuing(true);
     try {
-      const state = loadPilotState();
-      const freshUnit = state.units.find((u) => u.id === unit.id) ?? unit;
+      const freshUnit = unit;
 
       // Re-validate transactionally
       const recheck = validatePft2IssuanceAmount({
@@ -180,10 +201,12 @@ function DocumentIssuanceContent() {
         return;
       }
 
-      const seq = (state.pft2Challans?.length ?? 0) + 1;
-      const challanNumber = `PFT2-VHR-2026-${String(seq).padStart(5, "0")}`;
+      const serial =
+        freshUnit.demandUnit?.permanentDemandNo?.replace(/[^0-9]/g, "").slice(-4) ||
+        String(Date.now()).slice(-4);
+      const challanNumber = `PFT2-VHR-2026-${serial.padStart(5, "0")}`;
       const noticeNumber = generatePft2NoticeNumber({
-        demandNumber: freshUnit.demandUnit.permanentDemandNo,
+        demandNumber: freshUnit.demandUnit?.permanentDemandNo || "0001",
         issueDate: systemIssueDate,
         formTypeCode: formType,
         demandScope,
@@ -195,7 +218,7 @@ function DocumentIssuanceContent() {
       const newChallan: Pft2ChallanRecord = {
         id: `pft2-gen-${Date.now()}`,
         challanNumber,
-        demandNumber: freshUnit.demandUnit.permanentDemandNo,
+        demandNumber: freshUnit.demandUnit?.permanentDemandNo || "",
         unitId: freshUnit.id,
         legalName: freshUnit.legalName,
         tradeName: freshUnit.tradeName,
@@ -223,12 +246,8 @@ function DocumentIssuanceContent() {
         dueDate,
         status: "ISSUED",
         officialSha256: `sha256-gen-${pin}-${Date.now()}`,
-        qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-2&ref=${noticeNumber}&pdn=${freshUnit.demandUnit.permanentDemandNo}&amt=${effectivePayableAmount}&pin=${pin}`
+        qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-2&ref=${noticeNumber}&pdn=${freshUnit.demandUnit?.permanentDemandNo || ""}&amt=${effectivePayableAmount}&pin=${pin}`
       };
-
-      const updatedChallans = [newChallan, ...(state.pft2Challans ?? [])];
-      state.pft2Challans = updatedChallans;
-      savePilotState(state);
 
       setIssuedChallan(newChallan);
       setErrorMessage("");

@@ -44,6 +44,7 @@ export interface ValidSurveyUnit {
   readonly statutoryRule: StatutoryRuleDefinition;
   readonly categoryCode: string;
   readonly taxAmount: number;
+  readonly openingArrears?: number | undefined;
   readonly phone?: string | undefined;
 }
 
@@ -469,6 +470,8 @@ export function parseBulkSurveyCsv(
 
     let parsedUnit: ValidSurveyUnit | undefined;
     if (isValid && resolvedRule) {
+      const arrearsRaw = rowMap["arrears"] || rowMap["Arrears"] || "0";
+      const openingArrears = Number.parseFloat(arrearsRaw) || 0;
       parsedUnit = {
         legalName,
         tradeName,
@@ -480,6 +483,7 @@ export function parseBulkSurveyCsv(
         statutoryRule: resolvedRule,
         categoryCode: resolvedRule.category_code,
         taxAmount: resolvedRule.annual_rate_pkr,
+        openingArrears,
         phone
       };
       validUnits.push(parsedUnit);
@@ -593,6 +597,7 @@ export function convertValidSurveyUnitsToStoredUnits(
       assessments: [draftAsm],
       assessmentVersions: [draftVer],
       ledgerEntries: [],
+      openingArrears: item.openingArrears ?? 0,
       createdAt: baseTimestamp
     };
 

@@ -705,6 +705,7 @@ export function generateFormPFT2(
   const isApproved = latestAssessment?.status === "APPROVED";
 
   const baseTax = latestVersion?.snapshot.taxAmount ?? 0;
+  const arrears = unit.openingArrears ?? 0;
   let penalty = 0;
   for (const entry of unit.ledgerEntries) {
     if (entry.entryType === "PENALTY_DEMAND") {
@@ -714,10 +715,10 @@ export function generateFormPFT2(
 
   const isPartial = opts.isPartial ?? opts.paymentScope === "PARTIAL";
   const paymentScope = opts.paymentScope ?? (isPartial ? "PARTIAL" : "FULL");
-  const demandScope = opts.demandScope ?? "CURRENT";
+  const demandScope = opts.demandScope ?? (arrears > 0 ? "COMBINED" : "CURRENT");
   const formType = opts.formType ?? "STD";
 
-  const totalAssessed = baseTax + penalty;
+  const totalAssessed = baseTax + arrears + penalty;
   const totalPayable = opts.isTampered
     ? (opts.tamperedAmount ?? 100)
     : opts.customAmount !== undefined
@@ -787,7 +788,7 @@ export function generateFormPFT2(
     `Identifier: ${unit.identifierType}: ${unit.identifierValue}`,
     `Address: ${unit.address}`,
     `Classification: ${classificationFull}`,
-    `Detail of Tax: Current Tax: Rs. ${baseTax} | Arrears: Rs. 0 | Penalty: Rs. ${penalty} | Total Payable: Rs. ${totalPayable}`,
+    `Detail of Tax: Current Tax: Rs. ${baseTax} | Arrears: Rs. ${arrears} | Penalty: Rs. ${penalty} | Total Payable: Rs. ${totalPayable}`,
     `Amount in Words: ${totalPayableWords}`,
     `Assessment Information: Demand No: ${demandNo} | Circle: Circle-Vehari`,
     "Assessing Authority: Tariq Mahmood, ETO Tehsil Vehari",
@@ -830,7 +831,7 @@ export function generateFormPFT2(
     },
     taxPayable: {
       currentTax: baseTax,
-      arrears: 0,
+      arrears,
       penalty,
       totalPayable,
       totalPayableWords,
@@ -1033,24 +1034,75 @@ export function generateLandRevenueRecoveryCertificate(
   };
 }
 
+export interface UnitFinancialSummary {
+  readonly assessedCurrentTax: number;
+  readonly arrears: number;
+  readonly penalties: number;
+  readonly totalDemand: number;
+  readonly totalPaid: number;
+  readonly outstandingBalance: number;
+  readonly lastPaymentDate?: string | undefined;
+}
+
+export function computeUnitFinancialSummary(unit: StoredUnit): UnitFinancialSummary {
+  const latestVersion = unit.assessmentVersions[0];
+  const assessedCurrentTax = latestVersion?.snapshot.taxAmount ?? 0;
+  const arrears = unit.openingArrears ?? 0;
+
+  let penalties = 0;
+  let totalPaid = 0;
+  let lastPaymentDate: string | undefined = undefined;
+  let hasAssessmentDemandInLedger = false;
+
+  for (const entry of unit.ledgerEntries) {
+    if (entry.entryType === "PENALTY_DEMAND") {
+      penalties += entry.amount;
+    } else if (entry.entryType === "ASSESSMENT_DEMAND") {
+      hasAssessmentDemandInLedger = true;
+    } else if (entry.amount < 0) {
+      totalPaid += Math.abs(entry.amount);
+      const entryDate = entry.postedAt.split("T")[0];
+      if (!lastPaymentDate || (entryDate && entryDate > lastPaymentDate)) {
+        lastPaymentDate = entryDate;
+      }
+    }
+  }
+
+  const round2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
+  const totalDemand = round2(assessedCurrentTax + arrears + penalties);
+  const ledgerBalance = computeLedgerBalance(unit.ledgerEntries);
+
+  // If ledger has already recorded the ASSESSMENT_DEMAND (e.g. seeded pilot units),
+  // ledgerBalance already includes assessedCurrentTax.
+  // Otherwise, we consolidate: assessedCurrentTax + arrears + ledgerBalance (which contains payments/penalties/adjustments).
+  const rawBalance = hasAssessmentDemandInLedger
+    ? ledgerBalance + arrears
+    : assessedCurrentTax + arrears + ledgerBalance;
+
+  const outstandingBalance = round2(rawBalance);
+
+  return {
+    assessedCurrentTax,
+    arrears,
+    penalties,
+    totalDemand,
+    totalPaid,
+    outstandingBalance,
+    lastPaymentDate
+  };
+}
+
+export function computeUnitBalance(unit: StoredUnit): number {
+  return computeUnitFinancialSummary(unit).outstandingBalance;
+}
+
 /**
  * Generates the statutory Form P.F.T-3 Assessment & Demand Register rows (Rule 11).
  */
 export function generateFormPFT3Rows(units: readonly StoredUnit[]): readonly FormPFT3RowModel[] {
   return units.map((u, idx) => {
-    const latestVersion = u.assessmentVersions[0];
+    const summary = computeUnitFinancialSummary(u);
     const latestAssessment = u.assessments[0];
-    const currentTax = latestVersion?.snapshot.taxAmount ?? 0;
-    const balance = computeLedgerBalance(u.ledgerEntries);
-    let totalPaid = 0;
-    let lastPaymentDate: string | undefined = undefined;
-
-    for (const e of u.ledgerEntries) {
-      if (e.amount < 0) {
-        totalPaid += Math.abs(e.amount);
-        lastPaymentDate = e.postedAt.split("T")[0];
-      }
-    }
 
     return {
       sourceUnitId: u.id,
@@ -1068,13 +1120,13 @@ export function generateFormPFT3Rows(units: readonly StoredUnit[]): readonly For
       tertiarySlab: u.statutoryRule.statutory_tertiary_classification ?? null,
       slabRatePkr: u.statutoryRule.annual_rate_pkr,
       rateBasis: u.statutoryRule.rate_basis,
-      assessedCurrentTax: currentTax,
-      arrears: 0,
-      totalDemand: currentTax,
-      totalPaid,
-      outstandingBalance: balance,
+      assessedCurrentTax: summary.assessedCurrentTax,
+      arrears: summary.arrears,
+      totalDemand: summary.totalDemand,
+      totalPaid: summary.totalPaid,
+      outstandingBalance: summary.outstandingBalance,
       assessmentStatus: latestAssessment?.status ?? "DRAFT",
-      lastPaymentDate
+      lastPaymentDate: summary.lastPaymentDate
     };
   });
 }

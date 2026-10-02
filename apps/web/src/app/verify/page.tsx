@@ -2,7 +2,8 @@
 
 import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { loadPilotState } from "../../lib/pilot-store";
+import { loadPilotState, type StoredUnit } from "../../lib/pilot-store";
+import { loadOperationalSurveyUnits } from "../../lib/operational-survey";
 import { verifyStatutoryDocument, type DocumentVerificationResult } from "../../lib/public-portal";
 
 export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: string }) {
@@ -18,20 +19,40 @@ export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: str
   const [result, setResult] = useState<DocumentVerificationResult | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
 
+  const [operationalUnits, setOperationalUnits] = useState<StoredUnit[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadOperationalSurveyUnits()
+      .then((units) => {
+        if (!cancelled && units) setOperationalUnits(units);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     if (refParam) {
       setSearchQuery(refParam);
-      executeVerification(refParam);
+      executeVerification(refParam, operationalUnits);
     }
-  }, [refParam]);
+  }, [refParam, operationalUnits]);
 
-  const executeVerification = (query: string) => {
+  const executeVerification = (query: string, currentUnits?: StoredUnit[]) => {
     if (!query.trim()) return;
 
     const state = loadPilotState();
+    const effectiveUnits =
+      currentUnits && currentUnits.length > 0
+        ? currentUnits
+        : operationalUnits.length > 0
+          ? operationalUnits
+          : state.units;
     const verificationResult = verifyStatutoryDocument(
       query.trim(),
-      state.units,
+      effectiveUnits,
       state.clearanceCertificates ?? [],
       state.statutoryReceipts ?? [],
       state.pft2Challans ?? []

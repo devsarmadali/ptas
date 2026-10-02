@@ -15,11 +15,11 @@
 
 import {
   computeDefaulterAging,
-  computeLedgerBalance,
   getAllStatutoryRules,
   getStatutoryCategories,
   type StatutoryCategorySummary
 } from "@ptas/domain";
+import { computeUnitFinancialSummary } from "./statutory-forms";
 import type {
   AppealRecord,
   ClearanceCertificateRecord,
@@ -221,39 +221,12 @@ export function computeExecutiveMetrics(
   for (const u of units) {
     const catCode = u.statutoryRule?.category_code ?? u.categoryCode ?? "1";
     const ruleId = u.statutoryRuleId ?? u.statutoryRule?.rule_id ?? "PFT-1.i";
-    let uAssessed = 0;
-    let uPenalty = 0;
-    let uRealized = 0;
 
-    for (const entry of u.ledgerEntries) {
-      if (entry.entryType === "ASSESSMENT_DEMAND") {
-        uAssessed += entry.amount;
-      } else if (entry.entryType === "PENALTY_DEMAND") {
-        uPenalty += entry.amount;
-      } else if (entry.entryType === "REVISION_ADJUSTMENT") {
-        if (entry.metadata?.decisionType === "PENALTY_REMISSION") {
-          uPenalty += entry.amount;
-        } else {
-          uAssessed += entry.amount;
-        }
-      } else if (entry.amount < 0) {
-        // Payment credit or authorized credit adjustment
-        uRealized += Math.abs(entry.amount);
-      }
-    }
-
-    // Fallback if initial demand entry hasn't been posted yet but assessment version exists
-    if (uAssessed === 0 && u.assessmentVersions && u.assessmentVersions.length > 0) {
-      const latestVer = u.assessmentVersions[0];
-      if (latestVer?.snapshot?.taxAmount) {
-        uAssessed = latestVer.snapshot.taxAmount;
-      }
-    }
-
-    uAssessed = round2(uAssessed);
-    uPenalty = round2(uPenalty);
-    uRealized = round2(uRealized);
-    const uBalance = computeLedgerBalance(u.ledgerEntries);
+    const summary = computeUnitFinancialSummary(u);
+    const uAssessed = round2(summary.assessedCurrentTax);
+    const uPenalty = round2(summary.penalties);
+    const uRealized = round2(summary.totalPaid);
+    const uBalance = summary.outstandingBalance;
 
     totalAssessed += uAssessed;
     totalPenalty += uPenalty;
@@ -537,6 +510,7 @@ export function exportPft3RegisterCsv(units: readonly StoredUnit[]): string {
     "Rate Basis",
     "Statutory Slab Rate (PKR)",
     "Assessed Current Tax (PKR)",
+    "Arrears (PKR)",
     "Penalties (PKR)",
     "Total Demand (PKR)",
     "Total Paid (PKR)",
@@ -547,21 +521,14 @@ export function exportPft3RegisterCsv(units: readonly StoredUnit[]): string {
   ];
 
   const rows = units.map((u, idx) => {
-    const latestVersion = u.assessmentVersions[0];
-    const baseDemand = latestVersion?.snapshot?.taxAmount ?? 0;
-    let penalties = 0;
-    let totalPaid = 0;
+    const summary = computeUnitFinancialSummary(u);
+    const baseDemand = summary.assessedCurrentTax;
+    const arrears = summary.arrears;
+    const penalties = summary.penalties;
+    const totalDemand = summary.totalDemand;
+    const totalPaid = summary.totalPaid;
+    const balance = summary.outstandingBalance;
 
-    for (const entry of u.ledgerEntries) {
-      if (entry.entryType === "PENALTY_DEMAND") {
-        penalties += entry.amount;
-      } else if (entry.amount < 0) {
-        totalPaid += Math.abs(entry.amount);
-      }
-    }
-
-    const totalDemand = round2(baseDemand + penalties);
-    const balance = computeLedgerBalance(u.ledgerEntries);
     const aging = computeDefaulterAging(
       u.ledgerEntries,
       "2026-08-31",
@@ -586,6 +553,7 @@ export function exportPft3RegisterCsv(units: readonly StoredUnit[]): string {
       u.statutoryRule.rate_basis,
       u.statutoryRule.annual_rate_pkr,
       baseDemand,
+      arrears,
       penalties,
       totalDemand,
       round2(totalPaid),

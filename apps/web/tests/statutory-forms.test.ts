@@ -96,6 +96,22 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     expect(row?.permanentDemandNo).toBe("D-16");
   });
 
+  it("consolidates current assessed tax and arrears into total demand and outstanding balance in P.F.T-3", () => {
+    const unitWithArrears = {
+      ...alMadinaUnit,
+      id: "unit-arrears-test",
+      openingArrears: 5000,
+      ledgerEntries: []
+    };
+
+    const [row] = generateFormPFT3Rows([unitWithArrears]);
+    expect(row?.assessedCurrentTax).toBe(4000);
+    expect(row?.arrears).toBe(5000);
+    expect(row?.totalDemand).toBe(9000);
+    expect(row?.totalPaid).toBe(0);
+    expect(row?.outstandingBalance).toBe(9000);
+  });
+
   it("generates Show Cause Notice for Imposition of Penalty (Rule 10 & Sec 3(4))", () => {
     const scn = generateShowCausePenaltyNotice(alMadinaUnit, 45);
     expect(scn.noticeNumber).toMatch(/PB\/ET\/VHR\/CIR-1\/SCN\/2026-27\/\d{5}/);

@@ -233,6 +233,7 @@ export function mapOperationalUnit(value: unknown): StoredUnit {
     assessments: [assessment],
     assessmentVersions: [version],
     ledgerEntries,
+    openingArrears: asNumber(profile.opening_arrears ?? profile.arrears, 0),
     createdAt
   };
 }

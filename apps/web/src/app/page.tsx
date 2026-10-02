@@ -68,7 +68,8 @@ import {
   generateTaxClearanceCertificate,
   generatePft2NoticeNumber,
   formatStandardDocNumber,
-  numberToWordsPkr
+  numberToWordsPkr,
+  computeUnitBalance
 } from "../lib/statutory-forms";
 import {
   type BulkSurveyParseResult,
@@ -1248,7 +1249,12 @@ export default function HomePage({
       const allocatedPinNo =
         targetUnit.pinNumber ||
         targetUnit.provincialUin ||
-        `237-7704-V${String(units.indexOf(targetUnit) + 1).padStart(2, "0")}`;
+        generateUinForUnit({
+          jurisdiction: VEHARI_PILOT_JURISDICTION,
+          rule: targetUnit.statutoryRule,
+          allRules,
+          sequenceNumber: units.indexOf(targetUnit) + 1
+        });
 
       const updatedUnit: StoredUnit = {
         ...targetUnit,
@@ -1445,8 +1451,8 @@ export default function HomePage({
       setShowPaymentModal(false);
       showToast(
         "success",
-        `Payment receipt credited! New derived balance for ${targetUnit.legalName}: PKR ${computeLedgerBalance(
-          updatedUnit.ledgerEntries
+        `Payment receipt credited! New derived balance for ${targetUnit.legalName}: PKR ${computeUnitBalance(
+          updatedUnit
         ).toLocaleString()}`
       );
     } catch (err: unknown) {
@@ -1691,9 +1697,9 @@ export default function HomePage({
         break;
       }
       case "DEFAULTER_ROLL": {
-        const defaulterUnits = units.filter((u) => computeLedgerBalance(u.ledgerEntries) > 0);
+        const defaulterUnits = units.filter((u) => computeUnitBalance(u) > 0);
         const rows = defaulterUnits.map((u, i) => {
-          const balance = computeLedgerBalance(u.ledgerEntries);
+          const balance = computeUnitBalance(u);
           const aging = computeDefaulterAging(u.ledgerEntries, "2026-09-01");
           return [
             i + 1,
@@ -4905,6 +4911,8 @@ export default function HomePage({
                     <th style={{ maxWidth: "14rem" }}>Taxpayer Legal Name</th>
                     <th style={{ maxWidth: "16rem" }}>Statutory Class</th>
                     <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Assessed (PKR)</th>
+                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Arrears (PKR)</th>
+                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Total Demand (PKR)</th>
                     <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Paid (PKR)</th>
                     <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Balance (PKR)</th>
                     <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Status</th>
@@ -4915,7 +4923,7 @@ export default function HomePage({
                   {filteredFormPFT3Rows.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={10}
+                        colSpan={12}
                         style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
                       >
                         No assessed units match the selected search or filter criteria.
@@ -4970,6 +4978,21 @@ export default function HomePage({
                         </td>
                         <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                           <strong>PKR {row.assessedCurrentTax.toLocaleString()}</strong>
+                        </td>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          <span
+                            style={{
+                              color: row.arrears > 0 ? "#b45309" : "#64748b",
+                              fontWeight: row.arrears > 0 ? 600 : 400
+                            }}
+                          >
+                            PKR {row.arrears.toLocaleString()}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          <strong style={{ color: "#0f172a" }}>
+                            PKR {row.totalDemand.toLocaleString()}
+                          </strong>
                         </td>
                         <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                           <strong style={{ color: "#166534" }}>
@@ -5034,11 +5057,9 @@ export default function HomePage({
                   type="button"
                   className="btn-primary"
                   onClick={() => {
-                    const defaulterUnits = units.filter(
-                      (u) => computeLedgerBalance(u.ledgerEntries) > 0
-                    );
+                    const defaulterUnits = units.filter((u) => computeUnitBalance(u) > 0);
                     const dRows = defaulterUnits.map((u, i) => {
-                      const bal = computeLedgerBalance(u.ledgerEntries);
+                      const bal = computeUnitBalance(u);
                       const aging = computeDefaulterAging(u.ledgerEntries, "2026-09-01");
                       return [
                         i + 1,
@@ -5964,7 +5985,7 @@ export default function HomePage({
                     marginTop: "0.25rem"
                   }}
                 >
-                  {units.filter((u) => computeLedgerBalance(u.ledgerEntries) === 0).length} Units
+                  {units.filter((u) => computeUnitBalance(u) === 0).length} Units
                 </strong>
                 <span style={{ fontSize: "0.75rem", color: "#166534" }}>
                   Zero balance verified in demand ledger
@@ -5990,7 +6011,7 @@ export default function HomePage({
                     marginTop: "0.25rem"
                   }}
                 >
-                  {units.filter((u) => computeLedgerBalance(u.ledgerEntries) > 0).length} Units
+                  {units.filter((u) => computeUnitBalance(u) > 0).length} Units
                 </strong>
                 <span style={{ fontSize: "0.75rem", color: "#9f1239" }}>
                   Clearance certificate generation blocked
@@ -6039,7 +6060,7 @@ export default function HomePage({
                 </thead>
                 <tbody>
                   {units.map((u) => {
-                    const balance = computeLedgerBalance(u.ledgerEntries);
+                    const balance = computeUnitBalance(u);
                     const isZeroBalance = balance === 0;
                     const certRecord = clearanceCertificates.find((c) => c.unitId === u.id);
 
@@ -10281,8 +10302,7 @@ export default function HomePage({
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "#991b1b" }}>Active Defaulters:</span>
                       <strong style={{ color: "#991b1b" }}>
-                        {units.filter((u) => computeLedgerBalance(u.ledgerEntries) > 0).length}{" "}
-                        Assessees
+                        {units.filter((u) => computeUnitBalance(u) > 0).length} Assessees
                       </strong>
                     </div>
                     <div
@@ -12299,7 +12319,7 @@ export default function HomePage({
                     {units.map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.demandUnit.permanentDemandNo} &bull; {u.legalName} (Bal: PKR{" "}
-                        {computeLedgerBalance(u.ledgerEntries).toLocaleString()})
+                        {computeUnitBalance(u).toLocaleString()})
                       </option>
                     ))}
                   </select>
@@ -17018,7 +17038,7 @@ export default function HomePage({
                     {units.map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.legalName} ({u.demandUnit.permanentDemandNo}) &bull; PKR{" "}
-                        {computeLedgerBalance(u.ledgerEntries)} bal
+                        {computeUnitBalance(u)} bal
                       </option>
                     ))}
                   </select>
@@ -17600,7 +17620,7 @@ export default function HomePage({
                     {units.map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.legalName} ({u.demandUnit.permanentDemandNo}) &bull; PKR{" "}
-                        {computeLedgerBalance(u.ledgerEntries)} bal
+                        {computeUnitBalance(u)} bal
                       </option>
                     ))}
                   </select>

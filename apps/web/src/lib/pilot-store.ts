@@ -97,6 +97,8 @@ export interface StoredUnit {
   readonly assessments: Assessment[];
   readonly assessmentVersions: AssessmentVersion<StoredUnitSnapshot>[];
   readonly ledgerEntries: DemandLedgerEntry[];
+  /** Signed brought-forward arrears balance from prior tax years (preserves source survey data) */
+  readonly openingArrears?: number | undefined;
   readonly isRecoveryCertified?: boolean | undefined;
   readonly recoveryCertifiedAt?: string | undefined;
   readonly serviceStatus?: "PENDING" | "SERVED" | "REFUSED" | "UNTRACEABLE" | undefined;

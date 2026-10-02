@@ -7,7 +7,7 @@ import {
   type StatutoryReceiptRecord
 } from "../../../../lib/pilot-store";
 import { loadOperationalSurveyUnits } from "../../../../lib/operational-survey";
-import { computeLedgerBalance } from "@ptas/domain";
+import { computeUnitFinancialSummary } from "../../../../lib/statutory-forms";
 import { downloadOfficialPdf } from "../../../../lib/pdf";
 
 interface UnitDetailsPageProps {
@@ -18,7 +18,6 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
   const resolvedParams = use(params);
   const unitId = resolvedParams.unitId;
 
-  const [allUnits, setAllUnits] = useState<StoredUnit[]>([]);
   const [unit, setUnit] = useState<StoredUnit | null>(null);
   const [challans, setChallans] = useState<Pft2ChallanRecord[]>([]);
   const [receipts, setReceipts] = useState<StatutoryReceiptRecord[]>([]);
@@ -29,11 +28,11 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
     void loadOperationalSurveyUnits()
       .then((available) => {
         if (cancelled) return;
-        setAllUnits(available);
 
         const found =
           available.find(
             (u) =>
+              u.provincialUin === unitId ||
               u.pinNumber === unitId ||
               u.demandUnit?.permanentDemandNo === unitId ||
               u.id === unitId ||
@@ -53,20 +52,6 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
       cancelled = true;
     };
   }, [unitId]);
-
-  const handleSelectUnit = (newPin: string) => {
-    const selected = allUnits.find(
-      (u) => u.pinNumber === newPin || u.id === newPin || u.demandUnit?.permanentDemandNo === newPin
-    );
-    if (selected) {
-      setUnit(selected);
-      setChallans([]);
-      setReceipts([]);
-      if (typeof window !== "undefined") {
-        window.history.replaceState(null, "", `/units/${selected.id}/details`);
-      }
-    }
-  };
 
   if (!isLoaded) {
     return (
@@ -106,8 +91,12 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
     );
   }
 
-  const balance = computeLedgerBalance(unit.ledgerEntries);
-  const assessedTax = unit.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+  const summary = computeUnitFinancialSummary(unit);
+  const balance = summary.outstandingBalance;
+  const assessedTax = summary.assessedCurrentTax;
+  const arrears = summary.arrears;
+  const totalDemand = summary.totalDemand;
+  const totalPaid = summary.totalPaid;
 
   return (
     <div
@@ -159,50 +148,107 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
         </div>
       </div>
 
-      {/* Taxpayer Establishment Selector */}
+      {/* Locked Taxpayer Establishment Dossier Context */}
       <div
         style={{
           background: "#f0fdf4",
-          border: "1px solid #bbf7d0",
+          border: "1px solid #86efac",
           borderRadius: "8px",
-          padding: "0.75rem 1rem",
-          marginBottom: "1rem"
+          padding: "0.75rem 1.25rem",
+          marginBottom: "1rem",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "0.75rem"
         }}
       >
-        <label
-          htmlFor="dossier-unit-selector"
-          style={{
-            display: "block",
-            fontSize: "0.8rem",
-            fontWeight: 700,
-            color: "#166534",
-            marginBottom: "0.35rem"
-          }}
-        >
-          Select Taxpayer Establishment Dossier:
-        </label>
-        <select
-          id="dossier-unit-selector"
-          value={unit.provincialUin}
-          onChange={(e) => handleSelectUnit(e.target.value)}
-          style={{
-            width: "100%",
-            padding: "0.5rem 0.75rem",
-            borderRadius: "6px",
-            border: "1px solid #86efac",
-            fontSize: "0.88rem",
-            fontWeight: 600,
-            backgroundColor: "#ffffff",
-            color: "#0f172a"
-          }}
-        >
-          {allUnits.map((u) => (
-            <option key={u.id} value={u.provincialUin}>
-              PIN: {u.provincialUin} &bull; PDN: {u.demandUnit.permanentDemandNo} &bull;{" "}
-              {u.statutoryRule.category}
-            </option>
-          ))}
-        </select>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "1.1rem" }}>🔒</span>
+          <div>
+            <span
+              style={{
+                display: "block",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                color: "#166534",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em"
+              }}
+            >
+              Originating Assessee Dossier (Locked)
+            </span>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                flexWrap: "wrap",
+                marginTop: "0.2rem"
+              }}
+            >
+              <span style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.95rem" }}>
+                {unit.legalName}
+              </span>
+              {unit.tradeName && unit.tradeName !== unit.legalName && (
+                <span style={{ color: "#475569", fontSize: "0.85rem" }}>({unit.tradeName})</span>
+              )}
+              <span style={{ color: "#94a3b8" }}>•</span>
+              <span
+                style={{
+                  fontFamily: "monospace",
+                  fontWeight: 700,
+                  color: "#047857",
+                  background: "#dcfce7",
+                  padding: "0.15rem 0.45rem",
+                  borderRadius: "4px",
+                  fontSize: "0.85rem"
+                }}
+              >
+                PIN: {unit.provincialUin || unit.pinNumber || "— Not assigned"}
+              </span>
+              <span style={{ color: "#94a3b8" }}>•</span>
+              <span
+                style={{
+                  fontFamily: "monospace",
+                  fontWeight: 600,
+                  color: "#334155",
+                  background: "#f1f5f9",
+                  padding: "0.15rem 0.45rem",
+                  borderRadius: "4px",
+                  fontSize: "0.85rem"
+                }}
+              >
+                PDN: {unit.demandUnit?.permanentDemandNo || unit.demandNumber || "—"}
+              </span>
+              <span style={{ color: "#94a3b8" }}>•</span>
+              <span style={{ color: "#475569", fontSize: "0.85rem" }}>
+                Class {unit.statutoryRule.rule_code} ({unit.statutoryRule.category})
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <a
+            href="/assessment/pft3"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.35rem 0.7rem",
+              borderRadius: "6px",
+              background: "#ffffff",
+              border: "1px solid #cbd5e1",
+              color: "#334155",
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.3rem"
+            }}
+          >
+            ← PFT-3 Register
+          </a>
+        </div>
       </div>
 
       {/* Top Header */}
@@ -340,10 +386,34 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
           </div>
           <div>
             <span style={{ color: "#64748b", fontSize: "0.75rem", display: "block" }}>
-              Assessed Annual Demand:
+              Assessed Current Tax:
             </span>
             <strong style={{ fontSize: "1.1rem", color: "#0d3822" }}>
               PKR {assessedTax.toLocaleString()}
+            </strong>
+          </div>
+          <div>
+            <span style={{ color: "#64748b", fontSize: "0.75rem", display: "block" }}>
+              Arrears (Prior Years):
+            </span>
+            <strong style={{ fontSize: "1.1rem", color: arrears > 0 ? "#b45309" : "#64748b" }}>
+              PKR {arrears.toLocaleString()}
+            </strong>
+          </div>
+          <div>
+            <span style={{ color: "#64748b", fontSize: "0.75rem", display: "block" }}>
+              Total Demand:
+            </span>
+            <strong style={{ fontSize: "1.1rem", color: "#0f172a" }}>
+              PKR {totalDemand.toLocaleString()}
+            </strong>
+          </div>
+          <div>
+            <span style={{ color: "#64748b", fontSize: "0.75rem", display: "block" }}>
+              Total Paid:
+            </span>
+            <strong style={{ fontSize: "1.1rem", color: "#166534" }}>
+              PKR {totalPaid.toLocaleString()}
             </strong>
           </div>
           <div>
