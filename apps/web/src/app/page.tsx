@@ -69,7 +69,8 @@ import {
   generatePft2NoticeNumber,
   formatStandardDocNumber,
   numberToWordsPkr,
-  computeUnitBalance
+  computeUnitBalance,
+  computeUnitFinancialSummary
 } from "../lib/statutory-forms";
 import {
   type BulkSurveyParseResult,
@@ -456,6 +457,9 @@ export default function HomePage({
   const [pft3CircleFilter, setPft3CircleFilter] = useState("ALL");
   const [pft3LocalityFilter, setPft3LocalityFilter] = useState("ALL");
   const [pft3CategoryFilter, setPft3CategoryFilter] = useState("ALL");
+  const [pft3SearchExecuted, setPft3SearchExecuted] = useState(false);
+  const [pft3CurrentPage, setPft3CurrentPage] = useState(1);
+  const PFT3_PAGE_SIZE = 20;
 
   // Receipts Filter Controls
   const [receiptSourceFilter, setReceiptSourceFilter] = useState("ALL");
@@ -960,13 +964,9 @@ export default function HomePage({
     let pendingApprovals = 0;
 
     for (const u of units) {
-      for (const entry of u.ledgerEntries) {
-        if (entry.amount > 0) {
-          totalDemand += entry.amount;
-        } else {
-          totalPayments += Math.abs(entry.amount);
-        }
-      }
+      const summary = computeUnitFinancialSummary(u);
+      totalDemand += summary.totalDemand;
+      totalPayments += summary.totalPaid;
       const pending = u.assessments.some((a) => a.status === "SUBMITTED");
       if (pending) pendingApprovals++;
     }
@@ -1472,8 +1472,14 @@ export default function HomePage({
 
   // Statutory Form P.F.T-3 (Assessment & Demand Register under Rule 11)
   const pft3Districts = useMemo(() => {
-    return ["Vehari"];
-  }, []);
+    return Array.from(
+      new Set(
+        units
+          .map((unit) => unit.districtName || officer.jurisdictionName || "Vehari")
+          .filter((d): d is string => Boolean(d))
+      )
+    ).sort();
+  }, [units, officer.jurisdictionName]);
 
   const pft3Circles = useMemo(() => {
     return Array.from(
@@ -1504,7 +1510,10 @@ export default function HomePage({
       const targetUnit = units.find((unit) => unit.id === row.sourceUnitId);
       if (!targetUnit) return false;
 
-      if (pft3DistrictFilter !== "ALL" && pft3DistrictFilter !== "Vehari") {
+      if (
+        pft3DistrictFilter !== "ALL" &&
+        (targetUnit.districtName || officer.jurisdictionName || "Vehari") !== pft3DistrictFilter
+      ) {
         return false;
       }
       if (pft3CircleFilter !== "ALL" && targetUnit.circleName !== pft3CircleFilter) {
@@ -1557,8 +1566,54 @@ export default function HomePage({
     pft3DistrictFilter,
     pft3CircleFilter,
     pft3LocalityFilter,
-    pft3CategoryFilter
+    pft3CategoryFilter,
+    officer.jurisdictionName
   ]);
+
+  // Dynamically calculated KPI Metrics for Form PFT-3 & Assessment Hub:
+  // Reflects the active officer jurisdiction (all sub-circles for ETO, circle for Inspector),
+  // and dynamically updates whenever filters (search query, district, circle, locality, classification) are applied.
+  const pft3KpiMetrics = useMemo(() => {
+    const targetRows = filteredFormPFT3Rows;
+    let totalDemand = 0;
+    let totalPaid = 0;
+    let outstandingBalance = 0;
+
+    for (const r of targetRows) {
+      totalDemand += r.totalDemand;
+      totalPaid += r.totalPaid;
+      outstandingBalance += r.outstandingBalance;
+    }
+
+    return {
+      totalUnits: targetRows.length,
+      totalDemand,
+      totalPaid,
+      outstandingBalance
+    };
+  }, [filteredFormPFT3Rows]);
+
+  // Pagination for Form PFT-3 (20 rows per page)
+  const totalPft3Pages = Math.max(1, Math.ceil(filteredFormPFT3Rows.length / PFT3_PAGE_SIZE));
+  const paginatedFormPFT3Rows = useMemo(() => {
+    const startIndex = (pft3CurrentPage - 1) * PFT3_PAGE_SIZE;
+    return filteredFormPFT3Rows.slice(startIndex, startIndex + PFT3_PAGE_SIZE);
+  }, [filteredFormPFT3Rows, pft3CurrentPage]);
+
+  const handleExecutePft3Search = () => {
+    setPft3SearchExecuted(true);
+    setPft3CurrentPage(1);
+  };
+
+  const handleResetPft3Filters = () => {
+    setPft3SearchQuery("");
+    setPft3DistrictFilter("ALL");
+    setPft3CircleFilter("ALL");
+    setPft3LocalityFilter("ALL");
+    setPft3CategoryFilter("ALL");
+    setPft3CurrentPage(1);
+    setPft3SearchExecuted(false);
+  };
 
   // Defaulter Units Filter
   const defaulterUnits = useMemo(() => {
@@ -3519,6 +3574,8 @@ export default function HomePage({
         icon: "📑",
         onClick: () => {
           setPft3SearchQuery(targetUnit.demandUnit.permanentDemandNo);
+          setPft3SearchExecuted(true);
+          setPft3CurrentPage(1);
           switchTab("REGISTER_PFT3");
         }
       });
@@ -4633,7 +4690,9 @@ export default function HomePage({
                   onClick={() =>
                     downloadOfficialPdf({
                       type: "FORM_PFT3_REGISTER",
-                      documentIdOrData: { rows: filteredFormPFT3Rows },
+                      documentIdOrData: {
+                        rows: pft3SearchExecuted ? filteredFormPFT3Rows : formPFT3Rows
+                      },
                       defaultFilename: "Form_PFT3_Register.pdf"
                     }).catch((err) =>
                       showToast("error", `Failed to generate Form PFT-3: ${(err as Error).message}`)
@@ -4674,7 +4733,7 @@ export default function HomePage({
                     marginTop: "0.2rem"
                   }}
                 >
-                  {formPFT3Rows.length} Units
+                  {pft3KpiMetrics.totalUnits.toLocaleString()} Units
                 </strong>
               </div>
 
@@ -4697,7 +4756,7 @@ export default function HomePage({
                     marginTop: "0.2rem"
                   }}
                 >
-                  PKR {metrics.totalDemand.toLocaleString()}
+                  PKR {pft3KpiMetrics.totalDemand.toLocaleString()}
                 </strong>
               </div>
 
@@ -4720,7 +4779,7 @@ export default function HomePage({
                     marginTop: "0.2rem"
                   }}
                 >
-                  PKR {metrics.totalPayments.toLocaleString()}
+                  PKR {pft3KpiMetrics.totalPaid.toLocaleString()}
                 </strong>
               </div>
 
@@ -4743,7 +4802,7 @@ export default function HomePage({
                     marginTop: "0.2rem"
                   }}
                 >
-                  PKR {metrics.outstandingBalance.toLocaleString()}
+                  PKR {pft3KpiMetrics.outstandingBalance.toLocaleString()}
                 </strong>
               </div>
             </div>
@@ -4780,7 +4839,15 @@ export default function HomePage({
                   className="form-control"
                   style={{ width: "100%", fontSize: "0.85rem" }}
                   value={pft3SearchQuery}
-                  onChange={(e) => setPft3SearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setPft3SearchQuery(e.target.value);
+                    setPft3CurrentPage(1);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleExecutePft3Search();
+                    }
+                  }}
                 />
               </div>
 
@@ -4801,7 +4868,10 @@ export default function HomePage({
                   className="form-control"
                   style={{ width: "100%", fontSize: "0.85rem" }}
                   value={pft3DistrictFilter}
-                  onChange={(e) => setPft3DistrictFilter(e.target.value)}
+                  onChange={(e) => {
+                    setPft3DistrictFilter(e.target.value);
+                    setPft3CurrentPage(1);
+                  }}
                 >
                   <option value="ALL">All Districts</option>
                   {pft3Districts.map((d) => (
@@ -4829,7 +4899,10 @@ export default function HomePage({
                   className="form-control"
                   style={{ width: "100%", fontSize: "0.85rem" }}
                   value={pft3CircleFilter}
-                  onChange={(e) => setPft3CircleFilter(e.target.value)}
+                  onChange={(e) => {
+                    setPft3CircleFilter(e.target.value);
+                    setPft3CurrentPage(1);
+                  }}
                 >
                   <option value="ALL">All Circles</option>
                   {pft3Circles.map((c) => (
@@ -4857,7 +4930,10 @@ export default function HomePage({
                   className="form-control"
                   style={{ width: "100%", fontSize: "0.85rem" }}
                   value={pft3LocalityFilter}
-                  onChange={(e) => setPft3LocalityFilter(e.target.value)}
+                  onChange={(e) => {
+                    setPft3LocalityFilter(e.target.value);
+                    setPft3CurrentPage(1);
+                  }}
                 >
                   <option value="ALL">All Localities</option>
                   {pft3Localities.map((loc) => (
@@ -4885,7 +4961,10 @@ export default function HomePage({
                   className="form-control"
                   style={{ width: "100%", fontSize: "0.85rem" }}
                   value={pft3CategoryFilter}
-                  onChange={(e) => setPft3CategoryFilter(e.target.value)}
+                  onChange={(e) => {
+                    setPft3CategoryFilter(e.target.value);
+                    setPft3CurrentPage(1);
+                  }}
                 >
                   <option value="ALL">All Statutory Classifications</option>
                   {getStatutoryCategories().map((cat) => (
@@ -4896,165 +4975,345 @@ export default function HomePage({
                 </select>
               </div>
 
-              {(pft3SearchQuery ||
-                pft3DistrictFilter !== "ALL" ||
-                pft3CircleFilter !== "ALL" ||
-                pft3LocalityFilter !== "ALL" ||
-                pft3CategoryFilter !== "ALL") && (
-                <div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    color: "#475569",
+                    marginBottom: "0.25rem",
+                    visibility: "hidden"
+                  }}
+                >
+                  Actions
+                </label>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
                   <button
                     type="button"
-                    className="btn-secondary"
-                    style={{ width: "100%", fontSize: "0.825rem" }}
-                    onClick={() => {
-                      setPft3SearchQuery("");
-                      setPft3DistrictFilter("ALL");
-                      setPft3CircleFilter("ALL");
-                      setPft3LocalityFilter("ALL");
-                      setPft3CategoryFilter("ALL");
+                    className="btn-primary"
+                    style={{
+                      flex: 1,
+                      fontSize: "0.85rem",
+                      padding: "0.5rem 0.85rem",
+                      whiteSpace: "nowrap"
                     }}
+                    onClick={handleExecutePft3Search}
+                    title="Search and display matching units"
                   >
-                    Reset Filters
+                    🔍 Search
                   </button>
+                  {(pft3SearchQuery ||
+                    pft3DistrictFilter !== "ALL" ||
+                    pft3CircleFilter !== "ALL" ||
+                    pft3LocalityFilter !== "ALL" ||
+                    pft3CategoryFilter !== "ALL" ||
+                    pft3SearchExecuted) && (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{
+                        fontSize: "0.85rem",
+                        padding: "0.5rem 0.85rem",
+                        whiteSpace: "nowrap"
+                      }}
+                      onClick={handleResetPft3Filters}
+                      title="Clear search and reset filters"
+                    >
+                      Reset
+                    </button>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
 
-            {/* Statutory Register Table */}
-            <div className="table-container printable-document" id="pft3-register-document">
-              <table className="gov-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: "2.5rem", textAlign: "center" }}>S.No</th>
-                    <th style={{ whiteSpace: "nowrap" }}>Demand No.</th>
-                    <th style={{ whiteSpace: "nowrap" }}>PIN Number</th>
-                    <th style={{ maxWidth: "14rem" }}>Taxpayer Legal Name</th>
-                    <th style={{ maxWidth: "16rem" }}>Statutory Class</th>
-                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Assessed (PKR)</th>
-                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Arrears (PKR)</th>
-                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Total Demand (PKR)</th>
-                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Paid (PKR)</th>
-                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Balance (PKR)</th>
-                    <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Status</th>
-                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredFormPFT3Rows.length === 0 ? (
+            {/* On-Demand Search Prompt or Statutory Register Table */}
+            {!pft3SearchExecuted ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "3.5rem 1.5rem",
+                  background: "#f8fafc",
+                  borderRadius: "8px",
+                  border: "1px dashed #cbd5e1",
+                  marginBottom: "1.5rem"
+                }}
+              >
+                <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📋</div>
+                <h3
+                  style={{
+                    fontSize: "1.1rem",
+                    fontWeight: 700,
+                    color: "#1e293b",
+                    marginBottom: "0.35rem"
+                  }}
+                >
+                  Form P.F.T-3 Statutory Register Ready
+                </h3>
+                <p
+                  style={{
+                    fontSize: "0.85rem",
+                    color: "#64748b",
+                    maxWidth: "34rem",
+                    margin: "0 auto 1.25rem"
+                  }}
+                >
+                  {filteredFormPFT3Rows.length} assessed{" "}
+                  {filteredFormPFT3Rows.length === 1 ? "unit" : "units"} available in the active
+                  jurisdiction. To optimize system performance, units are fetched on demand. Click
+                  Search below to fetch and display the register.
+                </p>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  style={{ padding: "0.6rem 1.75rem", fontSize: "0.925rem", fontWeight: 600 }}
+                  onClick={handleExecutePft3Search}
+                >
+                  🔍 Search &amp; Display Register ({filteredFormPFT3Rows.length} Units)
+                </button>
+              </div>
+            ) : (
+              <div className="table-container printable-document" id="pft3-register-document">
+                <table className="gov-table">
+                  <thead>
                     <tr>
-                      <td
-                        colSpan={12}
-                        style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
-                      >
-                        No assessed units match the selected search or filter criteria.
-                      </td>
+                      <th style={{ whiteSpace: "nowrap" }}>Demand No.</th>
+                      <th style={{ maxWidth: "16rem" }}>Taxpayer Legal Name</th>
+                      <th style={{ maxWidth: "18rem" }}>Statutory Class</th>
+                      <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Assessed (PKR)</th>
+                      <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Arrears (PKR)</th>
+                      <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        Total Demand (PKR)
+                      </th>
+                      <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Paid (PKR)</th>
+                      <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Balance (PKR)</th>
+                      <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Actions</th>
                     </tr>
-                  ) : (
-                    filteredFormPFT3Rows.map((row) => (
-                      <tr key={row.sourceUnitId}>
-                        <td style={{ textAlign: "center", color: "#64748b" }}>
-                          {row.serialNumber}
-                        </td>
-                        <td style={{ whiteSpace: "nowrap" }}>
-                          <strong>{row.permanentDemandNo}</strong>
-                        </td>
-                        <td style={{ whiteSpace: "nowrap" }}>
-                          <span
-                            style={{
-                              fontFamily: "monospace",
-                              fontSize: "0.78rem",
-                              color: "#1d4ed8",
-                              fontWeight: 600
-                            }}
-                          >
-                            {row.provincialUin || "— Not assigned"}
-                          </span>
-                        </td>
-                        <td style={{ maxWidth: "14rem" }}>
-                          <strong>{row.legalName}</strong>
-                          {row.tradeName && (
-                            <span
-                              style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
-                            >
-                              Trade: {row.tradeName}
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ maxWidth: "16rem" }}>
-                          <span className="badge badge-draft" style={{ fontSize: "0.7rem" }}>
-                            {row.scheduleEntry}
-                          </span>
-                          <span
-                            style={{
-                              display: "block",
-                              fontSize: "0.725rem",
-                              color: "#64748b",
-                              marginTop: "0.15rem",
-                              lineHeight: 1.3
-                            }}
-                          >
-                            {row.categoryName}
-                          </span>
-                        </td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                          <strong>PKR {row.assessedCurrentTax.toLocaleString()}</strong>
-                        </td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                          <span
-                            style={{
-                              color: row.arrears > 0 ? "#b45309" : "#64748b",
-                              fontWeight: row.arrears > 0 ? 600 : 400
-                            }}
-                          >
-                            PKR {row.arrears.toLocaleString()}
-                          </span>
-                        </td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                          <strong style={{ color: "#0f172a" }}>
-                            PKR {row.totalDemand.toLocaleString()}
-                          </strong>
-                        </td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                          <strong style={{ color: "#166534" }}>
-                            PKR {row.totalPaid.toLocaleString()}
-                          </strong>
-                        </td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                          <strong
-                            style={{
-                              color: row.outstandingBalance > 0 ? "#b91c1c" : "#166534"
-                            }}
-                          >
-                            PKR {row.outstandingBalance.toLocaleString()}
-                          </strong>
-                        </td>
-                        <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
-                          <span
-                            className={`badge ${
-                              row.assessmentStatus === "APPROVED"
-                                ? "badge-approved"
-                                : row.assessmentStatus === "SUBMITTED"
-                                  ? "badge-pending"
-                                  : "badge-draft"
-                            }`}
-                          >
-                            {row.assessmentStatus}
-                          </span>
-                        </td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                          {(() => {
-                            const targetUnit = units.find(
-                              (u) => u.demandUnit.permanentDemandNo === row.permanentDemandNo
-                            );
-                            return targetUnit ? renderPft3UnitActions(targetUnit) : null;
-                          })()}
+                  </thead>
+                  <tbody>
+                    {filteredFormPFT3Rows.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={9}
+                          style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
+                        >
+                          No assessed units match the selected search or filter criteria.
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    ) : (
+                      paginatedFormPFT3Rows.map((row) => (
+                        <tr key={row.sourceUnitId}>
+                          <td style={{ whiteSpace: "nowrap" }}>
+                            <strong>{row.permanentDemandNo}</strong>
+                          </td>
+                          <td style={{ maxWidth: "16rem" }}>
+                            <strong>{row.legalName}</strong>
+                            {row.tradeName && (
+                              <span
+                                style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                              >
+                                Trade: {row.tradeName}
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ maxWidth: "18rem" }}>
+                            <span className="badge badge-draft" style={{ fontSize: "0.7rem" }}>
+                              {row.scheduleEntry}
+                            </span>
+                            <span
+                              style={{
+                                display: "block",
+                                fontSize: "0.725rem",
+                                color: "#64748b",
+                                marginTop: "0.15rem",
+                                lineHeight: 1.3
+                              }}
+                            >
+                              {row.categoryName}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                            <strong>{row.assessedCurrentTax.toLocaleString()}</strong>
+                          </td>
+                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                            <span
+                              style={{
+                                color: row.arrears > 0 ? "#b45309" : "#64748b",
+                                fontWeight: row.arrears > 0 ? 600 : 400
+                              }}
+                            >
+                              {row.arrears.toLocaleString()}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                            <strong style={{ color: "#0f172a" }}>
+                              {row.totalDemand.toLocaleString()}
+                            </strong>
+                          </td>
+                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                            <strong style={{ color: "#166534" }}>
+                              {row.totalPaid.toLocaleString()}
+                            </strong>
+                          </td>
+                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                            <strong
+                              style={{
+                                color: row.outstandingBalance > 0 ? "#b91c1c" : "#166534"
+                              }}
+                            >
+                              {row.outstandingBalance.toLocaleString()}
+                            </strong>
+                          </td>
+                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                            {(() => {
+                              const targetUnit = units.find(
+                                (u) => u.demandUnit.permanentDemandNo === row.permanentDemandNo
+                              );
+                              return targetUnit ? renderPft3UnitActions(targetUnit) : null;
+                            })()}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+
+                {/* 20-row Pagination Footer */}
+                {filteredFormPFT3Rows.length > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: "0.75rem",
+                      padding: "0.85rem 1rem",
+                      background: "#f8fafc",
+                      borderTop: "1px solid #e2e8f0"
+                    }}
+                  >
+                    <div style={{ fontSize: "0.85rem", color: "#475569" }}>
+                      Showing <strong>{(pft3CurrentPage - 1) * PFT3_PAGE_SIZE + 1}</strong> to{" "}
+                      <strong>
+                        {Math.min(pft3CurrentPage * PFT3_PAGE_SIZE, filteredFormPFT3Rows.length)}
+                      </strong>{" "}
+                      of <strong>{filteredFormPFT3Rows.length}</strong> units (Page{" "}
+                      <strong>{pft3CurrentPage}</strong> of <strong>{totalPft3Pages}</strong>)
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        style={{
+                          padding: "0.35rem 0.65rem",
+                          fontSize: "0.8rem",
+                          cursor: pft3CurrentPage === 1 ? "not-allowed" : "pointer",
+                          opacity: pft3CurrentPage === 1 ? 0.5 : 1
+                        }}
+                        disabled={pft3CurrentPage === 1}
+                        onClick={() => setPft3CurrentPage(1)}
+                        title="First Page"
+                      >
+                        « First
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        style={{
+                          padding: "0.35rem 0.65rem",
+                          fontSize: "0.8rem",
+                          cursor: pft3CurrentPage === 1 ? "not-allowed" : "pointer",
+                          opacity: pft3CurrentPage === 1 ? 0.5 : 1
+                        }}
+                        disabled={pft3CurrentPage === 1}
+                        onClick={() => setPft3CurrentPage((prev) => Math.max(1, prev - 1))}
+                        title="Previous Page"
+                      >
+                        ‹ Prev
+                      </button>
+
+                      {/* Dynamic page buttons */}
+                      {Array.from({ length: totalPft3Pages }, (_, i) => i + 1)
+                        .filter((p) => {
+                          return (
+                            p === 1 || p === totalPft3Pages || Math.abs(p - pft3CurrentPage) <= 1
+                          );
+                        })
+                        .reduce<(number | string)[]>((acc, p, idx, arr) => {
+                          if (
+                            idx > 0 &&
+                            typeof arr[idx - 1] === "number" &&
+                            (p as number) - (arr[idx - 1] as number) > 1
+                          ) {
+                            acc.push("...");
+                          }
+                          acc.push(p);
+                          return acc;
+                        }, [])
+                        .map((item, idx) =>
+                          typeof item === "string" ? (
+                            <span
+                              key={`ellipsis-${idx}`}
+                              style={{ padding: "0 0.25rem", color: "#94a3b8" }}
+                            >
+                              ...
+                            </span>
+                          ) : (
+                            <button
+                              key={item}
+                              type="button"
+                              className={item === pft3CurrentPage ? "btn-primary" : "btn-secondary"}
+                              style={{
+                                padding: "0.35rem 0.65rem",
+                                fontSize: "0.8rem",
+                                minWidth: "2rem",
+                                fontWeight: item === pft3CurrentPage ? 700 : 400
+                              }}
+                              onClick={() => setPft3CurrentPage(item)}
+                            >
+                              {item}
+                            </button>
+                          )
+                        )}
+
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        style={{
+                          padding: "0.35rem 0.65rem",
+                          fontSize: "0.8rem",
+                          cursor: pft3CurrentPage === totalPft3Pages ? "not-allowed" : "pointer",
+                          opacity: pft3CurrentPage === totalPft3Pages ? 0.5 : 1
+                        }}
+                        disabled={pft3CurrentPage === totalPft3Pages}
+                        onClick={() =>
+                          setPft3CurrentPage((prev) => Math.min(totalPft3Pages, prev + 1))
+                        }
+                        title="Next Page"
+                      >
+                        Next ›
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        style={{
+                          padding: "0.35rem 0.65rem",
+                          fontSize: "0.8rem",
+                          cursor: pft3CurrentPage === totalPft3Pages ? "not-allowed" : "pointer",
+                          opacity: pft3CurrentPage === totalPft3Pages ? 0.5 : 1
+                        }}
+                        disabled={pft3CurrentPage === totalPft3Pages}
+                        onClick={() => setPft3CurrentPage(totalPft3Pages)}
+                        title="Last Page"
+                      >
+                        Last »
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
         )}
 

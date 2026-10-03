@@ -223,6 +223,10 @@ export function mapOperationalUnit(value: unknown): StoredUnit {
     pinNumber: asPublicBusinessIdentifier(taxpayer.permanent_demand_no),
     provincialUin: asPublicBusinessIdentifier(taxpayer.permanent_demand_no) ?? "",
     circleName: asOptionalString(jurisdiction.name),
+    districtName:
+      asOptionalString(jurisdiction.district_name) ??
+      asOptionalString(jurisdiction.parent_name) ??
+      "Vehari",
     pft3Registered: row.pft3_registered === true,
     demandUnit: {
       id: demandUnitId,

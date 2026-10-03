@@ -77,6 +77,8 @@ export interface StoredUnit {
   readonly circleId: string;
   /** Human-readable Circle label returned by the jurisdiction-scoped database read model. */
   readonly circleName?: string | undefined;
+  /** Human-readable District label returned by the jurisdiction-scoped database read model. */
+  readonly districtName?: string | undefined;
   readonly categoryCode: string;
   readonly subclassificationCode?: string | null | undefined;
   readonly statutoryTertiaryCode?: string | null | undefined;
