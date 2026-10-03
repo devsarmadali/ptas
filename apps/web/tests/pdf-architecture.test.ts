@@ -6,9 +6,10 @@ import {
   generateFormPFT2,
   generateFormPFT3Rows,
   generateLandRevenueRecoveryCertificate,
-  generateShowCausePenaltyNotice
+  generateShowCausePenaltyNotice,
+  type TaxClearanceCertificateModel
 } from "../src/lib/statutory-forms.js";
-import { createInitialPilotUnits, type StoredUnit } from "../src/lib/pilot-store.js";
+import { createInitialPilotUnits } from "../src/lib/pilot-store.js";
 import {
   generateAuthoritativePdf,
   validateDocumentAuthorization,
@@ -20,7 +21,10 @@ import { generatePft3AssessmentRegisterPdf } from "../src/lib/pdf/templates/pft3
 import { generateShowCauseNoticePdf } from "../src/lib/pdf/templates/show-cause-notice.js";
 import { generateStatutoryReceiptPdf } from "../src/lib/pdf/templates/statutory-receipt.js";
 import { generateExecutivePft2BriefPdf } from "../src/lib/pdf/templates/executive-pft2-brief.js";
-import { generateStatutoryReportPdf } from "../src/lib/pdf/templates/statutory-reports.js";
+import {
+  generateStatutoryReportPdf,
+  type StatutoryReportData
+} from "../src/lib/pdf/templates/statutory-reports.js";
 import { generateTaxClearanceCertificatePdf } from "../src/lib/pdf/templates/tax-clearance-certificate.js";
 import { generateLandRevenueRecoveryPdf } from "../src/lib/pdf/templates/land-revenue-recovery.js";
 import { generateAppellateOrderPdf } from "../src/lib/pdf/templates/appellate-order.js";
@@ -31,6 +35,7 @@ import type {
   ExecutivePft2BriefData,
   UnitDossierData
 } from "../src/lib/pdf/types.js";
+import type { StatutoryReceiptDocument } from "../src/lib/receipt-generator.js";
 
 describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
   const units = createInitialPilotUnits();
@@ -219,12 +224,39 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
       expect(Math.round(width)).toBe(297);
       expect(Math.round(height)).toBe(210);
 
-      // Verify single page allocation for the 3-counterfoil layout
+      // Verify single page allocation for the 3-counterfoil layout (fits on 1 page with no overflow)
       expect(pdf.getNumberOfPages()).toBe(1);
 
       // Verify binary PDF buffer generation
       const arrayBuffer = pdf.output("arraybuffer");
       expect(arrayBuffer.byteLength).toBeGreaterThan(5000);
+
+      // Verify exactly three copies defined in model
+      expect(challan.copies).toHaveLength(3);
+      expect(challan.copies[0]?.copyTitle).toBe("TAXPAYER'S COPY");
+      expect(challan.copies[1]?.copyTitle).toBe("BANK'S COPY");
+      expect(challan.copies[2]?.copyTitle).toBe("DEPARTMENT'S COPY");
+    });
+
+    it("verifies date and tax year formatters for compact statutory display", async () => {
+      const { formatChallanDisplayDate, formatChallanTaxYear, cleanChallanScope } =
+        await import("../src/lib/pft2-formatters.js");
+
+      // Date formatting: DD-Mon-YYYY
+      expect(formatChallanDisplayDate("2026-10-03")).toBe("03-Oct-2026");
+      expect(formatChallanDisplayDate("2026-07-01")).toBe("01-Jul-2026");
+      expect(formatChallanDisplayDate("31/08/2026")).toBe("31-Aug-2026");
+      expect(formatChallanDisplayDate("31/10/2026")).toBe("31-Oct-2026");
+      expect(formatChallanDisplayDate("03-Oct-2026")).toBe("03-Oct-2026");
+
+      // Tax Year formatting
+      expect(formatChallanTaxYear("2026-2027")).toBe("2026-27");
+      expect(formatChallanTaxYear("2026-27")).toBe("2026-27");
+
+      // Scope cleaning (removes redundant "DEMAND")
+      expect(cleanChallanScope("CURRENT DEMAND")).toBe("CURRENT");
+      expect(cleanChallanScope("ARREAR DEMAND")).toBe("ARREAR");
+      expect(cleanChallanScope("COMBINED DEMAND")).toBe("COMBINED");
     });
   });
 
@@ -303,29 +335,34 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
   // ---------------------------------------------------------------------------
   describe("Statutory Payment Receipt Voucher PDF Generation", () => {
     it("generates Rule 10 receipt with CPR voucher", async () => {
-      const receiptData = {
+      const receiptData: StatutoryReceiptDocument = {
         receiptNumber: "REC-2026-00042",
-        cprNumber: "CPR-992026-B01601-8842",
-        unitLegalName: alMadina.legalName,
+        pin: "654321",
         provincialUin: alMadina.provincialUin,
-        district: "Vehari",
-        circle: "Circle-I",
+        challanNumber: "PFT2-0003",
+        demandNumber: alMadina.demandUnit.permanentDemandNo,
+        assesseeLegalName: alMadina.legalName,
+        assesseeTradeName: alMadina.tradeName,
+        identifier: `${alMadina.identifierType}: ${alMadina.identifierValue}`,
+        address: alMadina.address,
+        statutoryCategory: "Class 3(i) Companies",
+        subclassificationCode: null,
+        tertiarySlab: null,
+        amountPaid: 4000,
+        amountPaidWords: "Four Thousand Rupees Only",
+        dateOfReceipt: "2026-09-20",
+        timeOfReceipt: "11:42:00",
         paymentChannel: "e-Pay Punjab (1Link OTC)",
-        paymentDate: "2026-09-20 11:42:00",
-        instrumentReference: "FT260920884210",
-        taxAmount: 4000,
-        penaltyAmount: 0,
-        surchargeAmount: 0,
-        totalAmountPaid: 4000,
-        totalAmountPaidWords: "Four Thousand Rupees Only",
-        financialYear: "2025-2026",
-        headOfAccount: "B01601 - Tax on Professions, Trades and Callings",
         bankBranch: "National Bank of Pakistan, Main Branch Vehari (0142)",
-        cashierOfficer: "Muhammad Aslam (Scroll Officer)",
-        verificationHash: "a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e"
+        bankScrollRef: "SCR-2026-0920-0042",
+        receivingOfficerName: "Muhammad Aslam",
+        receivingOfficerTitle: "Scroll Officer / Cashier",
+        canonicalReceiptText: "CANONICAL-RECEIPT-TEXT",
+        officialSha256: "a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e",
+        qrPayload: "PTAS:RECEIPT:REC-2026-00042"
       };
 
-      const pdf = await generateStatutoryReceiptPdf(receiptData as any);
+      const pdf = await generateStatutoryReceiptPdf(receiptData);
       expect(pdf).toBeDefined();
       expect(Math.round(pdf.internal.pageSize.getWidth())).toBe(210);
       expect(Math.round(pdf.internal.pageSize.getHeight())).toBe(297);
@@ -374,7 +411,7 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
   // ---------------------------------------------------------------------------
   describe("Statutory Schedule Reports PDF Generation", () => {
     it("generates paginated Defaulters Roll Report", async () => {
-      const pdf = await generateStatutoryReportPdf({
+      const reportData: StatutoryReportData = {
         title: "STATUTORY DEFAULTERS ROLL & RECOVERY DOCKET",
         scheduleCode: "SCHEDULE-DEFAULTERS",
         district: "Vehari",
@@ -386,7 +423,8 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
           ["2", "PFT-0002", "Pak Chemical Ltd", "PKR 10,000", "PKR 10,000", "60 Days", "Warrant"]
         ],
         columnWidths: [12, 30, 75, 30, 30, 25, 35]
-      } as any);
+      };
+      const pdf = await generateStatutoryReportPdf(reportData);
 
       expect(pdf).toBeDefined();
       expect(Math.round(pdf.internal.pageSize.getWidth())).toBe(297);
@@ -401,9 +439,9 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
         circle: "Circle-I",
         financialYear: "2025-2026",
         headers: ["SR", "DISPATCH NO", "LEGAL NAME", "PIN", "MODE", "DATE", "STATUS"],
-        rows: (registerData.rows || []).map((e: any) => [
+        rows: (registerData.rows || []).map((e) => [
           String(e.serialNumber),
-          e.noticeNumber || e.dispatchNumber || "DISP-001",
+          e.noticeNumber || "DISP-001",
           e.assesseeLegalName,
           e.demandNumber || "N/A",
           "Official Notice Server",
@@ -421,22 +459,40 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
   // ---------------------------------------------------------------------------
   describe("Tax Clearance Certificate (Form P.F.T-5) PDF Generation", () => {
     it("generates official zero-balance clearance certificate", async () => {
-      const pdf = await generateTaxClearanceCertificatePdf({
+      const certData: TaxClearanceCertificateModel = {
+        isEligible: true,
         certificateNumber: "PFT5-VEH-2026-0089",
-        unitLegalName: alMadina.legalName,
+        pin: "68000000",
         provincialUin: alMadina.provincialUin,
-        tradeName: alMadina.tradeName,
-        premisesAddress: alMadina.address,
+        issueDate: "2026-09-26",
+        expiryDate: "2027-06-30",
+        financialYear: "2025-2026",
         district: "Vehari",
+        districtName: "Vehari",
+        tehsil: "Tehsil Vehari",
         circle: "Circle-I",
-        statutoryCategory: "Class 3(i) Companies",
-        clearedThroughFinancialYear: "2025-2026",
-        issuanceDate: "2026-09-26",
-        validUntilDate: "2027-06-30",
-        assessingAuthorityName: "Malik Muhammad Imran",
-        assessingAuthorityDesignation: "Excise & Taxation Officer, Vehari",
-        verificationHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-      } as any);
+        circleName: "Circle-I",
+        assesseeLegalName: alMadina.legalName,
+        assesseeTradeName: alMadina.tradeName,
+        identifierType: alMadina.identifierType,
+        identifierValue: alMadina.identifierValue,
+        address: alMadina.address,
+        businessAddress: alMadina.address,
+        demandNo: alMadina.demandUnit.permanentDemandNo,
+        categoryName: "Class 3(i) Companies",
+        scheduleEntry: "Class 3",
+        annualTaxAssessed: 4000,
+        totalTaxPaid: 4000,
+        currentOutstandingBalance: 0,
+        headOfAccount: "B01601 - Tax on Professions, Trades and Callings",
+        issuingOfficerName: "Malik Muhammad Imran",
+        issuingOfficerTitle: "Excise & Taxation Officer, Vehari",
+        officialSha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        qrPayload: "PTAS:PFT5:PFT5-VEH-2026-0089",
+        canonicalCertificateText: "PFT-5 CLEARANCE CERTIFICATE"
+      };
+
+      const pdf = await generateTaxClearanceCertificatePdf(certData);
 
       expect(pdf).toBeDefined();
       expect(Math.round(pdf.internal.pageSize.getWidth())).toBe(210);
@@ -492,56 +548,15 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
   // ---------------------------------------------------------------------------
   describe("Unit Master Dossier PDF Generation", () => {
     it("generates complete registration, assessment, and append-only ledger dossier", async () => {
-      const dossierData = {
+      const dossierData: UnitDossierData = {
         unit: alMadina,
-        currentBalancePkr: 0,
         generatedAt: "2026-09-26",
         officerName: "Malik Muhammad Imran",
         officerTitle: "Excise & Taxation Officer, Vehari",
-        officialSha256: "sha256-dossier-al-madina",
-        ledgerEntries: [
-          {
-            id: "led-1",
-            postingDate: "2025-07-01",
-            entryType: "ASSESSMENT_DEMAND",
-            reference: "PFT1-0003",
-            debitPkr: 4000,
-            creditPkr: 0,
-            balancePkr: 4000,
-            description: "Annual Professional Tax Demand FY 2025-26"
-          },
-          {
-            id: "led-2",
-            postingDate: "2025-08-15",
-            entryType: "PAYMENT_CREDIT",
-            reference: "REC-2025-0012",
-            debitPkr: 0,
-            creditPkr: 4000,
-            balancePkr: 0,
-            description: "Bank Collection e-Pay Punjab NBP Main Branch"
-          }
-        ],
-        assessments: [
-          {
-            financialYear: "2025-2026",
-            scheduleCode: "Class 3(i)(b)",
-            demandPkr: 4000,
-            status: "ASSESSED_APPROVED",
-            assessedBy: "Assessing Authority Vehari"
-          }
-        ],
-        payments: [
-          {
-            date: "2025-08-15",
-            cprNumber: "CPR-992025-B01601-1102",
-            amountPkr: 4000,
-            channel: "e-Pay Punjab",
-            status: "SETTLED"
-          }
-        ]
+        officialSha256: "sha256-dossier-al-madina"
       };
 
-      const pdf = await generateUnitDossierPdf(dossierData as any);
+      const pdf = await generateUnitDossierPdf(dossierData);
       expect(pdf).toBeDefined();
       expect(Math.round(pdf.internal.pageSize.getWidth())).toBe(210);
       expect(Math.round(pdf.internal.pageSize.getHeight())).toBe(297);

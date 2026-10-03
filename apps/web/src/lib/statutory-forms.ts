@@ -249,6 +249,7 @@ export interface FormPFT2CopyModel {
   readonly district: string;
   readonly taxYear: string;
   readonly dueDate: string;
+  readonly issueDate?: string | undefined;
   readonly qrPayload: string;
   readonly taxpayerInfo: {
     readonly taxNo: string;
@@ -297,6 +298,8 @@ export interface FormPFT2Model {
   readonly challanNumber: string;
   readonly noticeNumber: string;
   readonly pin: string;
+  readonly issueDate?: string | undefined;
+  readonly dueDate?: string | undefined;
   challanStatus?: string | undefined;
   readonly formType?: string | undefined;
   readonly demandScope?: string | undefined;
@@ -834,6 +837,7 @@ export function generateFormPFT2(
     district,
     taxYear,
     dueDate,
+    issueDate,
     qrPayload,
     taxpayerInfo: {
       taxNo: `${unit.identifierType}: ${unit.identifierValue}`,
@@ -901,6 +905,8 @@ export function generateFormPFT2(
     challanNumber,
     noticeNumber,
     pin,
+    issueDate,
+    dueDate,
     formType,
     demandScope,
     pft2TypeLabel,
