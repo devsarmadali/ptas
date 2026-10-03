@@ -598,8 +598,7 @@ export function generateFormPFT1(
 
   const districtName = unit.districtName || "Vehari";
   const circleName = unit.circleName || "Circle-I";
-  const assessingAuthorityName =
-    unit.assessmentVersions[0]?.approvedBy || "Assessing Authority";
+  const assessingAuthorityName = unit.assessmentVersions[0]?.approvedBy || "Assessing Authority";
   const assessingAuthorityTitle = `Excise & Taxation Officer / Assessing Authority, ${districtName}`;
   const serverName = unit.servedBy || "Authorized Service Officer";
   const serverRole = unit.servedBy

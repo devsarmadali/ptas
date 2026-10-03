@@ -22,10 +22,7 @@ import {
   renderPaginatedTable
 } from "../base-document";
 import type { DocumentGenerationOptions, UnitDossierData } from "../types";
-import {
-  computeUnitFinancialSummary,
-  getScheduleEntryLabel
-} from "../../statutory-forms";
+import { computeUnitFinancialSummary, getScheduleEntryLabel } from "../../statutory-forms";
 import type { DemandLedgerEntry } from "@ptas/domain";
 
 export async function generateUnitDossierPdf(
@@ -415,8 +412,7 @@ export async function generateUnitDossierPdf(
 
   const officerName =
     data.officerName || unit.assessmentVersions[0]?.approvedBy || "Assessing Authority";
-  const officerTitle =
-    data.officerTitle || "Excise & Taxation Officer / Assessing Authority";
+  const officerTitle = data.officerTitle || "Excise & Taxation Officer / Assessing Authority";
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.5);
