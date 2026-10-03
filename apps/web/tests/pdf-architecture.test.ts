@@ -238,6 +238,32 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
       expect(challan.copies[2]?.copyTitle).toBe("DEPARTMENT'S COPY");
     });
 
+    it("generates PFT2 challan with reconstructed notice number, compact counterfoil, and security code below QR", async () => {
+      const challan = generateFormPFT2(alMadina);
+      (challan as any).challanStatus = "ISSUED";
+      (challan as any).noticeNumber = "PFT2-1184-2610030101-2000";
+      (challan as any).pin = "741386";
+      challan.copies.forEach((copy) => {
+        (copy as any).noticeNumber = "PFT2-1184-2610030101-2000";
+        (copy as any).pin = "741386";
+        (copy.assessmentInfo as any).demandNo = "1184";
+        (copy as any).district = "Vehari";
+      });
+
+      const pdf = await generatePft2ChallanPdf(challan);
+      expect(pdf.getNumberOfPages()).toBe(1);
+
+      const pdfBytes = Buffer.from(pdf.output("arraybuffer"));
+      expect(pdfBytes.length).toBeGreaterThan(5000);
+
+      const fs = await import("node:fs");
+      const artifactDir =
+        "C:\\Users\\ETIVE\\.gemini\\antigravity-ide\\brain\\d93a868a-d531-4c38-b5f0-d2a8ca652865";
+      if (fs.existsSync(artifactDir)) {
+        fs.writeFileSync(`${artifactDir}\\sample_pft2_challan.pdf`, pdfBytes);
+      }
+    });
+
     it("verifies date and tax year formatters for compact statutory display", async () => {
       const { formatChallanDisplayDate, formatChallanTaxYear, cleanChallanScope } =
         await import("../src/lib/pft2-formatters.js");

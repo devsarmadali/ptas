@@ -67,10 +67,11 @@ export function formatDemandNumber(demand: string | number | undefined | null): 
 export function generatePft2NoticeNumber(params: Pft2NoticeNumberOptions): string {
   const demandClean = formatDemandNumber(params.demandNumber);
 
-  // Extract month and date codes from issueDate (YYYY-MM-DD)
+  // Extract 2-digit year, month, and date codes from issueDate (YYYY-MM-DD)
   const parts = params.issueDate ? params.issueDate.split("-") : [];
-  const monthCode = parts.length >= 2 && parts[1] ? parts[1].padStart(2, "0") : "01";
-  const dateCode = parts.length >= 3 && parts[2] ? parts[2].padStart(2, "0") : "01";
+  const yearCode = parts.length >= 1 && parts[0] ? parts[0].slice(-2) : "26";
+  const monthCode = parts.length >= 2 && parts[1] ? parts[1].padStart(2, "0") : "10";
+  const dateCode = parts.length >= 3 && parts[2] ? parts[2].padStart(2, "0") : "03";
 
   // Form type digit code (01: Standard, 02: Notice-cum-Challan, 03: Arrears, 04: Revised)
   const rawForm = (params.formTypeCode || "01").toUpperCase().trim();
@@ -126,30 +127,11 @@ export function generatePft2NoticeNumber(params: Pft2NoticeNumberOptions): strin
     scopeDigit = rawScope.padStart(2, "0");
   }
 
-  // Combined / Partial digit code (01: Full / Combined, 02: Partial)
-  const rawPayment = (params.paymentScope || "01").toUpperCase().trim();
-  let paymentDigit = "01";
-  if (
-    rawPayment === "01" ||
-    rawPayment === "1" ||
-    rawPayment === "FULL" ||
-    rawPayment === "COMBINED"
-  ) {
-    paymentDigit = "01";
-  } else if (
-    rawPayment === "02" ||
-    rawPayment === "2" ||
-    rawPayment === "PART" ||
-    rawPayment === "PARTIAL"
-  ) {
-    paymentDigit = "02";
-  } else if (/^\d+$/.test(rawPayment)) {
-    paymentDigit = rawPayment.padStart(2, "0");
-  }
-
   const amountInt = Math.round(params.amount || 0);
 
-  return `PFT2-${demandClean}-${monthCode}-${dateCode}-${formTypeDigit}-${scopeDigit}-${paymentDigit}-${amountInt}`;
+  // Reconstructed pattern: PFT2-{demandClean}-{yearCode}{monthCode}{dateCode}{formTypeDigit}{scopeDigit}-{amountInt}
+  // All internal dashes removed, year code block inserted, combination code digit 01 discarded
+  return `PFT2-${demandClean}-${yearCode}${monthCode}${dateCode}${formTypeDigit}${scopeDigit}-${amountInt}`;
 }
 
 export type StatutoryDocCode =
