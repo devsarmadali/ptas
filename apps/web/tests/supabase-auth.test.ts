@@ -88,6 +88,20 @@ describe("Supabase Auth and server-side PTAS assignment enforcement", () => {
     const missingPassword = await signInOfficer("officer@example.com");
     expect(missingPassword.success).toBe(false);
     expect(missingPassword.error).toBe("PASSWORD_REQUIRED");
+
+    const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const previousKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    try {
+      delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      const unconfiguredResult = await signInOfficer("officer@example.com", "validPassword123");
+      expect(unconfiguredResult.success).toBe(false);
+      expect(unconfiguredResult.error).toBe("AUTH_SERVICE_UNAVAILABLE");
+      expect(unconfiguredResult.message).toContain("Authentication service is not configured");
+    } finally {
+      if (previousUrl) process.env.NEXT_PUBLIC_SUPABASE_URL = previousUrl;
+      if (previousKey) process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = previousKey;
+    }
   });
 
   it("retains the statutory least-privilege action matrix", () => {

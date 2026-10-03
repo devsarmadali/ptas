@@ -61,14 +61,20 @@ export default function SignInPage() {
       setStatusMessage(
         "If this email is registered, Supabase has sent a password setup link. Check the inbox and spam folder."
       );
-    } catch {
-      setErrorMessage(
-        "The password setup email could not be sent. Please wait and retry or contact the PTAS administrator."
-      );
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "The password setup email could not be sent. Please wait and retry or contact the PTAS administrator.";
+      setErrorMessage(msg);
     } finally {
       setIsSendingReset(false);
     }
   };
+
+  const isConfigured = Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
 
   return (
     <main
@@ -112,6 +118,26 @@ export default function SignInPage() {
         </header>
 
         <div style={{ padding: "1.5rem" }}>
+          {!isConfigured && (
+            <div
+              role="alert"
+              style={{
+                marginBottom: "1rem",
+                padding: "0.75rem",
+                border: "1px solid #fed7aa",
+                borderRadius: "6px",
+                color: "#9a3412",
+                background: "#fff7ed",
+                fontSize: "0.85rem",
+                lineHeight: "1.4"
+              }}
+            >
+              <strong>Configuration Notice:</strong> Supabase authentication is not configured on
+              this deployment. Please add <code>NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
+              <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to your Vercel Project Settings &gt;
+              Environment Variables.
+            </div>
+          )}
           {errorMessage && (
             <div
               id="sign-in-error"

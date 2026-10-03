@@ -31,9 +31,6 @@ export interface OfficerCredentialInfo {
 /** @deprecated Kept temporarily for legacy UI compatibility; production accounts are server-side. */
 export const OFFICIAL_OFFICERS_REGISTRY: readonly OfficerCredentialInfo[] = [];
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
 export function getPasswordResetRedirectUrl(
   browserOrigin: string,
   configuredOrigin = process.env.NEXT_PUBLIC_APP_URL
@@ -50,13 +47,17 @@ export function getPasswordResetRedirectUrl(
 let browserClientInstance: ReturnType<typeof createBrowserSupabaseClient> | null = null;
 
 export function getSupabaseAuthClient() {
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    throw new Error("Supabase browser authentication is not configured");
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) {
+    throw new Error(
+      "Supabase browser authentication is not configured: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is missing."
+    );
   }
   if (!browserClientInstance) {
     browserClientInstance = createBrowserSupabaseClient({
-      url: SUPABASE_URL,
-      key: SUPABASE_KEY
+      url,
+      key: anonKey
     });
   }
   return browserClientInstance;
@@ -136,8 +137,14 @@ export function mapActorAssignmentToOfficer(
 export async function resolveAuthenticatedOfficer(user: User): Promise<MockOfficer> {
   const supabase = getSupabaseAuthClient();
   const { data: assignment, error } = await supabase.rpc("resolve_my_ptas_actor");
-  if (error || !assignment || typeof assignment !== "object" || Array.isArray(assignment)) {
-    throw new Error("Authenticated account has no active PTAS role assignment");
+  if (error) {
+    console.error("resolve_my_ptas_actor error:", error);
+    throw new Error(`Officer jurisdiction lookup failed: ${error.message}`);
+  }
+  if (!assignment || typeof assignment !== "object" || Array.isArray(assignment)) {
+    throw new Error(
+      "Authenticated account has no active PTAS role assignment in this jurisdiction"
+    );
   }
   return mapActorAssignmentToOfficer(assignment as ActorAssignment, user);
 }
@@ -167,11 +174,29 @@ export async function signInOfficer(email: string, password?: string): Promise<S
     };
   }
 
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) {
+    return {
+      success: false,
+      isCloudAuth: false,
+      message:
+        "Authentication service is not configured. Environment variables NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are missing from this deployment.",
+      error: "AUTH_SERVICE_UNAVAILABLE"
+    };
+  }
+
   try {
     const supabase = getSupabaseAuthClient();
     const networkTimeout = new Promise<{ data: { user: null }; error: Error }>((resolve) =>
       setTimeout(
-        () => resolve({ data: { user: null }, error: new Error("Auth network timeout") }),
+        () =>
+          resolve({
+            data: { user: null },
+            error: new Error(
+              "Authentication request timed out. Please check your network connection."
+            )
+          }),
         10000
       )
     );
@@ -183,34 +208,56 @@ export async function signInOfficer(email: string, password?: string): Promise<S
       networkTimeout
     ]);
 
-    if (!error && data.user) {
-      try {
-        const officer = await resolveAuthenticatedOfficer(data.user);
-        return {
-          success: true,
-          officer,
-          user: data.user,
-          isCloudAuth: true,
-          message: `Authenticated via Supabase Auth as ${officer.name} (${officer.role})`
-        };
-      } catch (assignmentError) {
-        await supabase.auth.signOut();
-        throw assignmentError;
-      }
+    if (error) {
+      return {
+        success: false,
+        isCloudAuth: false,
+        message: error.message || "Authentication failed. Please verify your email and password.",
+        error: "AUTHENTICATION_FAILED"
+      };
     }
 
-    return {
-      success: false,
-      isCloudAuth: false,
-      message: error?.message || "Authentication failed.",
-      error: "AUTHENTICATION_FAILED"
-    };
+    if (!data.user) {
+      return {
+        success: false,
+        isCloudAuth: false,
+        message: "No officer session was returned by authentication service.",
+        error: "AUTHENTICATION_FAILED"
+      };
+    }
+
+    try {
+      const officer = await resolveAuthenticatedOfficer(data.user);
+      return {
+        success: true,
+        officer,
+        user: data.user,
+        isCloudAuth: true,
+        message: `Authenticated via Supabase Auth as ${officer.name} (${officer.role})`
+      };
+    } catch (assignmentError) {
+      await supabase.auth.signOut();
+      const assignmentMessage =
+        assignmentError instanceof Error
+          ? assignmentError.message
+          : "Authenticated account has no active PTAS officer role or jurisdiction assignment.";
+      return {
+        success: false,
+        isCloudAuth: false,
+        message: assignmentMessage,
+        error: "OFFICER_ASSIGNMENT_FAILED"
+      };
+    }
   } catch (err: unknown) {
     console.warn("Supabase Auth failure:", err);
+    const errorMessage =
+      err instanceof Error
+        ? err.message
+        : "Authentication service is unavailable. No officer session was created.";
     return {
       success: false,
       isCloudAuth: false,
-      message: "Authentication service is unavailable. No officer session was created.",
+      message: errorMessage,
       error: "AUTH_SERVICE_UNAVAILABLE"
     };
   }

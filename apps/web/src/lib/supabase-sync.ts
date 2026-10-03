@@ -8,9 +8,6 @@ import { createPtasSupabaseClient } from "@ptas/database/client";
 import type { Json } from "@ptas/database/types";
 import type { StoredUnit, PilotAuditItem } from "./pilot-store";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
 export interface SyncResult {
   readonly success: boolean;
   readonly syncedUnitsCount: number;
@@ -20,12 +17,16 @@ export interface SyncResult {
 }
 
 export function getSupabaseClient() {
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    throw new Error("Supabase synchronization is not configured");
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    throw new Error(
+      "Supabase synchronization is not configured: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is missing."
+    );
   }
   return createPtasSupabaseClient({
-    url: SUPABASE_URL,
-    key: SUPABASE_KEY
+    url,
+    key
   });
 }
 
