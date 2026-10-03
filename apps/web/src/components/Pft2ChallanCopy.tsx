@@ -205,7 +205,31 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           </span>
         </div>
 
-        {/* Row 1: Security Code | Demand Number */}
+        {/* Row 1: PIN (Dedicated Full Width Row) */}
+        <div
+          style={{
+            gridColumn: "span 2",
+            display: "flex",
+            alignItems: "baseline",
+            borderBottom: "1px dashed #e2e8f0",
+            paddingBottom: "0.18rem"
+          }}
+        >
+          <span style={{ width: "6.8rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
+            PIN
+          </span>
+          <span
+            style={{
+              fontFamily: "monospace",
+              fontWeight: 700,
+              color: "#1d4ed8"
+            }}
+          >
+            {taxpayerPin}
+          </span>
+        </div>
+
+        {/* Row 2: Security Code | Demand Number */}
         <div style={{ display: "flex", alignItems: "baseline" }}>
           <span style={{ width: "6.8rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
             SECURITY CODE
@@ -241,42 +265,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           </span>
         </div>
 
-        {/* Row 2: PIN | District */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "baseline",
-            borderTop: "1px dashed #e2e8f0",
-            paddingTop: "0.18rem"
-          }}
-        >
-          <span style={{ width: "6.8rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
-            PIN
-          </span>
-          <span
-            style={{
-              fontFamily: "monospace",
-              fontWeight: 700,
-              color: "#1d4ed8"
-            }}
-          >
-            {taxpayerPin}
-          </span>
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "baseline",
-            justifyContent: "flex-end",
-            borderTop: "1px dashed #e2e8f0",
-            paddingTop: "0.18rem"
-          }}
-        >
-          <span style={{ fontWeight: 700, color: "#334155", marginRight: "0.4rem" }}>DISTRICT</span>
-          <span>{copy.district}</span>
-        </div>
-
-        {/* Row 3: Tax Unit | Tax Year */}
+        {/* Row 3: Tax Unit | District */}
         <div
           style={{
             display: "flex",
@@ -299,11 +288,11 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
             paddingTop: "0.18rem"
           }}
         >
-          <span style={{ fontWeight: 700, color: "#334155", marginRight: "0.4rem" }}>TAX YEAR</span>
-          <span style={{ fontWeight: 600 }}>{displayTaxYear}</span>
+          <span style={{ fontWeight: 700, color: "#334155", marginRight: "0.4rem" }}>DISTRICT</span>
+          <span>{copy.district}</span>
         </div>
 
-        {/* Row 4: Issue Date | Due Date */}
+        {/* Row 4: Tax Year | Issue Date */}
         <div
           style={{
             display: "flex",
@@ -312,10 +301,10 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
             paddingTop: "0.18rem"
           }}
         >
-          <span style={{ width: "5.5rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
-            ISSUE DATE
+          <span style={{ width: "6.8rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
+            TAX YEAR
           </span>
-          <span>{displayIssueDate}</span>
+          <span style={{ fontWeight: 600 }}>{displayTaxYear}</span>
         </div>
         <div
           style={{
@@ -326,8 +315,32 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
             paddingTop: "0.18rem"
           }}
         >
-          <span style={{ fontWeight: 700, color: "#b91c1c", marginRight: "0.4rem" }}>DUE DATE</span>
-          <span style={{ fontWeight: 800, color: "#b91c1c" }}>{displayDueDate}</span>
+          <span style={{ fontWeight: 700, color: "#334155", marginRight: "0.4rem" }}>
+            ISSUE DATE
+          </span>
+          <span>{displayIssueDate}</span>
+        </div>
+
+        {/* Row 5: Due Date (Full Width Callout) */}
+        <div
+          style={{
+            gridColumn: "span 2",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
+            borderRadius: "3px",
+            padding: "0.15rem 0.35rem",
+            marginTop: "0.1rem"
+          }}
+        >
+          <span style={{ fontWeight: 700, color: "#b91c1c", fontSize: "0.68rem" }}>
+            STATUTORY DUE DATE
+          </span>
+          <span style={{ fontWeight: 800, color: "#b91c1c", fontSize: "0.74rem" }}>
+            {displayDueDate}
+          </span>
         </div>
       </div>
 
