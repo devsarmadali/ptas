@@ -88,10 +88,10 @@ export async function generateAppellateOrderPdf(
   doc.text(String(orderNumber), left + 120, curY + 5);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Security PIN:", left + 4, curY + 10);
+  doc.text("Security Code:", left + 4, curY + 10);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`🔒 ${pin}`, left + 28, curY + 10);
+  doc.text(`[Code] ${pin}`, left + 28, curY + 10);
 
   doc.setTextColor(...PDF_COLORS.textDark);
   doc.setFont("helvetica", "bold");
@@ -242,9 +242,9 @@ export async function generateAppellateOrderPdf(
   const qrDataUrl = await generateQrDataUrl(qrPayload);
   doc.addImage(qrDataUrl, "PNG", left + 4, curY, 22, 22);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
+  doc.setFontSize(6.8);
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`PIN: ${pin}`, left + 15, curY + 26, { align: "center" });
+  doc.text(`Code: ${pin}`, left + 15, curY + 26, { align: "center" });
 
   const sigX = left + contentWidth - 65;
   doc.setDrawColor(...PDF_COLORS.borderDark);

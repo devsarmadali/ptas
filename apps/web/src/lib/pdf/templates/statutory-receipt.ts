@@ -84,10 +84,10 @@ export async function generateStatutoryReceiptPdf(
   doc.text(String(demandNumber), left + 138, curY + 5);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Security PIN:", left + 4, curY + 11);
+  doc.text("Security Code:", left + 4, curY + 11);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`🔒 ${pin}`, left + 30, curY + 11);
+  doc.text(`[Code] ${pin}`, left + 30, curY + 11);
 
   doc.setTextColor(...PDF_COLORS.textDark);
   doc.setFont("helvetica", "bold");
@@ -226,9 +226,9 @@ export async function generateStatutoryReceiptPdf(
   const qrDataUrl = await generateQrDataUrl(qrPayload);
   doc.addImage(qrDataUrl, "PNG", left + 4, curY, 22, 22);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
+  doc.setFontSize(6.8);
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`PIN: ${pin}`, left + 15, curY + 26, { align: "center" });
+  doc.text(`Code: ${pin}`, left + 15, curY + 26, { align: "center" });
 
   const sigX = left + contentWidth - 65;
   doc.setDrawColor(...PDF_COLORS.borderDark);

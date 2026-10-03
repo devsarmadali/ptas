@@ -60,10 +60,10 @@ export async function generateShowCauseNoticePdf(
   doc.text(notice.demandNumber, left + 138, curY + 5);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Security PIN:", left + 4, curY + 10);
+  doc.text("Security Code:", left + 4, curY + 10);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`🔒 ${notice.pin}`, left + 30, curY + 10);
+  doc.text(`[Code] ${notice.pin}`, left + 30, curY + 10);
 
   doc.setTextColor(...PDF_COLORS.textDark);
   doc.setFont("helvetica", "bold");
@@ -93,21 +93,25 @@ export async function generateShowCauseNoticePdf(
   doc.setFillColor(...PDF_COLORS.bgHeader);
   doc.rect(left, curY, contentWidth, 5.5, "F");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFontSize(8.5);
   doc.setTextColor(...PDF_COLORS.primary);
   doc.text("TO (DEFAULTING TAXPAYER PARTICULARS):", left + 4, curY + 4);
 
   curY += 6.5;
-  doc.setFontSize(8);
+  doc.setFontSize(8.5);
   doc.setTextColor(...PDF_COLORS.textDark);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Assessee Name:", left + 4, curY + 4);
+  doc.text("Legal Name:", left + 4, curY + 4);
   doc.setFont("helvetica", "normal");
-  const nameStr = notice.assesseeTradeName
-    ? `${notice.assesseeLegalName} (${notice.assesseeTradeName})`
-    : notice.assesseeLegalName;
-  doc.text(nameStr, left + 32, curY + 4);
+  doc.text(notice.assesseeLegalName, left + 28, curY + 4);
+
+  if (notice.assesseeTradeName) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Taxpayer / Proprietor:", left + 95, curY + 4);
+    doc.setFont("helvetica", "normal");
+    doc.text(notice.assesseeTradeName, left + 135, curY + 4);
+  }
 
   curY += 5.5;
   doc.setFont("helvetica", "bold");
@@ -200,9 +204,9 @@ export async function generateShowCauseNoticePdf(
   const qrDataUrl = await generateQrDataUrl(notice.qrPayload);
   doc.addImage(qrDataUrl, "PNG", left + 4, curY, 22, 22);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
+  doc.setFontSize(6.8);
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`PIN: ${notice.pin}`, left + 15, curY + 26, { align: "center" });
+  doc.text(`Code: ${notice.pin}`, left + 15, curY + 26, { align: "center" });
 
   const sigX = left + contentWidth - 65;
   doc.setDrawColor(...PDF_COLORS.borderDark);

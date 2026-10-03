@@ -85,8 +85,8 @@ export async function generateTaxClearanceCertificatePdf(
   doc.text("CERTIFICATE NUMBER:", left + 4, curY + 5.5);
   doc.text(String(certificateNumber), left + 46, curY + 5.5);
 
-  doc.text("SECURITY PIN:", left + 105, curY + 5.5);
-  doc.text(`🔒 ${pin}`, left + 135, curY + 5.5);
+  doc.text("SECURITY CODE:", left + 105, curY + 5.5);
+  doc.text(`[Code] ${pin}`, left + 135, curY + 5.5);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
@@ -209,9 +209,9 @@ export async function generateTaxClearanceCertificatePdf(
   const qrDataUrl = await generateQrDataUrl(qrPayload);
   doc.addImage(qrDataUrl, "PNG", left + 4, curY, 24, 24);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
+  doc.setFontSize(6.8);
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`PIN: ${pin}`, left + 16, curY + 28, { align: "center" });
+  doc.text(`Code: ${pin}`, left + 16, curY + 28, { align: "center" });
 
   const sigX = left + contentWidth - 65;
   doc.setDrawColor(...PDF_COLORS.borderDark);

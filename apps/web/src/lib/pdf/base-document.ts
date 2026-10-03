@@ -184,7 +184,7 @@ export function renderDocumentFooters(doc: jsPDF, options?: FooterOptions): void
     doc.setTextColor(...PDF_COLORS.textMuted);
 
     const hashSlice = options?.officialSha256 ? options.officialSha256.slice(0, 16) : "VERIFIED";
-    const pinPart = options?.pin ? ` • PIN: ${options.pin}` : "";
+    const pinPart = options?.pin ? ` • Code: ${options.pin}` : "";
     const docPart = options?.docNumber ? ` • Ref: ${options.docNumber}` : "";
     const leftText = `Government of the Punjab • Excise & Taxation • SHA-256: ${hashSlice}${pinPart}${docPart}`;
     doc.text(leftText, 10, footerY);

@@ -55,52 +55,52 @@ export async function generatePft1DemandNoticePdf(
   doc.rect(left, curY, contentWidth, 16, "FD");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFontSize(8.5);
   doc.setTextColor(...PDF_COLORS.textDark);
 
-  doc.text("Notice Ref:", left + 4, curY + 5);
+  doc.text("Notice Ref:", left + 4, curY + 5.2);
   doc.setFont("helvetica", "normal");
-  doc.text(notice.noticeNumber, left + 24, curY + 5);
+  doc.text(notice.noticeNumber, left + 24, curY + 5.2);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Permanent Demand No:", left + 100, curY + 5);
+  doc.text("Permanent Demand No:", left + 95, curY + 5.2);
   doc.setFont("helvetica", "normal");
-  doc.text(notice.demandNumber, left + 140, curY + 5);
+  doc.text(notice.demandNumber, left + 138, curY + 5.2);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Security PIN:", left + 4, curY + 10.5);
+  doc.text("Security Code:", left + 4, curY + 11.0);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`[PIN] ${notice.pin || "68000000"}`, left + 24, curY + 10.5);
+  doc.text(`[Code] ${notice.pin || "68000000"}`, left + 27, curY + 11.0);
 
   doc.setTextColor(...PDF_COLORS.textDark);
   doc.setFont("helvetica", "bold");
-  doc.text("Issue Date:", left + 65, curY + 10.5);
+  doc.text("Issue Date:", left + 68, curY + 11.0);
   doc.setFont("helvetica", "normal");
-  doc.text(notice.issueDate || "2026-08-01", left + 82, curY + 10.5);
+  doc.text(notice.issueDate || "2026-08-01", left + 86, curY + 11.0);
 
   // Due Date Highlight Box
   doc.setFillColor(254, 243, 199);
   doc.setDrawColor(217, 119, 6);
-  doc.rect(left + 115, curY + 7.5, 63, 6, "FD");
+  doc.rect(left + 115, curY + 7.5, 63, 6.2, "FD");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFontSize(8.5);
   doc.setTextColor(180, 83, 9);
   doc.text(`DUE DATE: ${notice.dueDate || "31/08/2026"}`, left + 146.5, curY + 11.8, {
     align: "center"
   });
 
-  // 3. Addressee / Assessee Particulars Box
+  // 3. Addressee / Taxpayer Particulars Box
   curY += 20;
   doc.setFillColor(...PDF_COLORS.bgHeader);
   doc.rect(left, curY, contentWidth, 5.5, "F");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFontSize(8.5);
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text("TO (ASSESSEE PARTICULARS):", left + 4, curY + 4);
+  doc.text("TO (TAXPAYER PARTICULARS):", left + 4, curY + 4);
 
   curY += 6.5;
-  doc.setFontSize(8);
+  doc.setFontSize(8.5);
   doc.setTextColor(...PDF_COLORS.textDark);
 
   doc.setFont("helvetica", "bold");
@@ -110,9 +110,9 @@ export async function generatePft1DemandNoticePdf(
 
   if (notice.assesseeTradeName) {
     doc.setFont("helvetica", "bold");
-    doc.text("Trade Name:", left + 100, curY + 4);
+    doc.text("Taxpayer / Proprietor:", left + 95, curY + 4);
     doc.setFont("helvetica", "normal");
-    doc.text(notice.assesseeTradeName, left + 122, curY + 4);
+    doc.text(notice.assesseeTradeName, left + 132, curY + 4);
   }
 
   curY += 6;
@@ -123,9 +123,9 @@ export async function generatePft1DemandNoticePdf(
 
   if (notice.provincialUin) {
     doc.setFont("helvetica", "bold");
-    doc.text("Provincial UIN:", left + 100, curY + 4);
+    doc.text("Taxpayer PIN (UIN):", left + 95, curY + 4);
     doc.setFont("helvetica", "normal");
-    doc.text(notice.provincialUin, left + 124, curY + 4);
+    doc.text(notice.provincialUin, left + 132, curY + 4);
   }
 
   curY += 6;
@@ -138,7 +138,7 @@ export async function generatePft1DemandNoticePdf(
   // 4. Formal Statutory Demand Text
   curY += 10;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.setFontSize(8.5);
   doc.setTextColor(...PDF_COLORS.textDark);
   const formalText =
     "Please take notice that for the financial year 2026-2027, an assessment of Professional Tax under Section 3 of the Punjab Finance Act, 1977 has been determined against you by the undersigned Assessing Authority under Rule 4 of the Punjab Professions and Trades Tax Rules, 1977 as set forth below:";
@@ -239,23 +239,23 @@ export async function generatePft1DemandNoticePdf(
   const qrDataUrl = await generateQrDataUrl(notice.qrPayload);
   doc.addImage(qrDataUrl, "PNG", left + 4, curY + 2, 22, 22);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
+  doc.setFontSize(6.8);
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`PIN: ${notice.pin}`, left + 15, curY + 28, { align: "center" });
+  doc.text(`Code: ${notice.pin}`, left + 15, curY + 28, { align: "center" });
 
   const sigX = left + contentWidth - 65;
   doc.setDrawColor(...PDF_COLORS.borderDark);
   doc.line(sigX, curY + 16, sigX + 60, curY + 16);
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFontSize(8.5);
   doc.setTextColor(...PDF_COLORS.textDark);
   doc.text(notice.assessingAuthorityName || "Tariq Mahmood", sigX + 30, curY + 20, {
     align: "center"
   });
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
+  doc.setFontSize(7.2);
   doc.setTextColor(...PDF_COLORS.textMuted);
   doc.text(
     notice.assessingAuthorityTitle || "Excise & Taxation Officer / Assessing Authority",
@@ -273,7 +273,7 @@ export async function generatePft1DemandNoticePdf(
   doc.setLineDashPattern([], 0);
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7);
+  doc.setFontSize(7.2);
   doc.setTextColor(...PDF_COLORS.textMuted);
   doc.text(
     "✂  TEAR-OFF SERVICE COUNTERFOIL (RULE 6 RECEIPT)  ✂",
@@ -292,7 +292,7 @@ export async function generatePft1DemandNoticePdf(
 
   receiptY += 7.5;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.8);
+  doc.setFontSize(7.0);
   doc.setTextColor(...PDF_COLORS.textDark);
 
   doc.text(`Demand No: ${notice.demandNumber}`, left + 4, receiptY);
@@ -300,7 +300,7 @@ export async function generatePft1DemandNoticePdf(
   doc.text(`Due Date: ${notice.dueDate || "31/08/2026"}`, left + 120, receiptY);
 
   receiptY += 5;
-  doc.text(`Assessee: ${notice.assesseeLegalName}`, left + 4, receiptY);
+  doc.text(`Taxpayer: ${notice.assesseeLegalName}`, left + 4, receiptY);
   doc.text(`CNIC/NTN: ${notice.taxNumber || "N/A"}`, left + 120, receiptY);
 
   receiptY += 5.5;
@@ -312,7 +312,7 @@ export async function generatePft1DemandNoticePdf(
   doc.text("Signature of Serving Officer", left + 29.5, receiptY + 9.5, { align: "center" });
 
   doc.line(left + 120, receiptY + 6, left + contentWidth - 4, receiptY + 6);
-  doc.text("Signature / Thumbprint of Assessee", left + 150, receiptY + 9.5, { align: "center" });
+  doc.text("Signature / Thumbprint of Taxpayer", left + 150, receiptY + 9.5, { align: "center" });
 
   // Footers
   renderDocumentFooters(doc, {

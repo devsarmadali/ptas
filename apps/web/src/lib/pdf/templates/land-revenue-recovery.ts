@@ -60,10 +60,10 @@ export async function generateLandRevenueRecoveryPdf(
   doc.text(cert.demandNumber, left + 138, curY + 5);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Security PIN:", left + 4, curY + 10);
+  doc.text("Security Code:", left + 4, curY + 10);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`🔒 ${cert.pin}`, left + 28, curY + 10);
+  doc.text(`[Code] ${cert.pin}`, left + 28, curY + 10);
 
   doc.setTextColor(...PDF_COLORS.textDark);
   doc.setFont("helvetica", "bold");
@@ -156,9 +156,9 @@ export async function generateLandRevenueRecoveryPdf(
   const qrDataUrl = await generateQrDataUrl(cert.qrPayload);
   doc.addImage(qrDataUrl, "PNG", left + 4, curY, 22, 22);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
+  doc.setFontSize(6.8);
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`PIN: ${cert.pin}`, left + 15, curY + 26, { align: "center" });
+  doc.text(`Code: ${cert.pin}`, left + 15, curY + 26, { align: "center" });
 
   const sigX = left + contentWidth - 65;
   doc.setDrawColor(...PDF_COLORS.borderDark);

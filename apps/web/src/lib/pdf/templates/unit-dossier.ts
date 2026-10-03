@@ -63,9 +63,9 @@ export async function generateUnitDossierPdf(
 
   if (unit.tradeName) {
     doc.setFont("helvetica", "bold");
-    doc.text("Trade Name:", left + 100, curY + 11);
+    doc.text("Taxpayer / Proprietor:", left + 95, curY + 11);
     doc.setFont("helvetica", "normal");
-    doc.text(unit.tradeName, left + 122, curY + 11);
+    doc.text(unit.tradeName, left + 135, curY + 11);
   }
 
   doc.setFont("helvetica", "bold");
@@ -74,20 +74,20 @@ export async function generateUnitDossierPdf(
   doc.text(`${unit.identifierType}: ${unit.identifierValue}`, left + 28, curY + 16.5);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Permanent Demand No:", left + 100, curY + 16.5);
+  doc.text("Permanent Demand No:", left + 95, curY + 16.5);
   doc.setFont("helvetica", "normal");
-  doc.text(unit.demandUnit?.permanentDemandNo || "Unallocated", left + 140, curY + 16.5);
+  doc.text(unit.demandUnit?.permanentDemandNo || "Unallocated", left + 138, curY + 16.5);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Provincial UIN:", left + 4, curY + 22);
+  doc.text("Taxpayer PIN (UIN):", left + 4, curY + 22);
   doc.setFont("helvetica", "normal");
-  doc.text(unit.provincialUin || "Pending", left + 28, curY + 22);
+  doc.text(unit.provincialUin || "Pending", left + 35, curY + 22);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Security PIN:", left + 100, curY + 22);
+  doc.text("Security Code:", left + 95, curY + 22);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`🔒 ${unit.pinNumber || "68000000"}`, left + 140, curY + 22);
+  doc.text(`[Code] ${unit.pinNumber || "68000000"}`, left + 135, curY + 22);
 
   doc.setTextColor(...PDF_COLORS.textDark);
   doc.setFont("helvetica", "bold");
