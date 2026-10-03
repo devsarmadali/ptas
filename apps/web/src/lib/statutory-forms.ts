@@ -596,21 +596,31 @@ export function generateFormPFT1(
   ].filter(Boolean);
   const statutoryClassificationFull = classificationParts.join(" — ");
 
+  const districtName = unit.districtName || "Vehari";
+  const circleName = unit.circleName || "Circle-I";
+  const assessingAuthorityName =
+    unit.assessmentVersions[0]?.approvedBy || "Assessing Authority";
+  const assessingAuthorityTitle = `Excise & Taxation Officer / Assessing Authority, ${districtName}`;
+  const serverName = unit.servedBy || "Authorized Service Officer";
+  const serverRole = unit.servedBy
+    ? "Process Server / Service Officer"
+    : "Authorized Service Officer / Process Server";
+
   const canonicalNoticeText = [
     "GOVERNMENT OF THE PUNJAB - EXCISE & TAXATION DEPARTMENT",
     "EXCISE & TAXATION OFFICER (PUNJAB PROFESSIONS & TRADES TAX)",
-    "DISTRICT VEHARI - OFFICE OF THE ASSESSING AUTHORITY",
+    `DISTRICT ${districtName.toUpperCase()} - OFFICE OF THE ASSESSING AUTHORITY`,
     "FORM P.F.T-1: NOTICE OF TAX DEMAND",
     "(Section 03 of Punjab Finance Act 1977 read with rule 6 of the Punjab Professions & Trades Tax Rules, 1977)",
     `Notice No: ${noticeNumber} | Security PIN: ${pin}`,
-    `Demand No: ${demandNumber} | Date: ${issueDate} | Circle: Circle-Vehari`,
+    `Demand No: ${demandNumber} | Date: ${issueDate} | Circle: ${circleName}`,
     `Tax No: ${taxNumber}`,
     `To: ${unit.legalName}`,
     `Address: ${unit.address}`,
     `Statutory Notice Text: According to Section 03 of Punjab Finance Act, 1977 you are liable to pay Tax on Professions, Trades, Employment or Callings amounting to Rs. ${taxAmount} (in words) ${taxAmountWords} under ${scheduleEntry} (${unit.statutoryRule.category}${unit.statutoryRule.subclassification_label ? ` — ${unit.statutoryRule.subclassification_label}` : ""}${tertiarySlab ? ` — Slab: ${tertiarySlab}` : ""}) for the year 2026-2027.`,
     "Directive: You are directed to make the payment in the National Bank of Pakistan or State Bank of Pakistan within one month of the service of this Notice through Payment Challan Form P.F.T-2 attached herewith and furnish a copy of paid Challan to the undersigned.",
     "Statutory Default Warning: In case of default, a penalty, not exceeding the amount of tax, shall be imposed and unpaid dues shall be recovered as arrears of Land Revenue.",
-    "Assessing Authority: Tariq Mahmood, Excise & Taxation Officer, Professional Tax, Tehsil Vehari",
+    `Assessing Authority: ${assessingAuthorityName}, ${assessingAuthorityTitle}`,
     `Service Receipt Counterfoil: Demand No: ${demandNumber} | Tax Payable: Rs. ${taxAmount} | Due Date: ${dueDate} | Class: ${scheduleEntry} [${tertiarySlab ?? unit.statutoryRule.category}]`
   ].join("\n");
 
@@ -626,8 +636,8 @@ export function generateFormPFT1(
     taxNumber,
     issueDate,
     dueDate,
-    circleName: "Circle-Vehari",
-    districtName: "Vehari",
+    circleName,
+    districtName,
     assesseeLegalName: unit.legalName,
     assesseeTradeName: unit.tradeName,
     address: unit.address,
@@ -642,8 +652,8 @@ export function generateFormPFT1(
     rateBasis,
     statutoryClassificationFull,
     financialYear: "2026-2027",
-    assessingAuthorityName: "Tariq Mahmood",
-    assessingAuthorityTitle: "Excise & Taxation Officer / Assessing Authority, Tehsil Vehari",
+    assessingAuthorityName,
+    assessingAuthorityTitle,
     canonicalNoticeText,
     officialSha256,
     qrPayload,
@@ -654,8 +664,8 @@ export function generateFormPFT1(
       assesseeName: unit.legalName,
       assesseeClass: `${scheduleEntry} - ${unit.statutoryRule.category}${tertiarySlab ? ` [Slab: ${tertiarySlab}]` : ""} | Rate: PKR ${slabRatePkr.toLocaleString()}`,
       taxNumber,
-      serverName: "Muhammad Aslam",
-      serverRole: "Tax Inspector / Service Officer, Circle-Vehari"
+      serverName,
+      serverRole
     }
   };
 }

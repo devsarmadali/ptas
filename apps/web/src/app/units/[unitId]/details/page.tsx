@@ -7,7 +7,10 @@ import {
   type StatutoryReceiptRecord
 } from "../../../../lib/pilot-store";
 import { loadOperationalSurveyUnits } from "../../../../lib/operational-survey";
-import { computeUnitFinancialSummary } from "../../../../lib/statutory-forms";
+import {
+  computeUnitFinancialSummary,
+  getScheduleEntryLabel
+} from "../../../../lib/statutory-forms";
 import { downloadOfficialPdf } from "../../../../lib/pdf";
 
 interface UnitDetailsPageProps {
@@ -74,11 +77,10 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
           textAlign: "center"
         }}
       >
-        <h2 style={{ color: "#991b1b", margin: "0 0 0.5rem" }}>
-          No Registered Taxpayer Units Found
-        </h2>
+        <h2 style={{ color: "#991b1b", margin: "0 0 0.5rem" }}>Taxpayer Unit Not Found</h2>
         <p style={{ color: "#475569" }}>
-          Please initialize pilot data from the main PTAS dashboard to view unit dossiers.
+          Unable to locate a registered taxpayer unit matching the requested identification in this
+          jurisdiction.
         </p>
         <a
           href="/"
@@ -97,11 +99,15 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
   const arrears = summary.arrears;
   const totalDemand = summary.totalDemand;
   const totalPaid = summary.totalPaid;
+  const schedEntry = getScheduleEntryLabel(unit.statutoryRule);
+  const isCompliant = balance <= 0;
+  const district = unit.districtName || "Vehari";
+  const circle = unit.circleName || "Circle-I";
 
   return (
     <div
       style={{
-        maxWidth: "1720px",
+        maxWidth: "1600px",
         width: "100%",
         margin: "1.25rem auto",
         padding: "1rem 1.5rem",
@@ -127,28 +133,43 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           <span style={{ fontSize: "1.2rem" }}>🏛️</span>
           <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#0d3822" }}>
-            PTAS Punjab &bull; Unit Dossier Archive
+            PTAS Punjab &bull; Taxpayer Unit Official Dossier
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+          <a
+            href="/assessment/pft3"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.35rem 0.75rem",
+              borderRadius: "5px",
+              background: "#ffffff",
+              border: "1px solid #cbd5e1",
+              color: "#334155",
+              textDecoration: "none"
+            }}
+          >
+            ← PFT-3 Register
+          </a>
           <a
             href="/"
             style={{
               fontSize: "0.8rem",
               fontWeight: 600,
-              padding: "0.3rem 0.65rem",
-              borderRadius: "4px",
+              padding: "0.35rem 0.75rem",
+              borderRadius: "5px",
               background: "#0d3822",
               color: "#ffffff",
               textDecoration: "none"
             }}
           >
-            ← Main Dashboard
+            Main Dashboard
           </a>
         </div>
       </div>
 
-      {/* Locked Taxpayer Establishment Dossier Context */}
+      {/* Locked Taxpayer Establishment Dossier Context Banner */}
       <div
         style={{
           background: "#f0fdf4",
@@ -169,7 +190,7 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
             <span
               style={{
                 display: "block",
-                fontSize: "0.75rem",
+                fontSize: "0.72rem",
                 fontWeight: 700,
                 color: "#166534",
                 textTransform: "uppercase",
@@ -187,7 +208,7 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
                 marginTop: "0.2rem"
               }}
             >
-              <span style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.95rem" }}>
+              <span style={{ fontWeight: 800, color: "#0f172a", fontSize: "1.0rem" }}>
                 {unit.legalName}
               </span>
               {unit.tradeName && unit.tradeName !== unit.legalName && (
@@ -202,7 +223,7 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
                   background: "#dcfce7",
                   padding: "0.15rem 0.45rem",
                   borderRadius: "4px",
-                  fontSize: "0.85rem"
+                  fontSize: "0.82rem"
                 }}
               >
                 PIN: {unit.provincialUin || unit.pinNumber || "— Not assigned"}
@@ -211,47 +232,26 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
               <span
                 style={{
                   fontFamily: "monospace",
-                  fontWeight: 600,
-                  color: "#334155",
-                  background: "#f1f5f9",
+                  fontWeight: 700,
+                  color: "#1e3a8a",
+                  background: "#e0f2fe",
                   padding: "0.15rem 0.45rem",
                   borderRadius: "4px",
-                  fontSize: "0.85rem"
+                  fontSize: "0.82rem"
                 }}
               >
                 PDN: {unit.demandUnit?.permanentDemandNo || unit.demandNumber || "—"}
               </span>
               <span style={{ color: "#94a3b8" }}>•</span>
-              <span style={{ color: "#475569", fontSize: "0.85rem" }}>
-                Class {unit.statutoryRule.rule_code} ({unit.statutoryRule.category})
+              <span style={{ color: "#166534", fontWeight: 700, fontSize: "0.82rem" }}>
+                {schedEntry} &bull; PKR {unit.statutoryRule.annual_rate_pkr.toLocaleString()}
               </span>
             </div>
           </div>
         </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <a
-            href="/assessment/pft3"
-            style={{
-              fontSize: "0.8rem",
-              fontWeight: 600,
-              padding: "0.35rem 0.7rem",
-              borderRadius: "6px",
-              background: "#ffffff",
-              border: "1px solid #cbd5e1",
-              color: "#334155",
-              textDecoration: "none",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.3rem"
-            }}
-          >
-            ← PFT-3 Register
-          </a>
-        </div>
       </div>
 
-      {/* Top Header */}
+      {/* Main Action Header */}
       <div
         style={{
           background: "linear-gradient(135deg, #0d3822 0%, #166534 100%)",
@@ -261,31 +261,40 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
           marginBottom: "1.5rem",
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center"
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "1rem"
         }}
       >
         <div>
           <div
             style={{
-              fontSize: "0.75rem",
+              fontSize: "0.72rem",
               textTransform: "uppercase",
               letterSpacing: "0.05em",
               color: "#bbf7d0"
             }}
           >
-            Government of the Punjab &bull; Professional Tax Administration
+            Government of the Punjab &bull; Excise, Taxation &amp; Narcotics Control Department
           </div>
-          <h1 style={{ margin: "0.25rem 0", fontSize: "1.4rem", fontWeight: 700 }}>
+          <h1 style={{ margin: "0.25rem 0", fontSize: "1.35rem", fontWeight: 700 }}>
             {unit.legalName}
           </h1>
           <span style={{ fontSize: "0.85rem", color: "#f0fdf4" }}>
-            Demand Number: <strong>{unit.demandUnit.permanentDemandNo}</strong> &bull; PIN:{" "}
-            <strong style={{ fontFamily: "monospace" }}>{unit.provincialUin}</strong>
+            Demand Number:{" "}
+            <strong>
+              {unit.demandUnit?.permanentDemandNo || unit.demandNumber || "Unallocated"}
+            </strong>{" "}
+            &bull; PIN:{" "}
+            <strong style={{ fontFamily: "monospace" }}>
+              {unit.provincialUin || unit.pinNumber}
+            </strong>{" "}
+            &bull; {circle}, {district}
           </span>
         </div>
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
           <a
-            href={`/documents/pft1?pin=${unit.provincialUin}`}
+            href={`/documents/pft1?pin=${unit.provincialUin || unit.pinNumber}`}
             target="_blank"
             rel="noopener noreferrer"
             className="btn-secondary"
@@ -295,13 +304,14 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
               fontWeight: 700,
               textDecoration: "none",
               display: "inline-flex",
-              alignItems: "center"
+              alignItems: "center",
+              gap: "0.3rem"
             }}
           >
-            📄 Form P.F.T-1 ↗
+            📄 Form P.F.T-1 Notice ↗
           </a>
           <a
-            href={`/documents/pf2/new?pin=${unit.provincialUin}`}
+            href={`/documents/pf2/new?pin=${unit.provincialUin || unit.pinNumber}`}
             target="_blank"
             rel="noopener noreferrer"
             className="btn-secondary"
@@ -311,7 +321,8 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
               fontWeight: 700,
               textDecoration: "none",
               display: "inline-flex",
-              alignItems: "center"
+              alignItems: "center",
+              gap: "0.3rem"
             }}
           >
             🏛️ PFT2 Challan ↗
@@ -324,105 +335,370 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
               downloadOfficialPdf({
                 type: "UNIT_DOSSIER",
                 documentIdOrData: unit,
-                defaultFilename: `Unit_${unit.demandUnit.permanentDemandNo}_Dossier.pdf`
+                defaultFilename: `Unit_${unit.demandUnit?.permanentDemandNo || unit.id}_Dossier.pdf`
               })
             }
           >
             📥 Download Dossier (PDF)
           </button>
-          <button
-            type="button"
-            className="btn-secondary"
-            style={{ color: "#ffffff", borderColor: "#4ade80" }}
-            onClick={() => window.close()}
-          >
-            Close Tab
-          </button>
         </div>
       </div>
 
       <div id="unit-dossier-document">
-        {/* Core Profile Grid */}
+        {/* Core Profile & Master Registration */}
         <div
           style={{
             background: "#ffffff",
             border: "1px solid #cbd5e1",
             borderRadius: "8px",
             padding: "1.25rem",
-            marginBottom: "1.5rem",
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(14rem, 1fr))",
-            gap: "1rem"
+            marginBottom: "1.25rem",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)"
           }}
         >
-          <div>
-            <span style={{ color: "#64748b", fontSize: "0.75rem", display: "block" }}>
-              Trade / Establishment:
-            </span>
-            <strong>{unit.tradeName || unit.legalName}</strong>
+          <h3
+            style={{
+              margin: "0 0 0.85rem",
+              fontSize: "0.95rem",
+              fontWeight: 700,
+              color: "#0d3822",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.4rem"
+            }}
+          >
+            <span>🏢</span> Master Registration Particulars
+          </h3>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(15rem, 1fr))",
+              gap: "1rem",
+              fontSize: "0.85rem"
+            }}
+          >
+            <div>
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Legal Entity Name:
+              </span>
+              <strong style={{ fontSize: "0.95rem", color: "#0f172a" }}>{unit.legalName}</strong>
+            </div>
+            <div>
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Trade / Taxpayer Name:
+              </span>
+              <strong>{unit.tradeName || unit.legalName}</strong>
+            </div>
+            <div>
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Identifier ({unit.identifierType}):
+              </span>
+              <strong style={{ fontFamily: "monospace" }}>{unit.identifierValue}</strong>
+            </div>
+            <div>
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Permanent Demand No (PDN):
+              </span>
+              <span
+                style={{
+                  fontFamily: "monospace",
+                  fontWeight: 800,
+                  color: "#166534",
+                  fontSize: "0.95rem"
+                }}
+              >
+                {unit.demandUnit?.permanentDemandNo || unit.demandNumber || "Unallocated"}
+              </span>
+            </div>
+            <div>
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Provincial PIN:
+              </span>
+              <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#1e3a8a" }}>
+                {unit.provincialUin || unit.pinNumber || "Pending"}
+              </span>
+            </div>
+            <div>
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Security Code:
+              </span>
+              <span
+                style={{
+                  fontFamily: "monospace",
+                  fontWeight: 800,
+                  color: "#0369a1",
+                  background: "#e0f2fe",
+                  padding: "0.1rem 0.35rem",
+                  borderRadius: "3px"
+                }}
+              >
+                {unit.pinNumber || "—"}
+              </span>
+            </div>
+            <div style={{ gridColumn: "span 2" }}>
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Commercial Address &amp; Locality:
+              </span>
+              <span>
+                {unit.address}
+                {unit.locality ? ` • Locality: ${unit.locality}` : ""}
+              </span>
+            </div>
+            <div>
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Administrative Jurisdiction:
+              </span>
+              <span>
+                {circle} &bull; District {district}
+              </span>
+            </div>
           </div>
-          <div>
-            <span style={{ color: "#64748b", fontSize: "0.75rem", display: "block" }}>
-              Identifier ({unit.identifierType}):
-            </span>
-            <strong>{unit.identifierValue}</strong>
+        </div>
+
+        {/* Statutory Classification & Prescribed Tariff (Rule Pack V3) */}
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #cbd5e1",
+            borderRadius: "8px",
+            padding: "1.25rem",
+            marginBottom: "1.25rem",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)"
+          }}
+        >
+          <h3
+            style={{
+              margin: "0 0 0.85rem",
+              fontSize: "0.95rem",
+              fontWeight: 700,
+              color: "#0d3822",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.4rem"
+            }}
+          >
+            <span>📜</span> Statutory Classification &amp; Prescribed Tariff (Punjab Finance Act
+            1977)
+          </h3>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(15rem, 1fr))",
+              gap: "1rem",
+              fontSize: "0.85rem"
+            }}
+          >
+            <div>
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Second Schedule Entry:
+              </span>
+              <strong style={{ color: "#166534" }}>{schedEntry}</strong>
+            </div>
+            <div>
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Statutory Category:
+              </span>
+              <strong>{unit.statutoryRule.category}</strong>
+            </div>
+            <div>
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Sub-Classification:
+              </span>
+              <span>
+                {unit.statutoryRule.subclassification_code
+                  ? `${unit.statutoryRule.subclassification_code} — ${unit.statutoryRule.subclassification_label || ""}`
+                  : "General / Standard Class"}
+              </span>
+            </div>
+            <div>
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Tertiary Slab / Basis:
+              </span>
+              <span>
+                {unit.statutoryRule.statutory_tertiary_classification ||
+                  unit.statutoryTertiaryCode ||
+                  "Standard Basis"}
+              </span>
+            </div>
+            <div>
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Prescribed Statutory Rate:
+              </span>
+              <strong style={{ fontSize: "1.05rem", color: "#0d3822" }}>
+                PKR {unit.statutoryRule.annual_rate_pkr.toLocaleString()} /-
+              </strong>
+            </div>
+            <div>
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Rate Basis &amp; Periodicity:
+              </span>
+              <span>{unit.statutoryRule.rate_basis || "Per Establishment / Per Annum"}</span>
+            </div>
+            <div style={{ gridColumn: "span 2" }}>
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Full Statutory Description:
+              </span>
+              <span style={{ color: "#475569" }}>
+                {unit.statutoryRule.official_text || unit.statutoryRule.category}
+              </span>
+            </div>
           </div>
-          <div>
-            <span style={{ color: "#64748b", fontSize: "0.75rem", display: "block" }}>
-              Commercial Address:
+        </div>
+
+        {/* Current Financial Standing & Compliance Status */}
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #cbd5e1",
+            borderRadius: "8px",
+            padding: "1.25rem",
+            marginBottom: "1.25rem",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)"
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "0.85rem",
+              flexWrap: "wrap",
+              gap: "0.5rem"
+            }}
+          >
+            <h3
+              style={{
+                margin: 0,
+                fontSize: "0.95rem",
+                fontWeight: 700,
+                color: "#0d3822",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem"
+              }}
+            >
+              <span>📊</span> Financial Standing (FY 2026-2027)
+            </h3>
+            <span
+              style={{
+                fontSize: "0.75rem",
+                fontWeight: 800,
+                padding: "0.2rem 0.65rem",
+                borderRadius: "4px",
+                background: isCompliant ? "#dcfce7" : "#fee2e2",
+                color: isCompliant ? "#166534" : "#991b1b",
+                border: `1px solid ${isCompliant ? "#86efac" : "#fca5a5"}`
+              }}
+            >
+              {isCompliant
+                ? "✓ FULLY COMPLIANT (ZERO BALANCE)"
+                : `⚠ DEFAULT: PKR ${balance.toLocaleString()} OUTSTANDING`}
             </span>
-            <span>{unit.address}</span>
           </div>
-          <div>
-            <span style={{ color: "#64748b", fontSize: "0.75rem", display: "block" }}>
-              Statutory Classification:
-            </span>
-            <strong>
-              Class {unit.statutoryRule.subclassification_code ?? unit.statutoryRule.category_code}
-            </strong>
-            <span style={{ display: "block", fontSize: "0.75rem", color: "#475569" }}>
-              {unit.statutoryRule.category}
-            </span>
-          </div>
-          <div>
-            <span style={{ color: "#64748b", fontSize: "0.75rem", display: "block" }}>
-              Assessed Current Tax:
-            </span>
-            <strong style={{ fontSize: "1.1rem", color: "#0d3822" }}>
-              PKR {assessedTax.toLocaleString()}
-            </strong>
-          </div>
-          <div>
-            <span style={{ color: "#64748b", fontSize: "0.75rem", display: "block" }}>
-              Arrears (Prior Years):
-            </span>
-            <strong style={{ fontSize: "1.1rem", color: arrears > 0 ? "#b45309" : "#64748b" }}>
-              PKR {arrears.toLocaleString()}
-            </strong>
-          </div>
-          <div>
-            <span style={{ color: "#64748b", fontSize: "0.75rem", display: "block" }}>
-              Total Demand:
-            </span>
-            <strong style={{ fontSize: "1.1rem", color: "#0f172a" }}>
-              PKR {totalDemand.toLocaleString()}
-            </strong>
-          </div>
-          <div>
-            <span style={{ color: "#64748b", fontSize: "0.75rem", display: "block" }}>
-              Total Paid:
-            </span>
-            <strong style={{ fontSize: "1.1rem", color: "#166534" }}>
-              PKR {totalPaid.toLocaleString()}
-            </strong>
-          </div>
-          <div>
-            <span style={{ color: "#64748b", fontSize: "0.75rem", display: "block" }}>
-              Outstanding Balance:
-            </span>
-            <strong style={{ fontSize: "1.1rem", color: balance > 0 ? "#b91c1c" : "#166534" }}>
-              PKR {balance.toLocaleString()}
-            </strong>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(12rem, 1fr))",
+              gap: "0.75rem"
+            }}
+          >
+            <div
+              style={{
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: "6px",
+                padding: "0.75rem"
+              }}
+            >
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Assessed Current Tax:
+              </span>
+              <strong style={{ fontSize: "1.05rem", color: "#0d3822" }}>
+                PKR {assessedTax.toLocaleString()}
+              </strong>
+            </div>
+
+            <div
+              style={{
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: "6px",
+                padding: "0.75rem"
+              }}
+            >
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Prior Year Arrears:
+              </span>
+              <strong
+                style={{
+                  fontSize: "1.05rem",
+                  color: arrears > 0 ? "#b45309" : "#64748b"
+                }}
+              >
+                PKR {arrears.toLocaleString()}
+              </strong>
+            </div>
+
+            <div
+              style={{
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: "6px",
+                padding: "0.75rem"
+              }}
+            >
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Total Net Demand:
+              </span>
+              <strong style={{ fontSize: "1.05rem", color: "#0f172a" }}>
+                PKR {totalDemand.toLocaleString()}
+              </strong>
+            </div>
+
+            <div
+              style={{
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: "6px",
+                padding: "0.75rem"
+              }}
+            >
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Realized Payments:
+              </span>
+              <strong style={{ fontSize: "1.05rem", color: "#166534" }}>
+                PKR {totalPaid.toLocaleString()}
+              </strong>
+            </div>
+
+            <div
+              style={{
+                background: isCompliant ? "#f0fdf4" : "#fef2f2",
+                border: `1px solid ${isCompliant ? "#86efac" : "#fecaca"}`,
+                borderRadius: "6px",
+                padding: "0.75rem"
+              }}
+            >
+              <span
+                style={{
+                  color: isCompliant ? "#166534" : "#991b1b",
+                  fontSize: "0.72rem",
+                  display: "block",
+                  fontWeight: 700
+                }}
+              >
+                Outstanding Balance:
+              </span>
+              <strong
+                style={{
+                  fontSize: "1.15rem",
+                  color: isCompliant ? "#166534" : "#b91c1c"
+                }}
+              >
+                PKR {balance.toLocaleString()}
+              </strong>
+            </div>
           </div>
         </div>
 
@@ -433,11 +709,19 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
             border: "1px solid #cbd5e1",
             borderRadius: "8px",
             padding: "1.25rem",
-            marginBottom: "1.5rem"
+            marginBottom: "1.25rem",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)"
           }}
         >
-          <h3 style={{ margin: "0 0 0.75rem", fontSize: "1rem", color: "#0d3822" }}>
-            Demand &amp; Payment Ledger (Rule 11)
+          <h3
+            style={{
+              margin: "0 0 0.75rem",
+              fontSize: "0.95rem",
+              color: "#0d3822",
+              fontWeight: 700
+            }}
+          >
+            Demand &amp; Payment Ledger Transactions (Rule 11)
           </h3>
           <div className="table-container">
             <table className="gov-table" style={{ width: "100%" }}>
@@ -455,7 +739,20 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
               <tbody>
                 {(() => {
                   let runningBalance = 0;
-                  return unit.ledgerEntries.map((entry) => {
+                  const entries = unit.ledgerEntries || [];
+                  if (entries.length === 0) {
+                    return (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          style={{ textAlign: "center", color: "#64748b", padding: "1rem" }}
+                        >
+                          No transactional ledger entries recorded for this unit.
+                        </td>
+                      </tr>
+                    );
+                  }
+                  return entries.map((entry) => {
                     runningBalance += entry.amount;
                     return (
                       <tr key={entry.id}>
@@ -501,10 +798,18 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
             border: "1px solid #cbd5e1",
             borderRadius: "8px",
             padding: "1.25rem",
-            marginBottom: "1.5rem"
+            marginBottom: "1.25rem",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)"
           }}
         >
-          <h3 style={{ margin: "0 0 0.75rem", fontSize: "1rem", color: "#0d3822" }}>
+          <h3
+            style={{
+              margin: "0 0 0.75rem",
+              fontSize: "0.95rem",
+              color: "#0d3822",
+              fontWeight: 700
+            }}
+          >
             Issued PFT2 Challans ({challans.length})
           </h3>
           {challans.length === 0 ? (
@@ -569,10 +874,18 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
             background: "#ffffff",
             border: "1px solid #cbd5e1",
             borderRadius: "8px",
-            padding: "1.25rem"
+            padding: "1.25rem",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)"
           }}
         >
-          <h3 style={{ margin: "0 0 0.75rem", fontSize: "1rem", color: "#0d3822" }}>
+          <h3
+            style={{
+              margin: "0 0 0.75rem",
+              fontSize: "0.95rem",
+              color: "#0d3822",
+              fontWeight: 700
+            }}
+          >
             Statutory Payment Receipts ({receipts.length})
           </h3>
           {receipts.length === 0 ? (

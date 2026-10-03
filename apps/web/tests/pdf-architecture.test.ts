@@ -303,6 +303,14 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
       expect(Math.round(height)).toBe(297);
 
       expect(pdf.getNumberOfPages()).toBe(1);
+
+      const pdfBytes = Buffer.from(pdf.output("arraybuffer"));
+      const fs = await import("node:fs");
+      const artifactDir =
+        "C:\\Users\\ETIVE\\.gemini\\antigravity-ide\\brain\\d93a868a-d531-4c38-b5f0-d2a8ca652865";
+      if (fs.existsSync(artifactDir)) {
+        fs.writeFileSync(`${artifactDir}\\sample_pft1_notice.pdf`, pdfBytes);
+      }
     });
   });
 
@@ -586,6 +594,14 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
       expect(pdf).toBeDefined();
       expect(Math.round(pdf.internal.pageSize.getWidth())).toBe(210);
       expect(Math.round(pdf.internal.pageSize.getHeight())).toBe(297);
+
+      const pdfBytes = Buffer.from(pdf.output("arraybuffer"));
+      const fs = await import("node:fs");
+      const artifactDir =
+        "C:\\Users\\ETIVE\\.gemini\\antigravity-ide\\brain\\d93a868a-d531-4c38-b5f0-d2a8ca652865";
+      if (fs.existsSync(artifactDir)) {
+        fs.writeFileSync(`${artifactDir}\\sample_unit_dossier.pdf`, pdfBytes);
+      }
     });
   });
 
