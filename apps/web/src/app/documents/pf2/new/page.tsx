@@ -490,7 +490,7 @@ function DocumentIssuanceContent() {
                   <span style={{ color: "#64748b" }}>•</span>
                   <span>PIN: {unit.provincialUin}</span>
                   <span style={{ color: "#64748b" }}>•</span>
-                  <span>PDN: {unit.demandUnit.permanentDemandNo}</span>
+                  <span>Demand Number: {unit.demandUnit.permanentDemandNo}</span>
                   <span style={{ color: "#64748b" }}>•</span>
                   <span>
                     Class {unit.statutoryRule.rule_code} ({unit.statutoryRule.category})
@@ -531,8 +531,9 @@ function DocumentIssuanceContent() {
                     const assessed = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
                     return (
                       <option key={u.id} value={u.provincialUin}>
-                        PIN: {u.provincialUin} &bull; PDN: {u.demandUnit.permanentDemandNo} &bull;{" "}
-                        {u.statutoryRule.category} (Assessed: PKR {assessed.toLocaleString()})
+                        PIN: {u.provincialUin} &bull; Demand Number:{" "}
+                        {u.demandUnit.permanentDemandNo} &bull; {u.statutoryRule.category}{" "}
+                        (Assessed: PKR {assessed.toLocaleString()})
                       </option>
                     );
                   })}

@@ -215,10 +215,10 @@ export function verifyStatutoryDocument(
     };
   }
 
-  // 0. Check for 6-Digit Document Security PIN Verification
+  // 0. Check for 6-Digit Document Security Code Verification
   const cleanPin = normalizeDocumentPin(trimmed);
   if (validateDocumentPin(cleanPin)) {
-    // Check issued PFT-2 Challans by PIN
+    // Check issued PFT2 Challans by Security Code
     const challanByPin = challans.find((c) => c.pin === cleanPin);
     if (challanByPin) {
       const ref = challanByPin.noticeNumber ?? challanByPin.challanNumber;
@@ -226,8 +226,8 @@ export function verifyStatutoryDocument(
         isValid: true,
         documentType: "FORM_PFT2_CHALLAN",
         verificationStatus: "AUTHENTIC_VALID",
-        title: "Authentic Form P.F.T-2 Payment Challan",
-        message: `✓ Official Form P.F.T-2 Challan verified via Document Security PIN ${cleanPin}. Notice No: ${ref} | Assessed Demand: PKR ${challanByPin.amountPayable.toLocaleString()} (Due: ${challanByPin.dueDate}).`,
+        title: "Authentic PFT2 Payment Challan",
+        message: `✓ Official PFT2 Challan verified via Security Code ${cleanPin}. Demand Number: ${ref} | Assessed Demand: PKR ${challanByPin.amountPayable.toLocaleString()} (Due: ${challanByPin.dueDate}).`,
         documentReference: ref,
         unitName: challanByPin.legalName,
         tradeName: challanByPin.tradeName,
@@ -247,7 +247,7 @@ export function verifyStatutoryDocument(
       };
     }
 
-    // Check issued Receipts by PIN
+    // Check issued Receipts by Security Code
     const receiptByPin = receipts.find((r) => r.pin === cleanPin);
     if (receiptByPin) {
       return {
@@ -255,7 +255,7 @@ export function verifyStatutoryDocument(
         documentType: "FORM_PFT_RECEIPT",
         verificationStatus: "AUTHENTIC_VALID",
         title: "Authentic Statutory Payment Receipt",
-        message: `✓ Official Payment Receipt verified via Document Security PIN ${cleanPin}. Amount: PKR ${receiptByPin.amountPaidPkr.toLocaleString()} fully credited to Punjab Professional Tax Account (Bank Scroll/CPR: ${receiptByPin.bankScrollRef}).`,
+        message: `✓ Official Statutory Receipt verified via Security Code ${cleanPin}. Amount: PKR ${receiptByPin.amountPaidPkr.toLocaleString()} fully credited to Punjab Professional Tax Account (Bank Scroll/CPR: ${receiptByPin.bankScrollRef}).`,
         documentReference: receiptByPin.receiptNumber,
         unitName: receiptByPin.assesseeLegalName,
         tradeName: receiptByPin.assesseeTradeName,
@@ -275,7 +275,7 @@ export function verifyStatutoryDocument(
       };
     }
 
-    // Check Clearance Certificates by PIN
+    // Check Clearance Certificates by Security Code
     const certByPin = clearanceCerts.find((c) => c.pin === cleanPin);
     if (certByPin) {
       const unit = units.find((u) => u.id === certByPin.unitId);
@@ -286,7 +286,7 @@ export function verifyStatutoryDocument(
           documentType: "FORM_PFT5_CLEARANCE",
           verificationStatus: "REVOKED_ARREARS_PENDING",
           title: "Clearance Revoked / Arrears Pending",
-          message: `Warning: This certificate (${certByPin.certificateNumber}) verified by PIN ${cleanPin} is INVALIDated by live ledger arrears of PKR ${liveBalance.toLocaleString()}.`,
+          message: `Warning: This certificate (${certByPin.certificateNumber}) verified by Security Code ${cleanPin} is INVALIDated by live ledger arrears of PKR ${liveBalance.toLocaleString()}.`,
           documentReference: certByPin.certificateNumber,
           unitName: certByPin.assesseeLegalName,
           tradeName: certByPin.assesseeTradeName,
@@ -308,7 +308,7 @@ export function verifyStatutoryDocument(
         documentType: "FORM_PFT5_CLEARANCE",
         verificationStatus: "AUTHENTIC_VALID",
         title: "Authentic Form P.F.T-5 Tax Clearance Certificate",
-        message: `✓ Official Tax Clearance Certificate verified via Document Security PIN ${cleanPin}. Assessee has NIL outstanding arrears for Financial Year ${certByPin.financialYear}.`,
+        message: `✓ Official Tax Clearance Certificate verified via Security Code ${cleanPin}. Assessee has NIL outstanding arrears for Financial Year ${certByPin.financialYear}.`,
         documentReference: certByPin.certificateNumber,
         unitName: certByPin.assesseeLegalName,
         tradeName: certByPin.assesseeTradeName,
@@ -326,7 +326,7 @@ export function verifyStatutoryDocument(
       };
     }
 
-    // Check units (PFT-1 or PFT-2 generated PIN)
+    // Check units (PFT-1 or PFT-2 generated Security Code)
     for (const u of units) {
       const pft1 = generateFormPFT1(u);
       if (pft1.pin === cleanPin) {
@@ -339,7 +339,7 @@ export function verifyStatutoryDocument(
             ? "Authentic Form P.F.T-1 Notice of Demand"
             : "Unapproved Draft Notice",
           message: pft1.isApproved
-            ? `✓ Official Notice of Demand verified via Document Security PIN ${cleanPin}. Assessed Tax: PKR ${pft1.taxAmount.toLocaleString()} • Current Ledger Balance: PKR ${balance.toLocaleString()}.`
+            ? `✓ Official Notice of Demand verified via Security Code ${cleanPin}. Assessed Tax: PKR ${pft1.taxAmount.toLocaleString()} • Current Ledger Balance: PKR ${balance.toLocaleString()}.`
             : "Notice: This demand notice reflects a draft assessment not yet approved by the Assessing Authority.",
           documentReference: pft1.noticeNumber,
           unitName: u.legalName,
@@ -368,11 +368,9 @@ export function verifyStatutoryDocument(
           isValid: pft2.isApproved,
           documentType: "FORM_PFT2_CHALLAN",
           verificationStatus: pft2.isApproved ? "AUTHENTIC_VALID" : "UNAPPROVED_DRAFT",
-          title: pft2.isApproved
-            ? "Authentic Form P.F.T-2 Payment Challan"
-            : "Unapproved Draft Challan",
+          title: pft2.isApproved ? "Authentic PFT2 Payment Challan" : "Unapproved Draft Challan",
           message: pft2.isApproved
-            ? `✓ Official Form P.F.T-2 Challan verified via Document Security PIN ${cleanPin}. Notice: ${pft2.noticeNumber} | Total payable: PKR ${pft2.displayAmount.toLocaleString()}.`
+            ? `✓ Official PFT2 Challan verified via Security Code ${cleanPin}. Demand Number: ${pft2.noticeNumber} | Total payable: PKR ${pft2.displayAmount.toLocaleString()}.`
             : "Notice: This payment challan is based on an unapproved draft assessment awaiting ETO review.",
           documentReference: pft2.noticeNumber,
           unitName: u.legalName,
@@ -538,8 +536,8 @@ export function verifyStatutoryDocument(
         isValid: true,
         documentType: "FORM_PFT2_CHALLAN",
         verificationStatus: "AUTHENTIC_VALID",
-        title: "Authentic Form P.F.T-2 Payment Challan",
-        message: `✓ Official Punjab Professional Tax Payment Challan verified. Notice: ${ref} | Total payable: PKR ${matchingChallan.amountPayable.toLocaleString()} (Due Date: ${matchingChallan.dueDate}).`,
+        title: "Authentic PFT2 Payment Challan",
+        message: `✓ Official Punjab Professional Tax PFT2 Challan verified. Demand Number: ${ref} | Total payable: PKR ${matchingChallan.amountPayable.toLocaleString()} (Due Date: ${matchingChallan.dueDate}).`,
         documentReference: ref,
         unitName: matchingChallan.legalName,
         tradeName: matchingChallan.tradeName,
@@ -578,12 +576,10 @@ export function verifyStatutoryDocument(
         isValid: pft2.isApproved,
         documentType: "FORM_PFT2_CHALLAN",
         verificationStatus: pft2.isApproved ? "AUTHENTIC_VALID" : "UNAPPROVED_DRAFT",
-        title: pft2.isApproved
-          ? "Authentic Form P.F.T-2 Payment Challan"
-          : "Unapproved Draft Challan",
+        title: pft2.isApproved ? "Authentic PFT2 Payment Challan" : "Unapproved Draft Challan",
         message: pft2.isApproved
-          ? `✓ Official Punjab Professional Tax Payment Challan verified. Total payable: PKR ${pft2.displayAmount.toLocaleString()} (Current Ledger Balance: PKR ${balance.toLocaleString()}).`
-          : "Notice: This payment challan is based on an unapproved draft assessment awaiting ETO review.",
+          ? `✓ Official Punjab Professional Tax PFT2 Challan verified. Total payable: PKR ${pft2.displayAmount.toLocaleString()} (Current Ledger Balance: PKR ${balance.toLocaleString()}).`
+          : "Notice: This PFT2 payment challan is based on an unapproved draft assessment awaiting ETO review.",
         documentReference: pft2.noticeNumber,
         unitName: matchingUnit.legalName,
         tradeName: matchingUnit.tradeName,
@@ -655,7 +651,7 @@ export function verifyStatutoryDocument(
     documentType: "UNKNOWN",
     verificationStatus: "INVALID_NOT_FOUND",
     title: "Document Not Found in Provincial Registry",
-    message: `No authentic Form P.F.T-1 notice, P.F.T-2 challan, or P.F.T-5 clearance certificate matching '${trimmed}' was found in Circle-Vehari.`,
+    message: `No authentic Form P.F.T-1 notice, PFT2 challan, or Form P.F.T-5 clearance certificate matching '${trimmed}' was found in Tax Unit Vehari.`,
     documentReference: trimmed,
     unitName: "N/A",
     identifier: "N/A",

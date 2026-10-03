@@ -1778,8 +1778,8 @@ export default function HomePage({
               "(Maintained under Rule 12 of Punjab Professions & Trades Tax Rules 1977)",
             columns: [
               { header: "Sr.", width: 8, align: "center" as const },
-              { header: "Demand No", width: 24, align: "left" as const },
-              { header: "Defaulter Legal Name", width: 55, align: "left" as const },
+              { header: "Demand Number", width: 24, align: "left" as const },
+              { header: "Legal Name", width: 55, align: "left" as const },
               { header: "Category", width: 45, align: "left" as const },
               { header: "Overdue", width: 20, align: "center" as const },
               { header: "Current", width: 26, align: "right" as const },
@@ -1822,8 +1822,8 @@ export default function HomePage({
             columns: [
               { header: "Sr.", width: 8, align: "center" as const },
               { header: "Notice No", width: 38, align: "left" as const },
-              { header: "Demand No", width: 26, align: "left" as const },
-              { header: "Assessee Name", width: 60, align: "left" as const },
+              { header: "Demand Number", width: 26, align: "left" as const },
+              { header: "Legal Name", width: 60, align: "left" as const },
               { header: "Amount (PKR)", width: 25, align: "right" as const },
               { header: "Due Date", width: 24, align: "center" as const },
               { header: "Server", width: 46, align: "left" as const },
@@ -1867,7 +1867,7 @@ export default function HomePage({
             columns: [
               { header: "Sr.", width: 8, align: "center" as const },
               { header: "Certificate No", width: 40, align: "left" as const },
-              { header: "Assessee Name", width: 60, align: "left" as const },
+              { header: "Legal Name", width: 60, align: "left" as const },
               { header: "CNIC/NTN", width: 30, align: "left" as const },
               { header: "FY", width: 22, align: "center" as const },
               { header: "Issue Date", width: 24, align: "center" as const },
@@ -1917,7 +1917,7 @@ export default function HomePage({
             columns: [
               { header: "Sr.", width: 8, align: "center" as const },
               { header: "Notice No", width: 40, align: "left" as const },
-              { header: "Assessee Name", width: 65, align: "left" as const },
+              { header: "Legal Name", width: 65, align: "left" as const },
               { header: "Date", width: 30, align: "center" as const },
               { header: "Status", width: 40, align: "center" as const },
               { header: "Grounds / Reason", width: 94, align: "left" as const }
@@ -4241,7 +4241,7 @@ export default function HomePage({
                   <div style={{ flex: "1 1 16rem" }}>
                     <input
                       type="text"
-                      placeholder="Search by legal name, trade name, CNIC, NTN, PIN, or PDN..."
+                      placeholder="Search by Legal Name, Taxpayer / Proprietor, CNIC, NTN, PIN, or Demand Number..."
                       value={unitsSearchQuery}
                       onChange={(e) => setUnitsSearchQuery(e.target.value)}
                       style={{
@@ -4308,9 +4308,11 @@ export default function HomePage({
                     <thead>
                       <tr>
                         <th style={{ whiteSpace: "nowrap" }}>Assessment No.</th>
-                        <th style={{ whiteSpace: "nowrap" }}>Demand No.</th>
-                        <th style={{ whiteSpace: "nowrap" }}>PIN Number</th>
-                        <th style={{ maxWidth: "13rem" }}>Legal &amp; Trade Name</th>
+                        <th style={{ whiteSpace: "nowrap" }}>Demand Number</th>
+                        <th style={{ whiteSpace: "nowrap" }}>PIN</th>
+                        <th style={{ maxWidth: "13rem" }}>
+                          Legal Name &amp; Taxpayer / Proprietor
+                        </th>
                         <th style={{ whiteSpace: "nowrap" }}>CNIC / NTN</th>
                         <th style={{ maxWidth: "15rem" }}>Second Schedule Classification</th>
                         <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Statutory Rate</th>
@@ -4414,7 +4416,7 @@ export default function HomePage({
                                       color: "#64748b"
                                     }}
                                   >
-                                    Trade: {u.tradeName}
+                                    Taxpayer / Proprietor: {u.tradeName}
                                   </span>
                                 )}
                                 {u.locality && (
@@ -7519,7 +7521,7 @@ export default function HomePage({
                                 border: "1px solid #bae6fd",
                                 letterSpacing: "1.5px"
                               }}
-                              title="Official 6-digit Document Security PIN"
+                              title="Official 6-digit Security Code"
                             >
                               🔐{" "}
                               {challan.pin ??
@@ -7535,7 +7537,7 @@ export default function HomePage({
                                 marginTop: "0.15rem"
                               }}
                             >
-                              Security PIN
+                              Security Code
                             </span>
                           </td>
                           <td>
@@ -11360,12 +11362,12 @@ export default function HomePage({
               <div className="panel-header">
                 <div>
                   <h4 style={{ margin: 0, color: "#0d3822", fontSize: "1.1rem" }}>
-                    🔍 Desk 1: Universal QR Code &amp; Document Security PIN Authenticator
+                    🔍 Desk 1: Universal QR Code &amp; Security Code Authenticator
                   </h4>
                   <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#64748b" }}>
-                    Instant multi-document authentication for Form P.F.T-1 (Demand Notice), Form
-                    P.F.T-2 (3-Copy Challan), Form P.F.T-5 (Tax Clearance Certificate), and
-                    Statutory Payment Receipts via 6-digit Document Security PIN or QR Code.
+                    Instant multi-document authentication for Form P.F.T-1 (Demand Notice), PFT2
+                    (3-Copy Challan), Form P.F.T-5 (Tax Clearance Certificate), and Statutory
+                    Payment Receipts via 6-digit Security Code or QR Code.
                   </p>
                 </div>
               </div>
@@ -11375,7 +11377,7 @@ export default function HomePage({
               >
                 <input
                   type="text"
-                  placeholder="Enter 6-digit Security PIN (e.g. 161105, 536863), Notice No, Challan No, or scan QR code..."
+                  placeholder="Enter 6-digit Security Code (e.g. 161105, 536863), Demand Number, Challan Number, or scan QR code..."
                   className="form-control"
                   style={{ flex: 1, minWidth: "20rem" }}
                   value={portalVerificationInput}
@@ -11629,7 +11631,7 @@ export default function HomePage({
                               boxShadow: "0 1px 3px rgba(0,0,0,0.15)"
                             }}
                           >
-                            🔐 Document Security PIN: {portalVerificationResult.pin}
+                            🔐 Security Code: {portalVerificationResult.pin}
                           </span>
                         </div>
                       )}
@@ -11662,7 +11664,7 @@ export default function HomePage({
                         <strong>{portalVerificationResult.documentReference}</strong>
                       </div>
                       <div>
-                        <span style={{ color: "#64748b", display: "block" }}>Assessee Name:</span>
+                        <span style={{ color: "#64748b", display: "block" }}>Legal Name:</span>
                         <strong>{portalVerificationResult.unitName}</strong>
                         {portalVerificationResult.tradeName && (
                           <span style={{ display: "block", color: "#475569" }}>
@@ -11729,7 +11731,7 @@ export default function HomePage({
                   </h4>
                   <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#64748b" }}>
                     Search and inspect outstanding professional tax assessments, payment receipts,
-                    and ePay challans by CNIC, NTN, or Permanent Demand Number.
+                    and ePay challans by CNIC, NTN, or Demand Number.
                   </p>
                 </div>
               </div>
@@ -11739,7 +11741,7 @@ export default function HomePage({
               >
                 <input
                   type="text"
-                  placeholder="Enter CNIC (e.g. 36601-2948192-3), NTN (e.g. 7412983-1), PIN, or Demand No (e.g. 0001)..."
+                  placeholder="Enter CNIC (e.g. 36601-2948192-3), NTN (e.g. 7412983-1), PIN, or Demand Number (e.g. 0001)..."
                   className="form-control"
                   style={{ flex: 1, minWidth: "20rem" }}
                   value={portalSearchQuery}
@@ -13042,11 +13044,11 @@ export default function HomePage({
                       letterSpacing: "1.5px"
                     }}
                   >
-                    🔐 PIN: {showCauseNoticeData.pin}
+                    🔐 Security Code: {showCauseNoticeData.pin}
                   </span>
                 </div>
                 <div>
-                  <strong>Permanent Demand No:</strong> {showCauseNoticeData.demandNumber}
+                  <strong>Demand Number:</strong> {showCauseNoticeData.demandNumber}
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <strong>Date of Issue:</strong> {showCauseNoticeData.noticeDate}
@@ -13064,11 +13066,11 @@ export default function HomePage({
                 }}
               >
                 <div>
-                  <strong>To (Assessee):</strong> {showCauseNoticeData.assesseeLegalName}
+                  <strong>Legal Name:</strong> {showCauseNoticeData.assesseeLegalName}
                 </div>
                 {showCauseNoticeData.assesseeTradeName && (
                   <div>
-                    <strong>Trade Name:</strong> {showCauseNoticeData.assesseeTradeName}
+                    <strong>Taxpayer / Proprietor:</strong> {showCauseNoticeData.assesseeTradeName}
                   </div>
                 )}
                 <div>
@@ -13512,11 +13514,11 @@ export default function HomePage({
                   <strong>District:</strong> {recoveryCertData.collectorDistrict}
                 </div>
                 <div style={{ marginTop: "0.5rem" }}>
-                  <strong>Defaulter Assessee:</strong> {recoveryCertData.assesseeLegalName}
+                  <strong>Legal Name:</strong> {recoveryCertData.assesseeLegalName}
                 </div>
                 {recoveryCertData.assesseeTradeName && (
                   <div>
-                    <strong>Trade Name:</strong> {recoveryCertData.assesseeTradeName}
+                    <strong>Taxpayer / Proprietor:</strong> {recoveryCertData.assesseeTradeName}
                   </div>
                 )}
                 <div>
@@ -13526,7 +13528,7 @@ export default function HomePage({
                   <strong>Location:</strong> {recoveryCertData.address}
                 </div>
                 <div>
-                  <strong>Permanent Demand No:</strong> {recoveryCertData.demandNumber}
+                  <strong>Demand Number:</strong> {recoveryCertData.demandNumber}
                 </div>
               </div>
 
@@ -13821,23 +13823,23 @@ export default function HomePage({
                       }}
                     >
                       <div>
-                        <strong>Demand No.:</strong> {pft1Data.demandNumber}
+                        <strong>Demand Number:</strong> {pft1Data.demandNumber}
                       </div>
                       <div>
                         <strong>Notice Date:</strong> {pft1Data.issueDate}
                       </div>
                       <div>
-                        <strong>Assessee:</strong> {pft1Data.assesseeLegalName}
+                        <strong>Legal Name:</strong> {pft1Data.assesseeLegalName}
                       </div>
                       <div>
-                        <strong>Business:</strong>{" "}
+                        <strong>Taxpayer / Proprietor:</strong>{" "}
                         {pft1Data.assesseeTradeName ?? pft1Data.assesseeLegalName}
                       </div>
                       <div>
                         <strong>Address:</strong> {pft1Data.address}
                       </div>
                       <div>
-                        <strong>PIN (Professional Identification No.):</strong>{" "}
+                        <strong>Professional Identification Number (PIN):</strong>{" "}
                         {pft1Data.provincialUin ?? pft1Data.taxNumber}
                       </div>
                       <div>
@@ -13918,11 +13920,11 @@ export default function HomePage({
                           }}
                         />
                         <strong>Excise &amp; Taxation Officer (ETO)</strong>
-                        <div style={{ color: "#64748b" }}>Circle-Vehari</div>
+                        <div style={{ color: "#64748b" }}>Tax Unit Vehari</div>
                       </div>
                     </div>
 
-                    {/* Security PIN row */}
+                    {/* Security Code row */}
                     <div
                       style={{
                         background: "#f0fdf4",
@@ -14127,11 +14129,11 @@ export default function HomePage({
                               border: "1px solid #bae6fd"
                             }}
                           >
-                            🔐 PIN: {noticeData.pin}
+                            🔐 Security Code: {noticeData.pin}
                           </span>
                         </div>
                         <div style={{ textAlign: "right" }}>
-                          <strong>Demand No:</strong>{" "}
+                          <strong>Demand Number:</strong>{" "}
                           <span
                             style={{ fontFamily: "monospace", fontWeight: 800, color: "#0d3822" }}
                           >
@@ -14147,7 +14149,7 @@ export default function HomePage({
                               paddingTop: "0.2rem"
                             }}
                           >
-                            <strong>PIN (Professional Identification Number):</strong>{" "}
+                            <strong>Professional Identification Number (PIN):</strong>{" "}
                             <span
                               style={{ fontFamily: "monospace", color: "#1d4ed8", fontWeight: 700 }}
                             >
@@ -14156,7 +14158,7 @@ export default function HomePage({
                           </div>
                         )}
                         <div>
-                          <strong>Circle:</strong> {noticeData.circleName}
+                          <strong>Tax Unit:</strong> {noticeData.circleName}
                         </div>
                         <div style={{ textAlign: "right" }}>
                           <strong>District:</strong> {noticeData.districtName}
@@ -14180,11 +14182,11 @@ export default function HomePage({
                         }}
                       >
                         <div>
-                          <strong>To (Assessee):</strong> {noticeData.assesseeLegalName}
+                          <strong>Legal Name:</strong> {noticeData.assesseeLegalName}
                         </div>
                         {noticeData.assesseeTradeName && (
                           <div>
-                            <strong>Trade Name:</strong> {noticeData.assesseeTradeName}
+                            <strong>Taxpayer / Proprietor:</strong> {noticeData.assesseeTradeName}
                           </div>
                         )}
                         <div>
@@ -14262,7 +14264,7 @@ export default function HomePage({
                           }}
                         >
                           <div>
-                            Demand No: <strong>{noticeData.serviceReceipt.demandNumber}</strong>
+                            Demand Number: <strong>{noticeData.serviceReceipt.demandNumber}</strong>
                           </div>
                           <div>
                             Assessed Tax:{" "}
@@ -14271,7 +14273,7 @@ export default function HomePage({
                             </strong>
                           </div>
                           <div>
-                            Assessee: <strong>{noticeData.serviceReceipt.assesseeName}</strong>
+                            Legal Name: <strong>{noticeData.serviceReceipt.assesseeName}</strong>
                           </div>
                           <div>
                             Process Server: <strong>{noticeData.serviceReceipt.serverName}</strong>
@@ -14584,8 +14586,8 @@ export default function HomePage({
                           columns: [
                             { header: "Sr.", width: 8, align: "center" as const },
                             { header: "Notice No", width: 38, align: "left" as const },
-                            { header: "Demand No", width: 26, align: "left" as const },
-                            { header: "Assessee Name", width: 60, align: "left" as const },
+                            { header: "Demand Number", width: 26, align: "left" as const },
+                            { header: "Legal Name", width: 60, align: "left" as const },
                             { header: "Amount (PKR)", width: 25, align: "right" as const },
                             { header: "Due Date", width: 24, align: "center" as const },
                             { header: "Server", width: 46, align: "left" as const },
@@ -14623,8 +14625,8 @@ export default function HomePage({
                   <thead>
                     <tr>
                       <th style={{ width: "2.5rem" }}>Select</th>
-                      <th>Notice &amp; Demand No</th>
-                      <th>Assessee Name &amp; Address</th>
+                      <th>Notice &amp; Demand Number</th>
+                      <th>Legal Name &amp; Address</th>
                       <th>Entry</th>
                       <th>Assessed Tax</th>
                       <th>Process Server</th>

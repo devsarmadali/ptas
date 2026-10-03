@@ -79,7 +79,7 @@ export async function generateStatutoryReceiptPdf(
   doc.text(String(receiptNumber), left + 30, curY + 5);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Permanent Demand No:", left + 95, curY + 5);
+  doc.text("Demand Number:", left + 95, curY + 5);
   doc.setFont("helvetica", "normal");
   doc.text(String(demandNumber), left + 138, curY + 5);
 
@@ -87,7 +87,7 @@ export async function generateStatutoryReceiptPdf(
   doc.text("Security Code:", left + 4, curY + 11);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`[Code] ${pin}`, left + 30, curY + 11);
+  doc.text(String(pin), left + 30, curY + 11);
 
   doc.setTextColor(...PDF_COLORS.textDark);
   doc.setFont("helvetica", "bold");
@@ -126,7 +126,7 @@ export async function generateStatutoryReceiptPdf(
   doc.setTextColor(...PDF_COLORS.textDark);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Payer Legal Name:", left + 4, curY + 4);
+  doc.text("Legal Name:", left + 4, curY + 4);
   doc.setFont("helvetica", "normal");
   const nameLine = assesseeTradeName
     ? `${assesseeLegalName} (${assesseeTradeName})`
@@ -141,9 +141,9 @@ export async function generateStatutoryReceiptPdf(
 
   if (provincialUin) {
     doc.setFont("helvetica", "bold");
-    doc.text("Provincial UIN:", left + 105, curY + 4);
+    doc.text("PIN:", left + 105, curY + 4);
     doc.setFont("helvetica", "normal");
-    doc.text(String(provincialUin), left + 130, curY + 4);
+    doc.text(String(provincialUin), left + 120, curY + 4);
   }
 
   curY += 5.5;

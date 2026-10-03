@@ -163,7 +163,7 @@ export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: str
               marginBottom: "0.5rem"
             }}
           >
-            Enter Document Security PIN, Notice #, or Challan #:
+            Enter Security Code, Notice Number, or Challan Number:
           </label>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <input
@@ -171,7 +171,7 @@ export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: str
               className="form-control"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="e.g. 6-digit PIN (e.g. 684219) or PFT2-0001-..."
+              placeholder="e.g. 6-digit Security Code (e.g. 684219) or PFT2-0001-..."
               style={{ fontSize: "0.95rem", padding: "0.65rem 0.85rem" }}
               required
             />
@@ -256,7 +256,7 @@ export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: str
                 {result.unitName && (
                   <div>
                     <span style={{ color: "#64748b", display: "block", fontSize: "0.72rem" }}>
-                      Assessee Name:
+                      Legal Name:
                     </span>
                     <strong>{result.unitName}</strong>
                   </div>

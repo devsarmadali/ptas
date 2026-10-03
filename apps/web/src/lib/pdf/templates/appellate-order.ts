@@ -91,7 +91,7 @@ export async function generateAppellateOrderPdf(
   doc.text("Security Code:", left + 4, curY + 10);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`[Code] ${pin}`, left + 28, curY + 10);
+  doc.text(String(pin), left + 28, curY + 10);
 
   doc.setTextColor(...PDF_COLORS.textDark);
   doc.setFont("helvetica", "bold");

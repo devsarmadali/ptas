@@ -138,7 +138,7 @@ describe("Phase 7: Executive MIS Analytics & Statutory Revenue Reporting Hub", (
 
   it("generates RFC-4180 compliant CSV for Form P.F.T-3 Assessment Register", () => {
     const csv = exportPft3RegisterCsv(units);
-    expect(csv).toContain("Permanent Demand No,Assessment No,Assessee Legal Name");
+    expect(csv).toContain("Demand Number,Assessment Number,Legal Name");
     expect(csv).toContain("0001");
     expect(csv).toContain("Vehari Cotton Ginners");
     const lines = csv.split("\r\n");
@@ -147,7 +147,7 @@ describe("Phase 7: Executive MIS Analytics & Statutory Revenue Reporting Hub", (
 
   it("generates RFC-4180 compliant CSV for Defaulter Recovery Roll", () => {
     const csv = exportDefaulterRecoveryCsv(units);
-    expect(csv).toContain("Permanent Demand No,Assessee Legal Name,Trade Name");
+    expect(csv).toContain("Demand Number,Legal Name,Taxpayer / Proprietor");
     expect(csv).toContain("Land Revenue Certified");
     const lines = csv.split("\r\n");
     expect(lines.length).toBeGreaterThanOrEqual(1);
@@ -155,7 +155,7 @@ describe("Phase 7: Executive MIS Analytics & Statutory Revenue Reporting Hub", (
 
   it("generates RFC-4180 compliant CSV for Notice Dispatch Register", () => {
     const csv = exportNoticeDispatchCsv(units);
-    expect(csv).toContain("Notice No,Permanent Demand No,Assessee Legal Name");
+    expect(csv).toContain("Notice No,Demand Number,Legal Name");
     expect(csv).toContain("PFT-1/VEH/2026/");
     const lines = csv.split("\r\n");
     expect(lines.length).toBe(units.length + 1);
@@ -163,7 +163,7 @@ describe("Phase 7: Executive MIS Analytics & Statutory Revenue Reporting Hub", (
 
   it("generates RFC-4180 compliant CSV for Tax Clearance Log", () => {
     const csv = exportClearanceCertificatesCsv(clearanceCertificates);
-    expect(csv).toContain("Certificate No,Issue Date,Valid Until,Assessee Legal Name");
+    expect(csv).toContain("Certificate No,Issue Date,Valid Until,Legal Name");
     if (clearanceCertificates.length > 0) {
       expect(csv).toContain(clearanceCertificates[0]!.certificateNumber);
     }
@@ -171,7 +171,7 @@ describe("Phase 7: Executive MIS Analytics & Statutory Revenue Reporting Hub", (
 
   it("generates RFC-4180 compliant CSV for Statutory Relief & Adjustment Register", () => {
     const csv = exportReliefAdjustmentsCsv(discontinuances, refundAdjustments);
-    expect(csv).toContain("Reference No,Relief Type,Assessee Legal Name");
+    expect(csv).toContain("Reference No,Relief Type,Legal Name");
     expect(csv).toContain("Rule 10 Trade Discontinuance");
     expect(csv).toContain("Rule 5");
   });

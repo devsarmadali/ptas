@@ -140,7 +140,7 @@ export async function generatePft2ChallanPdf(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.2);
     doc.setTextColor(...C.primary);
-    doc.text("PFT-2 \u2022 PAYMENT CHALLAN", deptCX, curY + 17.4, { align: "center" });
+    doc.text("PFT2 \u2022 PAYMENT CHALLAN", deptCX, curY + 17.4, { align: "center" });
 
     // 6. Scope & Rule 9
     const cleanScope = cleanChallanScope(copy.pft2TypeLabel || copy.demandScope || "CURRENT");
@@ -188,7 +188,7 @@ export async function generatePft2ChallanPdf(
     const metaR = innerX + innerW - 1.5;
     const LABEL_FS = 6.8;
     const VALUE_FS = 7.4;
-    const leftLabelW = 21.0;
+    const leftLabelW = 23.0;
 
     // Row 0: Notice No (Full Width)
     doc.setFont("helvetica", "bold");
@@ -202,7 +202,7 @@ export async function generatePft2ChallanPdf(
     doc.text(noticeText, metaL + leftLabelW, mY + META_ROW_H * 0.72);
     mY += META_ROW_H;
 
-    // Row 1: Code | Demand No
+    // Row 1: Security Code | Demand Number
     doc.setDrawColor(...C.borderLight);
     doc.setLineDashPattern([0.8, 0.8], 0);
     doc.line(metaL, mY, metaR, mY);
@@ -211,7 +211,7 @@ export async function generatePft2ChallanPdf(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(LABEL_FS);
     doc.setTextColor(...C.textDark);
-    doc.text("CODE", metaL, mY + META_ROW_H * 0.72);
+    doc.text("SECURITY CODE", metaL, mY + META_ROW_H * 0.72);
 
     const codeVal = copy.pin ?? challan.pin;
     doc.setFont("helvetica", "bold");
@@ -227,14 +227,14 @@ export async function generatePft2ChallanPdf(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(LABEL_FS);
     doc.setTextColor(...C.textDark);
-    doc.text("DEMAND NO.", metaMid, mY + META_ROW_H * 0.72);
+    doc.text("DEMAND NUMBER", metaMid, mY + META_ROW_H * 0.72);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.0);
     doc.setTextColor(...C.primaryLight);
     doc.text(copy.assessmentInfo.demandNo, metaR, mY + META_ROW_H * 0.72, { align: "right" });
     mY += META_ROW_H;
 
-    // Row 2: Taxpayer PIN | District
+    // Row 2: PIN | District
     doc.setDrawColor(...C.borderLight);
     doc.setLineDashPattern([0.8, 0.8], 0);
     doc.line(metaL, mY, metaR, mY);
@@ -243,7 +243,7 @@ export async function generatePft2ChallanPdf(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(LABEL_FS);
     doc.setTextColor(...C.textDark);
-    doc.text("TAXPAYER PIN", metaL, mY + META_ROW_H * 0.72);
+    doc.text("PIN", metaL, mY + META_ROW_H * 0.72);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(VALUE_FS);
     doc.setTextColor(...C.blueRef);
@@ -259,7 +259,7 @@ export async function generatePft2ChallanPdf(
     doc.text(copy.district, metaR, mY + META_ROW_H * 0.72, { align: "right" });
     mY += META_ROW_H;
 
-    // Row 3: Circle | Tax Year
+    // Row 3: Tax Unit | Tax Year
     doc.setDrawColor(...C.borderLight);
     doc.setLineDashPattern([0.8, 0.8], 0);
     doc.line(metaL, mY, metaR, mY);
@@ -268,7 +268,7 @@ export async function generatePft2ChallanPdf(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(LABEL_FS);
     doc.setTextColor(...C.textDark);
-    doc.text("CIRCLE", metaL, mY + META_ROW_H * 0.72);
+    doc.text("TAX UNIT", metaL, mY + META_ROW_H * 0.72);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(VALUE_FS);
     doc.text(copy.assessmentInfo.circleName, metaL + leftLabelW, mY + META_ROW_H * 0.72);

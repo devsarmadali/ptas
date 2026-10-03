@@ -55,7 +55,7 @@ export async function generateLandRevenueRecoveryPdf(
   doc.text(cert.certificateNumber, left + 28, curY + 5);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Permanent Demand No:", left + 95, curY + 5);
+  doc.text("Demand Number:", left + 95, curY + 5);
   doc.setFont("helvetica", "normal");
   doc.text(cert.demandNumber, left + 138, curY + 5);
 
@@ -63,7 +63,7 @@ export async function generateLandRevenueRecoveryPdf(
   doc.text("Security Code:", left + 4, curY + 10);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`[Code] ${cert.pin}`, left + 28, curY + 10);
+  doc.text(cert.pin, left + 28, curY + 10);
 
   doc.setTextColor(...PDF_COLORS.textDark);
   doc.setFont("helvetica", "bold");

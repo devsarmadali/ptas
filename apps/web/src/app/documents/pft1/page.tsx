@@ -208,7 +208,7 @@ function FormPft1NoticeContent() {
           <span style={{ color: "#64748b" }}>•</span>
           <span>PIN: {unit.pinNumber || "Not assigned"}</span>
           <span style={{ color: "#64748b" }}>•</span>
-          <span>PDN: {unit.demandUnit.permanentDemandNo}</span>
+          <span>Demand Number: {unit.demandUnit.permanentDemandNo}</span>
           <span style={{ color: "#64748b" }}>•</span>
           <span>
             Class {unit.statutoryRule.rule_code} ({unit.statutoryRule.category})
@@ -277,7 +277,7 @@ function FormPft1NoticeContent() {
               Excise, Taxation &amp; Narcotics Control Department
             </p>
             <p style={{ margin: 0, fontSize: "0.8rem", color: "#475569" }}>
-              Professional Tax &bull; Circle Vehari &bull; {pft1Data.financialYear}
+              Professional Tax &bull; Tax Unit Vehari &bull; {pft1Data.financialYear}
             </p>
           </div>
         </div>
@@ -297,16 +297,17 @@ function FormPft1NoticeContent() {
           }}
         >
           <div>
-            <strong>Demand No.:</strong> {pft1Data.demandNumber}
+            <strong>Demand Number:</strong> {pft1Data.demandNumber}
           </div>
           <div>
             <strong>Notice Date:</strong> {pft1Data.issueDate}
           </div>
           <div>
-            <strong>Assessee:</strong> {pft1Data.assesseeLegalName}
+            <strong>Legal Name:</strong> {pft1Data.assesseeLegalName}
           </div>
           <div>
-            <strong>Business:</strong> {pft1Data.assesseeTradeName ?? pft1Data.assesseeLegalName}
+            <strong>Taxpayer / Proprietor:</strong>{" "}
+            {pft1Data.assesseeTradeName ?? pft1Data.assesseeLegalName}
           </div>
           <div>
             <strong>Address:</strong> {pft1Data.address}
@@ -321,7 +322,7 @@ function FormPft1NoticeContent() {
             <strong>Annual Tax Demand:</strong> PKR {pft1Data.taxAmount?.toLocaleString()}
           </div>
           <div>
-            <strong>Financial Year:</strong> {pft1Data.financialYear}
+            <strong>Tax Year:</strong> {pft1Data.financialYear}
           </div>
           <div>
             <strong>Due Date:</strong> {pft1Data.dueDate}

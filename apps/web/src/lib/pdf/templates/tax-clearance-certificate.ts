@@ -86,7 +86,7 @@ export async function generateTaxClearanceCertificatePdf(
   doc.text(String(certificateNumber), left + 46, curY + 5.5);
 
   doc.text("SECURITY CODE:", left + 105, curY + 5.5);
-  doc.text(`[Code] ${pin}`, left + 135, curY + 5.5);
+  doc.text(String(pin), left + 135, curY + 5.5);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
@@ -118,7 +118,7 @@ export async function generateTaxClearanceCertificatePdf(
   const declarationText = [
     `This is to certify that the person/business entity named herein, holding ${identifierType} No. ${identifierValue}, has duly filed required returns and FULLY PAID all assessed Professional Tax dues under Section 3 of the Punjab Finance Act, 1977 for the Financial Year ${cert.financialYear || "2026-2027"}.`,
     "",
-    "There are NO outstanding arrears, surcharges, or default penalties against Permanent Demand Unit " +
+    "There are NO outstanding arrears, surcharges, or default penalties against Demand Number " +
       demandNo +
       " as of the date of issuance of this certificate."
   ];
@@ -137,7 +137,7 @@ export async function generateTaxClearanceCertificatePdf(
   curY += 4;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.text("Certified Assessee:", left + 5, curY);
+  doc.text("Legal Name:", left + 5, curY);
   doc.setFont("helvetica", "normal");
   doc.text(
     `${assesseeLegalName} ${assesseeTradeName ? `(${assesseeTradeName})` : ""}`,

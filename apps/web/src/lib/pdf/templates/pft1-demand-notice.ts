@@ -63,7 +63,7 @@ export async function generatePft1DemandNoticePdf(
   doc.text(notice.noticeNumber, left + 24, curY + 5.2);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Permanent Demand No:", left + 95, curY + 5.2);
+  doc.text("Demand Number:", left + 95, curY + 5.2);
   doc.setFont("helvetica", "normal");
   doc.text(notice.demandNumber, left + 138, curY + 5.2);
 
@@ -71,7 +71,7 @@ export async function generatePft1DemandNoticePdf(
   doc.text("Security Code:", left + 4, curY + 11.0);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`[Code] ${notice.pin || "68000000"}`, left + 27, curY + 11.0);
+  doc.text(notice.pin || "68000000", left + 27, curY + 11.0);
 
   doc.setTextColor(...PDF_COLORS.textDark);
   doc.setFont("helvetica", "bold");
@@ -123,9 +123,9 @@ export async function generatePft1DemandNoticePdf(
 
   if (notice.provincialUin) {
     doc.setFont("helvetica", "bold");
-    doc.text("Taxpayer PIN (UIN):", left + 95, curY + 4);
+    doc.text("PIN:", left + 95, curY + 4);
     doc.setFont("helvetica", "normal");
-    doc.text(notice.provincialUin, left + 132, curY + 4);
+    doc.text(notice.provincialUin, left + 115, curY + 4);
   }
 
   curY += 6;
@@ -295,12 +295,12 @@ export async function generatePft1DemandNoticePdf(
   doc.setFontSize(7.0);
   doc.setTextColor(...PDF_COLORS.textDark);
 
-  doc.text(`Demand No: ${notice.demandNumber}`, left + 4, receiptY);
+  doc.text(`Demand Number: ${notice.demandNumber}`, left + 4, receiptY);
   doc.text(`Tax Payable: PKR ${notice.taxAmount.toLocaleString()}`, left + 60, receiptY);
   doc.text(`Due Date: ${notice.dueDate || "31/08/2026"}`, left + 120, receiptY);
 
   receiptY += 5;
-  doc.text(`Taxpayer: ${notice.assesseeLegalName}`, left + 4, receiptY);
+  doc.text(`Legal Name: ${notice.assesseeLegalName}`, left + 4, receiptY);
   doc.text(`CNIC/NTN: ${notice.taxNumber || "N/A"}`, left + 120, receiptY);
 
   receiptY += 5.5;

@@ -177,8 +177,8 @@ export async function downloadDocumentPdf(
           columns: [
             { header: "Sr.", width: 8, align: "center" as const },
             { header: "Notice No", width: 38, align: "left" as const },
-            { header: "Demand No", width: 26, align: "left" as const },
-            { header: "Assessee Name", width: 60, align: "left" as const },
+            { header: "Demand Number", width: 26, align: "left" as const },
+            { header: "Legal Name", width: 60, align: "left" as const },
             { header: "Amount (PKR)", width: 25, align: "right" as const },
             { header: "Due Date", width: 24, align: "center" as const },
             { header: "Server", width: 46, align: "left" as const },

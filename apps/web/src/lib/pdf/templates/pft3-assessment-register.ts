@@ -47,7 +47,7 @@ export async function generatePft3RegisterPdf(
   });
 
   const headerOpts: HeaderOptions = {
-    docTitle: "FORM P.F.T - 3 : STATUTORY ASSESSMENT REGISTER",
+    docTitle: "PFT3 — STATUTORY ASSESSMENT REGISTER",
     docSubtitle: "Register of Assessed Persons, Tax Liabilities and Demands",
     statutoryRuleReference:
       "(Maintained under Rule 11 of the Punjab Professions and Trades Tax Rules, 1977)",
@@ -62,9 +62,9 @@ export async function generatePft3RegisterPdf(
   // Column definitions matching 277mm usable width
   const columns: readonly TableColumn[] = [
     { header: "Sr.", width: 8, align: "center" },
-    { header: "Demand No", width: 23, align: "left" },
-    { header: "Provincial UIN", width: 28, align: "left" },
-    { header: "Assessee Legal / Trade Name", width: 46, align: "left" },
+    { header: "Demand Number", width: 23, align: "left" },
+    { header: "PIN", width: 28, align: "left" },
+    { header: "Legal Name / Taxpayer", width: 46, align: "left" },
     { header: "CNIC / NTN", width: 26, align: "left" },
     { header: "Schedule Entry & Slab", width: 42, align: "left" },
     { header: "Current", width: 18, align: "right" },

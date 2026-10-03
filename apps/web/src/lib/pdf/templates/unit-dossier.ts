@@ -74,20 +74,20 @@ export async function generateUnitDossierPdf(
   doc.text(`${unit.identifierType}: ${unit.identifierValue}`, left + 28, curY + 16.5);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Permanent Demand No:", left + 95, curY + 16.5);
+  doc.text("Demand Number:", left + 95, curY + 16.5);
   doc.setFont("helvetica", "normal");
   doc.text(unit.demandUnit?.permanentDemandNo || "Unallocated", left + 138, curY + 16.5);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Taxpayer PIN (UIN):", left + 4, curY + 22);
+  doc.text("PIN:", left + 4, curY + 22);
   doc.setFont("helvetica", "normal");
-  doc.text(unit.provincialUin || "Pending", left + 35, curY + 22);
+  doc.text(unit.provincialUin || "Pending", left + 28, curY + 22);
 
   doc.setFont("helvetica", "bold");
   doc.text("Security Code:", left + 95, curY + 22);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`[Code] ${unit.pinNumber || "68000000"}`, left + 135, curY + 22);
+  doc.text(unit.pinNumber || "68000000", left + 135, curY + 22);
 
   doc.setTextColor(...PDF_COLORS.textDark);
   doc.setFont("helvetica", "bold");

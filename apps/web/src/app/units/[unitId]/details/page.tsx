@@ -279,7 +279,7 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
             {unit.legalName}
           </h1>
           <span style={{ fontSize: "0.85rem", color: "#f0fdf4" }}>
-            Permanent Demand No: <strong>{unit.demandUnit.permanentDemandNo}</strong> &bull; PIN:{" "}
+            Demand Number: <strong>{unit.demandUnit.permanentDemandNo}</strong> &bull; PIN:{" "}
             <strong style={{ fontFamily: "monospace" }}>{unit.provincialUin}</strong>
           </span>
         </div>
@@ -314,7 +314,7 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
               alignItems: "center"
             }}
           >
-            🏛️ Form PFT-2 Challan ↗
+            🏛️ PFT2 Challan ↗
           </a>
           <button
             type="button"
@@ -505,11 +505,11 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
           }}
         >
           <h3 style={{ margin: "0 0 0.75rem", fontSize: "1rem", color: "#0d3822" }}>
-            Issued Form P.F.T-2 Challans ({challans.length})
+            Issued PFT2 Challans ({challans.length})
           </h3>
           {challans.length === 0 ? (
             <p style={{ color: "#64748b", margin: 0, fontSize: "0.85rem" }}>
-              No Form PFT-2 payment challans have been issued for this unit yet.
+              No PFT2 payment challans have been issued for this unit yet.
             </p>
           ) : (
             <div className="table-container">
@@ -517,7 +517,7 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
                 <thead>
                   <tr>
                     <th>Challan / Notice #</th>
-                    <th>Security PIN</th>
+                    <th>Security Code</th>
                     <th>Scope</th>
                     <th>Amount (PKR)</th>
                     <th>Issue Date</th>

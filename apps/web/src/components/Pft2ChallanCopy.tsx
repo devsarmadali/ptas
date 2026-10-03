@@ -142,7 +142,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
               marginTop: "0.05rem"
             }}
           >
-            PFT-2 &bull; PAYMENT CHALLAN
+            PFT2 &bull; PAYMENT CHALLAN
           </div>
           <div
             style={{
@@ -190,7 +190,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
             paddingBottom: "0.18rem"
           }}
         >
-          <span style={{ width: "5.5rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
+          <span style={{ width: "6.8rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
             NOTICE NO.
           </span>
           <span
@@ -205,10 +205,10 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           </span>
         </div>
 
-        {/* Row 1: Code | Demand No */}
+        {/* Row 1: Security Code | Demand Number */}
         <div style={{ display: "flex", alignItems: "baseline" }}>
-          <span style={{ width: "5.5rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
-            CODE
+          <span style={{ width: "6.8rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
+            SECURITY CODE
           </span>
           <span
             style={{
@@ -227,7 +227,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
         </div>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "flex-end" }}>
           <span style={{ fontWeight: 700, color: "#334155", marginRight: "0.4rem" }}>
-            DEMAND NO.
+            DEMAND NUMBER
           </span>
           <span
             style={{
@@ -241,7 +241,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           </span>
         </div>
 
-        {/* Row 2: Taxpayer PIN | District */}
+        {/* Row 2: PIN | District */}
         <div
           style={{
             display: "flex",
@@ -250,8 +250,8 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
             paddingTop: "0.18rem"
           }}
         >
-          <span style={{ width: "5.5rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
-            TAXPAYER PIN
+          <span style={{ width: "6.8rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
+            PIN
           </span>
           <span
             style={{
@@ -276,7 +276,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           <span>{copy.district}</span>
         </div>
 
-        {/* Row 3: Circle | Tax Year */}
+        {/* Row 3: Tax Unit | Tax Year */}
         <div
           style={{
             display: "flex",
@@ -285,8 +285,8 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
             paddingTop: "0.18rem"
           }}
         >
-          <span style={{ width: "5.5rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
-            CIRCLE
+          <span style={{ width: "6.8rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
+            TAX UNIT
           </span>
           <span>{copy.assessmentInfo.circleName}</span>
         </div>

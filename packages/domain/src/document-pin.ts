@@ -1,12 +1,12 @@
 /**
- * PTAS Document Security PIN Module
- * Generates and validates official 6-digit Document Security PINs
+ * PTAS Document Security Code Module
+ * Generates and validates official 6-digit Document Security Codes
  * embedded on all issued notices, challans, and certificates for citizen verification.
  */
 
 /**
- * Generates a deterministic or cryptographically pseudo-random 6-digit Document Security PIN (100000 - 999999).
- * If a seed string or number is provided, generates a reproducible PIN for that document ID / hash.
+ * Generates a deterministic or cryptographically pseudo-random 6-digit Document Security Code (100000 - 999999).
+ * If a seed string or number is provided, generates a reproducible code for that document ID / hash.
  */
 export function generateDocumentPin(seed?: string | number): string {
   if (seed !== undefined && seed !== null && seed !== "") {
@@ -23,7 +23,7 @@ export function generateDocumentPin(seed?: string | number): string {
 }
 
 /**
- * Validates whether a candidate string is a well-formed 6-digit Document Security PIN.
+ * Validates whether a candidate string is a well-formed 6-digit Document Security Code.
  */
 export function validateDocumentPin(pin: string): boolean {
   if (!pin || typeof pin !== "string") return false;
@@ -32,7 +32,7 @@ export function validateDocumentPin(pin: string): boolean {
 }
 
 /**
- * Normalizes a candidate Document Security PIN by removing formatting, prefixes, and whitespace.
+ * Normalizes a candidate Document Security Code by removing formatting, prefixes, and whitespace.
  */
 export function normalizeDocumentPin(pin: string): string {
   if (!pin) return "";
@@ -41,3 +41,8 @@ export function normalizeDocumentPin(pin: string): string {
     .replace(/^PIN[-:]?\s*/i, "")
     .replace(/\s+/g, "");
 }
+
+/** Canonical system-wide aliases: Document Security Code */
+export const generateSecurityCode = generateDocumentPin;
+export const validateSecurityCode = validateDocumentPin;
+export const normalizeSecurityCode = normalizeDocumentPin;
