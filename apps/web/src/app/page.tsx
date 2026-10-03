@@ -19898,10 +19898,10 @@ export default function HomePage({
                             style={{
                               marginTop: "0.75rem",
                               border: "1px solid #cbd5e1",
-                              borderTop: "3px solid #0d3822",
-                              fontSize: "0.72rem",
+                              borderTop: "2px solid #0d3822",
+                              fontSize: "0.68rem",
                               background: "#fafaf9",
-                              padding: "0.6rem",
+                              padding: "0.35rem 0.5rem",
                               borderRadius: "4px"
                             }}
                           >
@@ -19911,68 +19911,75 @@ export default function HomePage({
                                 justifyContent: "space-between",
                                 alignItems: "center",
                                 background: "#fef3c7",
-                                padding: "0.2rem 0.4rem",
+                                padding: "0.15rem 0.35rem",
                                 borderRadius: "3px",
-                                marginBottom: "0.4rem"
+                                marginBottom: "0.3rem"
                               }}
                             >
-                              <strong style={{ color: "#78350f", fontSize: "0.7rem" }}>
+                              <strong style={{ color: "#78350f", fontSize: "0.65rem" }}>
                                 FOR BANK&apos;S USE ONLY &bull; Rule 9 Counterfoil
                               </strong>
-                              <span style={{ fontSize: "0.62rem", color: "#92400e" }}>
+                              <span style={{ fontSize: "0.58rem", color: "#92400e" }}>
                                 PTAS Official
                               </span>
                             </div>
                             <div
                               style={{
                                 display: "grid",
-                                gridTemplateColumns: "1fr 1fr",
-                                gap: "0.25rem 0.5rem",
-                                fontSize: "0.68rem"
+                                gridTemplateColumns: "1.4fr 1fr",
+                                gap: "0.4rem",
+                                alignItems: "stretch"
                               }}
                             >
-                              <p style={{ margin: "0.1rem 0", gridColumn: "span 2" }}>
-                                <strong>Bank &amp; Branch:</strong> ________________________________
-                              </p>
-                              <p style={{ margin: "0.1rem 0" }}>
-                                <strong>Scroll No:</strong> _________________
-                              </p>
-                              <p style={{ margin: "0.1rem 0", textAlign: "right" }}>
-                                <strong>Date:</strong> _________________
-                              </p>
-                            </div>
-                            <div
-                              style={{
-                                marginTop: "0.35rem",
-                                padding: "0.25rem 0.5rem",
-                                background: "#dcfce7",
-                                borderRadius: "4px",
-                                border: "1px solid #bbf7d0",
-                                textAlign: "center",
-                                fontWeight: 800,
-                                color: "#166534",
-                                fontSize: "0.74rem"
-                              }}
-                            >
-                              Amount Received: Rs. {copy.taxPayable.totalPayable.toLocaleString()}{" "}
-                              /-
-                            </div>
-                            <div
-                              style={{
-                                marginTop: "0.4rem",
-                                border: "1px dashed #94a3b8",
-                                borderRadius: "4px",
-                                background: "#ffffff",
-                                height: "2.2rem",
-                                display: "flex",
-                                alignItems: "flex-end",
-                                justifyContent: "center",
-                                paddingBottom: "0.25rem",
-                                color: "#64748b",
-                                fontSize: "0.62rem"
-                              }}
-                            >
-                              Authorized Cashier Signature &amp; Official Bank Stamp
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "0.2rem",
+                                  fontSize: "0.65rem"
+                                }}
+                              >
+                                <p style={{ margin: 0 }}>
+                                  <strong>Bank/Branch:</strong> ________________________
+                                </p>
+                                <p style={{ margin: 0 }}>
+                                  <strong>Scroll:</strong> _______ <strong>Date:</strong> _______
+                                </p>
+                                <div
+                                  style={{
+                                    padding: "0.15rem 0.35rem",
+                                    background: "#dcfce7",
+                                    borderRadius: "3px",
+                                    border: "1px solid #bbf7d0",
+                                    textAlign: "center",
+                                    fontWeight: 800,
+                                    color: "#166534",
+                                    fontSize: "0.7rem",
+                                    marginTop: "0.1rem"
+                                  }}
+                                >
+                                  Amount: Rs. {copy.taxPayable.totalPayable.toLocaleString()} /-
+                                </div>
+                              </div>
+                              <div
+                                style={{
+                                  border: "1px dashed #94a3b8",
+                                  borderRadius: "3px",
+                                  background: "#ffffff",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  alignItems: "center",
+                                  justifyContent: "flex-end",
+                                  padding: "0.2rem",
+                                  color: "#64748b",
+                                  fontSize: "0.55rem",
+                                  textAlign: "center",
+                                  minHeight: "2.8rem"
+                                }}
+                              >
+                                <span>Cashier Stamp</span>
+                                <span>&amp; Signature</span>
+                              </div>
                             </div>
                           </div>
                         </div>
