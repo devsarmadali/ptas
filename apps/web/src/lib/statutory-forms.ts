@@ -726,10 +726,10 @@ export function generateFormPFT2(
   const isCombinedScope = demandScope === "COMBINED";
 
   const pft2TypeLabel = isArrearScope
-    ? "ARREARS DEMAND"
+    ? "ARREARS"
     : isCombinedScope
-      ? "COMBINED DEMAND (CURRENT + ARREARS)"
-      : "CURRENT DEMAND";
+      ? "COMBINED (CURRENT + ARREARS)"
+      : "CURRENT";
 
   const scopeCurrentTax = isArrearScope ? 0 : baseTax;
   const scopeArrears = isArrearScope ? arrears : isCombinedScope ? arrears : 0;

@@ -279,7 +279,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     const currentChallan = generateFormPFT2(unitWithArrearsAndPenalty, {
       demandScope: "CURRENT"
     });
-    expect(currentChallan.pft2TypeLabel).toBe("CURRENT DEMAND");
+    expect(currentChallan.pft2TypeLabel).toBe("CURRENT");
     expect(currentChallan.displayAmount).toBe(4000);
     expect(currentChallan.copies[0].taxPayable.currentTax).toBe(4000);
     expect(currentChallan.copies[0].taxPayable.arrears).toBe(0);
@@ -290,7 +290,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     const arrearChallan = generateFormPFT2(unitWithArrearsAndPenalty, {
       demandScope: "ARREAR"
     });
-    expect(arrearChallan.pft2TypeLabel).toBe("ARREARS DEMAND");
+    expect(arrearChallan.pft2TypeLabel).toBe("ARREARS");
     expect(arrearChallan.displayAmount).toBe(5000);
     expect(arrearChallan.copies[0].taxPayable.currentTax).toBe(0);
     expect(arrearChallan.copies[0].taxPayable.arrears).toBe(5000);
@@ -301,7 +301,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     const combinedChallan = generateFormPFT2(unitWithArrearsAndPenalty, {
       demandScope: "COMBINED"
     });
-    expect(combinedChallan.pft2TypeLabel).toBe("COMBINED DEMAND (CURRENT + ARREARS)");
+    expect(combinedChallan.pft2TypeLabel).toBe("COMBINED (CURRENT + ARREARS)");
     expect(combinedChallan.displayAmount).toBe(10000);
     expect(combinedChallan.copies[0].taxPayable.currentTax).toBe(4000);
     expect(combinedChallan.copies[0].taxPayable.arrears).toBe(5000);

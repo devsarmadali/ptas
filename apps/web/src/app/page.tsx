@@ -19459,14 +19459,14 @@ export default function HomePage({
                   📑 Form P.F.T-2: Punjab Professional Tax Payment Challan &bull;{" "}
                   <span style={{ color: "#86efac" }}>
                     {activePrintChallan.demandScope === "ARREAR"
-                      ? "ARREARS DEMAND"
+                      ? "ARREARS"
                       : activePrintChallan.demandScope === "COMBINED"
-                        ? "COMBINED DEMAND (CURRENT + ARREARS)"
-                        : "CURRENT DEMAND"}
+                        ? "COMBINED (CURRENT + ARREARS)"
+                        : "CURRENT"}
                   </span>
                 </h3>
                 <span style={{ fontSize: "0.8rem", color: "#bbf7d0" }}>
-                  Notice No: {activePrintChallan.noticeNumber} &bull; Security PIN: 🔐{" "}
+                  Notice No: {activePrintChallan.noticeNumber} &bull; Security Code: 🔐{" "}
                   {activePrintChallan.pin}
                 </span>
               </div>
@@ -19576,7 +19576,7 @@ export default function HomePage({
                             letterSpacing: "1.5px"
                           }}
                         >
-                          🔐 PIN: {activePrintChallan.pin}
+                          🔐 Code: {activePrintChallan.pin}
                         </span>
                       </div>
                     </div>
@@ -19636,42 +19636,6 @@ export default function HomePage({
                                 >
                                   {copy.copyTitle}
                                 </span>
-                                <span
-                                  style={{
-                                    fontSize: "0.72rem",
-                                    fontWeight: 800,
-                                    color:
-                                      copy.demandScope === "ARREAR"
-                                        ? "#9a3412"
-                                        : copy.demandScope === "COMBINED"
-                                          ? "#1e40af"
-                                          : "#166534",
-                                    background:
-                                      copy.demandScope === "ARREAR"
-                                        ? "#ffedd5"
-                                        : copy.demandScope === "COMBINED"
-                                          ? "#dbeafe"
-                                          : "#dcfce7",
-                                    border: `1px solid ${
-                                      copy.demandScope === "ARREAR"
-                                        ? "#fdba74"
-                                        : copy.demandScope === "COMBINED"
-                                          ? "#bfdbfe"
-                                          : "#bbf7d0"
-                                    }`,
-                                    padding: "0.15rem 0.5rem",
-                                    borderRadius: "4px",
-                                    display: "inline-block",
-                                    letterSpacing: "0.3px"
-                                  }}
-                                >
-                                  {copy.pft2TypeLabel ||
-                                    (copy.demandScope === "ARREAR"
-                                      ? "ARREARS DEMAND"
-                                      : copy.demandScope === "COMBINED"
-                                        ? "COMBINED DEMAND (CURRENT + ARREARS)"
-                                        : "CURRENT DEMAND")}
-                                </span>
                               </div>
                               <h4
                                 style={{
@@ -19691,7 +19655,14 @@ export default function HomePage({
                                 PUNJAB PROFESSIONS &amp; TRADES TAX
                               </p>
                               <p style={{ margin: 0, fontSize: "0.62rem", color: "#64748b" }}>
-                                PAYMENT CHALLAN &bull; Rule 9
+                                PAYMENT CHALLAN &bull; Rule 9 &bull; [
+                                {copy.pft2TypeLabel ||
+                                  (copy.demandScope === "ARREAR"
+                                    ? "ARREARS"
+                                    : copy.demandScope === "COMBINED"
+                                      ? "COMBINED (CURRENT + ARREARS)"
+                                      : "CURRENT")}
+                                ]
                               </p>
                               <div
                                 style={{
@@ -19745,7 +19716,7 @@ export default function HomePage({
                                   letterSpacing: "1px"
                                 }}
                               >
-                                🔐 PIN: {copy.pin}
+                                🔐 Code: {copy.pin}
                               </span>
                             </div>
                             <div style={{ textAlign: "right" }}>
@@ -19769,7 +19740,7 @@ export default function HomePage({
                                   paddingTop: "0.25rem"
                                 }}
                               >
-                                <strong>PIN (Professional Identification Number):</strong>{" "}
+                                <strong>Taxpayer PIN (UIN):</strong>{" "}
                                 <span
                                   style={{
                                     fontFamily: "monospace",
@@ -19812,11 +19783,12 @@ export default function HomePage({
                               </span>
                             </p>
                             <p style={{ margin: "0.15rem 0" }}>
-                              <strong>Name:</strong> {copy.taxpayerInfo.legalName}
+                              <strong>Legal Name:</strong> {copy.taxpayerInfo.legalName}
                             </p>
                             {copy.taxpayerInfo.tradeName && (
                               <p style={{ margin: "0.15rem 0" }}>
-                                <strong>Trade:</strong> {copy.taxpayerInfo.tradeName}
+                                <strong>Taxpayer / Proprietor:</strong>{" "}
+                                {copy.taxpayerInfo.tradeName}
                               </p>
                             )}
                             <p
@@ -19991,31 +19963,16 @@ export default function HomePage({
                                 border: "1px dashed #94a3b8",
                                 borderRadius: "4px",
                                 background: "#ffffff",
-                                height: "3.5rem",
+                                height: "2.2rem",
                                 display: "flex",
                                 alignItems: "flex-end",
                                 justifyContent: "center",
-                                paddingBottom: "0.35rem",
+                                paddingBottom: "0.25rem",
                                 color: "#64748b",
                                 fontSize: "0.62rem"
                               }}
                             >
                               Authorized Cashier Signature &amp; Official Bank Stamp
-                            </div>
-                            <div
-                              style={{
-                                marginTop: "0.35rem",
-                                fontSize: "0.58rem",
-                                color: "#94a3b8",
-                                textAlign: "center",
-                                fontFamily: "monospace"
-                              }}
-                            >
-                              SHA-256:{" "}
-                              {challanModel.officialSha256
-                                ? challanModel.officialSha256.slice(0, 16)
-                                : "AUTHENTIC"}
-                              &hellip; &bull; Form PFT-2 (Rule 9)
                             </div>
                           </div>
                         </div>
