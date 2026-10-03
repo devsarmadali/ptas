@@ -14,6 +14,7 @@ import { generateFormPFT2, generatePft2NoticeNumber } from "../../../../lib/stat
 import { generateDocumentPin } from "@ptas/domain";
 import { Pft2ChallanDocument } from "../../../../components/Pft2ChallanDocument";
 import { downloadOfficialPdf } from "../../../../lib/pdf";
+import { saveIssuedPft2Challan } from "../../../../lib/challan-storage";
 
 function DocumentIssuanceContent() {
   const searchParams = useSearchParams();
@@ -249,6 +250,7 @@ function DocumentIssuanceContent() {
         qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-2&ref=${noticeNumber}&pdn=${freshUnit.demandUnit?.permanentDemandNo || ""}&amt=${effectivePayableAmount}&pin=${pin}`
       };
 
+      saveIssuedPft2Challan(newChallan);
       setIssuedChallan(newChallan);
       setErrorMessage("");
     } catch (err: unknown) {
@@ -332,58 +334,78 @@ function DocumentIssuanceContent() {
 
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
           {issuedChallan ? (
-            <button
-              type="button"
-              className="btn-primary"
-              disabled={isPdfLoading}
-              onClick={async () => {
-                if (!unit) {
-                  setErrorMessage("No taxpayer unit loaded. Cannot generate PDF.");
-                  return;
-                }
-                setIsPdfLoading(true);
-                setErrorMessage("");
-                try {
-                  // Pre-resolve the FormPFT2Model here where unit is already in scope.
-                  // This avoids the engine reconstruction path which requires a fresh
-                  // loadPilotState() lookup that may fail in the standalone document page.
-                  const challanModel = generateFormPFT2(unit, {
-                    dueDate: issuedChallan.dueDate,
-                    issueDate: issuedChallan.issueDate,
-                    formType: issuedChallan.formType,
-                    demandScope: issuedChallan.demandScope,
-                    paymentScope: issuedChallan.paymentScope,
-                    customAmount: issuedChallan.amountPayable,
-                    isPartial: issuedChallan.paymentScope === "PARTIAL",
-                    remainingBalance: issuedChallan.remainingBalance ?? 0,
-                    noticeNumber: issuedChallan.noticeNumber,
-                    pin: issuedChallan.pin,
-                    challanStatus: issuedChallan.status
-                  });
-                  challanModel.challanStatus = issuedChallan.status;
-                  await downloadOfficialPdf({
-                    type: "FORM_PFT2_CHALLAN",
-                    // Pass the resolved FormPFT2Model directly (has "copies" field)
-                    // so the engine skips the reconstruction step entirely.
-                    documentIdOrData: challanModel,
-                    authContext: {
-                      role: "ETO",
-                      district: "Vehari",
-                      circle: "Circle-Vehari"
-                    },
-                    defaultFilename: `Form_PFT2_${issuedChallan.challanNumber.replace(/\//g, "_")}.pdf`
-                  });
-                } catch (err: unknown) {
-                  const msg = err instanceof Error ? err.message : String(err);
-                  setErrorMessage(`PDF generation failed: ${msg}`);
-                } finally {
-                  setIsPdfLoading(false);
-                }
-              }}
-              title="Download authoritative 3-copy Form PFT-2 payment instrument as PDF"
-            >
-              {isPdfLoading ? "⏳ Generating PDF…" : "📥 Download Official PDF (A4 Landscape)"}
-            </button>
+            <>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={isPdfLoading}
+                onClick={async () => {
+                  if (!unit) {
+                    setErrorMessage("No taxpayer unit loaded. Cannot generate PDF.");
+                    return;
+                  }
+                  setIsPdfLoading(true);
+                  setErrorMessage("");
+                  try {
+                    // Pre-resolve the FormPFT2Model here where unit is already in scope.
+                    // This avoids the engine reconstruction path which requires a fresh
+                    // loadPilotState() lookup that may fail in the standalone document page.
+                    const challanModel = generateFormPFT2(unit, {
+                      dueDate: issuedChallan.dueDate,
+                      issueDate: issuedChallan.issueDate,
+                      formType: issuedChallan.formType,
+                      demandScope: issuedChallan.demandScope,
+                      paymentScope: issuedChallan.paymentScope,
+                      customAmount: issuedChallan.amountPayable,
+                      isPartial: issuedChallan.paymentScope === "PARTIAL",
+                      remainingBalance: issuedChallan.remainingBalance ?? 0,
+                      noticeNumber: issuedChallan.noticeNumber,
+                      pin: issuedChallan.pin,
+                      challanStatus: issuedChallan.status
+                    });
+                    challanModel.challanStatus = issuedChallan.status;
+                    await downloadOfficialPdf({
+                      type: "FORM_PFT2_CHALLAN",
+                      // Pass the resolved FormPFT2Model directly (has "copies" field)
+                      // so the engine skips the reconstruction step entirely.
+                      documentIdOrData: challanModel,
+                      authContext: {
+                        role: "ETO",
+                        district: "Vehari",
+                        circle: "Circle-Vehari"
+                      },
+                      defaultFilename: `Form_PFT2_${issuedChallan.challanNumber.replace(/\//g, "_")}.pdf`
+                    });
+                  } catch (err: unknown) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    setErrorMessage(`PDF generation failed: ${msg}`);
+                  } finally {
+                    setIsPdfLoading(false);
+                  }
+                }}
+                title="Download authoritative 3-copy Form PFT-2 payment instrument as PDF"
+              >
+                {isPdfLoading ? "⏳ Generating PDF…" : "📥 Download Official PDF (A4 Landscape)"}
+              </button>
+              <a
+                href="/revenue"
+                style={{
+                  fontSize: "0.8rem",
+                  fontWeight: 600,
+                  padding: "0.45rem 0.75rem",
+                  borderRadius: "6px",
+                  background: "#166534",
+                  color: "#ffffff",
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.3rem"
+                }}
+                title="View this issued challan in the Form P.F.T-2 Revenue Registry Desk"
+              >
+                🏛️ View in Revenue Desk →
+              </a>
+            </>
           ) : (
             <span
               style={{
@@ -401,7 +423,7 @@ function DocumentIssuanceContent() {
             </span>
           )}
           <a
-            href="/"
+            href="/revenue"
             style={{
               fontSize: "0.8rem",
               fontWeight: 600,
@@ -409,6 +431,24 @@ function DocumentIssuanceContent() {
               borderRadius: "6px",
               background: "#0d3822",
               color: "#ffffff",
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.3rem"
+            }}
+          >
+            🏛️ Revenue Desk
+          </a>
+          <a
+            href="/"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.45rem 0.75rem",
+              borderRadius: "6px",
+              background: "#f1f5f9",
+              color: "#1e293b",
+              border: "1px solid #cbd5e1",
               textDecoration: "none",
               display: "inline-flex",
               alignItems: "center"
@@ -837,9 +877,28 @@ function DocumentIssuanceContent() {
               <strong>{issuedChallan.noticeNumber}</strong> &bull; PIN:{" "}
               <strong>{issuedChallan.pin}</strong>
             </div>
-            <div style={{ color: "#15803d", fontWeight: 700 }}>
-              Amount: PKR {issuedChallan.amountPayable.toLocaleString()} &bull; Due:{" "}
-              {issuedChallan.dueDate}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+              <div style={{ color: "#15803d", fontWeight: 700 }}>
+                Amount: PKR {issuedChallan.amountPayable.toLocaleString()} &bull; Due:{" "}
+                {issuedChallan.dueDate}
+              </div>
+              <a
+                href="/revenue"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.25rem",
+                  padding: "0.25rem 0.65rem",
+                  borderRadius: "5px",
+                  background: "#166534",
+                  color: "#ffffff",
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  textDecoration: "none"
+                }}
+              >
+                🏛️ View in Revenue Desk →
+              </a>
             </div>
           </div>
         )}

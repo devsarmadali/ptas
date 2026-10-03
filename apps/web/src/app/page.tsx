@@ -114,6 +114,15 @@ import {
   calculateReceiptsExecutiveSummary
 } from "../lib/receipt-generator";
 import {
+  loadPersistedPft2Challans,
+  savePersistedPft2Challans,
+  loadPersistedStatutoryReceipts,
+  savePersistedStatutoryReceipts,
+  ensureChallansAndReceiptsForUnits,
+  CHALLANS_UPDATED_EVENT,
+  RECEIPTS_UPDATED_EVENT
+} from "../lib/challan-storage";
+import {
   type CitizenPaymentSimulationResult,
   type DocumentVerificationResult,
   type SelfAssessmentCriteriaInput,
@@ -625,6 +634,10 @@ export default function HomePage({
     try {
       const liveUnits = await loadOperationalSurveyUnits();
       setUnits(liveUnits);
+      const { challans: syncedChallans, receipts: syncedReceipts } =
+        ensureChallansAndReceiptsForUnits(liveUnits);
+      setPft2Challans(syncedChallans);
+      setStatutoryReceipts(syncedReceipts);
       const firstId = liveUnits[0]?.id ?? "";
       setSelectedUnitId(firstId);
       setPaymentUnitId(firstId);
@@ -645,8 +658,24 @@ export default function HomePage({
   // by the authenticated officer's active role and jurisdiction assignment.
   useEffect(() => {
     let sub: { unsubscribe: () => void } | undefined;
+    const handleStorageOrFocus = () => {
+      const freshChallans = loadPersistedPft2Challans();
+      if (freshChallans.length > 0) setPft2Challans(freshChallans);
+      const freshReceipts = loadPersistedStatutoryReceipts();
+      if (freshReceipts.length > 0) setStatutoryReceipts(freshReceipts);
+    };
+
     try {
       localStorage.removeItem("ptas_pilot_vehari_v3");
+      // Load any existing persisted challans & receipts immediately on mount
+      handleStorageOrFocus();
+
+      if (typeof window !== "undefined") {
+        window.addEventListener("storage", handleStorageOrFocus);
+        window.addEventListener(CHALLANS_UPDATED_EVENT, handleStorageOrFocus);
+        window.addEventListener(RECEIPTS_UPDATED_EVENT, handleStorageOrFocus);
+        window.addEventListener("focus", handleStorageOrFocus);
+      }
       // Check URL search parameters on mount for backward-compatible deep links
       if (typeof window !== "undefined") {
         const sp = new URLSearchParams(window.location.search);
@@ -719,6 +748,12 @@ export default function HomePage({
 
     return () => {
       sub?.unsubscribe();
+      if (typeof window !== "undefined") {
+        window.removeEventListener("storage", handleStorageOrFocus);
+        window.removeEventListener(CHALLANS_UPDATED_EVENT, handleStorageOrFocus);
+        window.removeEventListener(RECEIPTS_UPDATED_EVENT, handleStorageOrFocus);
+        window.removeEventListener("focus", handleStorageOrFocus);
+      }
     };
   }, []);
 
@@ -3221,17 +3256,12 @@ export default function HomePage({
     const updatedReceipts = [newReceipt, ...statutoryReceipts];
     const updatedAudits = [auditItem, ...auditLogs];
 
-    syncState(
-      updatedUnits,
-      updatedAudits,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      updatedChallans,
-      updatedReceipts
-    );
+    setPft2Challans(updatedChallans);
+    savePersistedPft2Challans(updatedChallans);
+    setStatutoryReceipts(updatedReceipts);
+    savePersistedStatutoryReceipts(updatedReceipts);
+    setUnits(updatedUnits);
+    setAuditLogs(updatedAudits);
 
     setShowReceivePft2Modal(false);
     setReceivingChallan(null);
@@ -3281,17 +3311,9 @@ export default function HomePage({
       details: `Form P.F.T-2 ${cancellingChallan.challanNumber} marked CANCELLED. Reason: ${cancelPft2Reason}`
     };
 
-    syncState(
-      units,
-      [auditItem, ...auditLogs],
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      updatedChallans,
-      statutoryReceipts
-    );
+    setPft2Challans(updatedChallans);
+    savePersistedPft2Challans(updatedChallans);
+    setAuditLogs([auditItem, ...auditLogs]);
 
     setShowCancelPft2Modal(false);
     setCancellingChallan(null);
@@ -3433,16 +3455,9 @@ export default function HomePage({
     const updatedChallans = [newChallanRecord, ...pft2Challans];
     const updatedAudits = [auditItem, ...auditLogs];
 
-    syncState(
-      units,
-      updatedAudits,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      updatedChallans
-    );
+    setPft2Challans(updatedChallans);
+    savePersistedPft2Challans(updatedChallans);
+    setAuditLogs(updatedAudits);
 
     setShowIssuePft2Modal(false);
     showToast("success", `✓ Form P.F.T-2 Challan issued! Notice: ${noticeNumber} (PIN: ${pin}).`);
@@ -3545,13 +3560,10 @@ export default function HomePage({
   void handleOpenReturnModal;
   void handleOpenEditSurveyUnit;
   void handleCloseDraftSurvey;
-  void setAuditLogs;
   void setDiscontinuances;
   void setRefundAdjustments;
   void setClearanceCertificates;
   void setAppeals;
-  void setPft2Challans;
-  void setStatutoryReceipts;
 
   // Row actions for Survey Register (UNITS tab) - strictly draft mode only
   const renderSurveyUnitActions = (targetUnit: StoredUnit) => {
@@ -7242,8 +7254,39 @@ export default function HomePage({
               </div>
               <div
                 className="panel-actions"
-                style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
+                style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}
               >
+                <button
+                  type="button"
+                  className="btn-success"
+                  onClick={() => {
+                    const firstApproved = units.find(
+                      (u) => u.assessments[0]?.status === "APPROVED"
+                    );
+                    if (firstApproved) {
+                      setIssuePft2UnitId(firstApproved.id);
+                      const a = firstApproved.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+                      setIssuePft2PartialAmount(Math.round(a / 2));
+                    }
+                    setShowIssuePft2Modal(true);
+                  }}
+                  title="Issue new Form P.F.T-2 statutory payment challan"
+                >
+                  ➕ Issue Challan
+                </button>
+                <Link
+                  href={asRoute("/documents/pf2/new")}
+                  className="btn-secondary"
+                  style={{
+                    textDecoration: "none",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.3rem"
+                  }}
+                  title="Open dedicated Form PFT-2 Issuance Studio with live 3-copy preview"
+                >
+                  ⚡ Issuance Studio ↗
+                </Link>
                 <button
                   type="button"
                   className="btn-secondary"
@@ -7457,9 +7500,64 @@ export default function HomePage({
                         <tr>
                           <td
                             colSpan={8}
-                            style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
+                            style={{
+                              textAlign: "center",
+                              padding: "3rem 1.5rem",
+                              color: "#64748b"
+                            }}
                           >
-                            No Form P.F.T-2 challans match the selected filter criteria.
+                            <div style={{ maxWidth: "26rem", margin: "0 auto" }}>
+                              <p
+                                style={{
+                                  fontSize: "1.05rem",
+                                  fontWeight: 700,
+                                  color: "#1e293b",
+                                  marginBottom: "0.4rem"
+                                }}
+                              >
+                                {pft2Challans.length === 0
+                                  ? "No Form P.F.T-2 Challans Registered"
+                                  : "No Matching Challans Found"}
+                              </p>
+                              <p
+                                style={{
+                                  fontSize: "0.85rem",
+                                  marginBottom: "1rem",
+                                  lineHeight: 1.4
+                                }}
+                              >
+                                {pft2Challans.length === 0
+                                  ? "Payment challans can be issued for any establishment with an approved statutory assessment."
+                                  : "Try changing your status filter or search keyword to locate the desired challan record."}
+                              </p>
+                              {pft2Challans.length === 0 ? (
+                                <button
+                                  type="button"
+                                  className="btn-success"
+                                  onClick={() => {
+                                    const firstApproved = units.find(
+                                      (u) => u.assessments[0]?.status === "APPROVED"
+                                    );
+                                    if (firstApproved) setIssuePft2UnitId(firstApproved.id);
+                                    setShowIssuePft2Modal(true);
+                                  }}
+                                >
+                                  ➕ Issue First Challan
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn-secondary"
+                                  onClick={() => {
+                                    setPft2StatusFilter("ALL");
+                                    setPft2CategoryFilter("ALL");
+                                    setPft2SearchQuery("");
+                                  }}
+                                >
+                                  Reset Filters
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
