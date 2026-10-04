@@ -661,9 +661,9 @@ export default function HomePage({
     let sub: { unsubscribe: () => void } | undefined;
     const handleStorageOrFocus = () => {
       const freshChallans = loadPersistedPft2Challans();
-      if (freshChallans.length > 0) setPft2Challans(freshChallans);
+      setPft2Challans(freshChallans);
       const freshReceipts = loadPersistedStatutoryReceipts();
-      if (freshReceipts.length > 0) setStatutoryReceipts(freshReceipts);
+      setStatutoryReceipts(freshReceipts);
     };
 
     try {
@@ -3071,9 +3071,9 @@ export default function HomePage({
   // Phase 10: PFT-2 Challan Management & Statutory Receipt Handlers
   const handleOpenReceivePft2 = (challan: Pft2ChallanRecord) => {
     setReceivingChallan(challan);
-    setReceivePaymentChannel(challan.paymentChannel || "National Bank of Pakistan");
+    setReceivePaymentChannel("National Bank of Pakistan");
     setReceiveBankBranch("Main Treasury Branch, Vehari (Treasury 0142)");
-    setReceiveBankScrollRef(`NBP-CPR-2026-${Math.floor(10000 + Math.random() * 90000)}`);
+    setReceiveBankScrollRef("");
 
     // Constrain initial receipt date between challan issue date and due date
     const today = new Date().toISOString().split("T")[0]!;
@@ -3084,7 +3084,7 @@ export default function HomePage({
       initialDate = challan.dueDate;
     }
     setReceiveDate(initialDate);
-    setReceiveRemarks("Discharged in full at authorized treasury counter under Rule 10.");
+    setReceiveRemarks("");
     setShowReceivePft2Modal(true);
   };
 
@@ -7392,7 +7392,7 @@ export default function HomePage({
                 <thead>
                   <tr>
                     <th>Challan &amp; Notice Ref</th>
-                    <th>🔒 Security Code</th>
+                    <th>Verification PIN</th>
                     <th>Taxpayer Details</th>
                     <th>Classification &amp; Type</th>
                     <th style={{ textAlign: "right" }}>Amount Payable</th>
@@ -7549,7 +7549,7 @@ export default function HomePage({
                                 border: "1px solid #bae6fd",
                                 letterSpacing: "1.5px"
                               }}
-                              title="Official 6-digit Security Code"
+                              title="Official 6-digit Verification PIN"
                             >
                               🔐{" "}
                               {challan.pin ??
@@ -7565,7 +7565,7 @@ export default function HomePage({
                                 marginTop: "0.15rem"
                               }}
                             >
-                              Security Code
+                              Verification PIN
                             </span>
                           </td>
                           <td>
@@ -7599,64 +7599,62 @@ export default function HomePage({
                                 Slab: {challan.tertiarySlab}
                               </span>
                             )}
-                            <div
-                              style={{
-                                marginTop: "0.3rem",
-                                display: "flex",
-                                gap: "0.25rem",
-                                flexWrap: "wrap"
-                              }}
-                            >
-                              <span
-                                className="badge"
+                            {(challan.demandScope === "ARREAR" ||
+                              challan.demandScope === "ARREARS" ||
+                              challan.demandScope === "COMBINED" ||
+                              challan.paymentScope === "PARTIAL") && (
+                              <div
                                 style={{
-                                  fontSize: "0.65rem",
-                                  padding: "0.1rem 0.35rem",
-                                  background: "#f1f5f9",
-                                  color: "#334155"
+                                  marginTop: "0.3rem",
+                                  display: "flex",
+                                  gap: "0.25rem",
+                                  flexWrap: "wrap"
                                 }}
                               >
-                                {challan.formType ?? "STD"}
-                              </span>
-                              <span
-                                className="badge"
-                                style={{
-                                  fontSize: "0.65rem",
-                                  padding: "0.1rem 0.35rem",
-                                  background: "#f8fafc",
-                                  color: "#475569"
-                                }}
-                              >
-                                {challan.demandScope ?? "CUR"}
-                              </span>
-                              {challan.paymentScope === "PARTIAL" ? (
-                                <span
-                                  className="badge"
-                                  style={{
-                                    fontSize: "0.65rem",
-                                    padding: "0.1rem 0.35rem",
-                                    background: "#fef3c7",
-                                    color: "#92400e"
-                                  }}
-                                  title={`Assessed: PKR ${(challan.fullAssessedAmount ?? challan.amountPayable).toLocaleString()} | Remaining: PKR ${(challan.remainingBalance ?? 0).toLocaleString()}`}
-                                >
-                                  PARTIAL (Rem: PKR{" "}
-                                  {(challan.remainingBalance ?? 0).toLocaleString()})
-                                </span>
-                              ) : (
-                                <span
-                                  className="badge"
-                                  style={{
-                                    fontSize: "0.65rem",
-                                    padding: "0.1rem 0.35rem",
-                                    background: "#f0fdf4",
-                                    color: "#166534"
-                                  }}
-                                >
-                                  FULL
-                                </span>
-                              )}
-                            </div>
+                                {(challan.demandScope === "ARREAR" ||
+                                  challan.demandScope === "ARREARS") && (
+                                  <span
+                                    className="badge"
+                                    style={{
+                                      fontSize: "0.65rem",
+                                      padding: "0.1rem 0.35rem",
+                                      background: "#fef3c7",
+                                      color: "#92400e"
+                                    }}
+                                  >
+                                    ARREARS
+                                  </span>
+                                )}
+                                {challan.demandScope === "COMBINED" && (
+                                  <span
+                                    className="badge"
+                                    style={{
+                                      fontSize: "0.65rem",
+                                      padding: "0.1rem 0.35rem",
+                                      background: "#fef3c7",
+                                      color: "#92400e"
+                                    }}
+                                  >
+                                    COMBINED
+                                  </span>
+                                )}
+                                {challan.paymentScope === "PARTIAL" && (
+                                  <span
+                                    className="badge"
+                                    style={{
+                                      fontSize: "0.65rem",
+                                      padding: "0.1rem 0.35rem",
+                                      background: "#fef3c7",
+                                      color: "#92400e"
+                                    }}
+                                    title={`Assessed: PKR ${(challan.fullAssessedAmount ?? challan.amountPayable).toLocaleString()} | Remaining: PKR ${(challan.remainingBalance ?? 0).toLocaleString()}`}
+                                  >
+                                    PARTIAL (Rem: PKR{" "}
+                                    {(challan.remainingBalance ?? 0).toLocaleString()})
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </td>
                           <td style={{ textAlign: "right" }}>
                             <strong
@@ -8025,10 +8023,6 @@ export default function HomePage({
                 >
                   <option value="ALL">All Payment Channels</option>
                   <option value="National Bank of Pakistan">National Bank of Pakistan</option>
-                  <option value="State Bank of Pakistan">State Bank of Pakistan</option>
-                  <option value="ePay Punjab">ePay Punjab (Digital)</option>
-                  <option value="Bank of Punjab">Bank of Punjab</option>
-                  <option value="Cash Counter">Cash Counter / OTC</option>
                 </select>
               </div>
 
@@ -18494,14 +18488,6 @@ export default function HomePage({
                     <option value="National Bank of Pakistan">
                       National Bank of Pakistan (Authorized Treasury)
                     </option>
-                    <option value="State Bank of Pakistan">State Bank of Pakistan</option>
-                    <option value="ePay Punjab (Digital Bank Transfer)">
-                      ePay Punjab (Digital Bank Transfer / 1Link)
-                    </option>
-                    <option value="Bank of Punjab">Bank of Punjab</option>
-                    <option value="District Cash Counter (OTC)">
-                      District Cash Counter (Over the Counter)
-                    </option>
                   </select>
                 </div>
 
@@ -18525,7 +18511,7 @@ export default function HomePage({
                   <input
                     type="text"
                     className="form-control"
-                    placeholder="e.g. NBP-CPR-2026-90142"
+                    placeholder="Enter Bank Scroll / CPR Reference Number (e.g. NBP-CPR-2026-90142)"
                     value={receiveBankScrollRef}
                     onChange={(e) => setReceiveBankScrollRef(e.target.value)}
                     required
@@ -18618,6 +18604,7 @@ export default function HomePage({
                   <input
                     type="text"
                     className="form-control"
+                    placeholder="Enter acknowledgement remarks or notes..."
                     value={receiveRemarks}
                     onChange={(e) => setReceiveRemarks(e.target.value)}
                   />

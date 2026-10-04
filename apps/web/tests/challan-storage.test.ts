@@ -160,20 +160,39 @@ describe("Form P.F.T-2 Challans & Statutory Receipts Persistence Layer", () => {
     expect(found1?.receiptNumber).toBe("RCPT-2026-00001");
   });
 
-  it("ensures all survey units receive baseline challans and maintains statutory receipts", () => {
+  it("maintains only officially issued challans and ensures receipts for received challans", () => {
     const units = createInitialPilotUnits();
+    // Initially without issued challans, it returns empty (never auto-generates 750 unissued challans)
+    const initial = ensureChallansAndReceiptsForUnits(units);
+    expect(initial.challans).toHaveLength(0);
+
+    // Save an issued challan
+    const challan: Pft2ChallanRecord = {
+      id: "pft2-v4-01",
+      challanNumber: "PFT2-0001",
+      noticeNumber: "PFT2-0001-2607010101-10000",
+      demandNumber: "0001",
+      unitId: units[0]!.id,
+      legalName: units[0]!.legalName,
+      identifierType: "NTN",
+      identifierValue: "1234567-8",
+      address: "Vehari",
+      category: "Companies",
+      subclassificationCode: "1(i)",
+      tertiarySlab: null,
+      amountPayable: 10000,
+      issueDate: "2026-07-01",
+      dueDate: "2026-08-31",
+      status: "RECEIVED",
+      receiptNumber: "RCPT-00001",
+      officialSha256: "sha-01",
+      qrPayload: "qr-01"
+    };
+    saveIssuedPft2Challan(challan);
+
     const { challans, receipts } = ensureChallansAndReceiptsForUnits(units);
-
-    expect(challans.length).toBeGreaterThanOrEqual(4);
-    expect(receipts.length).toBeGreaterThanOrEqual(1);
-
-    // Re-running ensure does not duplicate challans or receipts
-    const secondRun = ensureChallansAndReceiptsForUnits(units);
-    expect(secondRun.challans.length).toBe(challans.length);
-    expect(secondRun.receipts.length).toBe(receipts.length);
-
-    // Stored in localStorage
-    expect(localStorage.getItem(PFT2_CHALLANS_STORAGE_KEY)).not.toBeNull();
-    expect(localStorage.getItem(STATUTORY_RECEIPTS_STORAGE_KEY)).not.toBeNull();
+    expect(challans).toHaveLength(1);
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0]?.receiptNumber).toBe("RCPT-00001");
   });
 });

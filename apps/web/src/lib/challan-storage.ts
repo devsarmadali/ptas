@@ -1,10 +1,9 @@
 import type { StoredUnit, Pft2ChallanRecord, StatutoryReceiptRecord } from "./pilot-store";
-import { createInitialPft2Challans, createInitialStatutoryReceipts } from "./pilot-store";
 import { numberToWordsPkr, generatePft2NoticeNumber } from "./statutory-forms";
 import { generateDocumentPin } from "@ptas/domain";
 
-export const PFT2_CHALLANS_STORAGE_KEY = "ptas_pft2_challans_v2";
-export const STATUTORY_RECEIPTS_STORAGE_KEY = "ptas_statutory_receipts_v2";
+export const PFT2_CHALLANS_STORAGE_KEY = "ptas_pft2_challans_v4";
+export const STATUTORY_RECEIPTS_STORAGE_KEY = "ptas_statutory_receipts_v4";
 export const CHALLANS_UPDATED_EVENT = "ptas-challans-updated";
 export const RECEIPTS_UPDATED_EVENT = "ptas-receipts-updated";
 
@@ -14,6 +13,11 @@ export const RECEIPTS_UPDATED_EVENT = "ptas-receipts-updated";
 export function loadPersistedPft2Challans(): Pft2ChallanRecord[] {
   if (typeof window === "undefined") return [];
   try {
+    // Purge deprecated bulk pre-generated keys from earlier versions
+    localStorage.removeItem("ptas_pft2_challans_v2");
+    localStorage.removeItem("ptas_pft2_challans_v3");
+    localStorage.removeItem("ptas_pft2_challans");
+
     const raw = localStorage.getItem(PFT2_CHALLANS_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
@@ -69,6 +73,11 @@ export function saveIssuedPft2Challan(newChallan: Pft2ChallanRecord): Pft2Challa
 export function loadPersistedStatutoryReceipts(): StatutoryReceiptRecord[] {
   if (typeof window === "undefined") return [];
   try {
+    // Purge deprecated bulk receipt keys
+    localStorage.removeItem("ptas_statutory_receipts_v2");
+    localStorage.removeItem("ptas_statutory_receipts_v3");
+    localStorage.removeItem("ptas_statutory_receipts");
+
     const raw = localStorage.getItem(STATUTORY_RECEIPTS_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
@@ -93,42 +102,24 @@ export function savePersistedStatutoryReceipts(receipts: readonly StatutoryRecei
 }
 
 /**
- * Synchronize and ensure all survey units have valid Form PFT-2 Challans and
+ * Synchronize and ensure officially issued Form PFT-2 Challans and
  * corresponding Statutory Receipts.
  *
- * Rules:
- * 1. Stored custom / updated challans (RECEIVED, CANCELLED, custom amounts) take highest precedence.
- * 2. Units without a registered challan receive a generated baseline challan from statutory assessment.
- * 3. Any challan marked RECEIVED must have an authentic Statutory Receipt in the receipts registry.
+ * Statutory Rule:
+ * Challans are NOT automatically pre-issued for all surveyed units.
+ * A Form PFT-2 Challan only exists when an Assessing Authority / Inspector
+ * has formally issued it.
  */
-export function ensureChallansAndReceiptsForUnits(units: readonly StoredUnit[]): {
+export function ensureChallansAndReceiptsForUnits(units?: readonly StoredUnit[]): {
   challans: Pft2ChallanRecord[];
   receipts: StatutoryReceiptRecord[];
 } {
+  void units;
   const storedChallans = loadPersistedPft2Challans();
-  const baselineChallans = createInitialPft2Challans(units as StoredUnit[]);
+  const storedReceipts = loadPersistedStatutoryReceipts();
 
   const mergedChallans: Pft2ChallanRecord[] = [...storedChallans];
-  const registeredUnitIds = new Set(
-    storedChallans.map((c) => c.unitId).concat(storedChallans.map((c) => c.demandNumber))
-  );
-
-  for (const base of baselineChallans) {
-    if (!registeredUnitIds.has(base.unitId) && !registeredUnitIds.has(base.demandNumber)) {
-      mergedChallans.push(base);
-      registeredUnitIds.add(base.unitId);
-    }
-  }
-
-  savePersistedPft2Challans(mergedChallans);
-
-  // Sync Receipts
-  const storedReceipts = loadPersistedStatutoryReceipts();
-  const mergedReceipts: StatutoryReceiptRecord[] =
-    storedReceipts.length > 0
-      ? [...storedReceipts]
-      : createInitialStatutoryReceipts(units as StoredUnit[]);
-
+  const mergedReceipts: StatutoryReceiptRecord[] = [...storedReceipts];
   const existingReceiptNumbers = new Set(mergedReceipts.map((r) => r.receiptNumber));
 
   // Ensure every received challan has its matching Rule 10 statutory receipt
