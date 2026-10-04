@@ -4239,150 +4239,122 @@ export default function HomePage({
               </p>
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            {officer.role === "ADMIN" && (
-              <span
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "1rem",
+              flexWrap: "wrap"
+            }}
+          >
+            {/* Officer Details & Jurisdiction Profile */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                background: "rgba(255, 255, 255, 0.12)",
+                padding: "0.45rem 0.85rem",
+                borderRadius: "8px",
+                border: "1px solid rgba(255, 255, 255, 0.2)"
+              }}
+            >
+              <div
                 style={{
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "50%",
                   background: "rgba(255, 255, 255, 0.2)",
-                  padding: "0.3rem 0.75rem",
-                  borderRadius: "9999px",
-                  fontSize: "0.75rem",
-                  fontWeight: 700,
-                  letterSpacing: "0.05em"
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "1.1rem"
                 }}
               >
-                PRODUCTION &bull; SUPABASE
-              </span>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* Official Government Session Bar (Phase 5) */}
-      <nav className="officer-bar" aria-label="Official Officer Session Switcher">
-        <div className="officer-bar-inner">
-          <div
-            className="officer-current"
-            style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}
-          >
-            <div className="officer-avatar" style={{ fontSize: "1.2rem", fontWeight: 700 }}>
-              {officer.role === "INSPECTOR"
-                ? "👤"
-                : officer.role === "ETO"
-                  ? "⚖️"
-                  : officer.role === "DIRECTOR"
-                    ? "📊"
-                    : "🛡️"}
-            </div>
-            <div className="officer-details">
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <strong>{officer.name}</strong>
-                <span
-                  style={{
-                    background:
-                      officer.role === "INSPECTOR"
-                        ? "#e0f2fe"
-                        : officer.role === "ETO"
-                          ? "#fef3c7"
-                          : officer.role === "DIRECTOR"
-                            ? "#f3e8ff"
-                            : "#fce7f3",
-                    color:
-                      officer.role === "INSPECTOR"
-                        ? "#0369a1"
-                        : officer.role === "ETO"
-                          ? "#92400e"
-                          : officer.role === "DIRECTOR"
-                            ? "#6b21a8"
-                            : "#831843",
-                    padding: "0.15rem 0.45rem",
-                    borderRadius: "4px",
-                    fontSize: "0.7rem",
-                    fontWeight: 700
-                  }}
-                >
-                  {officer.role}
-                </span>
-                {officer.role === "ADMIN" && (
+                {officer.role === "INSPECTOR"
+                  ? "👤"
+                  : officer.role === "ETO"
+                    ? "⚖️"
+                    : officer.role === "DIRECTOR"
+                      ? "📊"
+                      : "🛡️"}
+              </div>
+              <div style={{ lineHeight: 1.35 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <strong style={{ color: "#ffffff", fontSize: "0.92rem", fontWeight: 700 }}>
+                    {officer.name}
+                  </strong>
                   <span
                     style={{
-                      background: "#ecfdf5",
-                      color: "#065f46",
-                      border: "1px solid #a7f3d0",
-                      padding: "0.15rem 0.45rem",
+                      background:
+                        officer.role === "INSPECTOR"
+                          ? "#0284c7"
+                          : officer.role === "ETO"
+                            ? "#d97706"
+                            : officer.role === "DIRECTOR"
+                              ? "#7e22ce"
+                              : "#be185d",
+                      color: "#ffffff",
+                      padding: "0.1rem 0.45rem",
                       borderRadius: "4px",
                       fontSize: "0.68rem",
-                      fontWeight: 600
+                      fontWeight: 800,
+                      letterSpacing: "0.03em"
                     }}
                   >
-                    🟢{" "}
-                    {authenticatedSessionType === "CLOUD"
-                      ? "Supabase Auth"
-                      : "Authenticated Session"}
+                    {officer.role}
                   </span>
-                )}
+                  {officer.role === "ADMIN" && (
+                    <span
+                      style={{
+                        background: "rgba(16, 185, 129, 0.25)",
+                        color: "#a7f3d0",
+                        border: "1px solid rgba(167, 243, 208, 0.4)",
+                        padding: "0.1rem 0.4rem",
+                        borderRadius: "4px",
+                        fontSize: "0.65rem",
+                        fontWeight: 600
+                      }}
+                    >
+                      🟢{" "}
+                      {authenticatedSessionType === "CLOUD"
+                        ? "Supabase Auth"
+                        : "Authenticated Session"}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: "0.74rem", color: "#d1fae5" }}>
+                  {officer.title} &bull; Jurisdiction:{" "}
+                  <strong style={{ color: "#ffffff" }}>{officer.jurisdictionName}</strong> (
+                  {officer.jurisdictionTier}) &bull; {officer.email}
+                </div>
               </div>
-              <span style={{ fontSize: "0.78rem", color: "#64748b" }}>
-                {officer.title} &bull; Jurisdiction: <strong>{officer.jurisdictionName}</strong> (
-                {officer.jurisdictionTier}) &bull; {officer.email}
-              </span>
             </div>
-          </div>
 
-          <div
-            className="header-utilities"
-            style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}
-          >
-            <a
-              href="/admin/user-management"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-secondary btn-sm"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.35rem",
-                textDecoration: "none",
-                fontWeight: 600,
-                color: "#1e293b",
-                backgroundColor: "#f8fafc",
-                borderColor: "#cbd5e1"
-              }}
-              title="Open Departmental User & Jurisdiction Management Desk (/admin/user-management)"
-            >
-              👥 User Management ↗
-            </a>
-            <a
-              href="/verify"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-secondary btn-sm"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.35rem",
-                textDecoration: "none",
-                fontWeight: 600,
-                color: "#1e293b",
-                backgroundColor: "#f8fafc",
-                borderColor: "#cbd5e1"
-              }}
-              title="Open Public Citizen Document Verification Portal (/verify)"
-            >
-              🔍 Citizen Verification ↗
-            </a>
+            {/* Officer Sign Out */}
             <button
               type="button"
               onClick={handleOfficerSignOut}
               className="btn-secondary btn-sm"
-              style={{ color: "#991b1b", borderColor: "#fecaca", fontWeight: 600 }}
+              style={{
+                color: "#fee2e2",
+                backgroundColor: "rgba(220, 38, 38, 0.25)",
+                borderColor: "rgba(252, 165, 165, 0.45)",
+                fontWeight: 700,
+                padding: "0.45rem 0.85rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                cursor: "pointer",
+                borderRadius: "6px"
+              }}
               title="Sign out of current officer session"
             >
               🚪 Sign Out
             </button>
           </div>
         </div>
-      </nav>
+      </header>
 
       {/* Main Page Body */}
       <main className="page-shell">
