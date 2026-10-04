@@ -6,7 +6,7 @@ import {
 } from "@ptas/domain";
 import type { StoredUnit } from "./pilot-store";
 
-export const POTENTIAL_UNITS_STORAGE_KEY = "ptas_potential_units_v1";
+export const POTENTIAL_UNITS_STORAGE_KEY = "ptas_potential_units_v2";
 export const POTENTIAL_UNITS_UPDATED_EVENT = "ptas-potential-units-updated";
 
 function resolveRule(
@@ -116,9 +116,11 @@ export function createInitialPotentialUnits(): PotentialUnitRecord[] {
     identifierValue: string;
     address: string;
     locality: string;
+    circleId: string;
+    circleName: string;
+    districtName: string;
     ruleCode: string;
     subclassificationCode?: string;
-    arrears: number;
   }> = [
     {
       seq: 1,
@@ -128,9 +130,11 @@ export function createInitialPotentialUnits(): PotentialUnitRecord[] {
       identifierValue: "36603-1928471-1",
       address: "Shop # 14-B, Grain Market, Vehari",
       locality: "Grain Market (Galla Mandi)",
+      circleId: "00000000-0000-4000-8000-000000000004",
+      circleName: "Vehari Circle I (City / Commercial)",
+      districtName: "Vehari",
       ruleCode: "1",
-      subclassificationCode: "1(i)",
-      arrears: 0
+      subclassificationCode: "1(i)"
     },
     {
       seq: 2,
@@ -140,9 +144,11 @@ export function createInitialPotentialUnits(): PotentialUnitRecord[] {
       identifierValue: "7193842-4",
       address: "Plot 45, Club Road Commercial Area, Vehari",
       locality: "Club Road Commercial Area",
+      circleId: "00000000-0000-4000-8000-000000000004",
+      circleName: "Vehari Circle I (City / Commercial)",
+      districtName: "Vehari",
       ruleCode: "4",
-      subclassificationCode: "4(ii)",
-      arrears: 1500
+      subclassificationCode: "4(ii)"
     },
     {
       seq: 3,
@@ -150,11 +156,13 @@ export function createInitialPotentialUnits(): PotentialUnitRecord[] {
       tradeName: "Chenab Ginners",
       identifierType: "NTN",
       identifierValue: "2837192-9",
-      address: "Burewala Road, Vehari Industrial Area",
-      locality: "Vehari Industrial Area",
+      address: "Chichawatni Road, Burewala Industrial Area",
+      locality: "Burewala Industrial Area",
+      circleId: "00000000-0000-4000-8000-000000000003",
+      circleName: "Burewala Circle",
+      districtName: "Vehari",
       ruleCode: "1",
-      subclassificationCode: "1(ii)",
-      arrears: 5000
+      subclassificationCode: "1(ii)"
     },
     {
       seq: 4,
@@ -164,9 +172,11 @@ export function createInitialPotentialUnits(): PotentialUnitRecord[] {
       identifierValue: "36601-8291047-3",
       address: "Karkhana Bazaar near Rail Gate, Vehari",
       locality: "Karkhana Bazaar",
+      circleId: "00000000-0000-4000-8000-000000000005",
+      circleName: "Vehari Circle II (Grain Market / Rural)",
+      districtName: "Vehari",
       ruleCode: "2",
-      subclassificationCode: "2(i)",
-      arrears: 0
+      subclassificationCode: "2(i)"
     },
     {
       seq: 5,
@@ -174,11 +184,13 @@ export function createInitialPotentialUnits(): PotentialUnitRecord[] {
       tradeName: "Horizon Institute",
       identifierType: "CNIC",
       identifierValue: "36603-5591024-7",
-      address: "Civil Lines, Chungi No. 9, Vehari",
-      locality: "Chungi No. 9 Commercial Strip",
+      address: "Main Commercial Bazaar, Mailsi",
+      locality: "Mailsi Commercial Strip",
+      circleId: "00000000-0000-4000-8000-000000000002",
+      circleName: "Mailsi Circle",
+      districtName: "Vehari",
       ruleCode: "3",
-      subclassificationCode: "3(i)",
-      arrears: 0
+      subclassificationCode: "3(i)"
     }
   ];
 
@@ -200,9 +212,9 @@ export function createInitialPotentialUnits(): PotentialUnitRecord[] {
       identifierValue: s.identifierValue,
       address: s.address,
       locality: s.locality,
-      circleId: "00000000-0000-4000-8000-000000000004",
-      circleName: "Circle-Vehari",
-      districtName: "Vehari",
+      circleId: s.circleId,
+      circleName: s.circleName,
+      districtName: s.districtName,
       categoryCode: rule.category_code,
       categoryName: rule.category,
       subclassificationCode: rule.subclassification_code,
@@ -212,7 +224,7 @@ export function createInitialPotentialUnits(): PotentialUnitRecord[] {
       statutoryRuleId: rule.rule_id,
       statutoryRule: rule,
       annualRatePkr: annualRate,
-      openingArrears: s.arrears,
+      openingArrears: 0,
       status: "ACTIVE",
       createdAt: "2026-09-01T08:00:00.000Z",
       createdBy: "Inspector Field Survey"
@@ -226,6 +238,11 @@ export function createInitialPotentialUnits(): PotentialUnitRecord[] {
 export function loadPersistedPotentialUnits(): PotentialUnitRecord[] {
   if (typeof window === "undefined") return [];
   try {
+    // Purge legacy v1 records containing mock arrears
+    if (localStorage.getItem("ptas_potential_units_v1")) {
+      localStorage.removeItem("ptas_potential_units_v1");
+    }
+
     const raw = localStorage.getItem(POTENTIAL_UNITS_STORAGE_KEY);
     if (!raw) {
       const initial = createInitialPotentialUnits();
@@ -406,6 +423,83 @@ export function migratePotentialUnitToPft3(
 }
 
 /**
+ * Official CSV Template for Bulk Potential Discovery Units Ingestion.
+ * Contains authentic Vehari jurisdiction circles and realistic commercial examples without arrears.
+ */
+export function generatePotentialCsvTemplate(): string {
+  const headers = [
+    "District",
+    "Circle",
+    "Tehsil",
+    "Locality",
+    "Commercial Address",
+    "Legal Name",
+    "Trade Name",
+    "Identifier Type",
+    "Identifier Value",
+    "Category Code",
+    "Subclass Code"
+  ].join(",");
+
+  const sampleRows = [
+    [
+      "Vehari",
+      "Vehari Circle I (City / Commercial)",
+      "Vehari",
+      "Club Road Commercial Area",
+      '"Shop # 12, Club Road, Vehari"',
+      "Al-Madina Medical & Surgical Store",
+      "Al-Madina Pharmacy",
+      "CNIC",
+      "36603-1234567-1",
+      "1",
+      "1(i)"
+    ].join(","),
+    [
+      "Vehari",
+      "Vehari Circle II (Grain Market / Rural)",
+      "Vehari",
+      "Grain Market (Galla Mandi)",
+      '"Plot 44-B, Grain Market, Vehari"',
+      "Ittehad Seed & Pesticides Corporation",
+      "Ittehad Seeds",
+      "NTN",
+      "4192837-1",
+      "4",
+      "4(ii)"
+    ].join(","),
+    [
+      "Vehari",
+      "Burewala Circle",
+      "Burewala",
+      "Chichawatni Road Commercial Strip",
+      '"Main Chichawatni Road, Burewala"',
+      "Bismillah Engineering & Spares Works",
+      "Bismillah Engineering",
+      "CNIC",
+      "36601-9876543-3",
+      "2",
+      "2(i)"
+    ].join(","),
+    [
+      "Vehari",
+      "Mailsi Circle",
+      "Mailsi",
+      "Mailsi Main Bazaar",
+      '"Shop 18, Colony Road, Mailsi"',
+      "Chenab Fabrics & Garments Emporium",
+      "Chenab Fabrics",
+      "CNIC",
+      "36602-5432109-5",
+      "3",
+      "3(i)"
+    ].join(",")
+  ].join("\r\n");
+
+  return `\uFEFF${headers}\r\n${sampleRows}\r\n`;
+}
+
+/**
  * Parse and import potential units from a raw CSV or structured text.
  * Requires no ETO approval; Inspector can immediately import into the Potential Register.
  */
@@ -429,12 +523,48 @@ export function importPotentialUnitsCsv(
     return { importedUnits, errors: ["CSV content is empty."] };
   }
 
-  // Check if first line is header
-  const firstLine = lines[0]!.toLowerCase();
-  const startIndex =
-    firstLine.includes("name") || firstLine.includes("legal") || firstLine.includes("potential")
-      ? 1
-      : 0;
+  // Parse header if present
+  const firstLineCols = lines[0]!.split(",").map((c) =>
+    c
+      .replace(/^["']|["']$/g, "")
+      .trim()
+      .toLowerCase()
+  );
+
+  const hasHeaders =
+    firstLineCols.some((c) => c.includes("legal") || c.includes("name")) ||
+    firstLineCols.some((c) => c.includes("identifier") || c.includes("cnic")) ||
+    firstLineCols.some((c) => c.includes("district") || c.includes("circle"));
+
+  const startIndex = hasHeaders ? 1 : 0;
+  const headerMap = new Map<string, number>();
+
+  if (hasHeaders) {
+    firstLineCols.forEach((col, idx) => {
+      if (col.includes("district")) headerMap.set("district", idx);
+      else if (col.includes("circle")) headerMap.set("circle", idx);
+      else if (col.includes("tehsil")) headerMap.set("tehsil", idx);
+      else if (col.includes("locality")) headerMap.set("locality", idx);
+      else if (col.includes("address")) headerMap.set("address", idx);
+      else if (col.includes("legal") || (col.includes("name") && !col.includes("trade"))) {
+        headerMap.set("legalName", idx);
+      } else if (col.includes("trade") || col.includes("business")) headerMap.set("tradeName", idx);
+      else if (col.includes("id type") || col.includes("identifier type")) {
+        headerMap.set("idType", idx);
+      } else if (
+        col.includes("id val") ||
+        col.includes("identifier val") ||
+        col === "identifier" ||
+        col === "cnic" ||
+        col === "ntn"
+      ) {
+        headerMap.set("idVal", idx);
+      } else if (col.includes("cat") || col.includes("class")) {
+        if (col.includes("sub")) headerMap.set("subCode", idx);
+        else headerMap.set("catCode", idx);
+      }
+    });
+  }
 
   let currentSequence =
     existingPotentialUnits.reduce((max, u) => {
@@ -445,28 +575,95 @@ export function importPotentialUnitsCsv(
 
   for (let i = startIndex; i < lines.length; i++) {
     const line = lines[i]!;
-    // Split by comma while respecting quotes
     const cols = line.split(",").map((c) => c.replace(/^["']|["']$/g, "").trim());
     if (cols.length < 2) continue;
 
-    // Expected layout:
-    // [0] Legal Name, [1] Identifier (CNIC/NTN), [2] Category Code, [3] Subclass Code, [4] Address, [5] Locality, [6] Arrears, [7] Trade Name
-    const legalName = cols[0] || `Establishment ${currentSequence}`;
-    const idVal = cols[1] || `36603-${Math.floor(1000000 + Math.random() * 9000000)}-1`;
-    const catCode = cols[2] || "1";
-    const subCode = cols[3] || undefined;
-    const address = cols[4] || "Vehari City Commercial Zone";
-    const locality = cols[5] || "Vehari City Commercial Zone";
-    const arrears = cols[6] ? parseInt(cols[6], 10) || 0 : 0;
-    const tradeName = cols[7] || undefined;
+    let legalName: string;
+    let tradeName: string | undefined;
+    let idTypeVal: string;
+    let idVal: string;
+    let catCode: string;
+    let subCode: string | undefined;
+    let address: string;
+    let locality: string;
+    let circleStr: string;
+    let districtStr: string;
+
+    if (hasHeaders && headerMap.size >= 2) {
+      legalName = (headerMap.has("legalName") ? cols[headerMap.get("legalName")!] : cols[0]) || "";
+      idVal = (headerMap.has("idVal") ? cols[headerMap.get("idVal")!] : cols[1]) || "";
+      tradeName = headerMap.has("tradeName") ? cols[headerMap.get("tradeName")!] : undefined;
+      idTypeVal = headerMap.has("idType") ? cols[headerMap.get("idType")!] || "" : "";
+      catCode = (headerMap.has("catCode") ? cols[headerMap.get("catCode")!] : cols[2]) || "1";
+      subCode = headerMap.has("subCode") ? cols[headerMap.get("subCode")!] : cols[3] || undefined;
+      address =
+        (headerMap.has("address") ? cols[headerMap.get("address")!] : cols[4]) ||
+        "Vehari Commercial Area";
+      locality =
+        (headerMap.has("locality") ? cols[headerMap.get("locality")!] : cols[5]) ||
+        "Vehari City Commercial Zone";
+      circleStr =
+        (headerMap.has("circle") ? cols[headerMap.get("circle")!] : "") ||
+        "Vehari Circle I (City / Commercial)";
+      districtStr = (headerMap.has("district") ? cols[headerMap.get("district")!] : "") || "Vehari";
+    } else if (cols.length >= 10) {
+      // 10 or 11 column template layout
+      districtStr = cols[0] || "Vehari";
+      circleStr = cols[1] || "Vehari Circle I (City / Commercial)";
+      locality = cols[3] || "Vehari City Commercial Zone";
+      address = cols[4] || "Vehari Commercial Area";
+      legalName = cols[5] || `Establishment ${currentSequence}`;
+      tradeName = cols[6] || undefined;
+      idTypeVal = cols[7] || "";
+      idVal = cols[8] || `36603-${Math.floor(1000000 + Math.random() * 9000000)}-1`;
+      catCode = cols[9] || "1";
+      subCode = cols[10] || undefined;
+    } else {
+      // Legacy positional layout
+      districtStr = "Vehari";
+      circleStr = "Vehari Circle I (City / Commercial)";
+      idTypeVal = "";
+      legalName = cols[0] || `Establishment ${currentSequence}`;
+      idVal = cols[1] || `36603-${Math.floor(1000000 + Math.random() * 9000000)}-1`;
+      catCode = cols[2] || "1";
+      subCode = cols[3] || undefined;
+      address = cols[4] || "Vehari Commercial Area";
+      locality = cols[5] || "Vehari City Commercial Zone";
+      tradeName = cols[7] || undefined;
+    }
+
+    if (!legalName) legalName = `Establishment ${currentSequence}`;
+    if (!idVal) idVal = `36603-${Math.floor(1000000 + Math.random() * 9000000)}-1`;
 
     const identifierType: "CNIC" | "NTN" =
-      idVal.includes("-") && idVal.length <= 10 ? "NTN" : "CNIC";
+      idTypeVal.toUpperCase() === "NTN" || (!idTypeVal && idVal.includes("-") && idVal.length <= 10)
+        ? "NTN"
+        : "CNIC";
+
     const rule = resolveRule(catCode, subCode);
     const potNum = `POT-${currentSequence.toString().padStart(4, "0")}`;
     const pinNumber = formatPotentialPin(
       `237-00101061102${currentSequence.toString().padStart(4, "0")}-01`
     );
+
+    // Resolve authoritative circle and circleId
+    let circleName = "Vehari Circle I (City / Commercial)";
+    let circleId = "00000000-0000-4000-8000-000000000004";
+    const lowerCircle = circleStr.toLowerCase();
+    if (lowerCircle.includes("burewala")) {
+      circleName = "Burewala Circle";
+      circleId = "00000000-0000-4000-8000-000000000003";
+    } else if (lowerCircle.includes("mailsi")) {
+      circleName = "Mailsi Circle";
+      circleId = "00000000-0000-4000-8000-000000000002";
+    } else if (
+      lowerCircle.includes("circle ii") ||
+      lowerCircle.includes("circle 2") ||
+      lowerCircle.includes("grain")
+    ) {
+      circleName = "Vehari Circle II (Grain Market / Rural)";
+      circleId = "00000000-0000-4000-8000-000000000005";
+    }
 
     importedUnits.push({
       id: `pot-import-${Date.now()}-${currentSequence}`,
@@ -479,9 +676,9 @@ export function importPotentialUnitsCsv(
       identifierValue: idVal,
       address,
       locality,
-      circleId: "00000000-0000-4000-8000-000000000004",
-      circleName: "Circle-Vehari",
-      districtName: "Vehari",
+      circleId,
+      circleName,
+      districtName: districtStr || "Vehari",
       categoryCode: rule.category_code,
       categoryName: rule.category,
       subclassificationCode: rule.subclassification_code,
@@ -491,7 +688,7 @@ export function importPotentialUnitsCsv(
       statutoryRuleId: rule.rule_id,
       statutoryRule: rule,
       annualRatePkr: rule.annual_rate_pkr ?? 4000,
-      openingArrears: arrears,
+      openingArrears: 0,
       status: "ACTIVE",
       createdAt: new Date().toISOString(),
       createdBy: officerName

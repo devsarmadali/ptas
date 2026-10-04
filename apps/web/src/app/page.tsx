@@ -24,7 +24,6 @@ import {
   getRulesByCategory,
   getStatutoryCategories,
   getStatutoryRuleById,
-  getStatutoryRuleBySubclassification,
   getAllStatutoryRules,
   generateUinForUnit,
   generateDocumentPin,
@@ -130,6 +129,7 @@ import {
   savePersistedPotentialUnits,
   migratePotentialUnitToPft3,
   importPotentialUnitsCsv,
+  generatePotentialCsvTemplate,
   formatPotentialPin,
   POTENTIAL_UNITS_UPDATED_EVENT
 } from "../lib/potential-units-storage";
@@ -516,10 +516,13 @@ export default function HomePage({
   const [potNewIdType, setPotNewIdType] = useState<"CNIC" | "NTN">("CNIC");
   const [potNewIdValue, setPotNewIdValue] = useState("");
   const [potNewAddress, setPotNewAddress] = useState("");
-  const [potNewLocality, setPotNewLocality] = useState("Vehari City Commercial Zone");
+  const [potNewLocality, setPotNewLocality] = useState("");
   const [potNewCategoryCode, setPotNewCategoryCode] = useState("1");
   const [potNewSubclassCode, setPotNewSubclassCode] = useState("1(i)");
-  const [potNewArrears, setPotNewArrears] = useState<number>(0);
+  const [potNewTertiaryCode, setPotNewTertiaryCode] = useState("");
+  const [potNewRuleId, setPotNewRuleId] = useState("PFT-1-01");
+  const [potNewCircleName, setPotNewCircleName] = useState("Vehari Circle I (City / Commercial)");
+  const [potNewTehsil, setPotNewTehsil] = useState("Vehari");
 
   // Receipts Filter Controls
   const [receiptSourceFilter, setReceiptSourceFilter] = useState("ALL");
@@ -992,6 +995,96 @@ export default function HomePage({
       return "";
     }
   }, [selectedStatutoryRule, allRules, units.length]);
+
+  // Classification Helpers for Potential Units Modal (matches Survey Add Modal)
+  const potAvailableRulesForCategory = useMemo(() => {
+    return getRulesByCategory(potNewCategoryCode);
+  }, [potNewCategoryCode]);
+
+  const potAvailableSubclasses = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of potAvailableRulesForCategory) {
+      if (r.subclassification_code) {
+        map.set(r.subclassification_code, r.subclassification_label ?? r.subcategory);
+      }
+    }
+    return Array.from(map.entries()).map(([code, label]) => ({ code, label }));
+  }, [potAvailableRulesForCategory]);
+
+  const potAvailableTertiaryRules = useMemo(() => {
+    return potAvailableRulesForCategory.filter(
+      (r) => r.subclassification_code === potNewSubclassCode && r.statutory_tertiary_code
+    );
+  }, [potAvailableRulesForCategory, potNewSubclassCode]);
+
+  const potSelectedStatutoryRule = useMemo(() => {
+    return getStatutoryRuleById(potNewRuleId) ?? potAvailableRulesForCategory[0];
+  }, [potNewRuleId, potAvailableRulesForCategory]);
+
+  const handlePotCategoryChange = (catCode: string) => {
+    setPotNewCategoryCode(catCode);
+    const catRules = getRulesByCategory(catCode);
+    const subMap = new Map<string, string>();
+    for (const r of catRules) {
+      if (r.subclassification_code) {
+        subMap.set(r.subclassification_code, r.subclassification_label ?? r.subcategory);
+      }
+    }
+    const subList = Array.from(subMap.keys());
+    if (subList.length === 0) {
+      setPotNewSubclassCode("");
+      setPotNewTertiaryCode("");
+      if (catRules[0]) setPotNewRuleId(catRules[0].rule_id);
+    } else {
+      const firstSub = subList[0]!;
+      setPotNewSubclassCode(firstSub);
+      const tertRules = catRules.filter(
+        (r) => r.subclassification_code === firstSub && r.statutory_tertiary_code
+      );
+      if (tertRules.length > 0) {
+        setPotNewTertiaryCode(tertRules[0]!.statutory_tertiary_code!);
+        setPotNewRuleId(tertRules[0]!.rule_id);
+      } else {
+        setPotNewTertiaryCode("");
+        const matched = catRules.find((r) => r.subclassification_code === firstSub);
+        if (matched) setPotNewRuleId(matched.rule_id);
+      }
+    }
+  };
+
+  const handlePotSubclassChange = (subCode: string) => {
+    setPotNewSubclassCode(subCode);
+    const tertRules = potAvailableRulesForCategory.filter(
+      (r) => r.subclassification_code === subCode && r.statutory_tertiary_code
+    );
+    if (tertRules.length > 0) {
+      setPotNewTertiaryCode(tertRules[0]!.statutory_tertiary_code!);
+      setPotNewRuleId(tertRules[0]!.rule_id);
+    } else {
+      setPotNewTertiaryCode("");
+      const matched = potAvailableRulesForCategory.find(
+        (r) => r.subclassification_code === subCode
+      );
+      if (matched) setPotNewRuleId(matched.rule_id);
+    }
+  };
+
+  const handlePotTertiaryChange = (tertCode: string) => {
+    setPotNewTertiaryCode(tertCode);
+    const matched = potAvailableTertiaryRules.find((r) => r.statutory_tertiary_code === tertCode);
+    if (matched) setPotNewRuleId(matched.rule_id);
+  };
+
+  const potPreviewPin = useMemo(() => {
+    if (!potSelectedStatutoryRule) return "";
+    try {
+      const seq = potentialUnits.length + 1;
+      const basePin = `237-00101061102${seq.toString().padStart(4, "0")}-01`;
+      return formatPotentialPin(basePin);
+    } catch {
+      return "";
+    }
+  }, [potSelectedStatutoryRule, potentialUnits.length]);
 
   // Real-time Duplicate Detection using domain's findDuplicateCandidates
   const duplicateWarning = useMemo((): DuplicateMatch | null => {
@@ -3301,12 +3394,15 @@ export default function HomePage({
     const basePin = `237-00101061102${nextSeq.toString().padStart(4, "0")}-01`;
     const pinNumber = formatPotentialPin(basePin);
 
-    let rule = getStatutoryRuleById(`PFT-${potNewCategoryCode}`);
-    if (!rule && potNewSubclassCode) {
-      rule = getStatutoryRuleBySubclassification(potNewSubclassCode);
-    }
-    if (!rule) {
-      rule = getAllStatutoryRules()[0]!;
+    const rule = potSelectedStatutoryRule || getAllStatutoryRules()[0]!;
+
+    let circleId = "00000000-0000-4000-8000-000000000004";
+    if (potNewCircleName.includes("Burewala")) {
+      circleId = "00000000-0000-4000-8000-000000000003";
+    } else if (potNewCircleName.includes("Mailsi")) {
+      circleId = "00000000-0000-4000-8000-000000000002";
+    } else if (potNewCircleName.includes("Circle II")) {
+      circleId = "00000000-0000-4000-8000-000000000005";
     }
 
     const newPotUnit: PotentialUnitRecord = {
@@ -3318,10 +3414,10 @@ export default function HomePage({
       tradeName: potNewTradeName.trim() || undefined,
       identifierType: potNewIdType,
       identifierValue: potNewIdValue.trim(),
-      address: potNewAddress.trim() || "Vehari Commercial Hub",
+      address: potNewAddress.trim() || "Vehari Commercial Area",
       locality: potNewLocality.trim() || "Vehari City Commercial Zone",
-      circleId: "00000000-0000-4000-8000-000000000004",
-      circleName: "Circle-Vehari",
+      circleId,
+      circleName: potNewCircleName,
       districtName: "Vehari",
       categoryCode: rule.category_code,
       categoryName: rule.category,
@@ -3332,7 +3428,7 @@ export default function HomePage({
       statutoryRuleId: rule.rule_id,
       statutoryRule: rule,
       annualRatePkr: rule.annual_rate_pkr ?? 4000,
-      openingArrears: potNewArrears || 0,
+      openingArrears: 0,
       status: "ACTIVE",
       createdAt: new Date().toISOString(),
       createdBy: `${officer.name} (${officer.title})`
@@ -3348,9 +3444,23 @@ export default function HomePage({
     setPotNewTradeName("");
     setPotNewIdValue("");
     setPotNewAddress("");
-    setPotNewArrears(0);
+    setPotNewLocality("");
 
     showToast("success", `✓ Potential Unit ${potNum} successfully registered.`);
+  };
+
+  const handleDownloadPotentialTemplate = () => {
+    const csv = generatePotentialCsvTemplate();
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "Punjab_PTAS_Potential_Units_Discovery_Template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast("info", "Official Potential Units discovery CSV template downloaded.");
   };
 
   const handleImportPotentialCsv = () => {
@@ -3391,9 +3501,16 @@ export default function HomePage({
         actions={[
           {
             id: "issue-provisional-pft2",
-            label: "Issue Form P.F.T-2 (Provisional Challan)",
-            icon: "📜",
+            label: "Instant Issue Provisional PFT-2",
+            icon: "⚡",
             onClick: () => handleIssueProvisionalPft2(target)
+          },
+          {
+            id: "issue-pft2-tab",
+            label: "Issue Form PFT-2 (New Tab ↗)",
+            icon: "📜",
+            href: `/documents/pf2/new?pin=${encodeURIComponent(target.pinNumber)}`,
+            target: "_blank"
           },
           {
             id: "view-details",
@@ -3404,7 +3521,7 @@ export default function HomePage({
           },
           {
             id: "view-pft1",
-            label: "Issue Form P.F.T-1 (Assessment Notice)",
+            label: "Issue Form P.F.T-1 (Assessment Notice ↗)",
             icon: "📄",
             href: `/documents/pft1?pin=${target.pinNumber}`,
             target: "_blank"
@@ -5129,6 +5246,14 @@ export default function HomePage({
                 <button
                   type="button"
                   className="btn-secondary"
+                  onClick={handleDownloadPotentialTemplate}
+                  title="Download standard CSV template for discovery of potential units"
+                >
+                  📄 Download Template
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
                   onClick={() => setShowImportPotentialModal(true)}
                   title="Import bulk discovery units via CSV"
                 >
@@ -5139,7 +5264,7 @@ export default function HomePage({
                   className="btn-primary"
                   onClick={() => {
                     const csvRows = [
-                      "Potential No,Provisional PIN,Legal Name,Trade Name,Identifier Type,Identifier Value,Address,Locality,Circle,Statutory Category,Annual Rate PKR,Opening Arrears PKR,Status",
+                      "Potential No,Provisional PIN,Legal Name,Trade Name,Identifier Type,Identifier Value,Address,Locality,Circle,Statutory Category,Annual Rate PKR,Status",
                       ...filteredPotentialUnits.map((u) =>
                         [
                           `"${u.potentialNumber}"`,
@@ -5150,10 +5275,9 @@ export default function HomePage({
                           `"${u.identifierValue}"`,
                           `"${u.address.replace(/"/g, '""')}"`,
                           `"${u.locality}"`,
-                          `"${u.circleName || "Circle-Vehari"}"`,
+                          `"${u.circleName || "Vehari Circle I (City / Commercial)"}"`,
                           `"${u.categoryName.replace(/"/g, '""')}"`,
                           u.annualRatePkr,
-                          u.openingArrears || 0,
                           `"${u.status}"`
                         ].join(",")
                       )
@@ -5542,11 +5666,6 @@ export default function HomePage({
                           <div style={{ fontWeight: 700, color: "#166534" }}>
                             PKR {u.annualRatePkr.toLocaleString()}
                           </div>
-                          {(u.openingArrears ?? 0) > 0 && (
-                            <div style={{ fontSize: "0.72rem", color: "#b45309" }}>
-                              + PKR {(u.openingArrears ?? 0).toLocaleString()} arr.
-                            </div>
-                          )}
                         </td>
                         <td>
                           {u.status === "ACTIVE" ? (
@@ -21872,10 +21991,11 @@ export default function HomePage({
                       marginBottom: "0.25rem"
                     }}
                   >
-                    Locality / Zone
+                    Locality / Zone *
                   </label>
                   <input
                     type="text"
+                    required
                     value={potNewLocality}
                     onChange={(e) => setPotNewLocality(e.target.value)}
                     placeholder="e.g. Club Road / Sharqi Colony"
@@ -21897,21 +22017,33 @@ export default function HomePage({
                       marginBottom: "0.25rem"
                     }}
                   >
-                    Opening Arrears (PKR)
+                    Administrative Circle *
                   </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={potNewArrears}
-                    onChange={(e) => setPotNewArrears(Number(e.target.value))}
-                    placeholder="0"
+                  <select
+                    value={potNewCircleName}
+                    onChange={(e) => {
+                      const circle = e.target.value;
+                      setPotNewCircleName(circle);
+                      if (circle.includes("Burewala")) setPotNewTehsil("Burewala");
+                      else if (circle.includes("Mailsi")) setPotNewTehsil("Mailsi");
+                      else setPotNewTehsil("Vehari");
+                    }}
                     style={{
                       width: "100%",
                       padding: "0.5rem",
                       borderRadius: "6px",
                       border: "1px solid #cbd5e1"
                     }}
-                  />
+                  >
+                    <option value="Vehari Circle I (City / Commercial)">
+                      Vehari Circle I (City / Commercial)
+                    </option>
+                    <option value="Vehari Circle II (Rural / Industrial)">
+                      Vehari Circle II (Rural / Industrial)
+                    </option>
+                    <option value="Burewala Circle">Burewala Circle</option>
+                    <option value="Mailsi Circle">Mailsi Circle</option>
+                  </select>
                 </div>
               </div>
 
@@ -21941,42 +22073,144 @@ export default function HomePage({
                 />
               </div>
 
-              <div style={{ marginBottom: "1.5rem" }}>
-                <label
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "1rem",
+                  marginBottom: "1rem"
+                }}
+              >
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      color: "#334155",
+                      marginBottom: "0.25rem"
+                    }}
+                  >
+                    Statutory Schedule Category *
+                  </label>
+                  <select
+                    value={potNewCategoryCode}
+                    onChange={(e) => handlePotCategoryChange(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      borderRadius: "6px",
+                      border: "1px solid #cbd5e1"
+                    }}
+                  >
+                    {allCategories.map((c) => (
+                      <option key={c.category_code} value={c.category_code}>
+                        Category {c.category_code}: {c.category_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      color: "#334155",
+                      marginBottom: "0.25rem"
+                    }}
+                  >
+                    Sub-Classification *
+                  </label>
+                  <select
+                    value={potNewSubclassCode}
+                    onChange={(e) => handlePotSubclassChange(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      borderRadius: "6px",
+                      border: "1px solid #cbd5e1"
+                    }}
+                  >
+                    {potAvailableSubclasses.map((s) => (
+                      <option key={s.code} value={s.code}>
+                        {s.code}: {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {potAvailableTertiaryRules.length > 0 && (
+                <div style={{ marginBottom: "1rem" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      color: "#334155",
+                      marginBottom: "0.25rem"
+                    }}
+                  >
+                    Tertiary Classification / Slabs
+                  </label>
+                  <select
+                    value={potNewTertiaryCode}
+                    onChange={(e) => handlePotTertiaryChange(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      borderRadius: "6px",
+                      border: "1px solid #cbd5e1"
+                    }}
+                  >
+                    {potAvailableTertiaryRules.map((r) => (
+                      <option key={r.rule_id} value={r.statutory_tertiary_code!}>
+                        {r.statutory_tertiary_code}: {r.statutory_tertiary_classification} (PKR{" "}
+                        {r.annual_rate_pkr.toLocaleString()})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Provisional PIN Preview and Rate Card */}
+              <div
+                style={{
+                  marginBottom: "1.5rem",
+                  padding: "0.75rem",
+                  borderRadius: "6px",
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  fontSize: "0.78rem",
+                  color: "#475569"
+                }}
+              >
+                <div
                   style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    fontWeight: 600,
-                    color: "#334155",
+                    display: "flex",
+                    justifyContent: "space-between",
                     marginBottom: "0.25rem"
                   }}
                 >
-                  Statutory Classification Rule
-                </label>
-                <select
-                  value={potNewCategoryCode}
-                  onChange={(e) => {
-                    setPotNewCategoryCode(e.target.value);
-                    const selectedRule = allRules.find((r) => r.category_code === e.target.value);
-                    if (selectedRule?.subclassification_code) {
-                      setPotNewSubclassCode(selectedRule.subclassification_code);
-                    }
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    borderRadius: "6px",
-                    border: "1px solid #cbd5e1"
-                  }}
-                >
-                  {allRules.map((rule) => (
-                    <option key={rule.rule_id} value={rule.category_code}>
-                      Category {rule.category_code}: {rule.category}{" "}
-                      {rule.subcategory ? `— ${rule.subcategory}` : ""} (PKR{" "}
-                      {rule.annual_rate_pkr?.toLocaleString() ?? "N/A"})
-                    </option>
-                  ))}
-                </select>
+                  <span>
+                    <strong>Provisional PIN:</strong>{" "}
+                    <code style={{ color: "#1e40af" }}>{potPreviewPin}</code>
+                  </span>
+                  <span>
+                    <strong>Account Head:</strong> B01601
+                  </span>
+                </div>
+                <div>
+                  <strong>Administrative Tehsil:</strong> {potNewTehsil} &bull;{" "}
+                  <strong>Circle:</strong> {potNewCircleName}
+                </div>
+                {potSelectedStatutoryRule && (
+                  <div style={{ color: "#166534", fontWeight: 700, marginTop: "0.35rem" }}>
+                    Statutory Annual Tax Rate: PKR{" "}
+                    {potSelectedStatutoryRule.annual_rate_pkr.toLocaleString()}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
@@ -22056,19 +22290,34 @@ export default function HomePage({
                 ✕
               </button>
             </div>
-            <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "1rem" }}>
+            <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "0.75rem" }}>
               Paste comma-separated survey data or upload a <code>.csv</code> file.
               <br />
               <span style={{ fontSize: "0.78rem", color: "#475569" }}>
-                Format:{" "}
+                Columns:{" "}
                 <code>
-                  Legal Name, Identifier (CNIC/NTN), Category Code, Subclass, Address, Locality,
-                  Arrears, Trade Name
+                  Legal Name, Identifier (CNIC/NTN), Category Code, Subclass Code, Address,
+                  Locality, Circle Name, Trade Name
                 </code>
               </span>
             </p>
 
-            <div style={{ marginBottom: "1rem" }}>
+            <div
+              style={{
+                marginBottom: "1rem",
+                display: "flex",
+                gap: "0.75rem",
+                alignItems: "center"
+              }}
+            >
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleDownloadPotentialTemplate}
+                style={{ fontSize: "0.8rem", padding: "0.35rem 0.75rem" }}
+              >
+                📄 Download Blank CSV Template
+              </button>
               <input
                 type="file"
                 accept=".csv,.txt"
@@ -22082,13 +22331,15 @@ export default function HomePage({
                     reader.readAsText(file);
                   }
                 }}
-                style={{ fontSize: "0.85rem", marginBottom: "0.75rem" }}
+                style={{ fontSize: "0.82rem" }}
               />
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
               <textarea
                 rows={8}
                 value={potentialCsvInput}
                 onChange={(e) => setPotentialCsvInput(e.target.value)}
-                placeholder="Al-Hamd Medical Store, 36603-9988776-1, 1, 1(i), Main Karkhana Bazaar, Vehari, 0, Al-Hamd Pharma"
+                placeholder={`Al-Hamd Medical Store, 36603-9988776-1, 1, 1(i), Main Karkhana Bazaar, Sharqi Colony, Vehari Circle I (City / Commercial), Al-Hamd Pharma\nBismillah Cloth House, 36603-1122334-3, 3, 3(ii), Club Road, Vehari Club, Vehari Circle I (City / Commercial), Bismillah Textiles`}
                 style={{
                   width: "100%",
                   fontFamily: "monospace",

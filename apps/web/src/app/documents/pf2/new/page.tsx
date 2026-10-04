@@ -15,6 +15,10 @@ import { generateDocumentPin } from "@ptas/domain";
 import { Pft2ChallanDocument } from "../../../../components/Pft2ChallanDocument";
 import { downloadOfficialPdf } from "../../../../lib/pdf";
 import { saveIssuedPft2Challan } from "../../../../lib/challan-storage";
+import {
+  loadPersistedPotentialUnits,
+  type PotentialUnitRecord
+} from "../../../../lib/potential-units-storage";
 
 function DocumentIssuanceContent() {
   const searchParams = useSearchParams();
@@ -53,9 +57,8 @@ function DocumentIssuanceContent() {
         const available = (units && units.length > 0 ? units : []).filter(
           (u) => u.assessments[0]?.status === "APPROVED"
         );
-        setAllUnits(available);
 
-        const found =
+        let found =
           available.find(
             (u) =>
               u.provincialUin === unitParam ||
@@ -63,18 +66,92 @@ function DocumentIssuanceContent() {
               u.demandUnit?.permanentDemandNo === unitParam ||
               u.id === unitParam ||
               (unitParam && u.legalName.toLowerCase().includes(unitParam.toLowerCase()))
-          ) ??
-          // Default to a unit with pending demand or first available unit
-          available.find((u) => {
-            const assessed = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
-            let paid = 0;
-            for (const e of u.ledgerEntries) {
-              if (e.entryType === "PAYMENT_CREDIT") paid += Math.abs(e.amount);
-            }
-            return assessed - paid > 0;
-          }) ??
-          available[0] ??
-          null;
+          ) ?? null;
+
+        if (!found && unitParam) {
+          const potList = loadPersistedPotentialUnits();
+          const pot = potList.find(
+            (p: PotentialUnitRecord) =>
+              p.pinNumber === unitParam ||
+              p.provincialUin === unitParam ||
+              p.potentialNumber === unitParam ||
+              p.id === unitParam ||
+              decodeURIComponent(unitParam) === p.pinNumber
+          );
+          if (pot) {
+            found = {
+              id: pot.id,
+              provincialUin: pot.pinNumber,
+              pinNumber: pot.pinNumber,
+              legalName: pot.legalName,
+              tradeName: pot.tradeName,
+              address: pot.address,
+              locality: pot.locality,
+              circleName: pot.circleName ?? "Circle-Vehari",
+              districtName: pot.districtName ?? "Vehari",
+              category: pot.categoryName,
+              subclass: pot.subclassificationName || pot.categoryCode,
+              statutoryRule: {
+                category: pot.categoryName,
+                subclassification_code: pot.categoryCode,
+                subclassification_label: pot.subclassificationName,
+                statutory_rate_pkr: pot.annualRatePkr,
+                annual_rate_pkr: pot.annualRatePkr,
+                schedule_entry: pot.categoryCode
+              },
+              openingArrears: 0,
+              identifiers: [{ type: pot.identifierType, value: pot.identifierValue }],
+              demandUnit: {
+                id: pot.id,
+                permanentDemandNo: pot.potentialNumber,
+                taxpayerUnitId: pot.id,
+                circleId: pot.circleId,
+                status: "ACTIVE"
+              },
+              assessments: [
+                {
+                  id: `ass-${pot.id}`,
+                  status: "APPROVED",
+                  taxpayerUnitId: pot.id,
+                  financialYear: "2025-2026",
+                  approvedAt: pot.createdAt
+                }
+              ],
+              assessmentVersions: [
+                {
+                  id: `ver-${pot.id}`,
+                  versionNumber: 1,
+                  approvedBy: "Excise & Taxation Officer",
+                  snapshot: {
+                    taxAmount: pot.annualRatePkr,
+                    category: pot.categoryName,
+                    subclass: pot.subclassificationName
+                  }
+                }
+              ],
+              ledgerEntries: [],
+              surveys: []
+            } as unknown as StoredUnit;
+
+            available.push(found);
+          }
+        }
+
+        if (!found) {
+          found =
+            available.find((u) => {
+              const assessed = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+              let paid = 0;
+              for (const e of u.ledgerEntries) {
+                if (e.entryType === "PAYMENT_CREDIT") paid += Math.abs(e.amount);
+              }
+              return assessed - paid > 0;
+            }) ??
+            available[0] ??
+            null;
+        }
+
+        setAllUnits(available);
 
         if (found) {
           setUnit(found);
@@ -216,6 +293,10 @@ function DocumentIssuanceContent() {
       });
       const pin = generateDocumentPin(noticeNumber);
 
+      const isProvisional =
+        freshUnit.pinNumber?.startsWith("Potential-") ||
+        freshUnit.demandUnit?.permanentDemandNo?.startsWith("POT-");
+
       const newChallan: Pft2ChallanRecord = {
         id: `pft2-gen-${Date.now()}`,
         challanNumber,
@@ -246,6 +327,8 @@ function DocumentIssuanceContent() {
         issueDate: systemIssueDate,
         dueDate,
         status: "ISSUED",
+        isProvisional,
+        potentialNumber: isProvisional ? freshUnit.demandUnit?.permanentDemandNo : undefined,
         officialSha256: `sha256-gen-${pin}-${Date.now()}`,
         qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-2&ref=${noticeNumber}&pdn=${freshUnit.demandUnit?.permanentDemandNo || ""}&amt=${effectivePayableAmount}&pin=${pin}`
       };

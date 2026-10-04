@@ -8,6 +8,7 @@ import {
   savePersistedPotentialUnits,
   migratePotentialUnitToPft3,
   importPotentialUnitsCsv,
+  generatePotentialCsvTemplate,
   POTENTIAL_UNITS_STORAGE_KEY
 } from "../src/lib/potential-units-storage";
 import type { StoredUnit } from "../src/lib/pilot-store";
@@ -102,6 +103,16 @@ describe("Potential Assessment Register Persistence & Migration Layer", () => {
     expect(result.importedUnits[0]?.pinNumber).toMatch(/^Potential-/);
     expect(result.importedUnits[0]?.potentialNumber).toMatch(/^POT-/);
     expect(result.importedUnits[0]?.createdBy).toBe("Inspector Ahmad");
+    expect(result.importedUnits[0]?.openingArrears).toBe(0);
+  });
+
+  it("generates authentic CSV template with Vehari jurisdiction headers and no arrears", () => {
+    const template = generatePotentialCsvTemplate();
+    expect(template).toContain("District,Circle,Tehsil,Locality,Commercial Address");
+    expect(template).toContain("Vehari Circle I (City / Commercial)");
+    expect(template).toContain("Burewala Circle");
+    expect(template).toContain("Mailsi Circle");
+    expect(template).not.toContain("Arrears");
   });
 
   it("migrates potential unit to PFT-3 upon payment realization", () => {
