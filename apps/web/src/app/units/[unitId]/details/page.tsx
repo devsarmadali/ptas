@@ -7,6 +7,7 @@ import {
   type StatutoryReceiptRecord
 } from "../../../../lib/pilot-store";
 import { loadOperationalSurveyUnits } from "../../../../lib/operational-survey";
+import { loadPersistedPotentialUnits } from "../../../../lib/potential-units-storage";
 import {
   computeUnitFinancialSummary,
   getScheduleEntryLabel
@@ -32,7 +33,7 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
       .then((available) => {
         if (cancelled) return;
 
-        const found =
+        let found =
           available.find(
             (u) =>
               u.provincialUin === unitId ||
@@ -41,6 +42,49 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
               u.id === unitId ||
               (unitId && u.legalName.toLowerCase().includes(unitId.toLowerCase()))
           ) ?? null;
+
+        if (!found) {
+          const potentialUnits = loadPersistedPotentialUnits();
+          const decodedId = decodeURIComponent(unitId);
+          const pot = potentialUnits.find(
+            (p) =>
+              p.id === unitId ||
+              p.potentialNumber === unitId ||
+              p.pinNumber === unitId ||
+              p.pinNumber === decodedId ||
+              p.provincialUin === unitId ||
+              p.provincialUin === decodedId ||
+              p.identifierValue === unitId ||
+              (unitId && p.legalName.toLowerCase().includes(unitId.toLowerCase()))
+          );
+          if (pot) {
+            found = {
+              id: pot.id,
+              provincialUin: pot.pinNumber,
+              pinNumber: pot.pinNumber,
+              legalName: pot.legalName,
+              tradeName: pot.tradeName,
+              address: pot.address,
+              locality: pot.locality,
+              circleName: pot.circleName ?? "Circle-Vehari",
+              districtName: pot.districtName ?? "Vehari",
+              category: pot.categoryName,
+              subclass: pot.subclassificationName || pot.categoryCode,
+              identifiers: [{ type: pot.identifierType, value: pot.identifierValue }],
+              demandUnit: {
+                id: pot.id,
+                permanentDemandNo: pot.potentialNumber,
+                taxpayerUnitId: pot.id,
+                circleId: pot.circleId,
+                status: "ACTIVE"
+              },
+              assessments: [],
+              assessmentVersions: [],
+              ledgerEntries: [],
+              surveys: []
+            } as unknown as StoredUnit;
+          }
+        }
 
         if (found) {
           setUnit(found);
@@ -414,13 +458,13 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
             </div>
             <div>
               <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
-                Permanent Demand No (PDN):
+                {pdn.startsWith("POT-") ? "Potential No:" : "Permanent Demand No (PDN):"}
               </span>
               <span
                 style={{
                   fontFamily: "monospace",
                   fontWeight: 800,
-                  color: "#166534",
+                  color: pdn.startsWith("POT-") ? "#b45309" : "#166534",
                   fontSize: "0.95rem"
                 }}
               >
@@ -429,10 +473,12 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
             </div>
             <div>
               <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
-                Provincial UIN:
+                {provincialUin?.startsWith("Potential-")
+                  ? "Provisional PIN:"
+                  : "Provincial PIN / UIN:"}
               </span>
               <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#1e3a8a" }}>
-                {provincialUin}
+                {provincialUin || unit.pinNumber || "Unassigned"}
               </span>
             </div>
             <div>
@@ -842,7 +888,7 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
                 <thead>
                   <tr>
                     <th>Challan / Notice #</th>
-                    <th>Security Code</th>
+                    <th>Verification PIN</th>
                     <th>Scope</th>
                     <th>Amount (PKR)</th>
                     <th>Issue Date</th>
@@ -866,7 +912,7 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
                           {c.noticeNumber}
                         </span>
                       </td>
-                      <td style={{ fontFamily: "monospace", fontWeight: 700 }}>🔒 {c.pin}</td>
+                      <td style={{ fontFamily: "monospace", fontWeight: 700 }}>{c.pin}</td>
                       <td>{c.demandScope ?? "CURRENT"}</td>
                       <td>
                         <strong>PKR {c.amountPayable.toLocaleString()}</strong>

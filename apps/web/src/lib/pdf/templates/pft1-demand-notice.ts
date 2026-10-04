@@ -288,21 +288,16 @@ export async function generatePft1DemandNoticePdf(
 
   const secBoxY = curY + QR_SIZE + 1.0;
   const secBoxW = QR_SIZE;
-  const secBoxH = 7.5;
+  const secBoxH = 6.2;
   doc.setFillColor(224, 242, 254);
   doc.setDrawColor(186, 230, 253);
   doc.setLineWidth(0.2);
   doc.roundedRect(left + 2, secBoxY, secBoxW, secBoxH, 0.6, 0.6, "FD");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(5.0);
-  doc.setTextColor(3, 105, 161);
-  doc.text("SECURITY CODE", left + 2 + secBoxW / 2, secBoxY + 2.5, { align: "center" });
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.2);
+  doc.setFontSize(8.5);
   doc.setTextColor(30, 58, 138);
-  doc.text(notice.pin, left + 2 + secBoxW / 2, secBoxY + 6.2, { align: "center" });
+  doc.text(notice.pin, left + 2 + secBoxW / 2, secBoxY + 4.3, { align: "center" });
 
   // Right: Assessing Authority Signature & Seal Block
   const sigX = left + contentWidth - 75;

@@ -4,6 +4,10 @@ import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { type StoredUnit } from "../../../lib/pilot-store";
 import { loadOperationalSurveyUnits } from "../../../lib/operational-survey";
+import {
+  loadPersistedPotentialUnits,
+  type PotentialUnitRecord
+} from "../../../lib/potential-units-storage";
 import { generateFormPFT1 } from "../../../lib/statutory-forms";
 import { StatutoryQrCode } from "../../../components/StatutoryQrCode";
 import { downloadOfficialPdf } from "../../../lib/pdf";
@@ -23,16 +27,81 @@ function FormPft1NoticeContent() {
       .then((available) => {
         if (cancelled) return;
 
-        const found =
+        let found =
           available.find(
             (u) =>
               u.pinNumber === unitParam ||
               u.provincialUin === unitParam ||
               u.demandUnit?.permanentDemandNo === unitParam ||
               u.id === unitParam
-          ) ??
-          available.find((u) => u.assessments[0]?.status === "APPROVED") ??
-          null;
+          ) ?? null;
+
+        if (!found && unitParam) {
+          const potList = loadPersistedPotentialUnits();
+          const pot = potList.find(
+            (p: PotentialUnitRecord) =>
+              p.pinNumber === unitParam ||
+              p.provincialUin === unitParam ||
+              p.potentialNumber === unitParam ||
+              p.id === unitParam ||
+              decodeURIComponent(unitParam) === p.pinNumber
+          );
+          if (pot) {
+            found = {
+              id: pot.id,
+              provincialUin: pot.pinNumber,
+              pinNumber: pot.pinNumber,
+              legalName: pot.legalName,
+              tradeName: pot.tradeName,
+              address: pot.address,
+              locality: pot.locality,
+              circleName: pot.circleName ?? "Circle-Vehari",
+              districtName: pot.districtName ?? "Vehari",
+              identifiers: [{ type: pot.identifierType, value: pot.identifierValue }],
+              demandUnit: {
+                id: pot.id,
+                permanentDemandNo: pot.potentialNumber,
+                taxpayerUnitId: pot.id,
+                circleId: pot.circleId,
+                status: "ACTIVE"
+              },
+              assessments: [
+                {
+                  id: `asm-${pot.id}`,
+                  demandUnitId: pot.id,
+                  financialYearId: "2026-2027",
+                  status: "APPROVED",
+                  taxpayerClass: pot.categoryCode,
+                  annualDemand: pot.annualRatePkr,
+                  currentVersionId: `v-${pot.id}`
+                }
+              ],
+              assessmentVersions: [
+                {
+                  id: `v-${pot.id}`,
+                  assessmentId: `asm-${pot.id}`,
+                  versionNumber: 1,
+                  status: "APPROVED",
+                  createdAt: pot.createdAt,
+                  createdBy: pot.createdBy || "System",
+                  snapshot: {
+                    taxAmount: pot.annualRatePkr,
+                    categoryCode: pot.categoryCode,
+                    categoryTitle: pot.categoryName,
+                    subclassificationCode: pot.subclassificationCode || "",
+                    subclassificationTitle: pot.subclassificationName || ""
+                  }
+                }
+              ],
+              ledgerEntries: [],
+              surveys: []
+            } as unknown as StoredUnit;
+          }
+        }
+
+        if (!found) {
+          found = available.find((u) => u.assessments[0]?.status === "APPROVED") ?? null;
+        }
 
         setUnit(found);
       })
@@ -269,23 +338,11 @@ function FormPft1NoticeContent() {
             >
               <div
                 style={{
-                  fontSize: "0.5rem",
-                  fontWeight: 800,
-                  color: "#0369a1",
-                  letterSpacing: "0.2px",
-                  lineHeight: 1
-                }}
-              >
-                SECURITY CODE
-              </div>
-              <div
-                style={{
                   fontFamily: "monospace",
-                  fontSize: "0.76rem",
+                  fontSize: "0.85rem",
                   fontWeight: 800,
                   color: "#1e3a8a",
-                  lineHeight: 1.15,
-                  marginTop: "0.08rem"
+                  lineHeight: 1.15
                 }}
               >
                 {pft1Data.pin}

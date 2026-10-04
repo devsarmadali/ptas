@@ -403,6 +403,8 @@ export interface Pft2ChallanRecord {
   readonly receivedBy?: string | undefined;
   readonly bankScrollRef?: string | undefined;
   readonly paymentChannel?: string | undefined;
+  readonly isProvisional?: boolean | undefined;
+  readonly potentialNumber?: string | undefined;
   readonly officialSha256: string;
   readonly qrPayload: string;
 }

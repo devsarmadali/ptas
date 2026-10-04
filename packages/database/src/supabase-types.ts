@@ -536,6 +536,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      list_potential_assessment_units: {
+        Args: Record<PropertyKey, never>;
+        Returns: Json;
+      };
     };
     Enums: {
       [_ in never]: never;

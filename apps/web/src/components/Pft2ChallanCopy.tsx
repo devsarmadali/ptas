@@ -169,10 +169,31 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
               fontWeight: 800,
               color: "#0d3822",
               lineHeight: 1.2,
-              marginTop: "0.05rem"
+              marginTop: "0.05rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.3rem"
             }}
           >
-            PFT2 &bull; PAYMENT CHALLAN
+            <span>PFT2 &bull; PAYMENT CHALLAN</span>
+            {(copy.pft2TypeLabel === "PROVISIONAL" ||
+              copy.assessmentInfo.demandNo?.startsWith("POT-") ||
+              copy.pin?.startsWith("Potential-")) && (
+              <span
+                style={{
+                  background: "#fef3c7",
+                  color: "#92400e",
+                  border: "1px solid #fde68a",
+                  padding: "0.05rem 0.35rem",
+                  borderRadius: "3px",
+                  fontSize: "0.62rem",
+                  fontWeight: 800
+                }}
+              >
+                PROVISIONAL
+              </span>
+            )}
           </div>
           <div
             style={{
@@ -264,7 +285,11 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
         {/* Row 2: Demand Number | Tax Year */}
         <div style={{ display: "flex", alignItems: "baseline" }}>
           <span style={{ width: "6.8rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
-            DEMAND NO.
+            {copy.assessmentInfo.demandNo?.startsWith("POT-") ||
+            copy.pft2TypeLabel === "PROVISIONAL" ||
+            copy.pin?.startsWith("Potential-")
+              ? "POTENTIAL NO."
+              : "DEMAND NO."}
           </span>
           <span
             style={{

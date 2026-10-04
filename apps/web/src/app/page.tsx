@@ -24,6 +24,7 @@ import {
   getRulesByCategory,
   getStatutoryCategories,
   getStatutoryRuleById,
+  getStatutoryRuleBySubclassification,
   getAllStatutoryRules,
   generateUinForUnit,
   generateDocumentPin,
@@ -124,6 +125,15 @@ import {
   RECEIPTS_UPDATED_EVENT
 } from "../lib/challan-storage";
 import {
+  type PotentialUnitRecord,
+  loadPersistedPotentialUnits,
+  savePersistedPotentialUnits,
+  migratePotentialUnitToPft3,
+  importPotentialUnitsCsv,
+  formatPotentialPin,
+  POTENTIAL_UNITS_UPDATED_EVENT
+} from "../lib/potential-units-storage";
+import {
   type CitizenPaymentSimulationResult,
   type DocumentVerificationResult,
   type SelfAssessmentCriteriaInput,
@@ -135,7 +145,8 @@ import {
   verifyStatutoryDocument
 } from "../lib/public-portal";
 
-export type RouteHubId = "assessment" | "enforcement" | "revenue" | "intelligence" | "admin";
+export type RouteHubId =
+  "demand" | "assessment" | "enforcement" | "revenue" | "intelligence" | "admin";
 
 type ActionableSurveyImportBatch = {
   batch_id: string;
@@ -150,14 +161,16 @@ type ActionableSurveyImportBatch = {
 };
 
 export type TabId =
+  | "REGISTER_PFT3"
+  | "REGISTER_POTENTIAL"
   | "UNITS"
   | "ANALYTICS"
   | "REPORTS"
   | "MIS_HUB"
   | "PUBLIC_PORTAL"
   | "ASSESSMENTS"
-  | "REGISTER_PFT3"
   | "PFT2"
+  | "POTENTIAL_PFT2"
   | "RECEIPTS"
   | "DEFAULTERS"
   | "APPEALS"
@@ -167,14 +180,16 @@ export type TabId =
   | "AUDIT";
 
 export const TAB_TO_HUB: Record<TabId, RouteHubId> = {
+  REGISTER_PFT3: "demand",
+  REGISTER_POTENTIAL: "demand",
   UNITS: "assessment",
   ASSESSMENTS: "assessment",
-  REGISTER_PFT3: "assessment",
   DEFAULTERS: "enforcement",
   APPEALS: "enforcement",
   RELIEF_DESK: "enforcement",
   CLEARANCE: "enforcement",
   PFT2: "revenue",
+  POTENTIAL_PFT2: "revenue",
   RECEIPTS: "revenue",
   EPAY: "revenue",
   PUBLIC_PORTAL: "revenue",
@@ -185,7 +200,8 @@ export const TAB_TO_HUB: Record<TabId, RouteHubId> = {
 };
 
 export const HUB_DEFAULT_TABS: Record<RouteHubId, TabId> = {
-  assessment: "REGISTER_PFT3",
+  demand: "REGISTER_PFT3",
+  assessment: "UNITS",
   enforcement: "DEFAULTERS",
   revenue: "PFT2",
   intelligence: "ANALYTICS",
@@ -193,14 +209,16 @@ export const HUB_DEFAULT_TABS: Record<RouteHubId, TabId> = {
 };
 
 export const TAB_TO_CANONICAL_PATH: Record<TabId, string> = {
+  REGISTER_PFT3: "/demand/pft3",
+  REGISTER_POTENTIAL: "/demand/potential",
   UNITS: "/assessment/survey",
   ASSESSMENTS: "/assessment/queue",
-  REGISTER_PFT3: "/assessment/pft3",
   DEFAULTERS: "/enforcement",
   APPEALS: "/enforcement/appeals",
   RELIEF_DESK: "/enforcement/adjustments",
   CLEARANCE: "/enforcement/clearance",
   PFT2: "/revenue",
+  POTENTIAL_PFT2: "/revenue/potential-challans",
   RECEIPTS: "/revenue/receipts",
   EPAY: "/revenue/epay",
   PUBLIC_PORTAL: "/verify",
@@ -211,8 +229,11 @@ export const TAB_TO_CANONICAL_PATH: Record<TabId, string> = {
 };
 
 export const PATH_TO_TAB: Record<string, { hub: RouteHubId; tab: TabId }> = {
-  "/assessment": { hub: "assessment", tab: "REGISTER_PFT3" },
-  "/assessment/pft3": { hub: "assessment", tab: "REGISTER_PFT3" },
+  "/demand": { hub: "demand", tab: "REGISTER_PFT3" },
+  "/demand/pft3": { hub: "demand", tab: "REGISTER_PFT3" },
+  "/demand/potential": { hub: "demand", tab: "REGISTER_POTENTIAL" },
+  "/assessment": { hub: "assessment", tab: "UNITS" },
+  "/assessment/pft3": { hub: "demand", tab: "REGISTER_PFT3" },
   "/assessment/survey": { hub: "assessment", tab: "UNITS" },
   "/assessment/units": { hub: "assessment", tab: "UNITS" },
   "/assessment/queue": { hub: "assessment", tab: "ASSESSMENTS" },
@@ -223,6 +244,7 @@ export const PATH_TO_TAB: Record<string, { hub: RouteHubId; tab: TabId }> = {
   "/enforcement/clearance": { hub: "enforcement", tab: "CLEARANCE" },
   "/revenue": { hub: "revenue", tab: "PFT2" },
   "/revenue/challans": { hub: "revenue", tab: "PFT2" },
+  "/revenue/potential-challans": { hub: "revenue", tab: "POTENTIAL_PFT2" },
   "/revenue/receipts": { hub: "revenue", tab: "RECEIPTS" },
   "/revenue/epay": { hub: "revenue", tab: "EPAY" },
   "/intelligence": { hub: "intelligence", tab: "ANALYTICS" },
@@ -264,19 +286,19 @@ export default function HomePage({
 
   // Resolve active hub and tab directly from URL pathname with fallback to props
   const resolvedFromPath = pathname ? PATH_TO_TAB[pathname] : null;
-  const activeRouteHub: RouteHubId = resolvedFromPath?.hub ?? initialRouteHub ?? "assessment";
+  const activeRouteHub: RouteHubId = resolvedFromPath?.hub ?? initialRouteHub ?? "demand";
   const activeTab: TabId = resolvedFromPath?.tab ?? initialTab ?? "REGISTER_PFT3";
 
   // URL-based Navigation
   const switchTab = (tab: TabId) => {
-    const targetPath = TAB_TO_CANONICAL_PATH[tab] ?? "/assessment";
+    const targetPath = TAB_TO_CANONICAL_PATH[tab] ?? "/demand";
     router.push(asRoute(targetPath));
   };
 
-  // Auto-redirect root URL to canonical /assessment route
+  // Auto-redirect root URL to canonical /demand route
   useEffect(() => {
     if (pathname === "/") {
-      router.replace(asRoute("/assessment"));
+      router.replace(asRoute("/demand"));
     }
   }, [pathname, router]);
 
@@ -472,6 +494,33 @@ export default function HomePage({
   const [pft3CurrentPage, setPft3CurrentPage] = useState(1);
   const PFT3_PAGE_SIZE = 20;
 
+  // Potential Register State, Search & Filter Controls
+  const [potentialUnits, setPotentialUnits] = useState<PotentialUnitRecord[]>([]);
+  const [potentialSearchQuery, setPotentialSearchQuery] = useState("");
+  const [potentialDistrictFilter, setPotentialDistrictFilter] = useState("ALL");
+  const [potentialCircleFilter, setPotentialCircleFilter] = useState("ALL");
+  const [potentialLocalityFilter, setPotentialLocalityFilter] = useState("ALL");
+  const [potentialClassificationFilter, setPotentialClassificationFilter] = useState("ALL");
+  const [potentialCurrentPage, setPotentialCurrentPage] = useState(1);
+  const POTENTIAL_PAGE_SIZE = 20;
+
+  // Potential Register Modals
+  const [showAddPotentialModal, setShowAddPotentialModal] = useState(false);
+  const [showImportPotentialModal, setShowImportPotentialModal] = useState(false);
+  const [potentialCsvInput, setPotentialCsvInput] = useState("");
+  const [potentialImportErrors, setPotentialImportErrors] = useState<string[]>([]);
+
+  // Add Potential Unit Form State
+  const [potNewLegalName, setPotNewLegalName] = useState("");
+  const [potNewTradeName, setPotNewTradeName] = useState("");
+  const [potNewIdType, setPotNewIdType] = useState<"CNIC" | "NTN">("CNIC");
+  const [potNewIdValue, setPotNewIdValue] = useState("");
+  const [potNewAddress, setPotNewAddress] = useState("");
+  const [potNewLocality, setPotNewLocality] = useState("Vehari City Commercial Zone");
+  const [potNewCategoryCode, setPotNewCategoryCode] = useState("1");
+  const [potNewSubclassCode, setPotNewSubclassCode] = useState("1(i)");
+  const [potNewArrears, setPotNewArrears] = useState<number>(0);
+
   // Receipts Filter Controls
   const [receiptSourceFilter, setReceiptSourceFilter] = useState("ALL");
 
@@ -664,6 +713,8 @@ export default function HomePage({
       setPft2Challans(freshChallans);
       const freshReceipts = loadPersistedStatutoryReceipts();
       setStatutoryReceipts(freshReceipts);
+      const freshPotential = loadPersistedPotentialUnits();
+      setPotentialUnits(freshPotential);
     };
 
     try {
@@ -675,6 +726,7 @@ export default function HomePage({
         window.addEventListener("storage", handleStorageOrFocus);
         window.addEventListener(CHALLANS_UPDATED_EVENT, handleStorageOrFocus);
         window.addEventListener(RECEIPTS_UPDATED_EVENT, handleStorageOrFocus);
+        window.addEventListener(POTENTIAL_UNITS_UPDATED_EVENT, handleStorageOrFocus);
         window.addEventListener("focus", handleStorageOrFocus);
       }
       // Check URL search parameters on mount for backward-compatible deep links
@@ -1645,6 +1697,106 @@ export default function HomePage({
     setPft3CategoryFilter("ALL");
     setPft3CurrentPage(1);
     setPft3SearchExecuted(false);
+  };
+
+  // Potential Register Filtered Rows
+  const filteredPotentialUnits = useMemo(() => {
+    return potentialUnits.filter((u) => {
+      if (potentialDistrictFilter !== "ALL") {
+        if ((u.districtName ?? "Vehari") !== potentialDistrictFilter) return false;
+      }
+      if (potentialCircleFilter !== "ALL") {
+        if ((u.circleName ?? "Circle-Vehari") !== potentialCircleFilter) return false;
+      }
+      if (potentialLocalityFilter !== "ALL") {
+        if (u.locality !== potentialLocalityFilter) return false;
+      }
+      if (potentialClassificationFilter !== "ALL") {
+        if (
+          u.categoryCode !== potentialClassificationFilter &&
+          u.categoryName !== potentialClassificationFilter
+        ) {
+          return false;
+        }
+      }
+      if (potentialSearchQuery.trim()) {
+        const q = potentialSearchQuery.trim().toLowerCase();
+        const matchesPotentialNo = u.potentialNumber.toLowerCase().includes(q);
+        const matchesPin = u.pinNumber.toLowerCase().includes(q);
+        const matchesLegalName = u.legalName.toLowerCase().includes(q);
+        const matchesTradeName = (u.tradeName ?? "").toLowerCase().includes(q);
+        const matchesCategory =
+          u.categoryName.toLowerCase().includes(q) ||
+          (u.subclassificationName ?? "").toLowerCase().includes(q);
+        const matchesIdentifier = u.identifierValue.toLowerCase().includes(q);
+
+        if (
+          !matchesPotentialNo &&
+          !matchesPin &&
+          !matchesLegalName &&
+          !matchesTradeName &&
+          !matchesCategory &&
+          !matchesIdentifier
+        ) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [
+    potentialUnits,
+    potentialDistrictFilter,
+    potentialCircleFilter,
+    potentialLocalityFilter,
+    potentialClassificationFilter,
+    potentialSearchQuery
+  ]);
+
+  // Potential Register KPI Metrics (strictly separate; never aggregated into PFT-3)
+  const potentialKpiMetrics = useMemo(() => {
+    const activeUnits = filteredPotentialUnits.filter((p) => p.status === "ACTIVE");
+    const migratedUnits = potentialUnits.filter((p) => p.status === "MIGRATED");
+
+    let totalPotentialDemand = 0;
+    for (const u of activeUnits) {
+      totalPotentialDemand += u.annualRatePkr + (u.openingArrears ?? 0);
+    }
+
+    let recoveredDemand = 0;
+    for (const u of migratedUnits) {
+      recoveredDemand += u.annualRatePkr + (u.openingArrears ?? 0);
+    }
+
+    const provisionalChallans = pft2Challans.filter(
+      (c) => c.isProvisional && c.status !== "CANCELLED"
+    );
+
+    return {
+      totalActiveUnits: activeUnits.length,
+      totalPotentialDemand,
+      provisionalChallansCount: provisionalChallans.length,
+      provisionalChallansAmount: provisionalChallans.reduce((s, c) => s + c.amountPayable, 0),
+      migratedUnitsCount: migratedUnits.length,
+      recoveredDemand
+    };
+  }, [filteredPotentialUnits, potentialUnits, pft2Challans]);
+
+  const totalPotentialPages = Math.max(
+    1,
+    Math.ceil(filteredPotentialUnits.length / POTENTIAL_PAGE_SIZE)
+  );
+  const paginatedPotentialUnits = useMemo(() => {
+    const startIndex = (potentialCurrentPage - 1) * POTENTIAL_PAGE_SIZE;
+    return filteredPotentialUnits.slice(startIndex, startIndex + POTENTIAL_PAGE_SIZE);
+  }, [filteredPotentialUnits, potentialCurrentPage]);
+
+  const handleResetPotentialFilters = () => {
+    setPotentialSearchQuery("");
+    setPotentialDistrictFilter("ALL");
+    setPotentialCircleFilter("ALL");
+    setPotentialLocalityFilter("ALL");
+    setPotentialClassificationFilter("ALL");
+    setPotentialCurrentPage(1);
   };
 
   // Defaulter Units Filter
@@ -3069,6 +3221,199 @@ export default function HomePage({
   };
 
   // Phase 10: PFT-2 Challan Management & Statutory Receipt Handlers
+  const handleIssueProvisionalPft2 = (unit: PotentialUnitRecord) => {
+    const payableAmount = unit.annualRatePkr + (unit.openingArrears ?? 0);
+    const challanSeq = String(pft2Challans.length + 1).padStart(4, "0");
+    const challanNumber = `PFT2-${challanSeq}`;
+    const issueDate = new Date().toISOString().split("T")[0]!;
+    const due = new Date();
+    due.setDate(due.getDate() + 30);
+    const dueDate = due.toISOString().split("T")[0]!;
+    const noticeNumber = generatePft2NoticeNumber({
+      demandNumber: unit.potentialNumber,
+      issueDate,
+      amount: payableAmount,
+      formTypeCode: "01",
+      demandScope: (unit.openingArrears ?? 0) > 0 ? "COMBINED" : "CURRENT",
+      paymentScope: "FULL"
+    });
+
+    const provisionalChallan: Pft2ChallanRecord = {
+      id: `pft2-prov-${Date.now()}`,
+      challanNumber,
+      noticeNumber,
+      demandNumber: unit.potentialNumber,
+      potentialNumber: unit.potentialNumber,
+      unitId: unit.id,
+      legalName: unit.legalName,
+      tradeName: unit.tradeName,
+      identifierType: unit.identifierType,
+      identifierValue: unit.identifierValue,
+      address: unit.address,
+      category: unit.categoryName,
+      subclassificationCode: unit.subclassificationCode ?? null,
+      statutoryTertiaryCode: unit.statutoryTertiaryCode ?? null,
+      tertiarySlab: null,
+      amountPayable: payableAmount,
+      pin: unit.pinNumber,
+      provincialUin: unit.pinNumber,
+      formType: "PROVISIONAL",
+      isProvisional: true,
+      demandScope: (unit.openingArrears ?? 0) > 0 ? "COMBINED" : "CURRENT",
+      paymentScope: "FULL",
+      fullAssessedAmount: payableAmount,
+      issueDate,
+      dueDate,
+      status: "ISSUED",
+      paymentChannel: "National Bank of Pakistan",
+      officialSha256: `sha256-prov-${challanNumber}-${Date.now()}`,
+      qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT2-PROV&ref=${challanNumber}&pdn=${unit.potentialNumber}&amt=${payableAmount}`
+    };
+
+    const updated = [provisionalChallan, ...pft2Challans];
+    setPft2Challans(updated);
+    savePersistedPft2Challans(updated);
+
+    showToast(
+      "success",
+      `✓ Form P.F.T-2 Provisional Challan ${challanNumber} issued for Potential Unit ${unit.potentialNumber} (${unit.legalName})!`
+    );
+
+    // Switch to Potential Challans tab in Revenue Desk
+    switchTab("POTENTIAL_PFT2");
+  };
+
+  const handleAddPotentialUnit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!potNewLegalName.trim() || !potNewIdValue.trim()) {
+      showToast("error", "Legal Name and Identifier are mandatory.");
+      return;
+    }
+
+    const nextSeq =
+      potentialUnits.reduce((max, u) => {
+        const match = u.potentialNumber.match(/\d+/);
+        const val = match ? parseInt(match[0], 10) : 0;
+        return Math.max(max, val);
+      }, 0) + 1;
+
+    const potNum = `POT-${nextSeq.toString().padStart(4, "0")}`;
+    const basePin = `237-00101061102${nextSeq.toString().padStart(4, "0")}-01`;
+    const pinNumber = formatPotentialPin(basePin);
+
+    let rule = getStatutoryRuleById(`PFT-${potNewCategoryCode}`);
+    if (!rule && potNewSubclassCode) {
+      rule = getStatutoryRuleBySubclassification(potNewSubclassCode);
+    }
+    if (!rule) {
+      rule = getAllStatutoryRules()[0]!;
+    }
+
+    const newPotUnit: PotentialUnitRecord = {
+      id: `pot-${Date.now()}-${nextSeq}`,
+      potentialNumber: potNum,
+      pinNumber,
+      provincialUin: pinNumber,
+      legalName: potNewLegalName.trim(),
+      tradeName: potNewTradeName.trim() || undefined,
+      identifierType: potNewIdType,
+      identifierValue: potNewIdValue.trim(),
+      address: potNewAddress.trim() || "Vehari Commercial Hub",
+      locality: potNewLocality.trim() || "Vehari City Commercial Zone",
+      circleId: "00000000-0000-4000-8000-000000000004",
+      circleName: "Circle-Vehari",
+      districtName: "Vehari",
+      categoryCode: rule.category_code,
+      categoryName: rule.category,
+      subclassificationCode: rule.subclassification_code,
+      subclassificationName: rule.subcategory,
+      statutoryTertiaryCode: rule.statutory_tertiary_code,
+      statutoryTertiaryClassification: rule.statutory_tertiary_classification,
+      statutoryRuleId: rule.rule_id,
+      statutoryRule: rule,
+      annualRatePkr: rule.annual_rate_pkr ?? 4000,
+      openingArrears: potNewArrears || 0,
+      status: "ACTIVE",
+      createdAt: new Date().toISOString(),
+      createdBy: `${officer.name} (${officer.title})`
+    };
+
+    const updated = [newPotUnit, ...potentialUnits];
+    setPotentialUnits(updated);
+    savePersistedPotentialUnits(updated);
+    setShowAddPotentialModal(false);
+
+    // Reset inputs
+    setPotNewLegalName("");
+    setPotNewTradeName("");
+    setPotNewIdValue("");
+    setPotNewAddress("");
+    setPotNewArrears(0);
+
+    showToast("success", `✓ Potential Unit ${potNum} successfully registered.`);
+  };
+
+  const handleImportPotentialCsv = () => {
+    if (!potentialCsvInput.trim()) {
+      showToast("error", "CSV content cannot be empty.");
+      return;
+    }
+
+    const { importedUnits, errors } = importPotentialUnitsCsv(
+      potentialCsvInput,
+      potentialUnits,
+      `${officer.name} (${officer.title})`
+    );
+
+    if (errors.length > 0 && importedUnits.length === 0) {
+      setPotentialImportErrors(errors);
+      showToast("error", "Failed to import CSV.");
+      return;
+    }
+
+    const updated = [...importedUnits, ...potentialUnits];
+    setPotentialUnits(updated);
+    savePersistedPotentialUnits(updated);
+    setShowImportPotentialModal(false);
+    setPotentialCsvInput("");
+    setPotentialImportErrors([]);
+
+    showToast(
+      "success",
+      `✓ Successfully imported ${importedUnits.length} potential units into the Potential Register.`
+    );
+  };
+
+  const renderPotentialUnitActions = (target: PotentialUnitRecord) => {
+    return (
+      <RowActionMenu
+        align="right"
+        actions={[
+          {
+            id: "issue-provisional-pft2",
+            label: "Issue Form P.F.T-2 (Provisional Challan)",
+            icon: "📜",
+            onClick: () => handleIssueProvisionalPft2(target)
+          },
+          {
+            id: "view-details",
+            label: "View Assessee Dossier",
+            icon: "📋",
+            href: `/units/${target.pinNumber}/details`,
+            target: "_blank"
+          },
+          {
+            id: "view-pft1",
+            label: "Issue Form P.F.T-1 (Assessment Notice)",
+            icon: "📄",
+            href: `/documents/pft1?pin=${target.pinNumber}`,
+            target: "_blank"
+          }
+        ]}
+      />
+    );
+  };
+
   const handleOpenReceivePft2 = (challan: Pft2ChallanRecord) => {
     setReceivingChallan(challan);
     setReceivePaymentChannel("National Bank of Pakistan");
@@ -3123,13 +3468,78 @@ export default function HomePage({
     const receiptNumber = formatStandardDocNumber({ docCode: "RCPT", sequence: receiptSeq });
     const nowTime = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 
-    // 1. Create Receipt Record with locked statutory amount and validated date
+    // 1. Check for Potential Unit Migration
+    const matchingPotential = potentialUnits.find(
+      (p) =>
+        p.id === receivingChallan.unitId ||
+        p.potentialNumber === receivingChallan.potentialNumber ||
+        p.potentialNumber === receivingChallan.demandNumber ||
+        p.pinNumber === receivingChallan.pin
+    );
+
+    let assignedDemandNo = receivingChallan.demandNumber;
+    let cleanPin = receivingChallan.pin || "";
+    const isPotentialMigration = Boolean(receivingChallan.isProvisional || matchingPotential);
+
+    let targetUnit = units.find((u) => u.id === receivingChallan.unitId);
+    let updatedUnits = units;
+
+    if (isPotentialMigration) {
+      const potTarget: PotentialUnitRecord = matchingPotential || {
+        id: receivingChallan.unitId,
+        potentialNumber: receivingChallan.potentialNumber || receivingChallan.demandNumber,
+        pinNumber: receivingChallan.pin || `Potential-${receivingChallan.challanNumber}`,
+        provincialUin: receivingChallan.provincialUin || receivingChallan.pin || "",
+        legalName: receivingChallan.legalName,
+        tradeName: receivingChallan.tradeName,
+        identifierType: (receivingChallan.identifierType as "CNIC" | "NTN") || "CNIC",
+        identifierValue: receivingChallan.identifierValue,
+        address: receivingChallan.address,
+        locality: "Vehari City Commercial Zone",
+        circleId: "00000000-0000-4000-8000-000000000004",
+        circleName: "Circle-Vehari",
+        districtName: "Vehari",
+        categoryCode: "1",
+        categoryName: receivingChallan.category,
+        subclassificationCode: receivingChallan.subclassificationCode,
+        statutoryRuleId: "PFT-1.i",
+        statutoryRule: getStatutoryRuleById("PFT-1.i")!,
+        annualRatePkr: payableAmount,
+        openingArrears: 0,
+        status: "ACTIVE",
+        createdAt: new Date().toISOString()
+      };
+
+      const migration = migratePotentialUnitToPft3(potTarget, units, payableAmount);
+      assignedDemandNo = migration.assignedDemandNo;
+      cleanPin = migration.cleanPin;
+
+      // Add newly migrated unit to Form P.F.T-3 register
+      updatedUnits = [migration.migratedUnit, ...units];
+      targetUnit = migration.migratedUnit;
+
+      // Mark potential unit as MIGRATED
+      const updatedPotList = potentialUnits.map((p) =>
+        p.id === potTarget.id || p.potentialNumber === potTarget.potentialNumber
+          ? {
+              ...p,
+              status: "MIGRATED" as const,
+              migratedToDemandNo: assignedDemandNo,
+              migratedAt: new Date().toISOString()
+            }
+          : p
+      );
+      setPotentialUnits(updatedPotList);
+      savePersistedPotentialUnits(updatedPotList);
+    }
+
+    // 2. Create Receipt Record with locked statutory amount and validated date
     const newReceipt: StatutoryReceiptRecord = {
       id: `rec-${Date.now()}`,
       receiptNumber,
-      paymentSource: "ISSUED_PFT2",
+      paymentSource: isPotentialMigration ? "MANUAL" : "ISSUED_PFT2",
       challanNumber: receivingChallan.challanNumber,
-      demandNumber: receivingChallan.demandNumber,
+      demandNumber: assignedDemandNo,
       unitId: receivingChallan.unitId,
       assesseeLegalName: receivingChallan.legalName,
       assesseeTradeName: receivingChallan.tradeName,
@@ -3148,18 +3558,22 @@ export default function HomePage({
       bankScrollRef: receiveBankScrollRef.trim(),
       receivingOfficerName: officer.name,
       receivingOfficerTitle: officer.title,
-      pin: generateDocumentPin(receiptNumber),
+      pin: cleanPin || generateDocumentPin(receiptNumber),
       officialSha256: `sha256-receipt-${receiptNumber}-${Date.now()}`,
-      qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-REC&ref=${receiptNumber}&pdn=${receivingChallan.demandNumber}&amt=${payableAmount}`,
+      qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-REC&ref=${receiptNumber}&pdn=${assignedDemandNo}&amt=${payableAmount}`,
       remarks: receiveRemarks
     };
 
-    // 2. Update Challan status
+    // 3. Update Challan status and attributes
     const updatedChallans = pft2Challans.map((c) =>
       c.id === receivingChallan.id
         ? {
             ...c,
             status: "RECEIVED" as Pft2Status,
+            isProvisional: false,
+            demandNumber: assignedDemandNo,
+            pin: cleanPin || c.pin,
+            provincialUin: cleanPin || c.provincialUin,
             receiptNumber,
             receivedAt: receiveDate,
             receivedBy: `${officer.name} (${officer.title})`,
@@ -3169,10 +3583,8 @@ export default function HomePage({
         : c
     );
 
-    // 3. Post PAYMENT_CREDIT to Unit's Demand Ledger
-    const targetUnit = units.find((u) => u.id === receivingChallan.unitId);
-    let updatedUnits = units;
-    if (targetUnit) {
+    // 4. Post PAYMENT_CREDIT to Unit's Demand Ledger if already in PFT-3
+    if (!isPotentialMigration && targetUnit) {
       const paymentEntry = createPaymentReceiptEntry({
         demandUnitId: targetUnit.demandUnit.id,
         amount: payableAmount,
@@ -3188,19 +3600,23 @@ export default function HomePage({
         ...targetUnit,
         ledgerEntries: [...targetUnit.ledgerEntries, paymentEntry]
       };
-      updatedUnits = units.map((u) => (u.id === targetUnit.id ? updatedUnit : u));
+      updatedUnits = units.map((u) => (u.id === targetUnit!.id ? updatedUnit : u));
     }
 
-    // 4. Record Audit Log
+    // 5. Record Audit Log
     const auditItem: PilotAuditItem = {
       id: `audit-${Date.now()}`,
-      eventType: "CHALLAN_RECEIVED_CONVERTED_TO_RECEIPT",
+      eventType: isPotentialMigration
+        ? "POTENTIAL_UNIT_MIGRATED_TO_PFT3"
+        : "CHALLAN_RECEIVED_CONVERTED_TO_RECEIPT",
       actorName: officer.name,
       actorRole: officer.role,
       target: receivingChallan.legalName,
       timestamp: new Date().toISOString(),
       correlationId: `corr-${receiptNumber}`,
-      details: `Form P.F.T-2 ${receivingChallan.challanNumber} received and credited (PKR ${payableAmount.toLocaleString()}) via ${receivePaymentChannel} [CPR: ${receiveBankScrollRef}]. Generated Statutory Receipt ${receiptNumber}.`
+      details: isPotentialMigration
+        ? `Potential Unit ${matchingPotential?.potentialNumber ?? receivingChallan.demandNumber} realized statutory payment (PKR ${payableAmount.toLocaleString()}) via ${receivePaymentChannel} [CPR: ${receiveBankScrollRef.trim()}]. Migrated to Form P.F.T-3 Register as Demand No. ${assignedDemandNo}. Clean Statutory PIN: ${cleanPin}. Receipt: ${receiptNumber}.`
+        : `Form P.F.T-2 ${receivingChallan.challanNumber} received and credited (PKR ${payableAmount.toLocaleString()}) via ${receivePaymentChannel} [CPR: ${receiveBankScrollRef.trim()}]. Generated Statutory Receipt ${receiptNumber}.`
     };
 
     const updatedReceipts = [newReceipt, ...statutoryReceipts];
@@ -3215,10 +3631,18 @@ export default function HomePage({
 
     setShowReceivePft2Modal(false);
     setReceivingChallan(null);
-    showToast(
-      "success",
-      `✓ Challan ${receivingChallan.challanNumber} received! Statutory Receipt ${receiptNumber} generated.`
-    );
+
+    if (isPotentialMigration) {
+      showToast(
+        "success",
+        `✓ Payment received! Potential unit migrated to Form P.F.T-3 Register as Demand No. ${assignedDemandNo} with clean PIN ${cleanPin}. Statutory Receipt ${receiptNumber} generated.`
+      );
+    } else {
+      showToast(
+        "success",
+        `✓ Challan ${receivingChallan.challanNumber} received! Statutory Receipt ${receiptNumber} generated.`
+      );
+    }
 
     // Automatically display the new Receipt document
     setActiveReceiptRecord(newReceipt);
@@ -3848,6 +4272,22 @@ export default function HomePage({
         {/* Tier 1: Unified Route Hubs Navigation */}
         <nav className="route-hubs-bar" aria-label="Unified Operational Routes">
           <Link
+            href={asRoute("/demand")}
+            className={`route-hub-card ${activeRouteHub === "demand" ? "active" : ""}`}
+            title="Demand Desk Hub (/demand)"
+            style={{ textDecoration: "none" }}
+          >
+            <span className="route-hub-icon">📋</span>
+            <div className="route-hub-content">
+              <div className="route-hub-title-row">
+                <span className="route-hub-title">Demand Desk</span>
+                <span className="route-hub-badge">{units.length} Assessed</span>
+              </div>
+              <p className="route-hub-desc">Potential &amp; Form P.F.T-3 Assessment Registers</p>
+            </div>
+          </Link>
+
+          <Link
             href="/assessment"
             className={`route-hub-card ${activeRouteHub === "assessment" ? "active" : ""}`}
             title="Assessment & Field Desk Hub (/assessment)"
@@ -3933,15 +4373,27 @@ export default function HomePage({
 
         {/* Tier 2: Contextual Sub-Tab Navigation Bar */}
         <div className="subtabs-nav" role="tablist" aria-label="Route Contextual Sub-Tabs">
-          {activeRouteHub === "assessment" && (
+          {activeRouteHub === "demand" && (
             <>
               <Link
-                href={asRoute("/assessment/pft3")}
-                className={`subtab-btn ${pathname === "/assessment/pft3" || pathname === "/assessment" || pathname === "/" || activeTab === "REGISTER_PFT3" ? "active" : ""}`}
+                href={asRoute("/demand/potential")}
+                className={`subtab-btn ${pathname === "/demand/potential" || activeTab === "REGISTER_POTENTIAL" ? "active" : ""}`}
+                style={{ textDecoration: "none" }}
+              >
+                🎯 Potential Register ({potentialUnits.filter((u) => u.status === "ACTIVE").length})
+              </Link>
+              <Link
+                href={asRoute("/demand/pft3")}
+                className={`subtab-btn ${pathname === "/demand/pft3" || pathname === "/demand" || pathname === "/" || activeTab === "REGISTER_PFT3" ? "active" : ""}`}
                 style={{ textDecoration: "none" }}
               >
                 📋 Form P.F.T-3 Assessment Register ({units.length})
               </Link>
+            </>
+          )}
+
+          {activeRouteHub === "assessment" && (
+            <>
               <Link
                 href={asRoute("/assessment/survey")}
                 className={`subtab-btn ${pathname === "/assessment/survey" || activeTab === "UNITS" ? "active" : ""}`}
@@ -3958,6 +4410,13 @@ export default function HomePage({
                 {metrics.pendingApprovals > 0 && (
                   <span className="subtab-badge">{metrics.pendingApprovals}</span>
                 )}
+              </Link>
+              <Link
+                href={asRoute("/demand/pft3")}
+                className="subtab-btn"
+                style={{ textDecoration: "none" }}
+              >
+                📋 Form P.F.T-3 Register ({units.length}) ↗
               </Link>
             </>
           )}
@@ -4046,7 +4505,14 @@ export default function HomePage({
                 className={`subtab-btn ${pathname === "/revenue" || activeTab === "PFT2" ? "active" : ""}`}
                 style={{ textDecoration: "none" }}
               >
-                📑 Form PFT-2 Challans ({pft2Challans.length})
+                📑 Form PFT-2 Challans ({pft2Challans.filter((c) => !c.isProvisional).length})
+              </Link>
+              <Link
+                href={asRoute("/revenue/potential-challans")}
+                className={`subtab-btn ${pathname === "/revenue/potential-challans" || activeTab === "POTENTIAL_PFT2" ? "active" : ""}`}
+                style={{ textDecoration: "none" }}
+              >
+                ⚡ Potential Challans ({pft2Challans.filter((c) => c.isProvisional).length})
               </Link>
               <Link
                 href={asRoute("/revenue/receipts")}
@@ -4633,7 +5099,544 @@ export default function HomePage({
           </section>
         )}
 
-        {/* TAB 5: FORM P.F.T-3 (ASSESSMENT & DEMAND REGISTER UNDER RULE 11) */}
+        {/* TAB: POTENTIAL REGISTER (UNASSESSED PROSPECTIVE ASSESSEES) */}
+        {activeTab === "REGISTER_POTENTIAL" && (
+          <section className="content-panel" aria-label="Potential Register Desk">
+            <div className="panel-header">
+              <div>
+                <h2>🎯 Potential Units Register (Survey &amp; Discovery Pipeline)</h2>
+                <p>
+                  Statutory discovery register of prospective assessees identified in the field or
+                  uploaded via bulk survey. Prospective units are unassessed and isolated from Form
+                  P.F.T-3. Upon payment realization via Form P.F.T-2, units are automatically
+                  migrated into the Form P.F.T-3 Assessment Register and assigned permanent PDN and
+                  PIN.
+                </p>
+              </div>
+
+              <div
+                className="panel-actions"
+                style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}
+              >
+                <button
+                  type="button"
+                  className="btn-success"
+                  onClick={() => setShowAddPotentialModal(true)}
+                  title="Register new prospective assessee in Potential Register"
+                >
+                  ➕ Add Potential Unit
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowImportPotentialModal(true)}
+                  title="Import bulk discovery units via CSV"
+                >
+                  📥 Import CSV
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => {
+                    const csvRows = [
+                      "Potential No,Provisional PIN,Legal Name,Trade Name,Identifier Type,Identifier Value,Address,Locality,Circle,Statutory Category,Annual Rate PKR,Opening Arrears PKR,Status",
+                      ...filteredPotentialUnits.map((u) =>
+                        [
+                          `"${u.potentialNumber}"`,
+                          `"${u.pinNumber}"`,
+                          `"${u.legalName.replace(/"/g, '""')}"`,
+                          `"${(u.tradeName || "").replace(/"/g, '""')}"`,
+                          `"${u.identifierType}"`,
+                          `"${u.identifierValue}"`,
+                          `"${u.address.replace(/"/g, '""')}"`,
+                          `"${u.locality}"`,
+                          `"${u.circleName || "Circle-Vehari"}"`,
+                          `"${u.categoryName.replace(/"/g, '""')}"`,
+                          u.annualRatePkr,
+                          u.openingArrears || 0,
+                          `"${u.status}"`
+                        ].join(",")
+                      )
+                    ].join("\n");
+                    const blob = new Blob([csvRows], { type: "text/csv;charset=utf-8;" });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.href = url;
+                    link.setAttribute(
+                      "download",
+                      `Potential_Register_${new Date().toISOString().split("T")[0]}.csv`
+                    );
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    showToast("success", "Exported Potential Register to CSV.");
+                  }}
+                  title="Export Potential Register as CSV"
+                >
+                  📥 Export Register (CSV)
+                </button>
+              </div>
+            </div>
+
+            {/* Potential Register KPI summary cards */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
+                gap: "1rem",
+                marginBottom: "1.5rem"
+              }}
+            >
+              <div
+                style={{
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  padding: "0.85rem",
+                  borderRadius: "6px"
+                }}
+              >
+                <span style={{ fontSize: "0.75rem", color: "#1e40af", fontWeight: 700 }}>
+                  ACTIVE POTENTIAL UNITS
+                </span>
+                <div
+                  style={{
+                    fontSize: "1.6rem",
+                    fontWeight: 800,
+                    color: "#1e3a8a",
+                    marginTop: "0.2rem"
+                  }}
+                >
+                  {potentialKpiMetrics.totalActiveUnits.toLocaleString()}
+                </div>
+                <span style={{ fontSize: "0.7rem", color: "#60a5fa" }}>
+                  Unassessed field prospects
+                </span>
+              </div>
+
+              <div
+                style={{
+                  background: "#fffbeb",
+                  border: "1px solid #fde68a",
+                  padding: "0.85rem",
+                  borderRadius: "6px"
+                }}
+              >
+                <span style={{ fontSize: "0.75rem", color: "#92400e", fontWeight: 700 }}>
+                  ESTIMATED POTENTIAL DEMAND
+                </span>
+                <div
+                  style={{
+                    fontSize: "1.6rem",
+                    fontWeight: 800,
+                    color: "#78350f",
+                    marginTop: "0.2rem"
+                  }}
+                >
+                  PKR {potentialKpiMetrics.totalPotentialDemand.toLocaleString()}
+                </div>
+                <span style={{ fontSize: "0.7rem", color: "#d97706" }}>
+                  Schedule yield potential
+                </span>
+              </div>
+
+              <div
+                style={{
+                  background: "#f5f3ff",
+                  border: "1px solid #ddd6fe",
+                  padding: "0.85rem",
+                  borderRadius: "6px"
+                }}
+              >
+                <span style={{ fontSize: "0.75rem", color: "#5b21b6", fontWeight: 700 }}>
+                  PROVISIONAL CHALLANS
+                </span>
+                <div
+                  style={{
+                    fontSize: "1.6rem",
+                    fontWeight: 800,
+                    color: "#4c1d95",
+                    marginTop: "0.2rem"
+                  }}
+                >
+                  {potentialKpiMetrics.provisionalChallansCount}
+                </div>
+                <span style={{ fontSize: "0.7rem", color: "#8b5cf6" }}>
+                  PKR {potentialKpiMetrics.provisionalChallansAmount.toLocaleString()} active demand
+                </span>
+              </div>
+
+              <div
+                style={{
+                  background: "#f0fdf4",
+                  border: "1px solid #bbf7d0",
+                  padding: "0.85rem",
+                  borderRadius: "6px"
+                }}
+              >
+                <span style={{ fontSize: "0.75rem", color: "#166534", fontWeight: 700 }}>
+                  MIGRATED TO FORM P.F.T-3
+                </span>
+                <div
+                  style={{
+                    fontSize: "1.6rem",
+                    fontWeight: 800,
+                    color: "#14532d",
+                    marginTop: "0.2rem"
+                  }}
+                >
+                  {potentialKpiMetrics.migratedUnitsCount}
+                </div>
+                <span style={{ fontSize: "0.7rem", color: "#16a34a" }}>
+                  PKR {potentialKpiMetrics.recoveredDemand.toLocaleString()} realized &amp; credited
+                </span>
+              </div>
+            </div>
+
+            {/* Filter and Search Bar */}
+            <div
+              style={{
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                padding: "1rem",
+                borderRadius: "8px",
+                marginBottom: "1.5rem",
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
+                gap: "0.75rem",
+                alignItems: "end"
+              }}
+            >
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    color: "#475569",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  Search Assessee / PIN / POT
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. POT-0001, PIN, Trade Name..."
+                  value={potentialSearchQuery}
+                  onChange={(e) => {
+                    setPotentialSearchQuery(e.target.value);
+                    setPotentialCurrentPage(1);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "0.45rem 0.65rem",
+                    fontSize: "0.85rem",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1"
+                  }}
+                />
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    color: "#475569",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  District
+                </label>
+                <select
+                  value={potentialDistrictFilter}
+                  onChange={(e) => {
+                    setPotentialDistrictFilter(e.target.value);
+                    setPotentialCurrentPage(1);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "0.45rem 0.65rem",
+                    fontSize: "0.85rem",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1"
+                  }}
+                >
+                  <option value="ALL">All Districts</option>
+                  <option value="Vehari">Vehari</option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    color: "#475569",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  Circle
+                </label>
+                <select
+                  value={potentialCircleFilter}
+                  onChange={(e) => {
+                    setPotentialCircleFilter(e.target.value);
+                    setPotentialCurrentPage(1);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "0.45rem 0.65rem",
+                    fontSize: "0.85rem",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1"
+                  }}
+                >
+                  <option value="ALL">All Circles</option>
+                  <option value="Circle-Vehari">Circle-Vehari</option>
+                  <option value="Circle-Burewala">Circle-Burewala</option>
+                  <option value="Circle-Mailsi">Circle-Mailsi</option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    color: "#475569",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  Locality
+                </label>
+                <select
+                  value={potentialLocalityFilter}
+                  onChange={(e) => {
+                    setPotentialLocalityFilter(e.target.value);
+                    setPotentialCurrentPage(1);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "0.45rem 0.65rem",
+                    fontSize: "0.85rem",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1"
+                  }}
+                >
+                  <option value="ALL">All Localities</option>
+                  {Array.from(new Set(potentialUnits.map((u) => u.locality).filter(Boolean))).map(
+                    (loc) => (
+                      <option key={loc} value={loc}>
+                        {loc}
+                      </option>
+                    )
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={handleResetPotentialFilters}
+                  className="btn-secondary"
+                  style={{ width: "100%", padding: "0.45rem 0.65rem", fontSize: "0.85rem" }}
+                >
+                  🔄 Reset Filters
+                </button>
+              </div>
+            </div>
+
+            {/* Potential Units Table */}
+            <div className="table-responsive">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Potential No &amp; PIN</th>
+                    <th>Assessee &amp; Trade Name</th>
+                    <th>Identifier (CNIC/NTN)</th>
+                    <th>Location &amp; Locality</th>
+                    <th>Statutory Classification</th>
+                    <th style={{ textAlign: "right" }}>Annual Rate</th>
+                    <th>Pipeline Status</th>
+                    <th style={{ textAlign: "right" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedPotentialUnits.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
+                      >
+                        No prospective units found matching filter criteria. Click &quot;Add
+                        Potential Unit&quot; or &quot;Import CSV&quot; to populate.
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedPotentialUnits.map((u) => (
+                      <tr key={u.id}>
+                        <td>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+                            <span
+                              style={{
+                                fontWeight: 800,
+                                color: "#b45309",
+                                fontFamily: "monospace",
+                                fontSize: "0.88rem"
+                              }}
+                            >
+                              {u.potentialNumber}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "0.72rem",
+                                color: "#475569",
+                                fontFamily: "monospace"
+                              }}
+                            >
+                              {u.pinNumber}
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 700, color: "#0f172a" }}>{u.legalName}</div>
+                          {u.tradeName && (
+                            <div style={{ fontSize: "0.78rem", color: "#475569" }}>
+                              Trade: {u.tradeName}
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <span
+                            style={{
+                              fontFamily: "monospace",
+                              fontSize: "0.82rem",
+                              background: "#f1f5f9",
+                              padding: "0.15rem 0.4rem",
+                              borderRadius: "4px"
+                            }}
+                          >
+                            {u.identifierType}: {u.identifierValue}
+                          </span>
+                        </td>
+                        <td>
+                          <div style={{ fontSize: "0.8rem", color: "#1e293b" }}>{u.address}</div>
+                          <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                            {u.locality} &bull; {u.circleName || "Circle-Vehari"}
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "#0d3822" }}>
+                            {u.categoryName}
+                          </div>
+                          {u.subclassificationName && (
+                            <div style={{ fontSize: "0.72rem", color: "#475569" }}>
+                              {u.subclassificationName} ({u.subclassificationCode})
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          <div style={{ fontWeight: 700, color: "#166534" }}>
+                            PKR {u.annualRatePkr.toLocaleString()}
+                          </div>
+                          {(u.openingArrears ?? 0) > 0 && (
+                            <div style={{ fontSize: "0.72rem", color: "#b45309" }}>
+                              + PKR {(u.openingArrears ?? 0).toLocaleString()} arr.
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          {u.status === "ACTIVE" ? (
+                            <span
+                              style={{
+                                display: "inline-block",
+                                padding: "0.2rem 0.55rem",
+                                borderRadius: "9999px",
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                                background: "#fef3c7",
+                                color: "#92400e",
+                                border: "1px solid #fde68a"
+                              }}
+                            >
+                              ⚡ Unassessed Prospect
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                display: "inline-block",
+                                padding: "0.2rem 0.55rem",
+                                borderRadius: "9999px",
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                                background: "#dcfce7",
+                                color: "#166534",
+                                border: "1px solid #bbf7d0"
+                              }}
+                            >
+                              ✓ Migrated to PFT-3 ({u.migratedToDemandNo})
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ textAlign: "right" }}>{renderPotentialUnitActions(u)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {totalPotentialPages > 1 && (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginTop: "1rem",
+                  padding: "0.5rem 0"
+                }}
+              >
+                <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                  Showing {(potentialCurrentPage - 1) * POTENTIAL_PAGE_SIZE + 1} to{" "}
+                  {Math.min(
+                    potentialCurrentPage * POTENTIAL_PAGE_SIZE,
+                    filteredPotentialUnits.length
+                  )}{" "}
+                  of {filteredPotentialUnits.length} potential units
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={potentialCurrentPage === 1}
+                    onClick={() => setPotentialCurrentPage((p) => Math.max(1, p - 1))}
+                    style={{ fontSize: "0.8rem", padding: "0.35rem 0.75rem" }}
+                  >
+                    &larr; Previous
+                  </button>
+                  <span style={{ fontSize: "0.85rem", padding: "0.35rem 0.5rem", fontWeight: 600 }}>
+                    Page {potentialCurrentPage} of {totalPotentialPages}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={potentialCurrentPage === totalPotentialPages}
+                    onClick={() =>
+                      setPotentialCurrentPage((p) => Math.min(totalPotentialPages, p + 1))
+                    }
+                    style={{ fontSize: "0.8rem", padding: "0.35rem 0.75rem" }}
+                  >
+                    Next &rarr;
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
 
         {/* TAB 5: FORM P.F.T-3 (ASSESSMENT & DEMAND REGISTER UNDER RULE 11) */}
         {activeTab === "REGISTER_PFT3" && (
@@ -7238,7 +8241,8 @@ export default function HomePage({
 
             {/* Lifecycle KPI Cards */}
             {(() => {
-              const summary = calculatePft2ExecutiveSummary(pft2Challans);
+              const standardChallans = pft2Challans.filter((c) => !c.isProvisional);
+              const summary = calculatePft2ExecutiveSummary(standardChallans);
               return (
                 <div
                   style={{
@@ -7403,27 +8407,30 @@ export default function HomePage({
                 </thead>
                 <tbody>
                   {(() => {
-                    const filtered = pft2Challans.filter((c) => {
-                      if (pft2StatusFilter !== "ALL" && c.status !== pft2StatusFilter) return false;
-                      if (
-                        pft2CategoryFilter !== "ALL" &&
-                        !c.category.toLowerCase().includes(pft2CategoryFilter.toLowerCase())
-                      )
-                        return false;
-                      if (pft2SearchQuery.trim()) {
-                        const q = pft2SearchQuery.toLowerCase();
-                        const match =
-                          c.challanNumber.toLowerCase().includes(q) ||
-                          c.demandNumber.toLowerCase().includes(q) ||
-                          (c.noticeNumber && c.noticeNumber.toLowerCase().includes(q)) ||
-                          (c.pin && c.pin.includes(q)) ||
-                          c.legalName.toLowerCase().includes(q) ||
-                          (c.tradeName && c.tradeName.toLowerCase().includes(q)) ||
-                          c.identifierValue.toLowerCase().includes(q);
-                        if (!match) return false;
-                      }
-                      return true;
-                    });
+                    const filtered = pft2Challans
+                      .filter((c) => !c.isProvisional)
+                      .filter((c) => {
+                        if (pft2StatusFilter !== "ALL" && c.status !== pft2StatusFilter)
+                          return false;
+                        if (
+                          pft2CategoryFilter !== "ALL" &&
+                          !c.category.toLowerCase().includes(pft2CategoryFilter.toLowerCase())
+                        )
+                          return false;
+                        if (pft2SearchQuery.trim()) {
+                          const q = pft2SearchQuery.toLowerCase();
+                          const match =
+                            c.challanNumber.toLowerCase().includes(q) ||
+                            c.demandNumber.toLowerCase().includes(q) ||
+                            (c.noticeNumber && c.noticeNumber.toLowerCase().includes(q)) ||
+                            (c.pin && c.pin.includes(q)) ||
+                            c.legalName.toLowerCase().includes(q) ||
+                            (c.tradeName && c.tradeName.toLowerCase().includes(q)) ||
+                            c.identifierValue.toLowerCase().includes(q);
+                          if (!match) return false;
+                        }
+                        return true;
+                      });
 
                     if (filtered.length === 0) {
                       return (
@@ -7825,6 +8832,265 @@ export default function HomePage({
                         </tr>
                       );
                     });
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {/* TAB: POTENTIAL FORM P.F.T-2 CHALLANS (PROVISIONAL CHALLANS) */}
+        {activeTab === "POTENTIAL_PFT2" && (
+          <section className="content-panel" aria-label="Potential Form PFT-2 Challan Desk">
+            <div className="panel-header">
+              <div>
+                <h2>⚡ Potential Form P.F.T-2 Challans (Provisional)</h2>
+                <p>
+                  Provisional Form P.F.T-2 payment instruments issued against prospective assessees
+                  in the Potential Register. Upon payment realization at the authorized treasury
+                  counter (National Bank of Pakistan), these units automatically migrate to the Form
+                  P.F.T-3 Assessment Register with permanent PDN and PIN.
+                </p>
+              </div>
+            </div>
+
+            {/* Lifecycle KPI Cards for Potential Challans */}
+            {(() => {
+              const provChallans = pft2Challans.filter((c) => c.isProvisional);
+              const summary = calculatePft2ExecutiveSummary(provChallans);
+              return (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
+                    gap: "1rem",
+                    marginBottom: "1.5rem"
+                  }}
+                >
+                  <div className="metric-card highlight">
+                    <p className="metric-label">Total Potential Challans</p>
+                    <p className="metric-value">{summary.total}</p>
+                    <p className="metric-subtext">
+                      PKR {summary.totalDemandPkr.toLocaleString()} Provisional Demand
+                    </p>
+                  </div>
+                  <div className="metric-card success">
+                    <p className="metric-label">Received / Realized</p>
+                    <p className="metric-value">{summary.receivedCount}</p>
+                    <p className="metric-subtext">
+                      PKR {summary.receivedAmountPkr.toLocaleString()} Realized &amp; Migrated
+                    </p>
+                  </div>
+                  <div className="metric-card warning">
+                    <p className="metric-label">Pending / Active</p>
+                    <p className="metric-value">{summary.issuedCount}</p>
+                    <p className="metric-subtext">
+                      PKR {summary.pendingAmountPkr.toLocaleString()} Outstanding
+                    </p>
+                  </div>
+                  <div className="metric-card danger">
+                    <p className="metric-label">Cancelled / Superseded</p>
+                    <p className="metric-value">{summary.cancelledCount}</p>
+                    <p className="metric-subtext">
+                      PKR {summary.cancelledAmountPkr.toLocaleString()} Superseded
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Provisional Challans Table */}
+            <div className="table-responsive">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Challan No.</th>
+                    <th>Potential No. &amp; PIN</th>
+                    <th>Assessee &amp; Business Name</th>
+                    <th>Statutory Classification</th>
+                    <th style={{ textAlign: "right" }}>Payable Amount</th>
+                    <th>Issue &amp; Due Date</th>
+                    <th>Status</th>
+                    <th style={{ textAlign: "right" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(() => {
+                    const provChallans = pft2Challans.filter((c) => c.isProvisional);
+                    if (provChallans.length === 0) {
+                      return (
+                        <tr>
+                          <td
+                            colSpan={8}
+                            style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
+                          >
+                            No provisional Form P.F.T-2 challans currently issued. Issue challans
+                            from the Potential Register in the Demand Desk.
+                          </td>
+                        </tr>
+                      );
+                    }
+                    return provChallans.map((challan) => (
+                      <tr key={challan.id}>
+                        <td>
+                          <span
+                            style={{
+                              fontWeight: 800,
+                              color: "#166534",
+                              fontFamily: "monospace"
+                            }}
+                          >
+                            {challan.challanNumber}
+                          </span>
+                        </td>
+                        <td>
+                          <div
+                            style={{
+                              fontWeight: 700,
+                              color: "#b45309",
+                              fontFamily: "monospace"
+                            }}
+                          >
+                            {challan.potentialNumber || challan.demandNumber}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "0.72rem",
+                              color: "#475569",
+                              fontFamily: "monospace"
+                            }}
+                          >
+                            {challan.pin}
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 700 }}>{challan.legalName}</div>
+                          {challan.tradeName && (
+                            <div style={{ fontSize: "0.78rem", color: "#475569" }}>
+                              {challan.tradeName}
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <div style={{ fontSize: "0.8rem" }}>{challan.category}</div>
+                          {challan.subclassificationCode && (
+                            <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                              Subclass: {challan.subclassificationCode}
+                            </div>
+                          )}
+                        </td>
+                        <td
+                          style={{
+                            textAlign: "right",
+                            fontWeight: 800,
+                            color: "#166534"
+                          }}
+                        >
+                          PKR {challan.amountPayable.toLocaleString()}
+                        </td>
+                        <td>
+                          <div style={{ fontSize: "0.8rem" }}>Issue: {challan.issueDate}</div>
+                          <div style={{ fontSize: "0.75rem", color: "#dc2626" }}>
+                            Due: {challan.dueDate}
+                          </div>
+                        </td>
+                        <td>
+                          {challan.status === "ISSUED" && (
+                            <span
+                              style={{
+                                padding: "0.2rem 0.5rem",
+                                borderRadius: "9999px",
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                                background: "#fef3c7",
+                                color: "#92400e"
+                              }}
+                            >
+                              ACTIVE (ISSUED)
+                            </span>
+                          )}
+                          {challan.status === "RECEIVED" && (
+                            <span
+                              style={{
+                                padding: "0.2rem 0.5rem",
+                                borderRadius: "9999px",
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                                background: "#dcfce7",
+                                color: "#166534"
+                              }}
+                            >
+                              REALIZED &amp; CREDITED
+                            </span>
+                          )}
+                          {challan.status === "CANCELLED" && (
+                            <span
+                              style={{
+                                padding: "0.2rem 0.5rem",
+                                borderRadius: "9999px",
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                                background: "#fee2e2",
+                                color: "#991b1b"
+                              }}
+                            >
+                              CANCELLED
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          <RowActionMenu
+                            align="right"
+                            actions={
+                              challan.status === "ISSUED"
+                                ? [
+                                    {
+                                      id: "receive-pft2",
+                                      label: "Receive Bank Payment (Realize)",
+                                      icon: "💳",
+                                      onClick: () => handleOpenReceivePft2(challan)
+                                    },
+                                    {
+                                      id: "print-pft2",
+                                      label: "Print 3-Copy Challan",
+                                      icon: "🖨️",
+                                      onClick: () => handlePrintPft2Challan(challan)
+                                    },
+                                    {
+                                      id: "view-dossier",
+                                      label: "View Assessee Dossier",
+                                      icon: "📋",
+                                      href: `/units/${challan.pin}/details`,
+                                      target: "_blank"
+                                    }
+                                  ]
+                                : [
+                                    {
+                                      id: "print-pft2",
+                                      label: "Print 3-Copy Challan",
+                                      icon: "🖨️",
+                                      onClick: () => handlePrintPft2Challan(challan)
+                                    },
+                                    {
+                                      id: "view-receipt",
+                                      label: "View Statutory Receipt",
+                                      icon: "🧾",
+                                      disabled: !challan.receiptNumber,
+                                      onClick: () => {
+                                        const rec = statutoryReceipts.find(
+                                          (r) => r.receiptNumber === challan.receiptNumber
+                                        );
+                                        if (rec) {
+                                          handleOpenReceiptDocument(rec);
+                                        }
+                                      }
+                                    }
+                                  ]
+                            }
+                          />
+                        </td>
+                      </tr>
+                    ));
                   })()}
                 </tbody>
               </table>
@@ -20395,6 +21661,482 @@ export default function HomePage({
                 </div>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADD POTENTIAL TAXABLE UNIT */}
+      {showAddPotentialModal && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(15, 23, 42, 0.75)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "1rem"
+          }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="modal-card"
+            style={{
+              background: "#ffffff",
+              borderRadius: "12px",
+              maxWidth: "40rem",
+              width: "100%",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
+              border: "1px solid #cbd5e1",
+              padding: "1.5rem"
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "1rem"
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: "1.25rem", color: "#0f172a" }}>
+                ➕ Register Potential Taxable Unit (Survey Intake)
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddPotentialModal(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  fontSize: "1.25rem",
+                  cursor: "pointer",
+                  color: "#64748b"
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "1.25rem" }}>
+              Enrolls an unassessed commercial unit into the discovery pipeline. It receives a
+              provisional PIN (e.g. <code>Potential-237-...</code>) and is isolated from Form
+              P.F.T-3 until its first challan is realized.
+            </p>
+            <form onSubmit={handleAddPotentialUnit}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "1rem",
+                  marginBottom: "1rem"
+                }}
+              >
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      color: "#334155",
+                      marginBottom: "0.25rem"
+                    }}
+                  >
+                    Legal / Assessee Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={potNewLegalName}
+                    onChange={(e) => setPotNewLegalName(e.target.value)}
+                    placeholder="e.g. Al-Madina Traders"
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      borderRadius: "6px",
+                      border: "1px solid #cbd5e1"
+                    }}
+                  />
+                </div>
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      color: "#334155",
+                      marginBottom: "0.25rem"
+                    }}
+                  >
+                    Trade / Business Name
+                  </label>
+                  <input
+                    type="text"
+                    value={potNewTradeName}
+                    onChange={(e) => setPotNewTradeName(e.target.value)}
+                    placeholder="e.g. Al-Madina Super Store"
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      borderRadius: "6px",
+                      border: "1px solid #cbd5e1"
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "120px 1fr",
+                  gap: "1rem",
+                  marginBottom: "1rem"
+                }}
+              >
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      color: "#334155",
+                      marginBottom: "0.25rem"
+                    }}
+                  >
+                    ID Type
+                  </label>
+                  <select
+                    value={potNewIdType}
+                    onChange={(e) => setPotNewIdType(e.target.value as "CNIC" | "NTN")}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      borderRadius: "6px",
+                      border: "1px solid #cbd5e1"
+                    }}
+                  >
+                    <option value="CNIC">CNIC</option>
+                    <option value="NTN">NTN</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      color: "#334155",
+                      marginBottom: "0.25rem"
+                    }}
+                  >
+                    Identifier Value *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={potNewIdValue}
+                    onChange={(e) => setPotNewIdValue(e.target.value)}
+                    placeholder="e.g. 36603-1234567-1 or NTN-1234567"
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      borderRadius: "6px",
+                      border: "1px solid #cbd5e1"
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "1rem",
+                  marginBottom: "1rem"
+                }}
+              >
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      color: "#334155",
+                      marginBottom: "0.25rem"
+                    }}
+                  >
+                    Locality / Zone
+                  </label>
+                  <input
+                    type="text"
+                    value={potNewLocality}
+                    onChange={(e) => setPotNewLocality(e.target.value)}
+                    placeholder="e.g. Club Road / Sharqi Colony"
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      borderRadius: "6px",
+                      border: "1px solid #cbd5e1"
+                    }}
+                  />
+                </div>
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      color: "#334155",
+                      marginBottom: "0.25rem"
+                    }}
+                  >
+                    Opening Arrears (PKR)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={potNewArrears}
+                    onChange={(e) => setPotNewArrears(Number(e.target.value))}
+                    placeholder="0"
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      borderRadius: "6px",
+                      border: "1px solid #cbd5e1"
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "1rem" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.8rem",
+                    fontWeight: 600,
+                    color: "#334155",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  Physical Address
+                </label>
+                <input
+                  type="text"
+                  value={potNewAddress}
+                  onChange={(e) => setPotNewAddress(e.target.value)}
+                  placeholder="e.g. Shop # 12, Main Commercial Market, Vehari"
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1"
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: "1.5rem" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.8rem",
+                    fontWeight: 600,
+                    color: "#334155",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  Statutory Classification Rule
+                </label>
+                <select
+                  value={potNewCategoryCode}
+                  onChange={(e) => {
+                    setPotNewCategoryCode(e.target.value);
+                    const selectedRule = allRules.find((r) => r.category_code === e.target.value);
+                    if (selectedRule?.subclassification_code) {
+                      setPotNewSubclassCode(selectedRule.subclassification_code);
+                    }
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1"
+                  }}
+                >
+                  {allRules.map((rule) => (
+                    <option key={rule.rule_id} value={rule.category_code}>
+                      Category {rule.category_code}: {rule.category}{" "}
+                      {rule.subcategory ? `— ${rule.subcategory}` : ""} (PKR{" "}
+                      {rule.annual_rate_pkr?.toLocaleString() ?? "N/A"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowAddPotentialModal(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-success">
+                  💾 Save Potential Unit
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: IMPORT POTENTIAL UNITS CSV */}
+      {showImportPotentialModal && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(15, 23, 42, 0.75)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "1rem"
+          }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="modal-card"
+            style={{
+              background: "#ffffff",
+              borderRadius: "12px",
+              maxWidth: "42rem",
+              width: "100%",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
+              border: "1px solid #cbd5e1",
+              padding: "1.5rem"
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "1rem"
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: "1.25rem", color: "#0f172a" }}>
+                📥 Bulk Import Survey Discovery Units (CSV)
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowImportPotentialModal(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  fontSize: "1.25rem",
+                  cursor: "pointer",
+                  color: "#64748b"
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "1rem" }}>
+              Paste comma-separated survey data or upload a <code>.csv</code> file.
+              <br />
+              <span style={{ fontSize: "0.78rem", color: "#475569" }}>
+                Format:{" "}
+                <code>
+                  Legal Name, Identifier (CNIC/NTN), Category Code, Subclass, Address, Locality,
+                  Arrears, Trade Name
+                </code>
+              </span>
+            </p>
+
+            <div style={{ marginBottom: "1rem" }}>
+              <input
+                type="file"
+                accept=".csv,.txt"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      setPotentialCsvInput(String(event.target?.result || ""));
+                    };
+                    reader.readAsText(file);
+                  }
+                }}
+                style={{ fontSize: "0.85rem", marginBottom: "0.75rem" }}
+              />
+              <textarea
+                rows={8}
+                value={potentialCsvInput}
+                onChange={(e) => setPotentialCsvInput(e.target.value)}
+                placeholder="Al-Hamd Medical Store, 36603-9988776-1, 1, 1(i), Main Karkhana Bazaar, Vehari, 0, Al-Hamd Pharma"
+                style={{
+                  width: "100%",
+                  fontFamily: "monospace",
+                  fontSize: "0.8rem",
+                  padding: "0.75rem",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1"
+                }}
+              />
+            </div>
+
+            {potentialImportErrors.length > 0 && (
+              <div
+                style={{
+                  padding: "0.75rem",
+                  backgroundColor: "#fee2e2",
+                  borderRadius: "6px",
+                  color: "#991b1b",
+                  fontSize: "0.8rem",
+                  marginBottom: "1rem"
+                }}
+              >
+                <strong>Import Warnings/Errors:</strong>
+                <ul style={{ margin: "0.25rem 0 0 1rem", padding: 0 }}>
+                  {potentialImportErrors.map((err, idx) => (
+                    <li key={idx}>{err}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowImportPotentialModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleImportPotentialCsv}
+                disabled={!potentialCsvInput.trim()}
+              >
+                📥 Confirm &amp; Import Records
+              </button>
+            </div>
           </div>
         </div>
       )}
