@@ -34,7 +34,8 @@ export async function generateTaxClearanceCertificatePdf(
   const annualTaxAssessed = cert.annualTaxAssessed ?? 4000;
   const totalTaxPaid = cert.totalTaxPaid ?? annualTaxAssessed;
   const isEligible = cert.isEligible ?? true;
-  const issuingOfficerName = cert.issuingOfficerName || "Tariq Mahmood";
+  const issuingOfficerName =
+    cert.issuingOfficerName || options?.officer?.name || "Assessing Authority";
   const issuingOfficerTitle =
     cert.issuingOfficerTitle || "Excise & Taxation Officer / Assessing Authority";
   const officialSha256 = cert.officialSha256 || "sha256-clearance-cert";
@@ -68,7 +69,7 @@ export async function generateTaxClearanceCertificatePdf(
     statutoryRuleReference:
       "(Issued under Rule 11 of the Punjab Professions and Trades Tax Rules, 1977)",
     district: cert.district || "Vehari",
-    circle: cert.circle || "Circle-Vehari",
+    circle: cert.circle || options?.circle || "Vehari Circle I (City / Commercial)",
     financialYear: cert.financialYear || "2026-2027",
     isProvisional: options?.isProvisional || !isEligible
   });

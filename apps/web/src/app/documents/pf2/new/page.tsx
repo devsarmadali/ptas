@@ -317,7 +317,7 @@ function DocumentIssuanceContent() {
             <span
               style={{ fontSize: "0.9rem", fontWeight: 700, color: "#0d3822", display: "block" }}
             >
-              PTAS Punjab &bull; Circle-Vehari &bull;{" "}
+              PTAS Punjab &bull; Vehari Circle I (City / Commercial) &bull;{" "}
               <span style={{ color: "#15803d" }}>
                 {demandScope === "ARREAR"
                   ? "ARREARS DEMAND"
@@ -372,7 +372,7 @@ function DocumentIssuanceContent() {
                       authContext: {
                         role: "ETO",
                         district: "Vehari",
-                        circle: "Circle-Vehari"
+                        circle: "Vehari Circle I (City / Commercial)"
                       },
                       defaultFilename: `Form_PFT2_${issuedChallan.challanNumber.replace(/\//g, "_")}.pdf`
                     });
@@ -528,7 +528,7 @@ function DocumentIssuanceContent() {
                 >
                   <span>🔒 {unit.legalName}</span>
                   <span style={{ color: "#64748b" }}>•</span>
-                  <span>PIN: {unit.provincialUin}</span>
+                  <span>UIN: {unit.provincialUin}</span>
                   <span style={{ color: "#64748b" }}>•</span>
                   <span>Demand Number: {unit.demandUnit.permanentDemandNo}</span>
                   <span style={{ color: "#64748b" }}>•</span>
@@ -571,7 +571,7 @@ function DocumentIssuanceContent() {
                     const assessed = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
                     return (
                       <option key={u.id} value={u.provincialUin}>
-                        PIN: {u.provincialUin} &bull; Demand Number:{" "}
+                        UIN: {u.provincialUin} &bull; Demand Number:{" "}
                         {u.demandUnit.permanentDemandNo} &bull; {u.statutoryRule.category}{" "}
                         (Assessed: PKR {assessed.toLocaleString()})
                       </option>

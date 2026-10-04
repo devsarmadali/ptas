@@ -242,7 +242,7 @@ export function verifyStatutoryDocument(
         officialSha256: challanByPin.officialSha256,
         qrPayload: challanByPin.qrPayload,
         verifiedAt: now,
-        issuingAuthority: "Tariq Mahmood, Excise & Taxation Officer (Assessing Authority), Vehari",
+        issuingAuthority: "Excise & Taxation Officer (Assessing Authority), Vehari",
         pin: challanByPin.pin ?? cleanPin
       };
     }
@@ -355,8 +355,7 @@ export function verifyStatutoryDocument(
           officialSha256: pft1.officialSha256,
           qrPayload: pft1.qrPayload,
           verifiedAt: now,
-          issuingAuthority:
-            "Tariq Mahmood, Excise & Taxation Officer / Assessing Authority, Vehari",
+          issuingAuthority: "Excise & Taxation Officer / Assessing Authority, Vehari",
           pin: pft1.pin ?? cleanPin
         };
       }
@@ -386,8 +385,7 @@ export function verifyStatutoryDocument(
           officialSha256: pft2.officialSha256,
           qrPayload: pft2.qrPayload,
           verifiedAt: now,
-          issuingAuthority:
-            "Tariq Mahmood, Excise & Taxation Officer (Assessing Authority), Vehari",
+          issuingAuthority: "Excise & Taxation Officer (Assessing Authority), Vehari",
           pin: pft2.pin ?? cleanPin
         };
       }
@@ -552,7 +550,7 @@ export function verifyStatutoryDocument(
         officialSha256: matchingChallan.officialSha256,
         qrPayload: matchingChallan.qrPayload,
         verifiedAt: now,
-        issuingAuthority: "Tariq Mahmood, Excise & Taxation Officer (Assessing Authority), Vehari",
+        issuingAuthority: "Excise & Taxation Officer (Assessing Authority), Vehari",
         pin: matchingChallan.pin
       };
     }
@@ -594,7 +592,7 @@ export function verifyStatutoryDocument(
         officialSha256: pft2.officialSha256,
         qrPayload: pft2.qrPayload,
         verifiedAt: now,
-        issuingAuthority: "Tariq Mahmood, Excise & Taxation Officer (Assessing Authority), Vehari",
+        issuingAuthority: "Excise & Taxation Officer (Assessing Authority), Vehari",
         pin: pft2.pin
       };
     }
@@ -640,7 +638,7 @@ export function verifyStatutoryDocument(
       officialSha256: pft1.officialSha256,
       qrPayload: pft1.qrPayload,
       verifiedAt: now,
-      issuingAuthority: "Tariq Mahmood, Excise & Taxation Officer / Assessing Authority, Vehari",
+      issuingAuthority: "Excise & Taxation Officer / Assessing Authority, Vehari",
       pin: pft1.pin
     };
   }
@@ -970,7 +968,8 @@ export function simulateCitizenPayment(
         issueDate: certModel.issueDate,
         validUntil: certModel.expiryDate,
         issuedByOfficerId: currentState.currentOfficer.id,
-        issuedByOfficerName: "Tariq Mahmood",
+        issuedByOfficerName:
+          currentState.currentOfficer?.name || "Excise & Taxation Officer (Vehari)",
         issuedByOfficerTitle: "Excise & Taxation Officer (Assessing Authority)",
         officialSha256: certModel.officialSha256,
         qrPayload: certModel.qrPayload,

@@ -187,7 +187,12 @@ export async function generateExecutivePft2BriefPdf(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
   doc.setTextColor(...PDF_COLORS.textDark);
-  doc.text(data.officerName || "Shahid Nawaz", sigX + 30, curY + 13.5, { align: "center" });
+  doc.text(
+    data.officerName || options?.officer?.name || "Director / Executive Reviewer",
+    sigX + 30,
+    curY + 13.5,
+    { align: "center" }
+  );
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);

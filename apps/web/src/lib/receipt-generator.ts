@@ -41,6 +41,8 @@ export interface StatutoryReceiptDocument {
   readonly canonicalReceiptText: string;
   readonly officialSha256: string;
   readonly qrPayload: string;
+  readonly circle?: string | undefined;
+  readonly district?: string | undefined;
 }
 
 /**
@@ -62,7 +64,7 @@ export function buildStatutoryReceiptDocument(
 
   const canonicalReceiptText = [
     "GOVERNMENT OF THE PUNJAB - EXCISE, TAXATION & NARCOTICS CONTROL DEPARTMENT",
-    "OFFICE OF THE EXCISE & TAXATION OFFICER (ASSESSING AUTHORITY), CIRCLE-VEHARI",
+    "OFFICE OF THE EXCISE & TAXATION OFFICER (ASSESSING AUTHORITY), VEHARI",
     "STATUTORY PAYMENT RECEIPT / ACKNOWLEDGEMENT OF PROFESSIONAL TAX",
     `(Issued under Rule 10 of the Punjab Professions & Trades Tax Rules, 1977)`,
     `Receipt Number: ${record.receiptNumber} | Security PIN: ${pin} | Date: ${record.dateOfReceipt} ${record.timeOfReceipt}`,
@@ -72,7 +74,7 @@ export function buildStatutoryReceiptDocument(
     `Registration / Tax Identifier: ${identifier}`,
     `Commercial Address: ${record.address}`,
     `Statutory Classification: ${entryLabel} - ${record.statutoryCategory}${tertiaryLabel}`,
-    `Head of Account: B01601 - Punjab Professional Tax (Provincial)`,
+    `Head of Account: B01601 - Punjab Professional Tax`,
     `Amount Discharged: PKR ${record.amountPaidPkr.toLocaleString()} (${amountWords})`,
     `Payment Channel: ${record.paymentChannel} | Branch: ${branch}`,
     `Bank Scroll / CPR Reference: ${record.bankScrollRef}`,

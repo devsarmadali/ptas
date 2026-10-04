@@ -102,7 +102,16 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
   const schedEntry = getScheduleEntryLabel(unit.statutoryRule);
   const isCompliant = balance <= 0;
   const district = unit.districtName || "Vehari";
-  const circle = unit.circleName || "Circle-I";
+  const circle = unit.circleName || "Vehari Circle I (City / Commercial)";
+  const tehsil =
+    unit.locality?.toLowerCase().includes("burewala") || circle.toLowerCase().includes("burewala")
+      ? "Burewala"
+      : unit.locality?.toLowerCase().includes("mailsi") || circle.toLowerCase().includes("mailsi")
+        ? "Mailsi"
+        : "Vehari";
+  const pdn = unit.demandUnit?.permanentDemandNo || unit.demandNumber || "Unallocated";
+  const provincialUin = unit.provincialUin;
+  const cleanAddress = unit.address.replace(/\s*•\s*Locality:\s*.*$/i, "").trim();
 
   return (
     <div
@@ -219,20 +228,6 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
                 style={{
                   fontFamily: "monospace",
                   fontWeight: 700,
-                  color: "#047857",
-                  background: "#dcfce7",
-                  padding: "0.15rem 0.45rem",
-                  borderRadius: "4px",
-                  fontSize: "0.82rem"
-                }}
-              >
-                PIN: {unit.provincialUin || unit.pinNumber || "— Not assigned"}
-              </span>
-              <span style={{ color: "#94a3b8" }}>•</span>
-              <span
-                style={{
-                  fontFamily: "monospace",
-                  fontWeight: 700,
                   color: "#1e3a8a",
                   background: "#e0f2fe",
                   padding: "0.15rem 0.45rem",
@@ -240,7 +235,35 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
                   fontSize: "0.82rem"
                 }}
               >
-                PDN: {unit.demandUnit?.permanentDemandNo || unit.demandNumber || "—"}
+                UIN: {provincialUin}
+              </span>
+              <span style={{ color: "#94a3b8" }}>•</span>
+              <span
+                style={{
+                  fontFamily: "monospace",
+                  fontWeight: 700,
+                  color: "#166534",
+                  background: "#dcfce7",
+                  padding: "0.15rem 0.45rem",
+                  borderRadius: "4px",
+                  fontSize: "0.82rem"
+                }}
+              >
+                PDN: {pdn}
+              </span>
+              <span style={{ color: "#94a3b8" }}>•</span>
+              <span
+                style={{
+                  fontFamily: "monospace",
+                  fontWeight: 600,
+                  color: "#334155",
+                  background: "#f1f5f9",
+                  padding: "0.15rem 0.45rem",
+                  borderRadius: "4px",
+                  fontSize: "0.82rem"
+                }}
+              >
+                {unit.identifierType}: {unit.identifierValue}
               </span>
               <span style={{ color: "#94a3b8" }}>•</span>
               <span style={{ color: "#166534", fontWeight: 700, fontSize: "0.82rem" }}>
@@ -281,15 +304,9 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
             {unit.legalName}
           </h1>
           <span style={{ fontSize: "0.85rem", color: "#f0fdf4" }}>
-            Demand Number:{" "}
-            <strong>
-              {unit.demandUnit?.permanentDemandNo || unit.demandNumber || "Unallocated"}
-            </strong>{" "}
-            &bull; PIN:{" "}
-            <strong style={{ fontFamily: "monospace" }}>
-              {unit.provincialUin || unit.pinNumber}
-            </strong>{" "}
-            &bull; {circle}, {district}
+            Demand Number (PDN): <strong style={{ fontFamily: "monospace" }}>{pdn}</strong> &bull;
+            Provincial UIN: <strong style={{ fontFamily: "monospace" }}>{provincialUin}</strong>{" "}
+            &bull; {circle} &bull; Tehsil {tehsil} &bull; District {district}
           </span>
         </div>
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
@@ -412,44 +429,47 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
             </div>
             <div>
               <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
-                Provincial PIN:
+                Provincial UIN:
               </span>
               <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#1e3a8a" }}>
-                {unit.provincialUin || unit.pinNumber || "Pending"}
+                {provincialUin}
               </span>
             </div>
             <div>
               <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
-                Security Code:
+                Assessment Survey No:
               </span>
               <span
                 style={{
                   fontFamily: "monospace",
-                  fontWeight: 800,
-                  color: "#0369a1",
-                  background: "#e0f2fe",
+                  fontWeight: 700,
+                  color: "#334155",
+                  background: "#f1f5f9",
                   padding: "0.1rem 0.35rem",
                   borderRadius: "3px"
                 }}
               >
-                {unit.pinNumber || "—"}
-              </span>
-            </div>
-            <div style={{ gridColumn: "span 2" }}>
-              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
-                Commercial Address &amp; Locality:
-              </span>
-              <span>
-                {unit.address}
-                {unit.locality ? ` • Locality: ${unit.locality}` : ""}
+                {unit.assessmentNumber || "—"}
               </span>
             </div>
             <div>
               <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Commercial Address:
+              </span>
+              <span style={{ color: "#0f172a", fontWeight: 500 }}>{cleanAddress}</span>
+            </div>
+            <div>
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
+                Locality / Area:
+              </span>
+              <span style={{ color: "#0f172a", fontWeight: 600 }}>{unit.locality || "—"}</span>
+            </div>
+            <div style={{ gridColumn: "span 2" }}>
+              <span style={{ color: "#64748b", fontSize: "0.72rem", display: "block" }}>
                 Administrative Jurisdiction:
               </span>
-              <span>
-                {circle} &bull; District {district}
+              <span style={{ fontWeight: 600, color: "#1e293b" }}>
+                {circle} &bull; Tehsil {tehsil} &bull; District {district}
               </span>
             </div>
           </div>

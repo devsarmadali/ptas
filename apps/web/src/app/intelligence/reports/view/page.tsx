@@ -4,14 +4,18 @@ import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { loadPilotState, type PilotState } from "../../../../lib/pilot-store";
 import { loadOperationalContext } from "../../../../lib/operational-survey";
-import { computeLedgerBalance, computeDefaulterAging } from "@ptas/domain";
+import { computeLedgerBalance } from "@ptas/domain";
 import {
   computeExecutiveMetrics,
   type CategoryYieldSummary,
   type SlabYieldSummary
 } from "../../../../lib/mis-analytics";
 import { downloadOfficialPdf } from "../../../../lib/pdf";
-import { generateFormPFT3Rows } from "../../../../lib/statutory-forms";
+import {
+  generateFormPFT3Rows,
+  computeUnitFinancialSummary,
+  computeUnitDefaulterAging
+} from "../../../../lib/statutory-forms";
 
 function ReportViewContent() {
   const searchParams = useSearchParams();
@@ -146,7 +150,8 @@ function ReportViewContent() {
               Statutory Reports Studio &bull; Official Gazetted Document
             </span>
             <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
-              Circle-Vehari &bull; Financial Year 2026-2027
+              {currentOfficer.jurisdictionName || "Vehari Circle I (City / Commercial)"} &bull;
+              Financial Year 2026-2027
             </span>
           </div>
         </div>
@@ -228,7 +233,7 @@ function ReportViewContent() {
             DIRECTORATE GENERAL OF EXCISE, TAXATION &amp; NARCOTICS CONTROL
           </p>
           <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
-            MULTAN DIVISION &bull; DISTRICT VEHARI &bull; CIRCLE-VEHARI
+            MULTAN DIVISION &bull; DISTRICT VEHARI &bull; VEHARI CIRCLE I (CITY / COMMERCIAL)
           </p>
 
           <div
@@ -264,7 +269,9 @@ function ReportViewContent() {
           <div>
             <strong>Financial Year:</strong> 2026–2027
             <br />
-            <strong>Jurisdiction:</strong> Circle-Vehari (Tehsil Vehari)
+            <strong>Jurisdiction:</strong>{" "}
+            {currentOfficer.jurisdictionName || "Vehari Circle I (City / Commercial)"} (District
+            Vehari)
           </div>
           <div>
             <strong>Statutory Baseline:</strong> Section 3, Second Schedule
@@ -504,14 +511,9 @@ function ReportViewContent() {
             </thead>
             <tbody>
               {units
-                .filter((u) => computeLedgerBalance(u.ledgerEntries) > 0)
+                .filter((u) => computeUnitFinancialSummary(u).outstandingBalance > 0)
                 .map((u) => {
-                  const aging = computeDefaulterAging(
-                    u.ledgerEntries,
-                    "2026-08-31",
-                    undefined,
-                    Boolean(u.isRecoveryCertified)
-                  );
+                  const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
                   return (
                     <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
                       <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
@@ -616,7 +618,10 @@ function ReportViewContent() {
                   </td>
                   <td style={{ padding: "0.35rem" }}>{u.servedAt ?? "—"}</td>
                   <td style={{ padding: "0.35rem" }}>
-                    {u.servedBy ?? "Muhammad Aslam, Inspector"}
+                    {u.servedBy ??
+                      (currentOfficer.role === "INSPECTOR"
+                        ? currentOfficer.name
+                        : "Authorized Process Server")}
                   </td>
                 </tr>
               ))}

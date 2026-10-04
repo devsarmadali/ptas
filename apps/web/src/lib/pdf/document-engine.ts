@@ -551,7 +551,7 @@ export async function generateAuthoritativePdf(
 
       const officer = options?.officer || {
         id: "a0000000-0000-4000-8000-000000000002",
-        name: "Tariq Mahmood",
+        name: "Excise & Taxation Officer (Vehari)",
         email: "eto.vehari@punjab.gov.pk",
         role: "ETO",
         title: "Excise & Taxation Officer (Assessing Authority)",
@@ -627,7 +627,7 @@ export async function generateAuthoritativePdf(
       const dossierData: UnitDossierData = {
         unit: effectiveUnit,
         generatedAt: new Date().toISOString(),
-        officerName: options?.officer?.name || "Tariq Mahmood",
+        officerName: options?.officer?.name || "Excise & Taxation Officer (Assessing Authority)",
         officerTitle: options?.officer?.title || "Excise & Taxation Officer / Assessing Authority",
         officialSha256: `sha256-dossier-${effectiveUnit?.id || "unit"}`
       };

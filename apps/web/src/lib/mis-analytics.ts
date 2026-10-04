@@ -14,12 +14,11 @@
  */
 
 import {
-  computeDefaulterAging,
   getAllStatutoryRules,
   getStatutoryCategories,
   type StatutoryCategorySummary
 } from "@ptas/domain";
-import { computeUnitFinancialSummary } from "./statutory-forms";
+import { computeUnitFinancialSummary, computeUnitDefaulterAging } from "./statutory-forms";
 import type {
   AppealRecord,
   ClearanceCertificateRecord,
@@ -253,12 +252,7 @@ export function computeExecutiveMetrics(
     slabArrears.set(ruleId, round2((slabArrears.get(ruleId) ?? 0) + (uBalance > 0 ? uBalance : 0)));
 
     // Defaulter aging distribution
-    const aging = computeDefaulterAging(
-      u.ledgerEntries,
-      "2026-08-31",
-      undefined,
-      Boolean(u.isRecoveryCertified)
-    );
+    const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
 
     switch (aging.status) {
       case "CURRENT":
@@ -529,12 +523,7 @@ export function exportPft3RegisterCsv(units: readonly StoredUnit[]): string {
     const totalPaid = summary.totalPaid;
     const balance = summary.outstandingBalance;
 
-    const aging = computeDefaulterAging(
-      u.ledgerEntries,
-      "2026-08-31",
-      undefined,
-      Boolean(u.isRecoveryCertified)
-    );
+    const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
 
     return [
       idx + 1,
@@ -599,22 +588,12 @@ export function exportDefaulterRecoveryCsv(units: readonly StoredUnit[]): string
   ];
 
   const defaulterUnits = units.filter((u) => {
-    const aging = computeDefaulterAging(
-      u.ledgerEntries,
-      "2026-08-31",
-      undefined,
-      Boolean(u.isRecoveryCertified)
-    );
-    return aging.status !== "PAID" && aging.status !== "CURRENT";
+    const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
+    return aging.status !== "PAID" && aging.status !== "CURRENT" && aging.remainingBalance > 0;
   });
 
   const rows = defaulterUnits.map((u, idx) => {
-    const aging = computeDefaulterAging(
-      u.ledgerEntries,
-      "2026-08-31",
-      undefined,
-      Boolean(u.isRecoveryCertified)
-    );
+    const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
 
     return [
       idx + 1,
@@ -698,7 +677,7 @@ export function exportNoticeDispatchCsv(units: readonly StoredUnit[]): string {
       "Personal Service (Rule 6)",
       u.serviceStatus ?? "PENDING",
       u.servedAt ?? "N/A",
-      u.servedBy ?? "Muhammad Aslam, Tax Inspector",
+      u.servedBy ?? "Tax Inspector, Vehari Circle I",
       u.recipientName ?? "N/A",
       u.witnessDetails ?? "N/A"
     ];

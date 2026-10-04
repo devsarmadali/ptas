@@ -26,15 +26,15 @@ describe("Vehari Pilot Store & Statutory Seed Verification", () => {
 
     const [inspector, eto, director, admin] = MOCK_OFFICERS;
     expect(inspector.role).toBe("INSPECTOR");
-    expect(inspector.name).toBe("Muhammad Aslam");
+    expect(inspector.name).toBe("Tax Inspector (Vehari Circle I)");
     expect(inspector.jurisdictionTier).toBe("CIRCLE");
 
     expect(eto.role).toBe("ETO");
-    expect(eto.name).toBe("Tariq Mahmood");
+    expect(eto.name).toBe("Excise & Taxation Officer (Vehari)");
     expect(eto.jurisdictionTier).toBe("OFFICE");
 
     expect(director.role).toBe("DIRECTOR");
-    expect(director.name).toBe("Shahid Nawaz");
+    expect(director.name).toBe("Director Excise & Taxation (Multan Division)");
     expect(director.jurisdictionTier).toBe("REGION");
 
     expect(admin.role).toBe("ADMIN");

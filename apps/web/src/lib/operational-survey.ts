@@ -190,10 +190,34 @@ export function mapOperationalUnit(value: unknown): StoredUnit {
     approvalEvidenceId: asOptionalString(versionRow.approval_evidence_id)
   };
 
-  const legacyDemandNo =
-    asOptionalString(profile.legacy_demand_no) ??
-    asOptionalString(taxpayer.permanent_demand_no) ??
-    asOptionalString(demandRow.permanent_demand_no);
+  const rawPdn = asOptionalString(taxpayer.permanent_demand_no);
+  const rawLegacy = asOptionalString(profile.legacy_demand_no);
+  const rawDemandRowPdn = asOptionalString(demandRow.permanent_demand_no);
+
+  const isUinPattern = (val?: string | null): boolean =>
+    typeof val === "string" && /^\d{3}-/.test(val) && val.length >= 15;
+
+  const pinNumber = rawPdn?.startsWith("PIN-")
+    ? rawPdn
+    : (asOptionalString(profile.pin_number) ?? undefined);
+
+  const provincialUin =
+    (isUinPattern(rawPdn) ? rawPdn : null) ??
+    (isUinPattern(rawLegacy) ? rawLegacy : null) ??
+    (isUinPattern(rawDemandRowPdn) ? rawDemandRowPdn : null) ??
+    (rawPdn?.startsWith("PIN-") ? rawPdn : null) ??
+    (isUinPattern(asOptionalString(profile.provincial_uin))
+      ? asString(profile.provincial_uin)
+      : null) ??
+    "";
+
+  const demandNumber =
+    (!isUinPattern(rawLegacy) ? rawLegacy : null) ??
+    (!isUinPattern(rawDemandRowPdn) ? rawDemandRowPdn : null) ??
+    (!isUinPattern(rawPdn) && !rawPdn?.startsWith("PIN-") ? rawPdn : null) ??
+    rawLegacy ??
+    rawDemandRowPdn;
+
   const demandUnitId = asString(demandRow.id, `pending-demand:${unitId}`);
   const ledgerEntries = Array.isArray(row.ledger_entries)
     ? row.ledger_entries
@@ -201,14 +225,18 @@ export function mapOperationalUnit(value: unknown): StoredUnit {
         .filter((entry): entry is DemandLedgerEntry => entry !== null)
     : [];
 
+  const rawAddress = asString(profile.commercial_address);
+  const locality = asOptionalString(profile.locality);
+  const cleanAddress = rawAddress.replace(/\s*•\s*Locality:\s*.*$/i, "").trim();
+
   return {
     id: unitId,
     legalName: asString(profile.legal_name, asString(taxpayer.display_name)),
     tradeName: asOptionalString(profile.taxpayer_name),
     identifierType: asString(identifier.type).toUpperCase() === "CNIC" ? "CNIC" : "NTN",
     identifierValue: asString(identifier.value),
-    address: asString(profile.commercial_address),
-    locality: asOptionalString(profile.locality),
+    address: cleanAddress || rawAddress,
+    locality,
     circleId: asString(row.jurisdiction_id),
     categoryCode: rule.category_code,
     subclassificationCode: rule.subclassification_code,
@@ -219,9 +247,9 @@ export function mapOperationalUnit(value: unknown): StoredUnit {
       asPublicBusinessIdentifier(assessmentRow.assessment_number) ??
       asPublicBusinessIdentifier(profile.assessment_number) ??
       "",
-    demandNumber: legacyDemandNo,
-    pinNumber: asPublicBusinessIdentifier(taxpayer.permanent_demand_no),
-    provincialUin: asPublicBusinessIdentifier(taxpayer.permanent_demand_no) ?? "",
+    demandNumber,
+    pinNumber,
+    provincialUin,
     circleName: asOptionalString(jurisdiction.name),
     districtName:
       asOptionalString(jurisdiction.district_name) ??
@@ -231,7 +259,7 @@ export function mapOperationalUnit(value: unknown): StoredUnit {
     demandUnit: {
       id: demandUnitId,
       taxpayerId,
-      permanentDemandNo: legacyDemandNo ?? "",
+      permanentDemandNo: demandNumber ?? "",
       createdAt: asString(demandRow.created_at, createdAt)
     },
     assessments: [assessment],

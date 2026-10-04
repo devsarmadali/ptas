@@ -70,7 +70,8 @@ export async function downloadDocumentPdf(
           cancelledCount: briefData.cancelledCount,
           circleBreakdown: [
             {
-              circleName: "Vehari Circle I",
+              circleName:
+                state.currentOfficer?.jurisdictionName || "Vehari Circle I (City / Commercial)",
               count: briefData.total,
               totalAmount: briefData.totalDemandPkr
             }
@@ -83,7 +84,7 @@ export async function downloadDocumentPdf(
             }
           ],
           generatedAt: new Date().toISOString().split("T")[0]!,
-          officerName: "Tariq Mahmood",
+          officerName: state.currentOfficer?.name || "Assessing Authority",
           officerTitle: "Assessing Authority",
           officialSha256: "sha256-exec-brief-auth"
         },
@@ -241,7 +242,7 @@ export async function downloadDocumentPdf(
           revisedTaxAmount: 5000,
           findingsAndReasoning: "Appellate inquiry confirmed activity falls under slab rate basis.",
           operativeOrderUrdu: "The appeal is partially allowed.",
-          appellateAuthorityName: "Shahid Nawaz",
+          appellateAuthorityName: state.currentOfficer?.name || "Appellate Authority",
           appellateAuthorityDesignation: "Director Excise & Taxation / Appellate Authority",
           canonicalOrderText: "Judicial Order Decree",
           officialSha256: "sha256-appellate-order-auth",

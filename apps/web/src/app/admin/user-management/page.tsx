@@ -6,10 +6,14 @@ import {
   type UserAccount,
   type UserManagementAuditRecord,
   DISTRICT_VEHARI_CIRCLES,
-  loadPilotState,
-  savePilotState,
+  ADMIN_OFFICER,
+  loadPersistedUserAccounts,
+  savePersistedUserAccounts,
+  loadPersistedUserAuditLogs,
+  savePersistedUserAuditLogs,
   getPakistanCurrentTimestamp
 } from "../../../lib/pilot-store";
+import { getSupabaseAuthClient, resolveAuthenticatedOfficer } from "../../../lib/supabase-auth";
 import { RowActionMenu } from "../../../components/RowActionMenu";
 
 export default function UserManagementPage() {
@@ -36,11 +40,25 @@ export default function UserManagementPage() {
   } | null>(null);
 
   useEffect(() => {
-    const state = loadPilotState();
-    setCurrentOfficer(state.currentOfficer);
-    setUsers(state.users ?? []);
-    setUserAuditLogs(state.userAuditLogs ?? []);
-    setIsLoaded(true);
+    async function initUserDesk() {
+      try {
+        const supabase = getSupabaseAuthClient();
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData?.user) {
+          const authOfficer = await resolveAuthenticatedOfficer(authData.user);
+          setCurrentOfficer(authOfficer);
+        } else {
+          setCurrentOfficer(ADMIN_OFFICER);
+        }
+      } catch {
+        setCurrentOfficer(ADMIN_OFFICER);
+      }
+
+      setUsers(loadPersistedUserAccounts());
+      setUserAuditLogs(loadPersistedUserAuditLogs());
+      setIsLoaded(true);
+    }
+    initUserDesk();
   }, []);
 
   if (!isLoaded) {
@@ -140,14 +158,13 @@ export default function UserManagementPage() {
       return;
     }
 
-    const state = loadPilotState();
     const oldCircleName = editingUser.assignedCircleName;
     const oldCircleId = editingUser.assignedCircleId;
     const oldStatus = editingUser.status;
 
     const isCircleChanged = oldCircleId !== targetCircle.id || oldCircleName !== targetCircle.name;
 
-    const updatedUsers = (state.users ?? users).map((u) => {
+    const updatedUsers = users.map((u) => {
       if (u.id === editingUser.id) {
         return {
           ...u,
@@ -174,10 +191,9 @@ export default function UserManagementPage() {
       timestamp: getPakistanCurrentTimestamp()
     };
 
-    const updatedLogs = [newAuditLog, ...(state.userAuditLogs ?? auditLogs)];
-    state.users = updatedUsers;
-    state.userAuditLogs = updatedLogs;
-    savePilotState(state);
+    const updatedLogs = [newAuditLog, ...auditLogs];
+    savePersistedUserAccounts(updatedUsers);
+    savePersistedUserAuditLogs(updatedLogs);
 
     setUsers(updatedUsers);
     setUserAuditLogs(updatedLogs);
@@ -197,7 +213,6 @@ export default function UserManagementPage() {
       return;
     }
 
-    const state = loadPilotState();
     const newAuditLog: UserManagementAuditRecord = {
       id: `usr-aud-${Date.now()}`,
       performedBy: currentOfficer.name,
@@ -210,9 +225,8 @@ export default function UserManagementPage() {
       timestamp: getPakistanCurrentTimestamp()
     };
 
-    const updatedLogs = [newAuditLog, ...(state.userAuditLogs ?? auditLogs)];
-    state.userAuditLogs = updatedLogs;
-    savePilotState(state);
+    const updatedLogs = [newAuditLog, ...auditLogs];
+    savePersistedUserAuditLogs(updatedLogs);
 
     setUserAuditLogs(updatedLogs);
     setPasswordChangeUser(null);

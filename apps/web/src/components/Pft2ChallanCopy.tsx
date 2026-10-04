@@ -92,29 +92,17 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
               background: "#e0f2fe",
               border: "1px solid #bae6fd",
               borderRadius: "3px",
-              padding: "0.1rem 0.15rem",
+              padding: "0.15rem 0.15rem",
               textAlign: "center"
             }}
           >
             <div
               style={{
-                fontSize: "0.48rem",
-                fontWeight: 800,
-                color: "#0369a1",
-                letterSpacing: "0.2px",
-                lineHeight: 1
-              }}
-            >
-              SECURITY CODE
-            </div>
-            <div
-              style={{
                 fontFamily: "monospace",
-                fontSize: "0.72rem",
+                fontSize: "0.78rem",
                 fontWeight: 800,
                 color: "#1e3a8a",
-                lineHeight: 1.15,
-                marginTop: "0.08rem"
+                lineHeight: 1.15
               }}
             >
               {copy.pin}
@@ -204,7 +192,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
               marginTop: "0.05rem"
             }}
           >
-            Head: {copy.headOfAccount}
+            Head: {copy.headOfAccount.replace(/\s*-\s*Provincial|\s*\(Provincial\)/gi, "").trim()}
           </div>
         </div>
       </div>
@@ -273,10 +261,10 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           </span>
         </div>
 
-        {/* Row 2: Demand Number | District (No mock Circle / Tax Unit) */}
+        {/* Row 2: Demand Number | Tax Year */}
         <div style={{ display: "flex", alignItems: "baseline" }}>
           <span style={{ width: "6.8rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
-            DEMAND NUMBER
+            DEMAND NO.
           </span>
           <span
             style={{
@@ -290,11 +278,11 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "flex-end" }}>
-          <span style={{ fontWeight: 700, color: "#334155", marginRight: "0.4rem" }}>DISTRICT</span>
-          <span style={{ fontWeight: 700, color: "#0f172a" }}>{copy.district}</span>
+          <span style={{ fontWeight: 700, color: "#334155", marginRight: "0.4rem" }}>TAX YEAR</span>
+          <span style={{ fontWeight: 700, color: "#0f172a" }}>{displayTaxYear}</span>
         </div>
 
-        {/* Row 3: Tax Year | Issue Date */}
+        {/* Row 3: District | Tehsil Grid */}
         <div
           style={{
             display: "flex",
@@ -304,9 +292,61 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           }}
         >
           <span style={{ width: "6.8rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
-            TAX YEAR
+            DISTRICT
           </span>
-          <span style={{ fontWeight: 700, color: "#0f172a" }}>{displayTaxYear}</span>
+          <span style={{ fontWeight: 700, color: "#0f172a" }}>{copy.district || "Vehari"}</span>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            justifyContent: "flex-end",
+            borderTop: "1px dashed #e2e8f0",
+            paddingTop: "0.18rem"
+          }}
+        >
+          <span style={{ fontWeight: 700, color: "#334155", marginRight: "0.4rem" }}>TEHSIL</span>
+          <span style={{ fontWeight: 700, color: "#0f172a" }}>
+            {copy.tehsil || copy.assessmentInfo.tehsil || "Vehari"}
+          </span>
+        </div>
+
+        {/* Row 4: Circle Name */}
+        <div
+          style={{
+            gridColumn: "span 2",
+            display: "flex",
+            alignItems: "baseline",
+            borderTop: "1px dashed #e2e8f0",
+            paddingTop: "0.18rem"
+          }}
+        >
+          <span style={{ width: "6.8rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
+            CIRCLE
+          </span>
+          <span style={{ fontWeight: 700, color: "#166534", fontSize: "0.72rem" }}>
+            {copy.assessmentInfo.circleName || "Vehari Circle I (City / Commercial)"}
+          </span>
+        </div>
+
+        {/* Row 5: Locality | Issue Date */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            borderTop: "1px dashed #e2e8f0",
+            paddingTop: "0.18rem"
+          }}
+        >
+          <span style={{ width: "6.8rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
+            LOCALITY
+          </span>
+          <span style={{ color: "#0f172a" }}>
+            {copy.locality ||
+              copy.assessmentInfo.locality ||
+              copy.taxpayerInfo.address.split(",")[0] ||
+              "City Zone"}
+          </span>
         </div>
         <div
           style={{
@@ -323,7 +363,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           <span>{displayIssueDate}</span>
         </div>
 
-        {/* Row 4: Due Date (Full Width Callout) */}
+        {/* Row 6: Due Date (Full Width Callout) */}
         <div
           style={{
             gridColumn: "span 2",
@@ -427,6 +467,36 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
             }}
           >
             {copy.taxpayerInfo.classification}
+          </span>
+        </div>
+
+        {/* Sub-Class Row */}
+        <div style={{ display: "flex", alignItems: "baseline" }}>
+          <span
+            style={{
+              width: "8.2rem",
+              flexShrink: 0,
+              fontWeight: 700,
+              color: "#334155"
+            }}
+          >
+            SUB-CLASS:
+          </span>
+          <span
+            style={{
+              flex: 1,
+              minWidth: 0,
+              color: "#166534",
+              fontWeight: 700,
+              fontSize: "0.72rem",
+              lineHeight: 1.3
+            }}
+          >
+            {copy.taxpayerInfo.subclassificationCode
+              ? `Code ${copy.taxpayerInfo.subclassificationCode}${copy.taxpayerInfo.subclassificationLabel ? ` — ${copy.taxpayerInfo.subclassificationLabel}` : ""}${copy.taxpayerInfo.tertiarySlab ? ` (${copy.taxpayerInfo.tertiarySlab})` : ""}`
+              : copy.taxpayerInfo.subclassificationLabel ||
+                copy.taxpayerInfo.tertiarySlab ||
+                "General / Standard Class"}
           </span>
         </div>
 
@@ -558,17 +628,26 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           </tbody>
         </table>
 
-        {/* Amount in Words (Compact Single Line) */}
+        {/* Amount in Words (Prominent Mint Callout Box with Larger 0.74rem Bold Text) */}
         <div
           style={{
-            marginTop: "0.18rem",
-            fontSize: "0.64rem",
-            color: "#334155",
-            lineHeight: 1.2
+            marginTop: "0.22rem",
+            background: "#f0fdf4",
+            border: "1px solid #bbf7d0",
+            borderRadius: "3px",
+            padding: "0.22rem 0.45rem",
+            fontSize: "0.74rem",
+            lineHeight: 1.3,
+            display: "flex",
+            alignItems: "baseline",
+            gap: "0.35rem",
+            flexWrap: "wrap"
           }}
         >
-          <span style={{ fontWeight: 700 }}>Amount in Words:</span>{" "}
-          <span style={{ fontStyle: "italic" }}>{copy.taxPayable.totalPayableWords}</span>
+          <span style={{ fontWeight: 800, color: "#166534" }}>Amount in Words:</span>
+          <span style={{ fontWeight: 700, color: "#1e3a8a", fontStyle: "italic" }}>
+            {copy.taxPayable.totalPayableWords}
+          </span>
         </div>
       </div>
 

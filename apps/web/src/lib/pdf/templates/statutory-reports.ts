@@ -35,6 +35,8 @@ export interface StatutoryReportData {
   readonly rows: readonly (readonly (string | number)[])[];
   readonly summaryNotes?: string | undefined;
   readonly officialSha256?: string | undefined;
+  readonly officerName?: string | undefined;
+  readonly officerTitle?: string | undefined;
 }
 
 export async function generateStatutoryReportPdf(
@@ -70,7 +72,7 @@ export async function generateStatutoryReportPdf(
     docSubtitle: "OFFICIAL GAZETTED STATUTORY REPORT",
     statutoryRuleReference: statutoryReference,
     district: data.district || "Vehari",
-    circle: data.circle || "Circle-Vehari",
+    circle: data.circle || "Vehari Circle I (City / Commercial)",
     financialYear: data.financialYear || "2026-2027",
     isProvisional: options?.isProvisional
   };
@@ -112,12 +114,24 @@ export async function generateStatutoryReportPdf(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
   doc.setTextColor(...PDF_COLORS.textDark);
-  doc.text("Tariq Mahmood", sigX + 27.5, footerBlockY + 11.5, { align: "center" });
+  doc.text(
+    data.officerName || options?.officer?.name || "Assessing Authority",
+    sigX + 27.5,
+    footerBlockY + 11.5,
+    { align: "center" }
+  );
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
-  doc.text("Excise & Taxation Officer / Circle Head", sigX + 27.5, footerBlockY + 14.5, {
-    align: "center"
-  });
+  doc.text(
+    data.officerTitle ||
+      options?.officer?.title ||
+      "Excise & Taxation Officer (Assessing Authority)",
+    sigX + 27.5,
+    footerBlockY + 14.5,
+    {
+      align: "center"
+    }
+  );
 
   renderDocumentFooters(doc, {
     officialSha256: data.officialSha256,

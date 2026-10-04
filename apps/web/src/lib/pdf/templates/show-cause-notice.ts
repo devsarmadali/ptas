@@ -35,7 +35,7 @@ export async function generateShowCauseNoticePdf(
     statutoryRuleReference:
       "(Issued under Section 3(5) of the Punjab Finance Act, 1977 read with Rule 12)",
     district: "Vehari",
-    circle: "Circle-Vehari",
+    circle: options?.circle || "Vehari Circle I (City / Commercial)",
     financialYear: "2026-2027",
     isProvisional: options?.isProvisional
   });
@@ -215,9 +215,14 @@ export async function generateShowCauseNoticePdf(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(...PDF_COLORS.textDark);
-  doc.text(notice.assessingAuthorityName || "Tariq Mahmood", sigX + 30, curY + 20, {
-    align: "center"
-  });
+  doc.text(
+    notice.assessingAuthorityName || options?.officer?.name || "Assessing Authority",
+    sigX + 30,
+    curY + 20,
+    {
+      align: "center"
+    }
+  );
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);

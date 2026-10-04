@@ -39,6 +39,8 @@ export interface DocumentGenerationOptions {
   readonly isProvisional?: boolean | undefined;
   readonly watermark?: string | undefined;
   readonly officer?: MockOfficer | undefined;
+  readonly circle?: string | undefined;
+  readonly district?: string | undefined;
 }
 
 export interface DocumentAuthorizationContext {

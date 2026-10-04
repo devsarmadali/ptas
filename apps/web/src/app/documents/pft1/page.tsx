@@ -213,7 +213,7 @@ function FormPft1NoticeContent() {
         >
           <span>🔒 {unit.legalName}</span>
           <span style={{ color: "#64748b" }}>•</span>
-          <span>PIN: {unit.provincialUin || unit.pinNumber || "Not assigned"}</span>
+          <span>UIN: {unit.provincialUin || "Not assigned"}</span>
           <span style={{ color: "#64748b" }}>•</span>
           <span>Demand Number: {unit.demandUnit?.permanentDemandNo || unit.demandNumber}</span>
           <span style={{ color: "#64748b" }}>•</span>

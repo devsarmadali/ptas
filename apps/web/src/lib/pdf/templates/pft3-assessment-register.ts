@@ -52,7 +52,7 @@ export async function generatePft3RegisterPdf(
     statutoryRuleReference:
       "(Maintained under Rule 11 of the Punjab Professions and Trades Tax Rules, 1977)",
     district: data.district || "Vehari",
-    circle: data.circle || "Circle-Vehari",
+    circle: data.circle || "Vehari Circle I (City / Commercial)",
     financialYear: data.financialYear || "2026-2027",
     isProvisional: options?.isProvisional
   };
@@ -156,7 +156,7 @@ export async function generatePft3RegisterPdf(
   doc.setFontSize(6.8);
   doc.setTextColor(...PDF_COLORS.textMuted);
   doc.text(
-    "Certified that the above entries constitute the complete, authoritative register of professional taxpayers and tax liabilities for Circle-Vehari, authenticated under Section 3 & Rule 11.",
+    `Certified that the above entries constitute the complete, authoritative register of professional taxpayers and tax liabilities for ${data.circle || "District Vehari"}, authenticated under Section 3 & Rule 11.`,
     10,
     certY
   );
@@ -167,7 +167,9 @@ export async function generatePft3RegisterPdf(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
   doc.setTextColor(...PDF_COLORS.textDark);
-  doc.text("Tariq Mahmood", sigX + 27.5, certY + 11.5, { align: "center" });
+  doc.text(options?.officer?.name || "Assessing Authority", sigX + 27.5, certY + 11.5, {
+    align: "center"
+  });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
   doc.text("Excise & Taxation Officer (Assessing Authority)", sigX + 27.5, certY + 14.5, {

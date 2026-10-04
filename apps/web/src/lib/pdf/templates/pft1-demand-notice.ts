@@ -141,7 +141,7 @@ export async function generatePft1DemandNoticePdf(
     doc.text(notice.assesseeTradeName, left + 128, tY);
   }
 
-  // Row 2: CNIC / NTN & Provincial PIN
+  // Row 2: CNIC / NTN & Provincial UIN
   tY += 5.2;
   doc.setFontSize(7.8);
   doc.setFont("helvetica", "bold");
@@ -150,7 +150,7 @@ export async function generatePft1DemandNoticePdf(
   doc.text(notice.taxNumber || "N/A", left + 26, tY);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Provincial PIN:", left + 105, tY);
+  doc.text("Provincial UIN:", left + 105, tY);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(30, 58, 138);
   doc.text(notice.provincialUin || notice.pin, left + 128, tY);

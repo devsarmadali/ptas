@@ -94,7 +94,7 @@ export async function generateLandRevenueRecoveryPdf(
     "",
     `AND WHEREAS an official Notice of Demand (Form PFT-1) and Show Cause Notice were duly served upon the defaulter and the prescribed statutory period has expired without payment;`,
     "",
-    `NOW THEREFORE, under Section 11 of the Punjab Finance Act, 1977, I, Tariq Mahmood, Excise & Taxation Officer / Assessing Authority, hereby certify that the sum of PKR ${cert.totalArrearsRecoverable.toLocaleString()} (${cert.totalArrearsWords}) is lawfully due and recoverable from the said defaulter as an arrear of land revenue under the Punjab Land Revenue Act, 1967.`,
+    `NOW THEREFORE, under Section 11 of the Punjab Finance Act, 1977, I, ${cert.assessingAuthorityName || "Assessing Authority"}, Excise & Taxation Officer / Assessing Authority, hereby certify that the sum of PKR ${cert.totalArrearsRecoverable.toLocaleString()} (${cert.totalArrearsWords}) is lawfully due and recoverable from the said defaulter as an arrear of land revenue under the Punjab Land Revenue Act, 1967.`,
     "",
     "You are requested to recover the said amount forthwith from the defaulter through revenue recovery process and remit the proceeds to Provincial Head of Account: 0113-Taxes on Professions, Trades and Callings."
   ];
@@ -167,7 +167,7 @@ export async function generateLandRevenueRecoveryPdf(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(...PDF_COLORS.textDark);
-  doc.text(cert.assessingAuthorityName || "Tariq Mahmood", sigX + 30, curY + 20, {
+  doc.text(cert.assessingAuthorityName || "Assessing Authority", sigX + 30, curY + 20, {
     align: "center"
   });
 

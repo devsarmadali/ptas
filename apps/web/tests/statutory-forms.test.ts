@@ -120,7 +120,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     expect(scn.maximumPenaltyExposable).toBe(4000); // 100% cap
     expect(scn.daysOverdue).toBe(45);
     expect(scn.officialSha256).toHaveLength(64);
-    expect(scn.assessingAuthorityName).toBe("Tariq Mahmood");
+    expect(scn.assessingAuthorityName).toBe("Assessing Authority");
   });
 
   it("generates Certificate of Recovery as Arrears of Land Revenue (Rule 12)", () => {
@@ -135,7 +135,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
 
   it("generates Circle Notice Dispatch & Service Register under Rule 6", () => {
     const register = generateCircleDispatchRegister(units, "2026-07-02");
-    expect(register.circleName).toBe("Circle-Vehari");
+    expect(register.circleName).toBe("Vehari Circle I (City / Commercial)");
     expect(register.district).toBe("Vehari");
     expect(register.financialYear).toBe("2026-2027");
     expect(register.totalNotices).toBe(4);
@@ -147,7 +147,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     const firstRow = register.rows[0]!;
     expect(firstRow.noticeNumber).toMatch(/PB\/ET\/VHR\/CIR-1\/PFT1\/2026-27\/\d{5}/);
     expect(firstRow.demandNumber).toBe("0001");
-    expect(firstRow.serverName).toContain("Muhammad Aslam");
+    expect(firstRow.serverName).toContain("Tax Inspector");
     expect(firstRow.serviceStatus).toBe("SERVED");
   });
 
@@ -175,7 +175,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     expect(order.decisionType).toBe("REDUCE");
     expect(order.reliefAmount).toBe(2000);
     expect(order.revisedTaxAmount).toBe(2000);
-    expect(order.appellateAuthorityName).toBe("Shahid Nawaz");
+    expect(order.appellateAuthorityName).toBe("Director Excise & Taxation / Appellate Authority");
     expect(order.officialSha256).toHaveLength(64);
     expect(order.operativeOrderUrdu).toContain("The appeal is partially allowed");
     expect(order.pin).toMatch(/^\d{6}$/);

@@ -42,7 +42,13 @@ export async function generateUnitDossierPdf(
   const contentWidth = pageWidth - 28; // 182mm
 
   const district = unit.districtName || "Vehari";
-  const circle = unit.circleName || "Circle-I";
+  const circle = unit.circleName || "Vehari Circle I (City / Commercial)";
+  const tehsil =
+    unit.locality?.toLowerCase().includes("burewala") || circle.toLowerCase().includes("burewala")
+      ? "Burewala"
+      : unit.locality?.toLowerCase().includes("mailsi") || circle.toLowerCase().includes("mailsi")
+        ? "Mailsi"
+        : "Vehari";
 
   let curY = renderDocumentHeader(doc, {
     docTitle: "TAXPAYER DOSSIER & ASSESSMENT HISTORY",
@@ -58,7 +64,7 @@ export async function generateUnitDossierPdf(
   // ══════════════════════════════════════════════════════════════════════════
   // SECTION 1 — MASTER REGISTRATION PARTICULARS
   // ══════════════════════════════════════════════════════════════════════════
-  const regBoxH = 34.0;
+  const regBoxH = 37.0;
   doc.setFillColor(...PDF_COLORS.bgLight);
   doc.setDrawColor(...PDF_COLORS.borderLight);
   doc.setLineWidth(0.25);
@@ -94,7 +100,7 @@ export async function generateUnitDossierPdf(
   const pdnText = unit.demandUnit?.permanentDemandNo || unit.demandNumber || "Unallocated";
   doc.text(pdnText, left + 138, rY);
 
-  // Row 2: Trade Name / Proprietor & Provincial PIN
+  // Row 2: Trade Name / Proprietor & Provincial UIN
   rY += 5.4;
   doc.setFontSize(7.6);
   doc.setTextColor(...PDF_COLORS.textDark);
@@ -104,12 +110,12 @@ export async function generateUnitDossierPdf(
   doc.text(unit.tradeName || unit.legalName, left + 28, rY);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Provincial PIN:", left + 105, rY);
+  doc.text("Provincial UIN:", left + 105, rY);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(30, 58, 138); // blue
-  doc.text(unit.provincialUin || unit.pinNumber || "Pending", left + 138, rY);
+  doc.text(unit.provincialUin || "Pending", left + 138, rY);
 
-  // Row 3: Identifier & Security Code
+  // Row 3: Identifier & Assessment Survey Number
   rY += 5.4;
   doc.setTextColor(...PDF_COLORS.textDark);
   doc.setFont("helvetica", "bold");
@@ -118,25 +124,33 @@ export async function generateUnitDossierPdf(
   doc.text(`${unit.identifierType}: ${unit.identifierValue}`, left + 36, rY);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Security Code:", left + 105, rY);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(3, 105, 161);
-  doc.text(unit.pinNumber || "—", left + 138, rY);
-
-  // Row 4: Commercial Address & Locality / Jurisdiction
-  rY += 5.4;
+  doc.text("Assessment No:", left + 105, rY);
+  doc.setFont("helvetica", "normal");
   doc.setTextColor(...PDF_COLORS.textDark);
+  doc.text(unit.assessmentNumber || "—", left + 138, rY);
+
+  // Row 4: Commercial Address (Alone) & Locality / Area (Alone)
+  rY += 5.4;
   doc.setFont("helvetica", "bold");
   doc.text("Address:", left + 4, rY);
   doc.setFont("helvetica", "normal");
-  const fullAddress = `${unit.address || "Not Specified"}${unit.locality ? ` • Locality: ${unit.locality}` : ""}`;
-  const addressLines = doc.splitTextToSize(fullAddress, 72);
+  const cleanAddress = (unit.address || "Not Specified")
+    .replace(/\s*•\s*Locality:\s*.*$/i, "")
+    .trim();
+  const addressLines = doc.splitTextToSize(cleanAddress, 70);
   doc.text(addressLines[0] ?? "", left + 28, rY);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Jurisdiction:", left + 105, rY);
+  doc.text("Locality / Area:", left + 105, rY);
   doc.setFont("helvetica", "normal");
-  doc.text(`${circle} • District ${district}`, left + 138, rY);
+  doc.text(unit.locality || "—", left + 138, rY);
+
+  // Row 5: Administrative Jurisdiction (Circle, Tehsil, District)
+  rY += 5.4;
+  doc.setFont("helvetica", "bold");
+  doc.text("Jurisdiction:", left + 4, rY);
+  doc.setFont("helvetica", "normal");
+  doc.text(`${circle} • Tehsil ${tehsil} • District ${district}`, left + 28, rY);
 
   curY += regBoxH + 3.5;
 
@@ -385,24 +399,19 @@ export async function generateUnitDossierPdf(
   const QR_SIZE = 20.0;
   doc.addImage(qrDataUrl, "PNG", left + 2, curY, QR_SIZE, QR_SIZE);
 
-  // Security Code Box below QR
+  // Verification PIN Box below QR (Number Only)
   const secBoxY = curY + QR_SIZE + 1.0;
   const secBoxW = QR_SIZE;
-  const secBoxH = 7.5;
+  const secBoxH = 6.2;
   doc.setFillColor(224, 242, 254);
   doc.setDrawColor(186, 230, 253);
   doc.setLineWidth(0.2);
   doc.roundedRect(left + 2, secBoxY, secBoxW, secBoxH, 0.6, 0.6, "FD");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(5.0);
-  doc.setTextColor(3, 105, 161);
-  doc.text("SECURITY CODE", left + 2 + secBoxW / 2, secBoxY + 2.5, { align: "center" });
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.2);
+  doc.setFontSize(9.0);
   doc.setTextColor(30, 58, 138);
-  doc.text(unit.pinNumber || "—", left + 2 + secBoxW / 2, secBoxY + 6.2, { align: "center" });
+  doc.text(unit.pinNumber || "—", left + 2 + secBoxW / 2, secBoxY + 4.3, { align: "center" });
 
   // Right: Assessing Authority Certification
   const sigX = left + contentWidth - 75;

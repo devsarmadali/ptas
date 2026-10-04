@@ -35,10 +35,11 @@ export async function generateStatutoryReceiptPdf(
   const paymentChannel = receipt.paymentChannel || "1Link OTC / e-Pay Punjab";
   const bankScrollRef = receipt.bankScrollRef || "SCR-0000";
   const amountPaidWords = receipt.amountPaidWords || "Rupees Only";
-  const qrPayload = receipt.qrPayload || JSON.stringify({ receiptNumber, amountPaidPkr, pin });
-  const receivingOfficerName = receipt.receivingOfficerName || "Muhammad Aslam";
+  const receivingOfficerName =
+    receipt.receivingOfficerName || options?.officer?.name || "Tax Inspector / Receiving Official";
   const receivingOfficerTitle = receipt.receivingOfficerTitle || "Tax Inspector / Scroll Officer";
   const officialSha256 = receipt.officialSha256 || "sha256-receipt-authenticated";
+  const qrPayload = receipt.qrPayload || `PTAS-RECEIPT:${receiptNumber}:${pin}:${amountPaidPkr}`;
 
   const doc = createBasePdf({
     orientation: "portrait",
@@ -58,7 +59,7 @@ export async function generateStatutoryReceiptPdf(
     statutoryRuleReference:
       "(Issued under Rule 10 of the Punjab Professions and Trades Tax Rules, 1977)",
     district: "Vehari",
-    circle: "Circle-Vehari",
+    circle: receipt.circle || options?.circle || "Vehari Circle I (City / Commercial)",
     financialYear: "2026-2027",
     isProvisional: options?.isProvisional
   });
@@ -243,7 +244,12 @@ export async function generateStatutoryReceiptPdf(
   doc.setFontSize(7);
   doc.setTextColor(...PDF_COLORS.textMuted);
   doc.text(receivingOfficerTitle, sigX + 30, curY + 24, { align: "center" });
-  doc.text("Circle-Vehari", sigX + 30, curY + 27.5, { align: "center" });
+  doc.text(
+    receipt.circle || options?.circle || "Vehari Circle I (City / Commercial)",
+    sigX + 30,
+    curY + 27.5,
+    { align: "center" }
+  );
 
   renderDocumentFooters(doc, {
     officialSha256,

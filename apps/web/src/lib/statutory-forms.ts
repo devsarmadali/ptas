@@ -9,10 +9,14 @@
 import {
   computeContentSha256,
   computeLedgerBalance,
+  computeDefaulterAging,
   generateDocumentPin,
+  type DefaulterAgingInfo,
+  type DefaulterAgingStatus,
+  type DemandLedgerEntry,
   type StatutoryRuleDefinition
 } from "@ptas/domain";
-export { computeLedgerBalance };
+export { computeLedgerBalance, computeDefaulterAging };
 import type { MockOfficer, StoredUnit } from "./pilot-store";
 
 export function getScheduleEntryLabel(rule: StatutoryRuleDefinition): string {
@@ -229,6 +233,8 @@ export interface FormPFT2CopyModel {
   readonly remainingBalance?: number | undefined;
   readonly headOfAccount: string;
   readonly district: string;
+  readonly tehsil?: string | undefined;
+  readonly locality?: string | undefined;
   readonly taxYear: string;
   readonly dueDate: string;
   readonly issueDate?: string | undefined;
@@ -238,6 +244,7 @@ export interface FormPFT2CopyModel {
     readonly provincialUin?: string | undefined;
     readonly classification: string;
     readonly subclassificationCode: string | null;
+    readonly subclassificationLabel?: string | null | undefined;
     readonly statutoryTertiaryCode?: string | null;
     readonly categoryName: string;
     readonly tertiarySlab: string | null;
@@ -264,6 +271,8 @@ export interface FormPFT2CopyModel {
     readonly demandNo: string;
     readonly circleNo: string;
     readonly circleName: string;
+    readonly tehsil?: string | undefined;
+    readonly locality?: string | undefined;
     readonly etoName: string;
     readonly etoTitle: string;
   };
@@ -449,6 +458,7 @@ export interface GenerateAppellateOrderInput {
   readonly reliefAmount: number;
   readonly revisedTaxAmount: number;
   readonly findingsAndReasoning: string;
+  readonly appellateAuthorityName?: string | undefined;
 }
 
 /**
@@ -683,6 +693,7 @@ export interface GenerateFormPFT2Options {
   readonly challanStatus?: string | undefined;
   readonly isTampered?: boolean | undefined;
   readonly tamperedAmount?: number | undefined;
+  readonly officer?: { readonly name?: string; readonly title?: string } | undefined;
 }
 
 /**
@@ -757,8 +768,18 @@ export function generateFormPFT2(
   const dueDate = opts.dueDate || "31/08/2026";
   const issueDate = opts.issueDate || "2026-07-01";
   const taxYear = "2026-2027";
-  const district = "Vehari";
-  const headOfAccount = "B01601 (Punjab Professional Tax - Provincial)";
+  const district = unit.districtName || "Vehari";
+  const circleName = unit.circleName || "Vehari Circle I (City / Commercial)";
+  const tehsil =
+    unit.locality?.toLowerCase().includes("burewala") ||
+    circleName.toLowerCase().includes("burewala")
+      ? "Burewala"
+      : unit.locality?.toLowerCase().includes("mailsi") ||
+          circleName.toLowerCase().includes("mailsi")
+        ? "Mailsi"
+        : "Vehari";
+  const locality = unit.locality || "";
+  const headOfAccount = "B01601 (Punjab Professional Tax)";
 
   const noticeNumber =
     opts.noticeNumber ||
@@ -774,6 +795,7 @@ export function generateFormPFT2(
   const pin = opts.pin || generateDocumentPin(noticeNumber || challanNumber);
 
   const subclassificationCode = unit.statutoryRule.subclassification_code;
+  const subclassificationLabel = unit.statutoryRule.subclassification_label ?? null;
   const statutoryTertiaryCode = unit.statutoryRule.statutory_tertiary_code;
   const categoryName = unit.statutoryRule.category;
   const tertiarySlab = unit.statutoryRule.statutory_tertiary_classification ?? null;
@@ -798,7 +820,8 @@ export function generateFormPFT2(
     "(Section 3 of Punjab Finance Act 1977 read with rule 9 of the Punjab Professions & Trades Tax Rules, 1977)",
     `Head of Account: ${headOfAccount}`,
     `Challan No: ${challanNumber} | Notice No: ${noticeNumber} | Security PIN: ${pin}`,
-    `District: ${district} | Tax Year: ${taxYear} | Due Date: ${dueDate}`,
+    `District: ${district} | Tehsil: ${tehsil} | Circle: ${circleName} | Locality: ${locality || "N/A"}`,
+    `Tax Year: ${taxYear} | Due Date: ${dueDate}`,
     `Form Type: ${formType} | Scope: ${demandScope} (${pft2TypeLabel}) (${paymentScope})${isPartial ? ` | Remaining Balance: PKR ${remainingBalance}` : ""}`,
     `Taxpayer: ${unit.legalName} | Trade Name: ${unit.tradeName ?? unit.legalName}`,
     `Identifier: ${unit.identifierType}: ${unit.identifierValue}`,
@@ -806,8 +829,8 @@ export function generateFormPFT2(
     `Classification: ${classificationFull}`,
     `Detail of Tax: Current Tax: Rs. ${scopeCurrentTax} | Arrears: Rs. ${scopeArrears} | Penalty: Rs. ${scopePenalty} | Total Payable: Rs. ${totalPayable}`,
     `Amount in Words: ${totalPayableWords}`,
-    `Assessment Information: Demand No: ${demandNo} | Circle: Circle-Vehari`,
-    "Assessing Authority: Tariq Mahmood, ETO Tehsil Vehari",
+    `Assessment Information: Demand No: ${demandNo} | Circle: ${circleName}`,
+    `Assessing Authority: ${opts?.officer?.name || "Excise & Taxation Officer (Assessing Authority)"}, Tehsil ${tehsil}`,
     "Authorized Treasury: National Bank of Pakistan (Main Branch Vehari) / State Bank of Pakistan / ePay Punjab"
   ].join("\n");
 
@@ -826,6 +849,8 @@ export function generateFormPFT2(
     remainingBalance,
     headOfAccount,
     district,
+    tehsil,
+    locality,
     taxYear,
     dueDate,
     issueDate,
@@ -835,6 +860,7 @@ export function generateFormPFT2(
       provincialUin: unit.provincialUin,
       classification: `${scheduleEntry} - ${categoryName}`,
       subclassificationCode,
+      subclassificationLabel,
       statutoryTertiaryCode,
       categoryName,
       tertiarySlab,
@@ -859,15 +885,17 @@ export function generateFormPFT2(
     },
     assessmentInfo: {
       demandNo,
-      circleNo: "Circle-01",
-      circleName: "Circle-Vehari",
-      etoName: "Tariq Mahmood",
-      etoTitle: "Excise & Taxation Officer, Vehari"
+      circleNo: unit.circleId || "CIR-VHR-01",
+      circleName,
+      tehsil,
+      locality,
+      etoName: opts?.officer?.name || "Excise & Taxation Officer (Assessing Authority)",
+      etoTitle: `Excise & Taxation Officer, Tehsil ${tehsil}`
     },
     bankUse: {
       challanSerial: challanNumber,
       bankName: "National Bank of Pakistan",
-      branchName: "Main Branch, Club Road, Vehari"
+      branchName: `Main Branch, Club Road, ${district}`
     }
   };
 
@@ -950,7 +978,7 @@ export function generateShowCausePenaltyNotice(
     `Assessed Tax Demand: PKR ${taxAmount} | Days Overdue: ${daysOverdue} days`,
     `Maximum Statutory Penalty Imposable: PKR ${maximumPenaltyExposable} (100% of assessed tax)`,
     `Hearing / Explanation Due Date: ${hearingDate} at 10:00 AM`,
-    "Authority: Tariq Mahmood, Excise & Taxation Officer / Assessing Authority, Tehsil Vehari"
+    "Authority: Excise & Taxation Officer / Assessing Authority, Tehsil Vehari"
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalNoticeText);
@@ -971,7 +999,7 @@ export function generateShowCausePenaltyNotice(
     originalTaxAmount: taxAmount,
     daysOverdue,
     maximumPenaltyExposable,
-    assessingAuthorityName: "Tariq Mahmood",
+    assessingAuthorityName: "Assessing Authority",
     assessingAuthorityTitle: "Excise & Taxation Officer / Assessing Authority, Tehsil Vehari",
     canonicalNoticeText,
     officialSha256,
@@ -1026,7 +1054,7 @@ export function generateLandRevenueRecoveryCertificate(
     `Penalty Arrears (Sec 3(4)): PKR ${penalty}`,
     `Total Arrears Recoverable: PKR ${totalArrearsRecoverable} (${totalArrearsWords})`,
     "Requisition: You are hereby requested to recover the said sum of arrears from the defaulter assessee as arrears of land revenue under Section 80 and Section 81 of the Punjab Land Revenue Act, 1967 (Act XVII of 1967) and credit the same under provincial Head of Account B01601.",
-    "Authority: Tariq Mahmood, Excise & Taxation Officer / Assessing Authority, Tehsil Vehari"
+    "Authority: Excise & Taxation Officer / Assessing Authority, Tehsil Vehari"
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalCertificateText);
@@ -1049,7 +1077,7 @@ export function generateLandRevenueRecoveryCertificate(
     totalArrearsRecoverable,
     totalArrearsWords,
     recoverySection: "Sections 80 & 81 of the Punjab Land Revenue Act 1967 (Act XVII of 1967)",
-    assessingAuthorityName: "Tariq Mahmood",
+    assessingAuthorityName: "Assessing Authority",
     assessingAuthorityTitle: "Excise & Taxation Officer / Assessing Authority, Vehari",
     canonicalCertificateText,
     officialSha256,
@@ -1117,6 +1145,87 @@ export function computeUnitFinancialSummary(unit: StoredUnit): UnitFinancialSumm
 
 export function computeUnitBalance(unit: StoredUnit): number {
   return computeUnitFinancialSummary(unit).outstandingBalance;
+}
+
+/**
+ * Computes statutory defaulter aging with automatic reconciliation between
+ * raw ledger entries and assessed unit liability.
+ * Prevents unpaid units with missing ledger demand rows from falsely showing as "PAID".
+ */
+export function computeUnitDefaulterAging(
+  unit: StoredUnit,
+  dueDateIso: string = "2026-08-31",
+  referenceDateIso?: string
+): DefaulterAgingInfo {
+  const fin = computeUnitFinancialSummary(unit);
+  const hasAssessmentDemand = unit.ledgerEntries.some((e) => e.entryType === "ASSESSMENT_DEMAND");
+  const fallbackDemand = hasAssessmentDemand ? 0 : fin.assessedCurrentTax + fin.arrears;
+
+  const entriesToEvaluate: DemandLedgerEntry[] = hasAssessmentDemand
+    ? [...unit.ledgerEntries]
+    : [
+        {
+          id: `synth-demand-${unit.id}`,
+          demandUnitId: unit.demandUnit?.permanentDemandNo ?? unit.id,
+          financialYearId: "FY-2026-2027",
+          entryType: "ASSESSMENT_DEMAND",
+          amount: fallbackDemand,
+          sourceType: "ASSESSMENT_DEMAND",
+          sourceId: unit.id,
+          idempotencyKey: `synth-${unit.id}`,
+          correlationId: `corr-${unit.id}`,
+          postedBy: "SYSTEM",
+          postedAt: `${dueDateIso}T00:00:00Z`,
+          metadata: {}
+        },
+        ...unit.ledgerEntries
+      ];
+
+  const aging = computeDefaulterAging(
+    entriesToEvaluate,
+    dueDateIso,
+    referenceDateIso,
+    Boolean(unit.isRecoveryCertified)
+  );
+
+  // Strict statutory verification: If outstanding balance is > 0, it can NEVER be classified as PAID!
+  if (fin.outstandingBalance > 0 && aging.status === "PAID") {
+    const refDate = referenceDateIso ? new Date(referenceDateIso) : new Date();
+    const dueDate = new Date(dueDateIso);
+    const diffTime = refDate.getTime() - dueDate.getTime();
+    const daysOverdue = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+
+    let status: DefaulterAgingStatus = "CURRENT";
+    if (unit.isRecoveryCertified) {
+      status = "RECOVERY_CERTIFIED";
+    } else if (fin.penalties > 0) {
+      status = "PENALIZED";
+    } else if (daysOverdue > 30) {
+      status = "PENALTY_ELIGIBLE";
+    } else if (daysOverdue > 0) {
+      status = "OVERDUE_30_DAYS";
+    }
+
+    return {
+      ...aging,
+      originalDemand: fin.assessedCurrentTax + fin.arrears,
+      penaltyDemand: fin.penalties,
+      totalPaid: fin.totalPaid,
+      remainingBalance: fin.outstandingBalance,
+      daysOverdue,
+      status
+    };
+  }
+
+  return {
+    ...aging,
+    originalDemand: hasAssessmentDemand
+      ? aging.originalDemand
+      : fin.assessedCurrentTax + fin.arrears,
+    penaltyDemand: Math.max(aging.penaltyDemand, fin.penalties),
+    totalPaid: fin.totalPaid,
+    remainingBalance: fin.outstandingBalance
+  };
 }
 
 /**
@@ -1218,7 +1327,7 @@ export function generateCircleDispatchRegister(
     "GOVERNMENT OF THE PUNJAB - EXCISE & TAXATION DEPARTMENT",
     "CIRCLE DISPATCH & NOTICE SERVICE REGISTER",
     "(Maintained under Rule 6 of Punjab Professions and Trades Tax Rules, 1977)",
-    `District: Vehari | Circle: Circle-Vehari | Financial Year: 2026-2027 | Dispatch Date: ${customDispatchDate}`,
+    `District: Vehari | Circle: Vehari Circle I (City / Commercial) | Financial Year: 2026-2027 | Dispatch Date: ${customDispatchDate}`,
     `Total Dispatched Notices: ${rows.length} | Gross Assessed Sum: PKR ${totalAssessedSum} | Total Served: ${totalServed} | Pending: ${totalPending}`,
     ...rows.map(
       (r) =>
@@ -1231,7 +1340,7 @@ export function generateCircleDispatchRegister(
   return {
     registerTitle: "Circle Notice Dispatch & Service Register (Rule 6)",
     registerTitleUrdu: "Circle Dispatch & Notice Service Register (Rule 6)",
-    circleName: "Circle-Vehari",
+    circleName: "Vehari Circle I (City / Commercial)",
     district: "Vehari",
     financialYear: "2026-2027",
     dispatchDate: customDispatchDate,
@@ -1303,7 +1412,7 @@ export function generateAppellateOrderDocument(
     `Undisputed Tax Deposited: PKR ${input.undisputedTaxDeposited}`,
     `Decision: ${input.decisionType} | Relief Granted: PKR ${input.reliefAmount} | Revised Demand: PKR ${input.revisedTaxAmount}`,
     `Judicial Reasoning & Findings: ${input.findingsAndReasoning}`,
-    "Appellate Authority: Shahid Nawaz, Director Excise & Taxation, Multan Division"
+    `Appellate Authority: ${input.appellateAuthorityName || "Director Excise & Taxation, Multan Division"}`
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalOrderText);
@@ -1335,7 +1444,8 @@ export function generateAppellateOrderDocument(
     revisedTaxAmount: input.revisedTaxAmount,
     findingsAndReasoning: input.findingsAndReasoning,
     operativeOrderUrdu: operativeUrdu,
-    appellateAuthorityName: "Shahid Nawaz",
+    appellateAuthorityName:
+      input.appellateAuthorityName || "Director Excise & Taxation / Appellate Authority",
     appellateAuthorityDesignation:
       "Director Excise & Taxation / Appellate Authority, Multan Division",
     canonicalOrderText,
@@ -1406,8 +1516,8 @@ export function generateTaxClearanceCertificate(
       district: "Vehari",
       districtName: "Vehari",
       tehsil: "Tehsil Vehari",
-      circle: "Circle-Vehari",
-      circleName: "Circle-Vehari",
+      circle: unit.circleName || "Vehari Circle I (City / Commercial)",
+      circleName: unit.circleName || "Vehari Circle I (City / Commercial)",
       assesseeLegalName: unit.legalName,
       assesseeTradeName: unit.tradeName,
       identifierType: unit.identifierType,
@@ -1422,7 +1532,7 @@ export function generateTaxClearanceCertificate(
       taxRatePkr: unit.statutoryRule.annual_rate_pkr,
       totalTaxPaid: 0,
       currentOutstandingBalance: currentBalance,
-      headOfAccount: "B01601 (Punjab Professional Tax - Provincial)",
+      headOfAccount: "B01601 (Punjab Professional Tax)",
       issuingOfficerName: issuingOfficer.name,
       issuingOfficerTitle: issuingOfficer.title,
       officialSha256: "",
@@ -1455,12 +1565,12 @@ export function generateTaxClearanceCertificate(
     `CNIC / Registration No: ${unit.identifierType}: ${unit.identifierValue}`,
     `Commercial Address: ${unit.address}`,
     `Second Schedule Classification: ${getScheduleEntryLabel(unit.statutoryRule)} (${unit.statutoryRule.category})`,
-    `Statutory Head of Account: B01601 (Punjab Professional Tax - Provincial)`,
+    `Statutory Head of Account: B01601 (Punjab Professional Tax)`,
     `Assessed Liability: PKR ${unit.statutoryRule.annual_rate_pkr}`,
     `Discharged Liability: PKR ${totalPaid}`,
     `Outstanding Arrears as of ${refDate}: NIL (PKR 0)`,
-    "Statutory Certification: This is to certify that the business establishment / professional named above has fully discharged all Professional Tax liabilities assessed under Section 3 of the Punjab Finance Act, 1977 for the Financial Year 2026-2027. There are no outstanding arrears or penalties standing against this assessee in Circle-Vehari as on the date of issue.",
-    `Issuing Assessing Authority: Tariq Mahmood, Excise & Taxation Officer, Vehari`
+    `Statutory Certification: This is to certify that the business establishment / professional named above has fully discharged all Professional Tax liabilities assessed under Section 3 of the Punjab Finance Act, 1977 for the Financial Year 2026-2027. There are no outstanding arrears or penalties standing against this assessee in ${unit.circleName || "Vehari Circle I (City / Commercial)"} as on the date of issue.`,
+    `Issuing Assessing Authority: Excise & Taxation Officer, Vehari`
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalCertificateText);
@@ -1477,8 +1587,8 @@ export function generateTaxClearanceCertificate(
     district: "Vehari",
     districtName: "Vehari",
     tehsil: "Tehsil Vehari",
-    circle: "Circle-Vehari",
-    circleName: "Circle-Vehari",
+    circle: unit.circleName || "Vehari Circle I (City / Commercial)",
+    circleName: unit.circleName || "Vehari Circle I (City / Commercial)",
     assesseeLegalName: unit.legalName,
     assesseeTradeName: unit.tradeName,
     identifierType: unit.identifierType,
@@ -1493,8 +1603,8 @@ export function generateTaxClearanceCertificate(
     taxRatePkr: unit.statutoryRule.annual_rate_pkr,
     totalTaxPaid: totalPaid,
     currentOutstandingBalance: 0,
-    headOfAccount: "B01601 (Punjab Professional Tax - Provincial)",
-    issuingOfficerName: "Tariq Mahmood",
+    headOfAccount: "B01601 (Punjab Professional Tax)",
+    issuingOfficerName: "Assessing Authority",
     issuingOfficerTitle: "Excise & Taxation Officer (Assessing Authority)",
     officialSha256,
     qrPayload,
@@ -1557,7 +1667,7 @@ export function generateDiscontinuanceOrder(
     `Inspector Inspection Findings: ${input.inspectorFindings}`,
     `Assessing Authority Decision: ${input.etoDecision}`,
     `Statutory Grounds: ${input.etoReason}`,
-    "Assessing Authority: Tariq Mahmood, Excise & Taxation Officer, Vehari"
+    "Assessing Authority: Excise & Taxation Officer, Vehari"
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalOrderText);
@@ -1582,8 +1692,8 @@ export function generateDiscontinuanceOrder(
     inspectorFindings: input.inspectorFindings,
     etoDecision: input.etoDecision,
     etoReason: input.etoReason,
-    issuingOfficerName: "Tariq Mahmood, Excise & Taxation Officer",
-    etoName: "Tariq Mahmood",
+    issuingOfficerName: "Excise & Taxation Officer",
+    etoName: "Assessing Authority",
     etoTitle: "Excise & Taxation Officer",
     canonicalOrderText,
     officialSha256,
@@ -1646,10 +1756,10 @@ export function generateRefundAdjustmentOrder(
     `Address: ${unit.address}`,
     `Adjustment Type: ${input.type}`,
     `Amount Authorized: PKR ${input.amount} (${amountWords})`,
-    `Head of Account: B01601 (Punjab Professional Tax - Provincial)`,
+    `Head of Account: B01601 (Punjab Professional Tax)`,
     `Stated Grounds: ${input.grounds}`,
     `Verified Evidence Reference: ${input.evidenceRef}`,
-    "Approving Authority: Tariq Mahmood, Excise & Taxation Officer / Assessing Authority, Vehari"
+    "Approving Authority: Excise & Taxation Officer / Assessing Authority, Vehari"
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalOrderText);
@@ -1677,8 +1787,8 @@ export function generateRefundAdjustmentOrder(
     grounds: input.grounds,
     evidenceRef: input.evidenceRef,
     headOfAccount: "B01601",
-    approvingOfficerName: "Tariq Mahmood, Excise & Taxation Officer",
-    etoName: "Tariq Mahmood",
+    approvingOfficerName: "Excise & Taxation Officer",
+    etoName: "Assessing Authority",
     etoTitle: "Excise & Taxation Officer",
     canonicalOrderText,
     officialSha256,

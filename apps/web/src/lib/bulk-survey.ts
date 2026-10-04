@@ -614,7 +614,7 @@ export function convertValidSurveyUnitsToStoredUnits(
     target: `Batch Survey Import (${validUnits.length} Units)`,
     timestamp: baseTimestamp,
     correlationId: auditCorrelationId,
-    details: `Imported ${validUnits.length} survey units in Feeded / Draft status for Circle-Vehari. Total surveyed demand: PKR ${totalAssessedDemand.toLocaleString()}`
+    details: `Imported ${validUnits.length} survey units in Feeded / Draft status for ${officer.jurisdictionName || "Vehari Circle I (City / Commercial)"}. Total surveyed demand: PKR ${totalAssessedDemand.toLocaleString()}`
   };
 
   return {

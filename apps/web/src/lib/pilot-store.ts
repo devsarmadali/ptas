@@ -217,18 +217,18 @@ export const ADMIN_OFFICER: MockOfficer = {
 export const MOCK_OFFICERS: readonly [MockOfficer, MockOfficer, MockOfficer, MockOfficer] = [
   {
     id: "officer-inspector-aslam",
-    name: "Muhammad Aslam",
+    name: "Tax Inspector (Vehari Circle I)",
     email: "inspector.vehari@punjab.gov.pk",
     role: "INSPECTOR",
     title: "Tax Inspector",
     jurisdictionId: CIRCLE_VEHARI_ID,
-    jurisdictionName: "Circle-Vehari",
+    jurisdictionName: "Vehari Circle I (City / Commercial)",
     jurisdictionTier: "CIRCLE",
     badgeText: "Inspector (Maker / Survey / Payments)"
   },
   {
     id: "officer-eto-mahmood",
-    name: "Tariq Mahmood",
+    name: "Excise & Taxation Officer (Vehari)",
     email: "eto.vehari@punjab.gov.pk",
     role: "ETO",
     title: "Excise & Taxation Officer (Assessing Authority)",
@@ -239,7 +239,7 @@ export const MOCK_OFFICERS: readonly [MockOfficer, MockOfficer, MockOfficer, Moc
   },
   {
     id: "officer-director-nawaz",
-    name: "Shahid Nawaz",
+    name: "Director Excise & Taxation (Multan Division)",
     email: "director.multan@punjab.gov.pk",
     role: "DIRECTOR",
     title: "Director",
@@ -954,6 +954,8 @@ export function createInitialPilotUnits(): StoredUnit[] {
       identifierValue: "NTN-7412983-1",
       address: "Factory Area, Khanewal Road, Vehari",
       circleId: CIRCLE_VEHARI_ID,
+      circleName: "Vehari Circle I (City / Commercial)",
+      districtName: "Vehari",
       categoryCode: "1",
       subclassificationCode: rule1.subclassification_code,
       statutoryTertiaryCode: rule1.statutory_tertiary_code,
@@ -972,7 +974,7 @@ export function createInitialPilotUnits(): StoredUnit[] {
       ledgerEntries: [entryDemand1, entryPay1],
       serviceStatus: "SERVED",
       servedAt: "2026-07-03",
-      servedBy: "Muhammad Aslam, Tax Inspector",
+      servedBy: "Tax Inspector, Vehari Circle I",
       recipientName: "Tariq Aziz, Director",
       createdAt: "2026-07-01T09:00:00.000Z"
     },
@@ -988,6 +990,8 @@ export function createInitialPilotUnits(): StoredUnit[] {
       identifierValue: "36601-2948192-3",
       address: "Grain Market, Club Road, Vehari",
       circleId: CIRCLE_VEHARI_ID,
+      circleName: "Vehari Circle I (City / Commercial)",
+      districtName: "Vehari",
       categoryCode: "6",
       subclassificationCode: rule6x.subclassification_code,
       statutoryTertiaryCode: rule6x.statutory_tertiary_code,
@@ -1006,7 +1010,7 @@ export function createInitialPilotUnits(): StoredUnit[] {
       ledgerEntries: [entryDemand2],
       serviceStatus: "SERVED",
       servedAt: "2026-07-04",
-      servedBy: "Muhammad Aslam, Tax Inspector",
+      servedBy: "Tax Inspector, Vehari Circle I",
       recipientName: "Muhammad Akram, Proprietor",
       createdAt: "2026-07-02T10:00:00.000Z"
     },
@@ -1022,6 +1026,8 @@ export function createInitialPilotUnits(): StoredUnit[] {
       identifierValue: "36601-8192847-1",
       address: "Karkhana Bazar, Vehari",
       circleId: CIRCLE_VEHARI_ID,
+      circleName: "Vehari Circle I (City / Commercial)",
+      districtName: "Vehari",
       categoryCode: "3",
       subclassificationCode: rule3ib.subclassification_code,
       statutoryTertiaryCode: rule3ib.statutory_tertiary_code,
@@ -1053,6 +1059,8 @@ export function createInitialPilotUnits(): StoredUnit[] {
       identifierValue: "36601-4710293-7",
       address: "Luddan Road, Near DPO Chowk, Vehari",
       circleId: CIRCLE_VEHARI_ID,
+      circleName: "Vehari Circle I (City / Commercial)",
+      districtName: "Vehari",
       categoryCode: "10",
       subclassificationCode: null,
       statutoryTertiaryCode: null,
@@ -1074,7 +1082,7 @@ export function createInitialPilotUnits(): StoredUnit[] {
       ledgerEntries: [entryDemand4],
       serviceStatus: "SERVED",
       servedAt: "2026-07-14",
-      servedBy: "Muhammad Aslam, Tax Inspector",
+      servedBy: "Tax Inspector, Vehari Circle I",
       recipientName: "Chaudhry Riaz, Owner",
       createdAt: "2026-07-12T14:00:00.000Z"
     }
@@ -1086,7 +1094,7 @@ export function createInitialAuditLogs(): PilotAuditItem[] {
     {
       id: "audit-01",
       eventType: "TAX_UNIT_REGISTERED",
-      actorName: "Muhammad Aslam",
+      actorName: "Tax Inspector (Vehari Circle I)",
       actorRole: "INSPECTOR",
       target: "Vehari Cotton Ginners (Pvt.) Ltd.",
       timestamp: "2026-07-01T09:00:00.000Z",
@@ -1096,7 +1104,7 @@ export function createInitialAuditLogs(): PilotAuditItem[] {
     {
       id: "audit-02",
       eventType: "ASSESSMENT_APPROVED",
-      actorName: "Tariq Mahmood",
+      actorName: "Excise & Taxation Officer (Vehari)",
       actorRole: "ETO",
       target: "Vehari Cotton Ginners (Pvt.) Ltd.",
       timestamp: "2026-07-01T11:30:00.000Z",
@@ -1117,7 +1125,7 @@ export function createInitialAuditLogs(): PilotAuditItem[] {
     {
       id: "audit-04",
       eventType: "TAX_UNIT_REGISTERED",
-      actorName: "Muhammad Aslam",
+      actorName: "Tax Inspector (Vehari Circle I)",
       actorRole: "INSPECTOR",
       target: "Al-Madina Commercial Center",
       timestamp: "2026-07-10T11:00:00.000Z",
@@ -1143,17 +1151,26 @@ export function createInitialReconciliations(): EpayReconciliationRecord[] {
   ];
 }
 
-export function createInitialAppeals(): AppealRecord[] {
+export function createInitialAppeals(units?: StoredUnit[]): AppealRecord[] {
+  const targetUnit = units?.[1] ?? units?.[0];
+  const unitId = targetUnit?.id ?? "unit-kisan-pesticides-02";
+  const appellantName = targetUnit?.legalName ?? "Muhammad Akram";
+  const appellantTradeName = targetUnit?.tradeName ?? "Kisan Pesticides & Fertilizer Agency";
+  const appellantCnic = targetUnit?.identifierValue ?? "36601-2948192-3";
+  const businessName =
+    targetUnit?.tradeName ?? targetUnit?.legalName ?? "Kisan Pesticides & Fertilizer Agency";
+  const businessAddress = targetUnit?.address ?? "Grain Market, Club Road, Vehari";
+
   return [
     {
       id: "appeal-01",
       appealNumber: formatStandardDocNumber({ docCode: "APP", sequence: "00001" }),
-      unitId: "unit-kisan-pesticides-02",
-      appellantName: "Muhammad Akram",
-      appellantTradeName: "Kisan Pesticides & Fertilizer Agency",
-      appellantCnic: "36601-2948192-3",
-      businessName: "Kisan Pesticides & Fertilizer Agency",
-      businessAddress: "Grain Market, Club Road, Vehari",
+      unitId,
+      appellantName,
+      appellantTradeName,
+      appellantCnic,
+      businessName,
+      businessAddress,
       filingDate: "2026-07-20",
       limitationDays: 16,
       isWithinLimitation: true,
@@ -1169,15 +1186,21 @@ export function createInitialAppeals(): AppealRecord[] {
   ];
 }
 
-export function createInitialDiscontinuances(): DiscontinuanceRecord[] {
+export function createInitialDiscontinuances(units?: StoredUnit[]): DiscontinuanceRecord[] {
+  const targetUnit = units?.[2] ?? units?.[0];
+  const unitId = targetUnit?.id ?? "unit-almadina-center-03";
+  const assesseeLegalName = targetUnit?.legalName ?? "Muhammad Siddique";
+  const assesseeTradeName = targetUnit?.tradeName ?? "Al-Madina Commercial Center";
+  const cnicOrNtn = targetUnit?.identifierValue ?? "36601-3829104-5";
+
   return [
     {
       id: "disc-01",
       noticeNumber: formatStandardDocNumber({ docCode: "DSC", sequence: "00001" }),
-      unitId: "unit-almadina-center-03",
-      assesseeLegalName: "Muhammad Siddique",
-      assesseeTradeName: "Al-Madina Commercial Center",
-      cnicOrNtn: "36601-3829104-5",
+      unitId,
+      assesseeLegalName,
+      assesseeTradeName,
+      cnicOrNtn,
       discontinuanceDate: "2026-07-31",
       reason:
         "Surrendered commercial shop lease agreement due to liquidation and relocation of stock.",
@@ -1187,22 +1210,28 @@ export function createInitialDiscontinuances(): DiscontinuanceRecord[] {
       filedAt: "2026-08-05T10:00:00.000Z",
       filedBy: "officer-inspector-aslam",
       inspectorReport:
-        "Physical inspection conducted on 2026-08-12 by Inspector Muhammad Aslam. Shop premises at Karkhana Bazar verified completely vacated. Shutter locked with 'To-Let' banner displayed. No commercial business active.",
+        "Physical inspection conducted on 2026-08-12 by Tax Inspector (Vehari Circle I). Shop premises at Karkhana Bazar verified completely vacated. Shutter locked with 'To-Let' banner displayed. No commercial business active.",
       inspectedAt: "2026-08-12T11:30:00.000Z",
       inspectedBy: "officer-inspector-aslam"
     }
   ];
 }
 
-export function createInitialRefundAdjustments(): RefundAdjustmentRecord[] {
+export function createInitialRefundAdjustments(units?: StoredUnit[]): RefundAdjustmentRecord[] {
+  const targetUnit = units?.[0];
+  const unitId = targetUnit?.id ?? "unit-vehari-cotton-01";
+  const assesseeLegalName = targetUnit?.legalName ?? "Vehari Cotton Ginners (Pvt.) Ltd.";
+  const assesseeTradeName = targetUnit?.tradeName ?? "Vehari Ginning & Pressing Mills";
+  const cnicOrNtn = targetUnit?.identifierValue ?? "NTN-7412983-1";
+
   return [
     {
       id: "ref-01",
       applicationNumber: formatStandardDocNumber({ docCode: "RFD", sequence: "00001" }),
-      unitId: "unit-vehari-cotton-01",
-      assesseeLegalName: "Vehari Cotton Ginners (Pvt.) Ltd.",
-      assesseeTradeName: "Vehari Ginning & Pressing Mills",
-      cnicOrNtn: "NTN-7412983-1",
+      unitId,
+      assesseeLegalName,
+      assesseeTradeName,
+      cnicOrNtn,
       type: "CREDIT_ADJUSTMENT",
       amount: 2000,
       originalPaymentAmount: 12000,
@@ -1225,24 +1254,34 @@ export function createInitialRefundAdjustments(): RefundAdjustmentRecord[] {
   ];
 }
 
-export function createInitialClearanceCertificates(): ClearanceCertificateRecord[] {
+export function createInitialClearanceCertificates(
+  units?: StoredUnit[]
+): ClearanceCertificateRecord[] {
   const certificateNumber = formatStandardDocNumber({ docCode: "PFT5", sequence: "00001" });
+  const targetUnit = units?.[0];
+  const unitId = targetUnit?.id ?? "unit-vehari-cotton-01";
+  const assesseeLegalName = targetUnit?.legalName ?? "Vehari Cotton Ginners (Pvt.) Ltd.";
+  const assesseeTradeName = targetUnit?.tradeName ?? "Vehari Ginning & Pressing Mills";
+  const cnicOrNtn = targetUnit?.identifierValue ?? "NTN-7412983-1";
+  const categoryName =
+    targetUnit?.statutoryRule?.category ?? "Companies (Paid-up capital up to Rs 5 million)";
+
   return [
     {
       id: "cert-01",
       certificateNumber,
       pin: generateDocumentPin(certificateNumber),
-      unitId: "unit-vehari-cotton-01",
-      assesseeLegalName: "Vehari Cotton Ginners (Pvt.) Ltd.",
-      assesseeTradeName: "Vehari Ginning & Pressing Mills",
-      cnicOrNtn: "NTN-7412983-1",
-      categoryName: "Companies (Paid-up capital up to Rs 5 million)",
+      unitId,
+      assesseeLegalName,
+      assesseeTradeName,
+      cnicOrNtn,
+      categoryName,
       scheduleEntry: "1(i)",
       financialYear: FINANCIAL_YEAR_2026_27,
       issueDate: "2026-07-20",
       validUntil: "2027-06-30",
       issuedByOfficerId: "officer-eto-mahmood",
-      issuedByOfficerName: "Tariq Mahmood",
+      issuedByOfficerName: "Excise & Taxation Officer (Vehari)",
       issuedByOfficerTitle: "Excise & Taxation Officer (Assessing Authority)",
       officialSha256: "3f9c6d48293e502bc14a7e91d5f2a1b384c2e6f7d0a9b8c7e6f5d4a3b2c1e0f9",
       qrPayload:
@@ -1306,7 +1345,7 @@ export function createInitialPft2Challans(units: StoredUnit[]): Pft2ChallanRecor
       status: isPaid ? "RECEIVED" : "ISSUED",
       receiptNumber,
       receivedAt: isPaid ? "2026-07-15" : undefined,
-      receivedBy: isPaid ? "Muhammad Aslam (Tax Inspector)" : undefined,
+      receivedBy: isPaid ? "Tax Inspector (Vehari Circle I)" : undefined,
       bankScrollRef: isPaid ? "ePay-PUNJAB-TXN-994182" : undefined,
       paymentChannel: isPaid ? "ePay Punjab (Digital Bank Transfer)" : undefined,
       officialSha256: `sha256-pft2-${serial}-${amountPayable}`,
@@ -1345,7 +1384,7 @@ export function createInitialPft2Challans(units: StoredUnit[]): Pft2ChallanRecor
     status: "CANCELLED",
     cancelledReason: "Superseded by revised assessment under Rule 12 (employment re-verified)",
     cancelledAt: "2026-07-28",
-    cancelledBy: "Tariq Mahmood (ETO)",
+    cancelledBy: "Excise & Taxation Officer (ETO)",
     officialSha256: "sha256-pft2-cancelled-00099",
     qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-2&ref=${cancelledNumber}&pdn=0099&amt=4000&pin=${cancelledPin}`
   });
@@ -1383,8 +1422,8 @@ export function createInitialStatutoryReceipts(units: StoredUnit[]): StatutoryRe
       paymentChannel: "ePay Punjab (Digital Bank Transfer)",
       bankBranch: "State Bank / 1Link Portal",
       bankScrollRef: "ePay-PUNJAB-TXN-994182",
-      receivingOfficerName: "Muhammad Aslam",
-      receivingOfficerTitle: "Tax Inspector, Circle-Vehari",
+      receivingOfficerName: "Tax Inspector",
+      receivingOfficerTitle: "Tax Inspector, Vehari Circle I (City / Commercial)",
       officialSha256: "8e3c1a9f02b4d6e8a1c3e5f7b9d2a4c6e8f0a2b4c6d8e0f2a4b6c8e0d2f4a6b8",
       qrPayload:
         "https://ptas.punjab.gov.pk/verify?type=PFT-REC&ref=PFT-REC-2026-0001&pdn=0001&amt=10000&sha=8e3c1a9f",
@@ -1399,7 +1438,7 @@ export function createInitialUserAccounts(): UserAccount[] {
   return [
     {
       id: "usr-eto-01",
-      name: "Tariq Mahmood",
+      name: "Excise & Taxation Officer (Vehari)",
       email: "eto.vehari@punjab.gov.pk",
       role: "ETO",
       title: "Excise & Taxation Officer (Assessing Authority)",
@@ -1408,13 +1447,13 @@ export function createInitialUserAccounts(): UserAccount[] {
       officeId: TEHSIL_VEHARI_ID,
       officeName: "Tehsil Vehari",
       assignedCircleId: CIRCLE_VEHARI_ID,
-      assignedCircleName: "Circle-Vehari",
+      assignedCircleName: "Vehari Circle I (City / Commercial)",
       status: "ACTIVE",
       mobileNumber: "0300-1234567"
     },
     {
       id: "usr-insp-01",
-      name: "Muhammad Aslam",
+      name: "Tax Inspector (Vehari Circle I)",
       email: "inspector.vehari@punjab.gov.pk",
       role: "INSPECTOR",
       title: "Tax Inspector",
@@ -1423,13 +1462,58 @@ export function createInitialUserAccounts(): UserAccount[] {
       officeId: TEHSIL_VEHARI_ID,
       officeName: "Tehsil Vehari",
       assignedCircleId: CIRCLE_VEHARI_ID,
-      assignedCircleName: "Circle-Vehari",
+      assignedCircleName: "Vehari Circle I (City / Commercial)",
       status: "ACTIVE",
       mobileNumber: "0301-9876543"
     },
     {
+      id: "usr-insp-02",
+      name: "Inspector Vehari Circle II",
+      email: "inspector.vehari2@punjab.gov.pk",
+      role: "INSPECTOR",
+      title: "Tax Inspector (Grain Market / Rural)",
+      districtId: VEHARI_DISTRICT_ID,
+      districtName: "Vehari",
+      officeId: TEHSIL_VEHARI_ID,
+      officeName: "Tehsil Vehari",
+      assignedCircleId: CIRCLE_VEHARI_2_ID,
+      assignedCircleName: "Vehari Circle II (Grain Market / Rural)",
+      status: "ACTIVE",
+      mobileNumber: "0303-1122334"
+    },
+    {
+      id: "usr-insp-03",
+      name: "Inspector Burewala Circle",
+      email: "inspector.burewala@punjab.gov.pk",
+      role: "INSPECTOR",
+      title: "Tax Inspector (Burewala)",
+      districtId: VEHARI_DISTRICT_ID,
+      districtName: "Vehari",
+      officeId: TEHSIL_VEHARI_ID,
+      officeName: "Tehsil Burewala",
+      assignedCircleId: CIRCLE_BUREWALA_ID,
+      assignedCircleName: "Burewala Circle",
+      status: "ACTIVE",
+      mobileNumber: "0304-5566778"
+    },
+    {
+      id: "usr-insp-04",
+      name: "Inspector Mailsi Circle",
+      email: "inspector.mailsi@punjab.gov.pk",
+      role: "INSPECTOR",
+      title: "Tax Inspector (Mailsi)",
+      districtId: VEHARI_DISTRICT_ID,
+      districtName: "Vehari",
+      officeId: TEHSIL_VEHARI_ID,
+      officeName: "Tehsil Mailsi",
+      assignedCircleId: CIRCLE_MAILSI_ID,
+      assignedCircleName: "Mailsi Circle",
+      status: "ACTIVE",
+      mobileNumber: "0305-9988776"
+    },
+    {
       id: "usr-dir-01",
-      name: "Shahid Nawaz",
+      name: "Director Excise & Taxation (Multan Division)",
       email: "director.multan@punjab.gov.pk",
       role: "DIRECTOR",
       title: "Director Excise & Taxation",
@@ -1438,7 +1522,7 @@ export function createInitialUserAccounts(): UserAccount[] {
       officeId: TEHSIL_VEHARI_ID,
       officeName: "Division Multan",
       assignedCircleId: CIRCLE_VEHARI_ID,
-      assignedCircleName: "All Circles (Division)",
+      assignedCircleName: "All Circles (Division Multan)",
       status: "ACTIVE",
       mobileNumber: "0302-5551234"
     }
@@ -1449,27 +1533,183 @@ export function createInitialUserAuditLogs(): UserManagementAuditRecord[] {
   return [
     {
       id: "usr-audit-01",
-      performedBy: "Shahid Nawaz",
+      performedBy: "Director Excise & Taxation",
       performedByRole: "DIRECTOR",
       targetUserId: "usr-eto-01",
-      targetUserName: "Tariq Mahmood",
+      targetUserName: "Excise & Taxation Officer",
       actionType: "CIRCLE_REASSIGNED",
       oldValue: "Unassigned",
-      newValue: "Circle-Vehari (Tehsil Vehari)",
+      newValue: "Vehari Circle I (City / Commercial)",
       timestamp: "2026-07-01 09:00:00+05:00"
     },
     {
       id: "usr-audit-02",
-      performedBy: "Tariq Mahmood",
+      performedBy: "Excise & Taxation Officer",
       performedByRole: "ETO",
       targetUserId: "usr-insp-01",
-      targetUserName: "Muhammad Aslam",
+      targetUserName: "Tax Inspector",
       actionType: "CIRCLE_REASSIGNED",
-      oldValue: "Circle-2",
-      newValue: "Circle-Vehari",
+      oldValue: "Vehari Circle II (Grain Market / Rural)",
+      newValue: "Vehari Circle I (City / Commercial)",
       timestamp: "2026-07-01 10:15:00+05:00"
     }
   ];
+}
+
+const USER_ACCOUNTS_STORAGE_KEY = "ptas_user_management_accounts_v1";
+const USER_AUDIT_LOGS_STORAGE_KEY = "ptas_user_management_audit_logs_v1";
+
+export function loadPersistedUserAccounts(): UserAccount[] {
+  if (typeof window === "undefined") return createInitialUserAccounts();
+  try {
+    const raw = localStorage.getItem(USER_ACCOUNTS_STORAGE_KEY);
+    if (!raw) return createInitialUserAccounts();
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : createInitialUserAccounts();
+  } catch {
+    return createInitialUserAccounts();
+  }
+}
+
+export function savePersistedUserAccounts(accounts: UserAccount[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(USER_ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function loadPersistedUserAuditLogs(): UserManagementAuditRecord[] {
+  if (typeof window === "undefined") return createInitialUserAuditLogs();
+  try {
+    const raw = localStorage.getItem(USER_AUDIT_LOGS_STORAGE_KEY);
+    if (!raw) return createInitialUserAuditLogs();
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : createInitialUserAuditLogs();
+  } catch {
+    return createInitialUserAuditLogs();
+  }
+}
+
+export function savePersistedUserAuditLogs(logs: UserManagementAuditRecord[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(USER_AUDIT_LOGS_STORAGE_KEY, JSON.stringify(logs));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export const APPEALS_STORAGE_KEY = "ptas_enforcement_appeals_v1";
+export const DISCONTINUANCES_STORAGE_KEY = "ptas_enforcement_discontinuances_v1";
+export const REFUNDS_STORAGE_KEY = "ptas_enforcement_refunds_v1";
+export const CLEARANCE_STORAGE_KEY = "ptas_enforcement_clearance_v1";
+
+export function loadPersistedAppeals(units?: StoredUnit[]): AppealRecord[] {
+  if (typeof window === "undefined") return createInitialAppeals(units);
+  try {
+    const raw = localStorage.getItem(APPEALS_STORAGE_KEY);
+    if (!raw) return createInitialAppeals(units);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : createInitialAppeals(units);
+  } catch {
+    return createInitialAppeals(units);
+  }
+}
+
+export function savePersistedAppeals(appeals: AppealRecord[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(APPEALS_STORAGE_KEY, JSON.stringify(appeals));
+  } catch {
+    // Storage quota exceeded or disabled in private browsing
+  }
+}
+
+export function loadPersistedDiscontinuances(units?: StoredUnit[]): DiscontinuanceRecord[] {
+  if (typeof window === "undefined") return createInitialDiscontinuances(units);
+  try {
+    const raw = localStorage.getItem(DISCONTINUANCES_STORAGE_KEY);
+    if (!raw) return createInitialDiscontinuances(units);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0
+      ? parsed
+      : createInitialDiscontinuances(units);
+  } catch {
+    return createInitialDiscontinuances(units);
+  }
+}
+
+export function savePersistedDiscontinuances(disc: DiscontinuanceRecord[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(DISCONTINUANCES_STORAGE_KEY, JSON.stringify(disc));
+  } catch {
+    // Storage quota exceeded or disabled in private browsing
+  }
+}
+
+export function loadPersistedRefundAdjustments(units?: StoredUnit[]): RefundAdjustmentRecord[] {
+  if (typeof window === "undefined") return createInitialRefundAdjustments(units);
+  try {
+    const raw = localStorage.getItem(REFUNDS_STORAGE_KEY);
+    if (!raw) return createInitialRefundAdjustments(units);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0
+      ? parsed
+      : createInitialRefundAdjustments(units);
+  } catch {
+    return createInitialRefundAdjustments(units);
+  }
+}
+
+export function savePersistedRefundAdjustments(refunds: RefundAdjustmentRecord[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(REFUNDS_STORAGE_KEY, JSON.stringify(refunds));
+  } catch {
+    // Storage quota exceeded or disabled in private browsing
+  }
+}
+
+export function loadPersistedClearanceCertificates(
+  units?: StoredUnit[]
+): ClearanceCertificateRecord[] {
+  if (typeof window === "undefined") return createInitialClearanceCertificates(units);
+  try {
+    const raw = localStorage.getItem(CLEARANCE_STORAGE_KEY);
+    if (!raw) return createInitialClearanceCertificates(units);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0
+      ? parsed
+      : createInitialClearanceCertificates(units);
+  } catch {
+    return createInitialClearanceCertificates(units);
+  }
+}
+
+export function savePersistedClearanceCertificates(certs: ClearanceCertificateRecord[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(CLEARANCE_STORAGE_KEY, JSON.stringify(certs));
+  } catch {
+    // Storage quota exceeded or disabled in private browsing
+  }
+}
+
+export function ensureEnforcementRecordsForUnits(units: StoredUnit[]): {
+  appeals: AppealRecord[];
+  discontinuances: DiscontinuanceRecord[];
+  refunds: RefundAdjustmentRecord[];
+  clearanceCerts: ClearanceCertificateRecord[];
+} {
+  const appeals = loadPersistedAppeals(units);
+  const discontinuances = loadPersistedDiscontinuances(units);
+  const refunds = loadPersistedRefundAdjustments(units);
+  const clearanceCerts = loadPersistedClearanceCertificates(units);
+
+  return { appeals, discontinuances, refunds, clearanceCerts };
 }
 
 export function loadPilotState(): PilotState {

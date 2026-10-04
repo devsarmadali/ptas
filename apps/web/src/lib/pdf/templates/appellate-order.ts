@@ -37,11 +37,14 @@ export async function generateAppellateOrderPdf(
   const originalTaxAmount = order.originalTaxAmount ?? 4000;
   const revisedTaxAmount = order.revisedTaxAmount ?? originalTaxAmount;
   const reliefAmount = order.reliefAmount ?? Math.max(0, originalTaxAmount - revisedTaxAmount);
-  const decisionType = order.decisionType || (reliefAmount > 0 ? "REDUCE" : "CONFIRM");
-  const appellateAuthorityName = order.appellateAuthorityName || "Shahid Nawaz";
+  const appellateAuthorityName =
+    order.appellateAuthorityName ||
+    options?.officer?.name ||
+    "Director Excise & Taxation / Appellate Authority";
   const appellateAuthorityDesignation =
     order.appellateAuthorityDesignation ||
     "Director Excise & Taxation / Appellate Authority, Multan Division";
+  const decisionType = order.decisionType || "CONFIRMED";
   const qrPayload =
     order.qrPayload || JSON.stringify({ appealNumber, orderNumber, decisionType, reliefAmount });
   const officialSha256 = order.officialSha256 || "sha256-appellate-authenticated";

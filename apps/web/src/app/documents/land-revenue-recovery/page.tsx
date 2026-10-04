@@ -115,7 +115,8 @@ function LandRevenueRecoveryContent() {
               Certificate of Recovery as Arrears of Land Revenue
             </span>
             <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
-              Rule 12 &bull; Sections 80 &amp; 81 Punjab Land Revenue Act 1967 &bull; Circle-Vehari
+              Rule 12 &bull; Sections 80 &amp; 81 Punjab Land Revenue Act 1967 &bull; Vehari Circle
+              I (City / Commercial)
             </span>
           </div>
         </div>
@@ -210,7 +211,7 @@ function LandRevenueRecoveryContent() {
         >
           <span>🔒 {unit.legalName}</span>
           <span style={{ color: "#64748b" }}>•</span>
-          <span>PIN: {unit.provincialUin}</span>
+          <span>UIN: {unit.provincialUin}</span>
           <span style={{ color: "#64748b" }}>•</span>
           <span>PDN: {unit.demandUnit.permanentDemandNo}</span>
           <span style={{ color: "#64748b" }}>•</span>
@@ -430,7 +431,8 @@ function LandRevenueRecoveryContent() {
               <strong>Designated Account Head:</strong> B01601 &bull; Direct Provincial Revenue
             </div>
             <div>
-              <strong>Recovery Jurisdiction:</strong> Circle-Vehari, Multan Division
+              <strong>Recovery Jurisdiction:</strong> Vehari Circle I (City / Commercial), Multan
+              Division
             </div>
           </div>
           <div style={{ textAlign: "center" }}>
@@ -441,7 +443,7 @@ function LandRevenueRecoveryContent() {
               {certData.assessingAuthorityTitle}
             </div>
             <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
-              Assessing Authority &bull; Circle-Vehari
+              Assessing Authority &bull; Vehari Circle I (City / Commercial)
             </div>
           </div>
         </div>

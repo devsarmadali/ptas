@@ -70,7 +70,8 @@ import {
   formatStandardDocNumber,
   numberToWordsPkr,
   computeUnitBalance,
-  computeUnitFinancialSummary
+  computeUnitFinancialSummary,
+  computeUnitDefaulterAging
 } from "../lib/statutory-forms";
 import {
   type BulkSurveyParseResult,
@@ -1014,12 +1015,7 @@ export default function HomePage({
     let totalPenaltiesImposed = 0;
 
     for (const u of units) {
-      const aging = computeDefaulterAging(
-        u.ledgerEntries,
-        "2026-08-31",
-        undefined,
-        u.isRecoveryCertified
-      );
+      const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
       if (aging.status === "OVERDUE_30_DAYS") defaultersOverdue++;
       if (aging.status === "PENALTY_ELIGIBLE") defaultersPenaltyEligible++;
       if (aging.status === "PENALIZED") defaultersPenalized++;
@@ -1191,7 +1187,7 @@ export default function HomePage({
     setSelectedUnitId(unitId);
     showToast(
       "success",
-      `Unit '${newUnit.legalName}' successfully registered under Class ${rule.rule_code} (PIN: ${provincialUin}, PKR ${rule.annual_rate_pkr})`
+      `Unit '${newUnit.legalName}' successfully registered under Class ${rule.rule_code} (UIN: ${provincialUin}, PKR ${rule.annual_rate_pkr})`
     );
   };
 
@@ -1654,13 +1650,9 @@ export default function HomePage({
   // Defaulter Units Filter
   const defaulterUnits = useMemo(() => {
     return units.filter((u) => {
-      const aging = computeDefaulterAging(
-        u.ledgerEntries,
-        "2026-08-31",
-        undefined,
-        u.isRecoveryCertified
-      );
-      if (defaulterFilter === "ALL") return aging.remainingBalance > 0;
+      const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
+      if (defaulterFilter === "ALL")
+        return aging.remainingBalance > 0 && aging.status !== "PAID" && aging.status !== "CURRENT";
       return aging.status === defaulterFilter;
     });
   }, [units, defaulterFilter]);
@@ -1791,7 +1783,7 @@ export default function HomePage({
         const defaulterUnits = units.filter((u) => computeUnitBalance(u) > 0);
         const rows = defaulterUnits.map((u, i) => {
           const balance = computeUnitBalance(u);
-          const aging = computeDefaulterAging(u.ledgerEntries, "2026-09-01");
+          const aging = computeUnitDefaulterAging(u, "2026-09-01");
           return [
             i + 1,
             u.demandUnit?.permanentDemandNo || u.assessmentNumber,
@@ -1822,22 +1814,7 @@ export default function HomePage({
               { header: "Total Due", width: 30, align: "right" as const },
               { header: "Status", width: 43, align: "center" as const }
             ],
-            rows:
-              rows.length > 0
-                ? rows
-                : [
-                    [
-                      1,
-                      "0001",
-                      "Defaulter Unit",
-                      "Commercial",
-                      "30 Days",
-                      "10,000",
-                      "5,000",
-                      "15,000",
-                      "DEFAULTER"
-                    ]
-                  ],
+            rows: rows,
             officialSha256: "sha256-defaulters-roll"
           },
           defaultFilename: "Defaulters_Roster_Recovery_Roll.pdf"
@@ -1910,22 +1887,7 @@ export default function HomePage({
               { header: "Cleared Amt", width: 35, align: "right" as const },
               { header: "Status", width: 34, align: "center" as const }
             ],
-            rows:
-              rows.length > 0
-                ? rows
-                : [
-                    [
-                      1,
-                      "CERT-0001",
-                      "Cleared Unit",
-                      "36601-0000000-1",
-                      "2026-2027",
-                      "2026-08-01",
-                      "2027-06-30",
-                      "PKR 10,000",
-                      "CLEARED"
-                    ]
-                  ],
+            rows: rows,
             officialSha256: "sha256-clearance-log"
           },
           defaultFilename: "Tax_Clearance_Certificates_Log.pdf"
@@ -1957,19 +1919,7 @@ export default function HomePage({
               { header: "Status", width: 40, align: "center" as const },
               { header: "Grounds / Reason", width: 94, align: "left" as const }
             ],
-            rows:
-              rows.length > 0
-                ? rows
-                : [
-                    [
-                      1,
-                      "DISC-0001",
-                      "Discontinued Assessee",
-                      "2026-08-01",
-                      "APPROVED",
-                      "Business closed down"
-                    ]
-                  ],
+            rows: rows,
             officialSha256: "sha256-relief-register"
           },
           defaultFilename: "Statutory_Relief_Discontinuance_Register.pdf"
@@ -4587,7 +4537,7 @@ export default function HomePage({
                               style={{ display: "block", fontSize: "0.725rem", color: "#64748b" }}
                             >
                               {u.demandUnit.permanentDemandNo}
-                              {u.provincialUin ? ` • PIN: ${u.provincialUin}` : ""} &bull;{" "}
+                              {u.provincialUin ? ` • UIN: ${u.provincialUin}` : ""} &bull;{" "}
                               {u.address}
                             </span>
                           </td>
@@ -5354,7 +5304,7 @@ export default function HomePage({
                     const defaulterUnits = units.filter((u) => computeUnitBalance(u) > 0);
                     const dRows = defaulterUnits.map((u, i) => {
                       const bal = computeUnitBalance(u);
-                      const aging = computeDefaulterAging(u.ledgerEntries, "2026-09-01");
+                      const aging = computeUnitDefaulterAging(u, "2026-09-01");
                       return [
                         i + 1,
                         u.demandUnit?.permanentDemandNo || u.assessmentNumber,
@@ -5385,22 +5335,7 @@ export default function HomePage({
                           { header: "Total Due", width: 30, align: "right" as const },
                           { header: "Status", width: 43, align: "center" as const }
                         ],
-                        rows:
-                          dRows.length > 0
-                            ? dRows
-                            : [
-                                [
-                                  1,
-                                  "0001",
-                                  "Defaulter Unit",
-                                  "Commercial",
-                                  "30 Days",
-                                  "10,000",
-                                  "5,000",
-                                  "15,000",
-                                  "DEFAULTER"
-                                ]
-                              ],
+                        rows: dRows,
                         officialSha256: "sha256-defaulters-roll"
                       },
                       defaultFilename: "PTAS_Defaulters_Roster_Vehari.pdf"
@@ -5438,8 +5373,8 @@ export default function HomePage({
                 <strong>Section 3(4) Punjab Finance Act 1977 Statutory Mandate:</strong> Any person
                 who fails to pay tax by August 31st or within 30 days of Form P.F.T-1 service is
                 liable to a penalty <em>not exceeding the amount of assessed tax</em> as determined
-                by the Assessing Authority (ETO Tariq Mahmood), recoverable as Arrears of Land
-                Revenue under Rule 12.
+                by the legally designated Assessing Authority (Excise &amp; Taxation Officer),
+                recoverable as Arrears of Land Revenue under Rule 12.
               </div>
             </div>
 
@@ -5597,12 +5532,7 @@ export default function HomePage({
                     </tr>
                   ) : (
                     defaulterUnits.map((u) => {
-                      const aging = computeDefaulterAging(
-                        u.ledgerEntries,
-                        "2026-08-31",
-                        undefined,
-                        u.isRecoveryCertified
-                      );
+                      const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
                       const latestVersion = u.assessmentVersions[0];
                       const assessedTax = latestVersion?.snapshot.taxAmount ?? 0;
 
@@ -5809,7 +5739,10 @@ export default function HomePage({
                 <p>
                   Appellate proceedings under Section 7 of Punjab Finance Act, 1977 read with Rule
                   13 of Punjab Professions &amp; Trades Tax Rules, 1977. Appellate Authority:{" "}
-                  <strong>Shahid Nawaz, Director Excise &amp; Taxation, Multan Division</strong>.
+                  <strong>
+                    Director Excise &amp; Taxation (Appellate Authority, Multan Division)
+                  </strong>
+                  .
                 </p>
               </div>
 
@@ -5849,10 +5782,7 @@ export default function HomePage({
                           { header: "Status", width: 35, align: "center" as const },
                           { header: "Hearing Date", width: 30, align: "center" as const }
                         ],
-                        rows:
-                          appealRows.length > 0
-                            ? appealRows
-                            : [[1, "APP-0001", "Appellant", "Assessment dispute", "PENDING", "—"]],
+                        rows: appealRows,
                         officialSha256: "sha256-appeals-cause-list"
                       },
                       defaultFilename: "PTAS_Appeals_Cause_List.pdf"
@@ -5888,11 +5818,11 @@ export default function HomePage({
               <span style={{ fontSize: "1.5rem" }}>🏛️</span>
               <div>
                 <strong>Section 7 &amp; Rule 13 Appellate Mandate:</strong> Any person aggrieved by
-                an order of the Assessing Authority (ETO Tariq Mahmood) may within 30 days prefer an
-                appeal to the Appellate Authority (Director Shahid Nawaz). Under Rule 13(2), no
-                appeal shall be entertained unless the undisputed amount of tax has been deposited.
-                Appellate decisions immediately adjust the demand ledger without altering historical
-                audit trails.
+                an order of the Assessing Authority (ETO) may within 30 days prefer an appeal to the
+                designated Appellate Authority (Director Excise &amp; Taxation). Under Rule 13(2),
+                no appeal shall be entertained unless the undisputed amount of tax has been
+                deposited. Appellate decisions immediately adjust the demand ledger without altering
+                historical audit trails.
               </div>
             </div>
 
@@ -6372,13 +6302,13 @@ export default function HomePage({
                                 fontWeight: 600,
                                 marginTop: "2px"
                               }}
-                              title="PIN (Professional Identification Number)"
+                              title="Provincial UIN (Province-wide Unique Identification Number)"
                             >
-                              PIN: {u.provincialUin}
+                              UIN: {u.provincialUin}
                             </span>
                           )}
                           <span style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}>
-                            Circle-Vehari
+                            {u.circleName || "Vehari Circle I (City / Commercial)"}
                           </span>
                         </td>
                         <td>
@@ -10450,7 +10380,8 @@ export default function HomePage({
                 </div>
                 <p style={{ margin: 0, fontSize: "0.85rem", color: "#ccfbf1" }}>
                   Official gazetted registers, audit-ready demand rolls, and compliance verification
-                  sheets &bull; Second Schedule (Categories 1–11) &bull; Circle-Vehari
+                  sheets &bull; Second Schedule (Categories 1–11) &bull;{" "}
+                  {officer.jurisdictionName || "District Vehari"}
                 </p>
               </div>
 
@@ -19855,7 +19786,7 @@ export default function HomePage({
                         Provincial Account Head:
                       </td>
                       <td style={{ padding: "0.3rem 0", fontFamily: "monospace" }}>
-                        B01601 &mdash; Punjab Professional Tax (Provincial)
+                        B01601 &mdash; Punjab Professional Tax
                       </td>
                     </tr>
                   </tbody>
