@@ -4234,41 +4234,40 @@ export default function HomePage({
             <div className="gov-titles">
               <h1>Government of the Punjab — Professional Tax Administration (PTAS)</h1>
               <p className="gov-subtitle">
-                Production Deployment &bull; Authenticated Supabase Records &bull;{" "}
-                {officer.jurisdictionName || "Assigned Jurisdiction"}
+                Production Deployment &bull; Authenticated Supabase Records
               </p>
             </div>
           </div>
+
+          {/* Immersed Single-Line Officer Identity & Sign Out */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "1rem",
-              flexWrap: "wrap"
+              gap: "0.85rem",
+              flexShrink: 0,
+              whiteSpace: "nowrap"
             }}
           >
-            {/* Officer Details & Jurisdiction Profile */}
             <div
               style={{
-                display: "flex",
+                display: "inline-flex",
                 alignItems: "center",
-                gap: "0.75rem",
-                background: "rgba(255, 255, 255, 0.12)",
-                padding: "0.45rem 0.85rem",
-                borderRadius: "8px",
-                border: "1px solid rgba(255, 255, 255, 0.2)"
+                gap: "0.5rem",
+                color: "#ffffff",
+                fontSize: "0.84rem"
               }}
             >
-              <div
+              <span
                 style={{
-                  width: "36px",
-                  height: "36px",
+                  width: "28px",
+                  height: "28px",
                   borderRadius: "50%",
-                  background: "rgba(255, 255, 255, 0.2)",
-                  display: "flex",
+                  background: "rgba(255, 255, 255, 0.18)",
+                  display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: "1.1rem"
+                  fontSize: "0.95rem"
                 }}
               >
                 {officer.role === "INSPECTOR"
@@ -4278,75 +4277,77 @@ export default function HomePage({
                     : officer.role === "DIRECTOR"
                       ? "📊"
                       : "🛡️"}
-              </div>
-              <div style={{ lineHeight: 1.35 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <strong style={{ color: "#ffffff", fontSize: "0.92rem", fontWeight: 700 }}>
-                    {officer.name}
-                  </strong>
-                  <span
-                    style={{
-                      background:
-                        officer.role === "INSPECTOR"
-                          ? "#0284c7"
-                          : officer.role === "ETO"
-                            ? "#d97706"
-                            : officer.role === "DIRECTOR"
-                              ? "#7e22ce"
-                              : "#be185d",
-                      color: "#ffffff",
-                      padding: "0.1rem 0.45rem",
-                      borderRadius: "4px",
-                      fontSize: "0.68rem",
-                      fontWeight: 800,
-                      letterSpacing: "0.03em"
-                    }}
-                  >
-                    {officer.role}
-                  </span>
-                  {officer.role === "ADMIN" && (
-                    <span
-                      style={{
-                        background: "rgba(16, 185, 129, 0.25)",
-                        color: "#a7f3d0",
-                        border: "1px solid rgba(167, 243, 208, 0.4)",
-                        padding: "0.1rem 0.4rem",
-                        borderRadius: "4px",
-                        fontSize: "0.65rem",
-                        fontWeight: 600
-                      }}
-                    >
-                      🟢{" "}
-                      {authenticatedSessionType === "CLOUD"
-                        ? "Supabase Auth"
-                        : "Authenticated Session"}
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: "0.74rem", color: "#d1fae5" }}>
-                  {officer.title} &bull; Jurisdiction:{" "}
-                  <strong style={{ color: "#ffffff" }}>{officer.jurisdictionName}</strong> (
-                  {officer.jurisdictionTier}) &bull; {officer.email}
-                </div>
-              </div>
+              </span>
+
+              <span style={{ fontWeight: 700, color: "#ffffff" }}>{officer.name}</span>
+
+              <span
+                style={{
+                  background:
+                    officer.role === "INSPECTOR"
+                      ? "#0284c7"
+                      : officer.role === "ETO"
+                        ? "#d97706"
+                        : officer.role === "DIRECTOR"
+                          ? "#7e22ce"
+                          : "#059669",
+                  color: "#ffffff",
+                  padding: "0.15rem 0.5rem",
+                  borderRadius: "4px",
+                  fontSize: "0.72rem",
+                  fontWeight: 800,
+                  letterSpacing: "0.04em"
+                }}
+              >
+                {officer.role === "INSPECTOR"
+                  ? "ETI"
+                  : officer.role === "ETO"
+                    ? "ETO"
+                    : officer.role === "DIRECTOR"
+                      ? "Director"
+                      : "Admin"}
+              </span>
+
+              <span style={{ color: "#d1fae5", fontSize: "0.78rem" }}>
+                &bull; Jurisdiction:{" "}
+                <strong style={{ color: "#ffffff" }}>{officer.jurisdictionName}</strong>
+                {officer.jurisdictionTier ? ` (${officer.jurisdictionTier})` : ""}
+              </span>
+
+              {officer.role === "ADMIN" && (
+                <span
+                  style={{
+                    background: "rgba(16, 185, 129, 0.25)",
+                    color: "#a7f3d0",
+                    border: "1px solid rgba(167, 243, 208, 0.4)",
+                    padding: "0.1rem 0.4rem",
+                    borderRadius: "4px",
+                    fontSize: "0.65rem",
+                    fontWeight: 600
+                  }}
+                >
+                  🟢 {authenticatedSessionType === "CLOUD" ? "Cloud" : "Session"}
+                </span>
+              )}
             </div>
 
-            {/* Officer Sign Out */}
+            {/* Immersed Compact Sign Out */}
             <button
               type="button"
               onClick={handleOfficerSignOut}
               className="btn-secondary btn-sm"
               style={{
-                color: "#fee2e2",
+                color: "#fecaca",
                 backgroundColor: "rgba(220, 38, 38, 0.25)",
-                borderColor: "rgba(252, 165, 165, 0.45)",
-                fontWeight: 700,
-                padding: "0.45rem 0.85rem",
+                borderColor: "rgba(248, 113, 113, 0.4)",
+                fontWeight: 600,
+                fontSize: "0.75rem",
+                padding: "0.3rem 0.65rem",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "0.35rem",
+                gap: "0.3rem",
                 cursor: "pointer",
-                borderRadius: "6px"
+                borderRadius: "5px"
               }}
               title="Sign out of current officer session"
             >
