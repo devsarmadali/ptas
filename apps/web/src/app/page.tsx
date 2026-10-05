@@ -871,7 +871,7 @@ export default function HomePage({
           target: `${result.officer.name} (${result.officer.email})`,
           timestamp: new Date().toISOString(),
           correlationId: `corr-auth-${Date.now()}`,
-          details: `Authenticated session via Supabase Auth for ${result.officer.title} (${result.officer.jurisdictionName}). Enforced tier: ${result.officer.jurisdictionTier}.`
+          details: `Authenticated session for ${result.officer.title} (${result.officer.jurisdictionName}). Enforced tier: ${result.officer.jurisdictionTier}.`
         };
         syncState(units, [auditItem, ...auditLogs], result.officer);
         showToast("success", `🔑 ${result.message}`);
@@ -4265,9 +4265,7 @@ export default function HomePage({
             <div className="gov-crest">🏛️</div>
             <div className="gov-titles">
               <h1>Government of the Punjab — Professional Tax Administration (PTAS)</h1>
-              <p className="gov-subtitle">
-                Production Deployment &bull; Authenticated Supabase Records
-              </p>
+              <p className="gov-subtitle">Excise, Taxation &amp; Narcotics Control Department</p>
             </div>
           </div>
 
@@ -4875,7 +4873,7 @@ export default function HomePage({
                       {isLoadingOperationalUnits ? (
                         <tr>
                           <td colSpan={10} style={{ textAlign: "center", padding: "2.5rem" }}>
-                            Loading authorized survey units from Supabase…
+                            Loading authorized survey units…
                           </td>
                         </tr>
                       ) : operationalUnitsError ? (
@@ -5070,7 +5068,7 @@ export default function HomePage({
                 <p>
                   Maker-Checker workflow for authenticated Inspectors and the assigned Assessing
                   Authority. Records shown here come directly from the jurisdiction-filtered
-                  Supabase workflow.
+                  operational workflow.
                 </p>
               </div>
             </div>
@@ -5091,7 +5089,7 @@ export default function HomePage({
                   {isLoadingOperationalUnits ? (
                     <tr>
                       <td colSpan={6} style={{ textAlign: "center", padding: "2.5rem" }}>
-                        Loading authorized assessment records from Supabase…
+                        Loading authorized assessment records…
                       </td>
                     </tr>
                   ) : operationalUnitsError ? (
@@ -14081,7 +14079,7 @@ export default function HomePage({
 
                 <div className="form-group">
                   <label htmlFor="pay-receipt-file">
-                    Stamped Form PFT-2 Bank Copy / Challan Scan (Supabase Storage)
+                    Stamped Form PFT-2 Bank Copy / Challan Scan
                   </label>
                   <input
                     id="pay-receipt-file"
@@ -14142,7 +14140,7 @@ export default function HomePage({
                       }}
                     >
                       File: {receiptFile.name} ({(receiptFile.size / 1024).toFixed(1)} KB) &bull;
-                      Ready for Supabase Storage
+                      Ready for Secure Upload
                     </span>
                   </div>
                 )}
@@ -14299,7 +14297,7 @@ export default function HomePage({
                     marginTop: "0.35rem"
                   }}
                 >
-                  File: {previewScanFileName} &bull; Stored securely in Supabase Storage bucket{" "}
+                  File: {previewScanFileName} &bull; Stored securely in storage vault{" "}
                   <code>receipts-challan32a</code>
                 </span>
               </div>
@@ -17656,8 +17654,7 @@ export default function HomePage({
                   <span>Official Portal Sign In &amp; Session Control</span>
                 </h3>
                 <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#d1fae5" }}>
-                  Official Officer Authentication &amp; Multi-Role Jurisdiction Studio (Supabase
-                  Auth)
+                  Official Officer Authentication &amp; Multi-Role Jurisdiction Studio
                 </p>
               </div>
               <button
@@ -17691,7 +17688,7 @@ export default function HomePage({
                     fontWeight: 600
                   }}
                 >
-                  🔐 Supabase Email &amp; Password Sign In
+                  🔐 Official Email &amp; Password Sign In
                 </button>
               </div>
 
@@ -17941,9 +17938,7 @@ export default function HomePage({
                         backgroundColor: "#0d3822"
                       }}
                     >
-                      {isAuthenticating
-                        ? "Verifying with Supabase Auth..."
-                        : "🔐 Sign In with Supabase Auth"}
+                      {isAuthenticating ? "Verifying credentials..." : "🔐 Sign In"}
                     </button>
                   </form>
                 </div>

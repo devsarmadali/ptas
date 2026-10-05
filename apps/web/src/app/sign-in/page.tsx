@@ -59,7 +59,7 @@ export default function SignInPage() {
       const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, { redirectTo });
       if (error) throw error;
       setStatusMessage(
-        "If this email is registered, Supabase has sent a password setup link. Check the inbox and spam folder."
+        "If this email is registered, a password setup link has been sent. Check the inbox and spam folder."
       );
     } catch (err: unknown) {
       const msg =
@@ -112,7 +112,7 @@ export default function SignInPage() {
             PTAS Officer Sign In
           </h1>
           <p style={{ margin: "0.5rem 0 0", color: "#d1fae5", fontSize: "0.85rem" }}>
-            Use the email registered in Supabase Auth. Your role and jurisdiction are resolved from
+            Use your registered official email address. Your role and jurisdiction are resolved from
             the server after authentication.
           </p>
         </header>
@@ -132,10 +132,9 @@ export default function SignInPage() {
                 lineHeight: "1.4"
               }}
             >
-              <strong>Configuration Notice:</strong> Supabase authentication is not configured on
-              this deployment. Please add <code>NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
-              <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to your Vercel Project Settings &gt;
-              Environment Variables.
+              <strong>Configuration Notice:</strong> Authentication service is not configured on
+              this deployment. Please verify your environment configuration or contact the system
+              administrator.
             </div>
           )}
           {errorMessage && (
@@ -218,7 +217,7 @@ export default function SignInPage() {
               className="btn-primary"
               style={{ width: "100%", justifyContent: "center", marginTop: "1.25rem" }}
             >
-              {isAuthenticating ? "Verifying…" : "Sign in with Supabase Auth"}
+              {isAuthenticating ? "Verifying…" : "Sign In"}
             </button>
 
             <button

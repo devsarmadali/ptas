@@ -21,7 +21,7 @@ export function getSupabaseClient() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) {
     throw new Error(
-      "Supabase synchronization is not configured: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is missing."
+      "Cloud database synchronization is not configured: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is missing."
     );
   }
   return createPtasSupabaseClient({
@@ -193,7 +193,7 @@ export async function pushPilotStateToSupabase(
       success: true,
       syncedUnitsCount: units.length,
       syncedLedgerCount: newLedgerEntriesCount,
-      message: `Successfully synchronized ${units.length} tax units and ${newLedgerEntriesCount} ledger entries to Supabase cloud.`
+      message: `Successfully synchronized ${units.length} tax units and ${newLedgerEntriesCount} ledger entries to cloud database.`
     };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
@@ -202,7 +202,7 @@ export async function pushPilotStateToSupabase(
       success: false,
       syncedUnitsCount: 0,
       syncedLedgerCount: 0,
-      message: `Failed to synchronize with Supabase: ${errorMsg}`,
+      message: `Failed to synchronize with cloud database: ${errorMsg}`,
       error: errorMsg
     };
   }

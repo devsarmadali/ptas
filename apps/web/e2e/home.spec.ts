@@ -28,7 +28,7 @@ test("credential sign-in contains no embedded users or passwords", async ({ page
     await expect(page.getByText(retiredIdentity, { exact: false })).toHaveCount(0);
   }
 
-  await page.getByRole("button", { name: /Sign in with Supabase Auth/i }).click();
+  await page.getByRole("button", { name: /^Sign in$/i }).click();
   await expect(page.locator("#sign-in-error")).toContainText(/valid email address/i);
 });
 

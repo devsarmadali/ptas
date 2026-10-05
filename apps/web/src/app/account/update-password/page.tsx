@@ -97,7 +97,7 @@ export default function UpdatePasswordPage() {
   return (
     <main style={{ maxWidth: "32rem", margin: "4rem auto", padding: "1rem" }}>
       <h1>Set PTAS password</h1>
-      <p>Open this page from the Supabase password setup email, then choose your password.</p>
+      <p>Open this page from the password setup email, then choose your password.</p>
       {error && <div role="alert">{error}</div>}
       {message && <div role="status">{message}</div>}
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: "1rem" }}>

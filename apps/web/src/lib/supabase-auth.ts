@@ -233,7 +233,7 @@ export async function signInOfficer(email: string, password?: string): Promise<S
         officer,
         user: data.user,
         isCloudAuth: true,
-        message: `Authenticated via Supabase Auth as ${officer.name} (${officer.role})`
+        message: `Authenticated as ${officer.name} (${officer.role})`
       };
     } catch (assignmentError) {
       await supabase.auth.signOut();
