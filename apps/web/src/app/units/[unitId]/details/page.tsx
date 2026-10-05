@@ -16,6 +16,7 @@ import {
   getScheduleEntryLabel
 } from "../../../../lib/statutory-forms";
 import { downloadOfficialPdf } from "../../../../lib/pdf";
+import { generateDocumentPin } from "@ptas/domain";
 
 interface UnitDetailsPageProps {
   params: Promise<{ unitId: string }>;
@@ -871,7 +872,7 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
                 <thead>
                   <tr>
                     <th>Challan / Notice #</th>
-                    <th>Verification PIN</th>
+                    <th>Security Code</th>
                     <th>Scope</th>
                     <th>Amount (PKR)</th>
                     <th>Issue Date</th>
@@ -895,7 +896,12 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
                           {c.noticeNumber}
                         </span>
                       </td>
-                      <td style={{ fontFamily: "monospace", fontWeight: 700 }}>{c.pin}</td>
+                      <td style={{ fontFamily: "monospace", fontWeight: 700, color: "#0369a1" }}>
+                        🔐{" "}
+                        {c.pin && /^\d{6}$/.test(c.pin)
+                          ? c.pin
+                          : generateDocumentPin(c.noticeNumber || c.challanNumber || "PTAS-PFT2")}
+                      </td>
                       <td>{c.demandScope ?? "CURRENT"}</td>
                       <td>
                         <strong>PKR {c.amountPayable.toLocaleString()}</strong>

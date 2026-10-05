@@ -477,14 +477,18 @@ export interface UserAccount {
   readonly email: string;
   readonly role: MockRole;
   readonly title: string;
+  readonly designation?: string | undefined;
+  readonly cnic?: string | undefined;
   readonly districtId: string;
   readonly districtName: string;
   readonly officeId: string;
   readonly officeName: string;
+  readonly officeAddress?: string | undefined;
   readonly assignedCircleId: string;
   readonly assignedCircleName: string;
   readonly status: "ACTIVE" | "SUSPENDED" | "INACTIVE";
   readonly mobileNumber: string;
+  readonly phone?: string | undefined;
   readonly lastActiveAt?: string | undefined;
 }
 
@@ -1444,74 +1448,95 @@ export function createInitialUserAccounts(): UserAccount[] {
       email: "eto.vehari@punjab.gov.pk",
       role: "ETO",
       title: "Excise & Taxation Officer (Assessing Authority)",
+      designation: "Excise & Taxation Officer (Assessing Authority)",
+      cnic: "36603-3456789-9",
       districtId: VEHARI_DISTRICT_ID,
       districtName: "Vehari",
       officeId: TEHSIL_VEHARI_ID,
       officeName: "Tehsil Vehari",
+      officeAddress: "Office of the Excise & Taxation Officer, District Courts Complex, Vehari",
       assignedCircleId: CIRCLE_VEHARI_ID,
       assignedCircleName: "Vehari Circle I (City / Commercial)",
       status: "ACTIVE",
-      mobileNumber: "0300-1234567"
+      mobileNumber: "0300-1234567",
+      phone: "067-3360000"
     },
     {
       id: "usr-insp-01",
-      name: "Tax Inspector (Vehari Circle I)",
+      name: "Muhammad Aslam",
       email: "inspector.vehari@punjab.gov.pk",
       role: "INSPECTOR",
       title: "Tax Inspector",
+      designation: "Tax Inspector (Vehari Circle I)",
+      cnic: "36603-1234567-1",
       districtId: VEHARI_DISTRICT_ID,
       districtName: "Vehari",
       officeId: TEHSIL_VEHARI_ID,
       officeName: "Tehsil Vehari",
+      officeAddress: "Office of the Excise & Taxation Officer, District Courts Complex, Vehari",
       assignedCircleId: CIRCLE_VEHARI_ID,
       assignedCircleName: "Vehari Circle I (City / Commercial)",
       status: "ACTIVE",
-      mobileNumber: "0301-9876543"
+      mobileNumber: "0301-9876543",
+      phone: "0301-9876543"
     },
     {
       id: "usr-insp-02",
-      name: "Inspector Vehari Circle II",
+      name: "Tariq Mehmood",
       email: "inspector.vehari2@punjab.gov.pk",
       role: "INSPECTOR",
       title: "Tax Inspector (Grain Market / Rural)",
+      designation: "Tax Inspector (Vehari Circle II)",
+      cnic: "36603-7654321-3",
       districtId: VEHARI_DISTRICT_ID,
       districtName: "Vehari",
       officeId: TEHSIL_VEHARI_ID,
       officeName: "Tehsil Vehari",
+      officeAddress: "Office of the Excise & Taxation Officer, District Courts Complex, Vehari",
       assignedCircleId: CIRCLE_VEHARI_2_ID,
       assignedCircleName: "Vehari Circle II (Grain Market / Rural)",
       status: "ACTIVE",
-      mobileNumber: "0303-1122334"
+      mobileNumber: "0303-1122334",
+      phone: "0303-1122334"
     },
     {
       id: "usr-insp-03",
-      name: "Inspector Burewala Circle",
+      name: "Muhammad Rashid",
       email: "inspector.burewala@punjab.gov.pk",
       role: "INSPECTOR",
       title: "Tax Inspector (Burewala)",
+      designation: "Tax Inspector (Burewala Circle)",
+      cnic: "36601-5544332-5",
       districtId: VEHARI_DISTRICT_ID,
       districtName: "Vehari",
       officeId: TEHSIL_VEHARI_ID,
       officeName: "Tehsil Burewala",
+      officeAddress:
+        "Sub-Divisional Office, Excise & Taxation Department, Tehsil Complex, Burewala",
       assignedCircleId: CIRCLE_BUREWALA_ID,
       assignedCircleName: "Burewala Circle",
       status: "ACTIVE",
-      mobileNumber: "0304-5566778"
+      mobileNumber: "0304-5566778",
+      phone: "0304-5566778"
     },
     {
       id: "usr-insp-04",
-      name: "Inspector Mailsi Circle",
+      name: "Abdul Ghafoor",
       email: "inspector.mailsi@punjab.gov.pk",
       role: "INSPECTOR",
       title: "Tax Inspector (Mailsi)",
+      designation: "Tax Inspector (Mailsi Circle)",
+      cnic: "36602-8877665-7",
       districtId: VEHARI_DISTRICT_ID,
       districtName: "Vehari",
       officeId: TEHSIL_VEHARI_ID,
       officeName: "Tehsil Mailsi",
+      officeAddress: "Sub-Divisional Office, Excise & Taxation Department, Colony Road, Mailsi",
       assignedCircleId: CIRCLE_MAILSI_ID,
       assignedCircleName: "Mailsi Circle",
       status: "ACTIVE",
-      mobileNumber: "0305-9988776"
+      mobileNumber: "0305-9988776",
+      phone: "0305-9988776"
     },
     {
       id: "usr-dir-01",
@@ -1519,14 +1544,18 @@ export function createInitialUserAccounts(): UserAccount[] {
       email: "director.multan@punjab.gov.pk",
       role: "DIRECTOR",
       title: "Director Excise & Taxation",
+      designation: "Director Excise & Taxation",
+      cnic: "36302-1122334-1",
       districtId: VEHARI_DISTRICT_ID,
       districtName: "Vehari",
       officeId: TEHSIL_VEHARI_ID,
       officeName: "Division Multan",
+      officeAddress: "Regional Directorate of Excise & Taxation, LMQ Road, Multan",
       assignedCircleId: CIRCLE_VEHARI_ID,
       assignedCircleName: "All Circles (Division Multan)",
       status: "ACTIVE",
-      mobileNumber: "0302-5551234"
+      mobileNumber: "0302-5551234",
+      phone: "061-9200000"
     }
   ];
 }

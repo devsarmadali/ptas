@@ -540,6 +540,12 @@ export type Database = {
         Args: Record<PropertyKey, never>;
         Returns: Json;
       };
+      get_designated_bank_branches: {
+        Args: {
+          p_district?: string | null;
+        };
+        Returns: Json;
+      };
     };
     Enums: {
       [_ in never]: never;

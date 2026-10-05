@@ -1,0 +1,681 @@
+﻿S#,Region,District,Branch Name,Branch Code
+1,D G Khan,D G Khan,Main Branch D G Khan,326
+2,D G Khan,D G Khan,Taunsa Sharif,473
+3,D G Khan,D G Khan,PAEC-BC,1635
+4,D G Khan,D G Khan,Mouza Gadai,863
+5,D G Khan,Layyah,Layyah Branch,358
+6,D G Khan,Layyah,Karor Lal Eason,1688
+7,D G Khan,Layyah,Chowk Azam,1894
+8,D G Khan,Layyah,Choubara,1687
+9,D G Khan,Muzaffargarh,M B MUZAFFAR GARH,378
+10,D G Khan,Muzaffargarh,ALI PUR BRANCH,446
+11,D G Khan,Muzaffargarh,JATOI BRANCH,1969
+12,D G Khan,Muzaffargarh,KOT ADDU,355
+13,D G Khan,Muzaffargarh,Chak 571/TDA,1762
+14,D G Khan,Muzaffargarh,Khan Garh,1900
+15,D G Khan,Muzaffargarh,Qasba Gujrat,939
+16,D G Khan,Rajan Pur,RAJAN PUR,392
+17,D G Khan,Rajan Pur,JAM PUR BRANCH,439
+18,D G Khan,Rajan Pur,ROJHAN BRANCH,1686
+19,D G Khan,Rajan Pur,Fazil Pur,622
+20,D G Khan,Rajan Pur,Kot Mithan,624
+21,Rawalakot AK,Poonch AK,Main Br.Rawalakot,393
+22,Rawalakot AK,Poonch AK,Hajira Br.,586
+23,Rawalakot AK,Poonch AK,Abbaspur Br.,818
+24,Rawalakot AK,Poonch AK,Thorar Br.,1425
+25,Rawalakot AK,Poonch AK,Khigala Br.,1426
+26,Rawalakot AK,Poonch AK,Jandala Br.,1673
+27,Rawalakot AK,Bagh AK,Main Br.Bagh,447
+28,Rawalakot AK,Bagh AK,Chirala Branch,1593
+29,Rawalakot AK,Bagh AK,Rangla Br.,1659
+30,Rawalakot AK,Haveli AK,Kahutta Br.,961
+31,Rawalakot AK,Haveli AK,Gogdar Br.,1805
+32,Rawalakot AK,Sudhnoti AK,Pullandn Branch,508
+33,Rawalakot AK,Sudhnoti AK,Trarkhel Br.,819
+34,Rawalakot AK,Sudhnoti AK,Awanabad Br.,1782
+35,Rawalakot AK,Sudhnoti AK,Ball Khan Mong Br.,1835
+36,Sahiwal,Bahawal Nagar,Main Branch Bahawal Nagar,307
+37,Sahiwal,Bahawal Nagar,Grain Market Fort Abbas,329
+38,Sahiwal,Bahawal Nagar,Minchin Abad,370
+39,Sahiwal,Bahawal Nagar,Bank Street Bahawal Nagar,709
+40,Sahiwal,Bahawal Nagar,Chest Branch Haroon Abad,715
+41,Sahiwal,Okara,Main Branch Okara,383
+42,Sahiwal,Okara,Renala Khurd,477
+43,Sahiwal,Okara,Depalpur,498
+44,Sahiwal,Okara,Kuthehry Bazar Okara,763
+45,Sahiwal,Okara,SQA Okra Cantt,1627
+46,Sahiwal,Okara,Hujra Shah Muqeem,458
+47,Sahiwal,Pakpattan,Thana Bazar Arifwala,304
+48,Sahiwal,Pakpattan,College Road Pakpattan,384
+49,Sahiwal,Sahiwal,Grain Market Chichawatni,317
+50,Sahiwal,Sahiwal,District Courts Sahiwal,373
+51,Sahiwal,Sahiwal,City Branch Sahiwal,536
+52,Sahiwal,Sahiwal,Fareed Town Branch Sahiwal,648
+53,Sahiwal,Sahiwal,Jamia Masjid Chichawatni,760
+54,Sahiwal,Sahiwal,Grain Market Sahiwal,1514
+55,Gilgit,Gilgit,Main Branch Gilgit,425
+56,Gilgit,Gilgit,Jutial Cantt Branch,1434
+57,Gilgit,Gilgit,Danyore Branch,2311
+58,Gilgit,Skardu,Skardu Branch,486
+59,Gilgit,Skardu,Alamdar Chowk Branch,2173
+60,Gilgit,Diamir,Chilas Branch,504
+61,Gilgit,Ghizer,Gahkuch Branch,2029
+62,Gilgit,Ghizer,Gupis Branch,8886
+63,Gilgit,Astore,Astore Branch,8885
+64,Gilgit,Hunza,Aliabad Branch,2226
+65,Gilgit,Hunza,Karimabad Branch,873
+66,Gilgit,Nagar,Sikandarabad Branch,2227
+67,Gilgit,Ghanche,Khaplu Branch,888
+68,Gilgit,Shigar,Shigar Branch,2175
+69,Gilgit,Kharmong,Mehdiabad Branch,874
+70,Muzaffarabad,Muzaffarabad,Main Branch Muzaffarabad,377
+71,Muzaffarabad,AK,Civil Secretariat Branch,660
+72,Muzaffarabad,AK,Upper Adda Branch,1617
+73,Muzaffarabad,AK,Chattar Domel Branch,1464
+74,Muzaffarabad,AK,Gojra Bypass Branch,2248
+75,Muzaffarabad,AK,Pattika Branch,1672
+76,Muzaffarabad,Hattian,Hattian Branch,673
+77,Muzaffarabad,Hattian,Chikar Branch,948
+78,Muzaffarabad,Bagh,Dhirkot Branch,887
+79,Muzaffarabad,Neelum,Athmuqam Branch,2092
+80,Gujrat,Gujrat,"Main Branch, Gujrat",335
+81,Gujrat,Gujrat,Main Branch Lalamusa.,589
+82,Gujrat,Gujrat,Deona Mandi Branch.,645
+83,Gujrat,Gujrat,Kunjah Branch.,666
+84,Gujrat,Gujrat,Dinga Branch.,787
+85,Gujrat,Gujrat,Railway Road Branch Gujrat.,788
+86,Gujrat,Gujrat,Noonawali Branch,792
+87,Gujrat,Gujrat,Jalalpur Jattan Branch.,795
+88,Gujrat,Gujrat,Dullanwala Branch,1727
+89,Gujrat,Gujrat,Kotla Arab Ali Khan.,1975
+90,Gujrat,Gujrat,"Bhimber Road Branch, Gujrat",2312
+91,Gujrat,Mandi Bahauddin.,Main Branch Mandi Bahauddin.,362
+92,Gujrat,Mandi Bahauddin.,Phalia Branch,460
+93,Gujrat,Mandi Bahauddin.,Malakwal Branch.,615
+94,Gujrat,Mandi Bahauddin.,Qadirabad Branch.,790
+95,Gujrat,Mandi Bahauddin.,Mona Depot Branch,870
+96,Gujrat,Mandi Bahauddin.,Mangat Branch.,871
+97,Gujrat,Mandi Bahauddin.,Hardorerkabla Branch,908
+98,Gujrat,Mandi Bahauddin.,Mano Chak Branch.,1386
+99,Gujrat,Mandi Bahauddin.,Gojra Branch,2196
+100,Gujrat,Mandi Bahauddin.,Kutchehry Road  Branch,789
+101,Karachi,South,Main Branch,2
+102,Karachi,South,DHA Branch,9
+103,Karachi,South,Denso Hall Branch,10
+104,Karachi,South,Nicol Road Branch,44
+105,Karachi,South,PIDC House Branch,50
+106,Karachi,South,Saddar Branch,55
+107,Karachi,South,Income Tax Branch,85
+108,Karachi,South,Hasrat Mohani Road Branch,158
+109,Karachi,South,Nadir House Branch,222
+110,Karachi,South,Haroon House Branch,223
+111,Karachi,South,PNSC Building Branch,250
+112,Karachi,South,Avari Tower Branch,271
+113,Karachi,South,Model Clifton Branch,1027
+114,Karachi,South,New Sindh Secretariat Branch,1053
+115,Karachi,South,Massan Road Branch,1065
+116,Karachi,South,Clifton Block 2 Branch,2055
+117,Karachi,South,Kayaban E Ittehad Branch,2100
+118,Karachi,South,Tauheed Commercial Branch,2158
+119,Sargodha,Sargodha,Main Branch Bhalwal,312
+120,Sargodha,Sargodha,Civil Lines Sargodha,397
+121,Sargodha,Sargodha,Shahpur Saddar,431
+122,Sargodha,Sargodha,Sillanwali,532
+123,Sargodha,Sargodha,Bhagtanwala,567
+124,Sargodha,Sargodha,Chak 46 SB,579
+125,Sargodha,Sargodha,Sargodha City,621
+126,Sargodha,Sargodha,Remount Depot Sargodha,691
+127,Sargodha,Sargodha,Satellite Town Sargodha,750
+128,Sargodha,Sargodha,Chak No.29 Sb,1316
+129,Sargodha,Sargodha,Sial More,1809
+130,Sargodha,Sargodha,Bhera,1901
+131,Sargodha,Sargodha,Kotmomin,1921
+132,Sargodha,Sargodha,Sahiwal,1977
+133,Sargodha,Chiniot,SQA Chiniot,319
+134,Sargodha,Chiniot,Chenab Nagar,1308
+135,Sargodha,Chiniot,Thatha Musa,1729
+136,Faisalabad,Faisalabad,Civil Lines,360
+137,Faisalabad,Faisalabad,Main Branch Jaranwala,342
+138,Faisalabad,Faisalabad,Main Branch Samundari,423
+139,Faisalabad,Faisalabad,Abdullahpur,559
+140,Faisalabad,Faisalabad,Dijkot Road,1395
+141,Faisalabad,Faisalabad,Peoples Colony,1478
+142,Faisalabad,Faisalabad,Uni. of Agriculture,549
+143,Faisalabad,Faisalabad,Jinnah Colony,1571
+144,Faisalabad,Faisalabad,Noorpur,867
+145,Faisalabad,Faisalabad,Tandlianwala,407
+146,Faisalabad,Faisalabad,Malikpur Manawala,889
+147,Faisalabad,Faisalabad,Ayub Agriculture Research Institute,560
+148,Faisalabad,Faisalabad,Chak Jhumra,516
+149,Faisalabad,Faisalabad,Chak # 210/GB,741
+150,Faisalabad,Faisalabad,Adda Dijkot,1457
+151,Faisalabad,Faisalabad,Mamoon Kanjan,1458
+152,Faisalabad,Faisalabad,Small Industrial Estate,1955
+153,Faisalabad,Faisalabad,Chak # 229/RB,1558
+154,Faisalabad,Faisalabad,Narwala Banglaw,842
+155,Faisalabad,Faisalabad,Chak # 66/JB,838
+156,Larkana,Larkana,Main Branch Larkana,22
+157,Larkana,Larkana,Bank Square Branch,211
+158,Larkana,Larkana,Ratodero Branch,111
+159,Larkana,Larkana,Naudero Branch,134
+160,Larkana,Larkana,Industrial Area Br.,2325
+161,Larkana,Larkana,Dokri,132
+162,Larkana,Kamber @ Shahdadkot,Kamber Ali Khan,17
+163,Larkana,Kamber @ Shahdadkot,Shahdadkot Branch,59
+164,Larkana,Kamber @ Shahdadkot,Nasirabad Branch,129
+165,Larkana,Shikarpur,Main Branch Shikarpur,61
+166,Larkana,Shikarpur,Hathidar Br: Shikarpur,1927
+167,Larkana,Shikarpur,Garhi Yaseen Branch,88
+168,Larkana,Kashmore @ Kandhkot,Kandhkot Branch,74
+169,Larkana,Kashmore @ Kandhkot,Kashmore Branch,115
+170,Larkana,Kashmore @ Kandhkot,Thull Branch,106
+171,Larkana,Kashmore @ Kandhkot,Ghouspur Branch,170
+172,Larkana,Jacobabad,TR Jacobabad Branch,15
+173,Larkana,Dadu,Main Branch Dadu,8
+174,Larkana,Dadu,K.N Shah Branch,120
+175,Larkana,Dadu,Mehar Branch,33
+176,Larkana,Dadu,Johi Branch,102
+177,Swat,Swat,Main Branch Saidu Sharif,1330
+178,Swat,Swat,Bank Square Mingora,438
+179,Swat,Swat,Khwaza Khela,1911
+180,Swat,Swat,Matta,663
+181,Swat,Swat,Barikot,1970
+182,Swat,Swat,Thana,1842
+183,Swat,Swat,Kabal Bazar,2009
+184,Swat,Shangla,Alpuri,1934
+185,Swat,Lower DIR,Main Branch Timergara,841
+186,Swat,Lower DIR,Chakdara,1331
+187,Swat,Lower DIR,Main Branch Dir,328
+188,Swat,Lower DIR,Warai,1323
+189,Swat,Bajawar,Khar Branch,1595
+190,Swat,Chitral,Main Branch Chitral,321
+191,Swat,Chitral,Booni Branch,1866
+192,Swat,Chitral,Drosh Branch,1581
+193,Multan,Khanewal,"Main Branch, Kabirwala",345
+194,Multan,Khanewal,Abdul Hakim Branch,417
+195,Multan,Khanewal,Kukkar Hatta Branch,905
+196,Multan,Multan,"Main Branch, Multan",374
+197,Multan,Multan,City Branch Multan,375
+198,Multan,Multan,Main Branch Shujabad,402
+199,Multan,Multan,"Cantt Branch, Multan",437
+200,Multan,Multan,"Gulgasht Colony, Multan",542
+201,Multan,Multan,Jalalpur Pirwala Branch.,544
+202,Multan,Multan,Qadirpur Rawan Branch,585
+203,Multan,Multan,Lar Branch,627
+204,Multan,Multan,Timber Market Multan.,835
+205,Multan,Multan,Mumtazabad Br Multan,1490
+206,Multan,Multan,"Dera Adda Branch, Multan",1495
+207,Multan,Multan,"Haram Gate, Multan",1527
+208,Multan,Multan,"Bosan Road, Multan",1931
+209,Multan,Multan,"Shah Rukn-e-Alam, Multan",1995
+210,Multan,Multan,Wapda Town Multan.,2071
+211,Multan,Multan,Adda Band Bosan,2315
+212,Mianwali,Bhakkar,Main Branch Bhakkar,311
+213,Mianwali,Bhakkar,Draya Khan Branch,1427
+214,Mianwali,Mianwali,Main Branch Mianwali,369
+215,Mianwali,Mianwali,Liaqatabad Branch,428
+216,Mianwali,Mianwali,Kalabagh Branch,985
+217,Mianwali,Mianwali,Chashma Barrage,502
+218,Mianwali,Mianwali,Daud Khel Branch,1548
+219,Mianwali,Mianwali,Wan Bhachran Branch,2243
+220,Mianwali,Khushab,Main Branch Joharabad,436
+221,Mianwali,Khushab,Khushab Branch,353
+222,Mianwali,Khushab,Naushera Branch,1662
+223,Mianwali,Khushab,Noorpur Thal Branch,1685
+224,Mianwali,Khushab,Katha Sagral Branch,924
+225,Mianwali,Khushab,Pail Branch,679
+226,Bannu,Bannu,Bannu City Branch,309
+227,Bannu,Bannu,Jadid Abadi Bannu,1401
+228,Bannu,Bannu,K.N.F. Khel Branch,1415
+229,Bannu,Bannu,Bannu Cantt Branch,552
+230,Bannu,Dera Ismail Khan,Main Branch D.I.Khan,327
+231,Bannu,Dera Ismail Khan,Lar Branch D.I. Khan,1327
+232,Bannu,Dera Ismail Khan,Gomal University,1373
+233,Bannu,Dera Ismail Khan,Paroa Road  D.I. Khan,1545
+234,Bannu,Dera Ismail Khan,Circular Road Branch DIK,1433
+235,Bannu,Hango,Hangu Branch,420
+236,Bannu,Hango,Tall Branch,411
+237,Bannu,Karak,Karak Branch,451
+238,Bannu,Karak,Faqirabad Branch,1743
+239,Bannu,Karak,Takht-e-Nusrati Branch,1918
+240,Bannu,Lakki Marwat,Main Branch Lakki Marwat,426
+241,Bannu,Lakki Marwat,Sarai Naurang,964
+242,Bannu,Lakki Marwat,Serai Gambeela Branch,1391
+243,Bannu,Miranshah,Miranshah Branch,453
+244,Bannu,Parachinar,Parachinar Branch,385
+245,Bannu,Tank,Tank City Branch,408
+246,Bannu,Tank,Sadam Shoping Center Branch Tank,1851
+247,Abbottabad,Abbottabad,Main Branch Abbottabad,301
+248,Abbottabad,Abbottabad,Abbottabad City Branch,591
+249,Abbottabad,Abbottabad,Khola Keyal Branch,1876
+250,Abbottabad,Abbottabad,Mandian Mirpur Branch,1348
+251,Abbottabad,Abbottabad,Havelian Branch,424
+252,Abbottabad,Abbottabad,Nawansher Branch,488
+253,Abbottabad,Abbottabad,Lora Branch,1609
+254,Abbottabad,Abbottabad,Takia Hall Branch,1822
+255,Abbottabad,Haripur,Main Branch Haripur,337
+256,Abbottabad,Haripur,Shahrah-e-Hazara Branch,827
+257,Abbottabad,Haripur,TIP Branch Haripur,505
+258,Abbottabad,Haripur,Sikandar pur Branch,1979
+259,Abbottabad,Haripur,NTTS Branch Haripur,826
+260,Abbottabad,Haripur,Ghazi Branch,499
+261,Abbottabad,Haripur,Khanpur Dam Branch,582
+262,Abbottabad,Haripur,Sarai Saleh Branch,952
+263,Sheikhupura,Sheikhupura,Civil Lines Branch Sheikhupura,401
+264,Sheikhupura,Sheikhupura,Grain Market Sheikhupura,781
+265,Sheikhupura,Sheikhupura,Farooqabad,464
+266,Sheikhupura,Sheikhupura,Sharaqpur,400
+267,Sheikhupura,Sheikhupura,Bhikhi,1403
+268,Sheikhupura,Sheikhupura,Ahmedpur,535
+269,Sheikhupura,Sheikhupura,Kot Abdul Malik,1986
+270,Sheikhupura,Sheikhupura,Manawala,1985
+271,Sheikhupura,Nankana Sahib,Sangla Hill,581
+272,Sheikhupura,Nankana Sahib,Shahkot,534
+273,Sheikhupura,Nankana Sahib,GM Nankana Sahib,379
+274,Sheikhupura,Nankana Sahib,Warburton,478
+275,Sheikhupura,Hafizabad,Sukheke Mandi,776
+276,Sheikhupura,Hafizabad,Main Branch Hafizabad,336
+277,Sheikhupura,Hafizabad,Pindi Bhttian,1502
+278,Mardan,Attock,Main Br Attock,315
+279,Mardan,Attock,Hazro Br,1584
+280,Mardan,Attock,Pindi Gheb,459
+281,Mardan,Attock,Jand,1779
+282,Mardan,Mardan,Main Br Mardan,365
+283,Mardan,Mardan,Takht Bhai Br,548
+284,Mardan,Mardan,Katlang,884
+285,Mardan,Mardan,Rustam,1352
+286,Mardan,Mardan,A.W.K Univ Mardan,2233
+287,Mardan,Mardan,Mayar Branch,828
+288,Mardan,Mardan,Nowshera Road Br.,2242
+289,Mardan,Malakand,Dargai br,620
+290,Mardan,Malakand,Main Br Malakand,419
+291,Mardan,Malakand,U.C Mkd,1990
+292,Mardan,Malakand,Sakhakot Br.,593
+293,Mardan,Buner,Main Br Daggar,1704
+294,Mardan,Swabi,Main Br Swabi,406
+295,Mardan,Swabi,Turlandi Br Swabi,1870
+296,Mardan,Swabi,Topi Branch,503
+297,Mardan,Swabi,Kunda Branch,1313
+298,Mardan,Swabi,Zaida Branch,1972
+299,Gujranwala,Gujranwala,Civil Lines Gujranwala,333
+300,Gujranwala,Gujranwala,City Branch Gujranwala,334
+301,Gujranwala,Gujranwala,Main Branch Wazirabad,418
+302,Gujranwala,Gujranwala,S.I.E.Gujranwala,513
+303,Gujranwala,Gujranwala,Alipur Chatha,541
+304,Gujranwala,Gujranwala,G.T Road Ghakhar,766
+305,Gujranwala,Gujranwala,Atta Building,767
+306,Gujranwala,Gujranwala,Ghalla Mandi Kamoke,770
+307,Gujranwala,Gujranwala,More Eminabad,772
+308,Gujranwala,Gujranwala,Nowshera Virkan,773
+309,Gujranwala,Gujranwala,Qila Didar Singh,774
+310,Gujranwala,Gujranwala,G.T.Road Muridke,779
+311,Gujranwala,Gujranwala,Gulabpura Cantt,892
+312,Gujranwala,Gujranwala,Satellite Town,1498
+313,Gujranwala,Gujranwala,Model Town,1610
+314,Islamabad,Islmabad,Main Br Islamabad,341
+315,Islamabad,Islmabad,Main Br Murree,376
+316,Islamabad,Islmabad,Aabpara,1456
+317,Islamabad,Islmabad,Capt.Naeem Tufail,2067
+318,Islamabad,Islmabad,G-9 Markaz,1932
+319,Islamabad,Islmabad,F-10 Markaz,1933
+320,Islamabad,Islmabad,F-8 Markaz,1694
+321,Islamabad,Islmabad,Industrial Area,1531
+322,Islamabad,Islmabad,S-Block,485
+323,Islamabad,Islmabad,D-Block,501
+324,Islamabad,Islmabad,B-Block,880
+325,Islamabad,Islmabad,Margalla,1725
+326,Islamabad,Islmabad,Foreign Office,474
+327,Islamabad,Islmabad,P.M Secct,1732
+328,Islamabad,Islmabad,PARC,1539
+329,Islamabad,Islmabad,A.I.O.U,977
+330,Islamabad,Islmabad,N.H Q,1469
+331,Islamabad,Islmabad,Ghora Gali,692
+332,Hyderabad,Hyderabad,Fatima jinnah,14
+333,Hyderabad,Hyderabad,MARKET AREA,30
+334,Hyderabad,Hyderabad,LATIFABAD 08,91
+335,Hyderabad,Hyderabad,QASIMABAD,2031
+336,Hyderabad,Hyderabad,NEW CLOTH,43
+337,Hyderabad,Hyderabad,TANDO JAM,177
+338,Hyderabad,Hyderabad,WAPDA COLONY,1057
+339,Hyderabad,Badin,BADIN,4
+340,Hyderabad,Badin,MATLI,96
+341,Hyderabad,Badin,GOLARCHI,1044
+342,Hyderabad,Badin,TALHAR,2022
+343,Hyderabad,Badin,TANDO Bago,75
+344,Hyderabad,Thatta,Thatta,70
+345,Hyderabad,Thatta,MAKLI,81
+346,Hyderabad,Thatta,MIR Pur SAKRO,92
+347,Hyderabad,Matiari,MATYARI,2020
+348,Hyderabad,Matiari,HALA,2251
+349,Hyderabad,Tando Allah Yar,TANDO ALLAHYAR,68
+350,Hyderabad,Tando Muhammad Khan,TANDO MUHAMMAD KHAN,69
+351,Hyderabad,Sujawal,SUJAWAL,76
+352,Hyderabad,Sujawal,MIR PUR BATHARO,35
+353,Hyderabad,Jamshoro,SITE NOORIBAD,1720
+354,Hyderabad,Jamshoro,KOTRI,21
+355,Hyderabad,Jamshoro,SANN,2303
+356,Hyderabad,Jamshoro,SINDH UNIVERSITY,226
+357,Rawalpindi,Rawalpindi,Main Branch Rawalpindi,394
+358,Rawalpindi,Rawalpindi,RAWALPINDI CITY.,395
+359,Rawalpindi,Rawalpindi,SATELLIT TOWN BRANCH,399
+360,Rawalpindi,Rawalpindi,Wah Cantt,415
+361,Rawalpindi,Rawalpindi,KAHUTA BRANCH,442
+362,Rawalpindi,Rawalpindi,Fateh Jang,454
+363,Rawalpindi,Rawalpindi,Hassanabdal,467
+364,Rawalpindi,Rawalpindi,Kallar Syedan,521
+365,Rawalpindi,Rawalpindi,PAF CHAKLALA BRANCH,557
+366,Rawalpindi,Rawalpindi,EME COLLEGE RAWALPINDI,640
+367,Rawalpindi,Rawalpindi,RWP CANTT.BOARD BUILDING.,642
+368,Rawalpindi,Rawalpindi,KHANNA DAK DISTT R'PINDI,963
+369,Rawalpindi,Rawalpindi,HPTC Rawat Branch,1506
+370,Rawalpindi,Rawalpindi,HEAVY REBUILT FAC TAXILLA CANT,1542
+371,Rawalpindi,Rawalpindi,SHALIMAR PLAZA RAWALPINDI,1623
+372,Rawalpindi,Rawalpindi,Passport Office,1666
+373,Rawalpindi,Rawalpindi,SUMBALGAH DISTT R.PINDI,1683
+374,Rawalpindi,Rawalpindi,"P.A.C KAMRA, ATTOCK",1351
+375,Rawalpindi,Rawalpindi,ATTOCK OIL COMPANY MORGAH,639
+376,Rawalpindi,Rawalpindi,Noor Khan Air Base,2202
+377,Rawalpindi,Rawalpindi,PESHAWAR ROAD RAWALPINDI,1508
+378,Rawalpindi,Rawalpindi,DISTRICT COUNCIL RAWALPINDI,638
+379,Rawalpindi,Rawalpindi,ADIYALA ROAD BRANCH,2321
+380,Jhang,Jhang,Main Branch Jhang,343
+381,Jhang,Jhang,Shorkot City,471
+382,Jhang,Jhang,Jhang City Branch,636
+383,Jhang,Jhang,Chund Branch,675
+384,Jhang,Jhang,Community Centre Br Jhang,752
+385,Jhang,Jhang,Garhmore Branch,1754
+386,Jhang,Jhang,Ahmed Pur Sial,1974
+387,Jhang,Toba Tek Singh,Main Branch Gojra,331
+388,Jhang,Toba Tek Singh,Kamalia City,347
+389,Jhang,Toba Tek Singh,City Br Toba Tek Singh,412
+390,Jhang,Toba Tek Singh,Main Branch Pirmahal,533
+391,Jhang,Toba Tek Singh,Grain Market Br Gojra,742
+392,Jhang,Toba Tek Singh,K.B. Kamalia,1734
+393,Jhang,Toba Tek Singh,D.C. Br Toba Tek Singh,1924
+394,Jhang,Toba Tek Singh,Nia Lahore Branch,2234
+395,Bahawalpur,Bahawalpur,Kutchery Road Branch Ahmadpur East,302
+396,Bahawalpur,Bahawalpur,District Court Bahawalpur,308
+397,Bahawalpur,Bahawalpur,Yazman Branch,606
+398,Bahawalpur,Bahawalpur,Farid Gate Branch,701
+399,Bahawalpur,Bahawalpur,Uch Sharif Branch,703
+400,Bahawalpur,Bahawalpur,Satlitetown Branch Bahawalpur,957
+401,Bahawalpur,Lohdran,Lohdran Branch,470
+402,Bahawalpur,Lohdran,Kehror Pacca Brach,623
+403,Bahawalpur,Lohdran,Denote,732
+404,Bahawalpur,Lohdran,Dunyapur Branch,836
+405,Bahawalpur,Lohdran,City Branch Lohdran,2179
+406,Bahawalpur,Rahim Yar Khan,Chest Branch Khanpur,350
+407,Bahawalpur,Rahim Yar Khan,Liaqatpur Branch,359
+408,Bahawalpur,Rahim Yar Khan,Model Town Branch Rahimyarkhan,391
+409,Bahawalpur,Rahim Yar Khan,Chest Branch Sadiqabad,396
+410,Bahawalpur,Rahim Yar Khan,ZahirPir Branch,731
+411,Bahawalpur,Rahim Yar Khan,Feroza Branch,1437
+412,Bahawalpur,Rahim Yar Khan,Pull Sunny Branch,1568
+413,Jhelum,Rawalpindi,G.T. Road Gujar Khan,332
+414,Jhelum,Rawalpindi,Daultala,803
+415,Jhelum,Rawalpindi,Gulyana,643
+416,Jhelum,Jhelum,Civil Lines Jhelum,344
+417,Jhelum,Jhelum,Pind Dadan Khan,432
+418,Jhelum,Jhelum,Mangla Road Dina,616
+419,Jhelum,Jhelum,G.T. Road Sohawa,1812
+420,Jhelum,Jhelum,Domeli,1460
+421,Jhelum,Jhelum,Chak Khasa,1383
+422,Jhelum,Jhelum,Muhammadi Bazar,1583
+423,Jhelum,Jhelum,Khewra,352
+424,Jhelum,Jhelum,Mangal Cantt.,363
+425,Jhelum,Chakwal,Main Branch Chakwal,421
+426,Jhelum,Chakwal,Talagang,422
+427,Jhelum,Chakwal,Choa Saiden Shah,556
+428,Jhelum,Chakwal,Dhudial,1615
+429,Jhelum,Chakwal,Chakora Kallar Kahar,1885
+430,Jhelum,Chakwal,Lawa,2099
+431,Jhelum,Chakwal,Bangwala,1884
+432,Jhelum,Gujrat,Kharian City,512
+433,Jhelum,Gujrat,Sarai Alamgir,569
+434,Mirpurkhas,Mirpurkhas,Digri,11
+435,Mirpurkhas,Mirpurkhas,Kot Ghulam Muhammad,16
+436,Mirpurkhas,Mirpurkhas,Main Branch Mirpurkhas,36
+437,Mirpurkhas,Mirpurkhas,Municipal Corporation Mirp,39
+438,Mirpurkhas,Nawabshah,Main Branch Nawabshah,40
+439,Mirpurkhas,Nawabshah,Sakrand Branch,56
+440,Mirpurkhas,Nawabshah,Engg. University Nawabshah,293
+441,Mirpurkhas,Nawabshah,Kazi Ahmed Branch,169
+442,Mirpurkhas,Nawabshah,Mohni Bazar Nawabshah,230
+443,Mirpurkhas,Nawabshah,Dour,1033
+444,Mirpurkhas,Sanghar,Main Branch Sanghar,57
+445,Mirpurkhas,Sanghar,Shahdadpur Branch,58
+446,Mirpurkhas,Sanghar,Tando Adam,67
+447,Mirpurkhas,Sanghar,Khipro,98
+448,Mirpurkhas,Umerkot,Samaro,83
+449,Mirpurkhas,Umerkot,Umerkot Branch,110
+450,Mirpurkhas,Umerkot,Kunri,2030
+451,Mirpurkhas,Mithi,Mithi,116
+452,Mirpurkhas,Mithi,Islamkot,195
+453,Quetta,Quetta,Manan chowk Branch,1860
+454,Quetta,Quetta,Quetta City,51
+455,Quetta,Quetta,Quetta Cantt,52
+456,Quetta,Quetta,Satellite Town,1083
+457,Quetta,Quetta,B.M.C. Branch Quetta,184
+458,Quetta,Quetta,Almo Chowk Br Quetta,2188
+459,Quetta,Quetta,Nawan killi Branch,2259
+460,Quetta,Quetta,Alamdar Road Branch,2106
+461,Quetta,Quetta,Ind Esate Branch,297
+462,Quetta,Pishin,Pishin,136
+463,Quetta,Kila Abdullah,Chaman,5
+464,Quetta,Killa Siaf ullah,Killa Siafullah,1061
+465,Quetta,Killa Siaf ullah,Muslim Bagh,151
+466,Quetta,Zhob,Zhob,101
+467,Quetta,Nushki,Nushki,175
+468,Quetta,Chagi,Dalbandin,174
+469,Quetta,Kharan,Kharan,154
+470,Quetta,Washuk,Washuk,2066
+471,Quetta,Ziarat,Ziarat,210
+472,Sibi,Sibi,Sibi,119
+473,Sibi,Bolan,Dhadar,176
+474,Sibi,Bolan,Bhagh,1989
+475,Sibi,Lehri,Lehri,206
+476,Sibi,Naseerabad,Dera Murad Jamali,1072
+477,Sibi,Jaffarabad,Dera Allah yar,105
+478,Sibi,Jaffarabad,Usta  Muhammad,1962
+479,Sibi,Sohbat pur,Sohbat pur,2247
+480,Sibi,Dera Bugti,Dera Bugti,1045
+481,Sibi,Dera Bugti,Sui,2193
+482,Sibi,Kohlu,Kohlu,209
+483,Sibi,Barkhan,Barkhan,204
+484,Sibi,Musa Khel,Musa Khel,1040
+485,Sibi,Loralai,Loralai,26
+486,Sibi,Duki,Duki,1050
+487,Sibi,Harnai,Harnai,155
+488,Lahore East,Kasur,Main Branch Kasur,348
+489,Lahore East,Kasur,Chunian Branch,322
+490,Lahore East,Kasur,Kot Radha Kishan Branch,515
+491,Lahore East,Kasur,Pattoki Branch,462
+492,Lahore East,Lahore,Raiwind Branch,518
+493,Lahore East,Lahore,Ismail Nagar Branch,1587
+494,Lahore East,Lahore,Shahpur Kanjran Branch,1655
+495,Lahore East,Lahore,Township Branch,1669
+496,Lahore East,Lahore,Model Town Branch,372
+497,Lahore East,Lahore,LDA Plaza Branch,466
+498,Lahore East,Lahore,ACP Model Branch,1442
+499,Lahore East,Lahore,Model Branch Gulberg,1569
+500,Lahore East,Lahore,Jail Road Branch,509
+501,Lahore East,Lahore,Punjab University Branch,2045
+502,Lahore East,Lahore,Sh. Zayed Hospital Branch,1707
+503,Lahore East,Lahore,Bahria Town Branch,2215
+504,Lahore East,Lahore,Moon Market Branch,1887
+505,Lahore East,Lahore,Wahdat Road Branch,979
+506,Sialkot,Sialkot,MB Daska,325
+507,Sialkot,Sialkot,District Courts,403
+508,Sialkot,Sialkot,Cantt,404
+509,Sialkot,Sialkot,City,405
+510,Sialkot,Sialkot,MB Pasrur,434
+511,Sialkot,Sialkot,Sambrial,481
+512,Sialkot,Sialkot,Chawinda,562
+513,Sialkot,Sialkot,S.I.E.,608
+514,Sialkot,Sialkot,Jandoke Goraya,670
+515,Sialkot,Sialkot,Dulchike,946
+516,Sialkot,Sialkot,Randhir More,1319
+517,Sialkot,Sialkot,Bullowal Kalan,1360
+518,Sialkot,Sialkot,TM Pasrur,1546
+519,Sialkot,Sialkot,Gohadpur,1626
+520,Sialkot,Sialkot,Kingra,1678
+521,Sialkot,Narowal,MB Narowal,381
+522,Sialkot,Narowal,RR Shakargarh,435
+523,Sialkot,Narowal,Baddomalhi,482
+524,Sialkot,Narowal,Kanjrur,682
+525,Sialkot,Narowal,Maingri,683
+526,Sialkot,Narowal,Jaman Chandowal,1730
+527,Sialkot,Narowal,Zafarwal,2077
+528,Mirpur AK,Mirpur AK,"Main BRANCH Mirpur, AK",371
+529,Mirpur AK,Mirpur AK,"CHAKSWARI, AK",445
+530,Mirpur AK,Mirpur AK,DISTT.COURTS BR. MIRPUR AK,472
+531,Mirpur AK,Mirpur AK,"SEC. C-4 BR. MIRPUR, AK",604
+532,Mirpur AK,Mirpur AK,"IND. AREA MIRPUR, AK",975
+533,Mirpur AK,Mirpur AK,"KAKRA TOWN, AK",1306
+534,Mirpur AK,Mirpur AK,Main Branch Dadyal AK,444
+535,Mirpur AK,Mirpur AK,"JATLAN BRANCH, AK",1466
+536,Mirpur AK,Mirpur AK,"KHADIMABAD,AK",844
+537,Mirpur AK,Mirpur AK,"AKALGARH, AK",1463
+538,Mirpur AK,Mirpur AK,"WAPDA COLONY MANGLA, AK",614
+539,Mirpur AK,Mirpur AK,"K. B. DADYAL, AK",1846
+540,Mirpur AK,Kotli AK,"M. B. KOTLI, AK",441
+541,Mirpur AK,Kotli AK,"BRAND BHATTA, AK",816
+542,Mirpur AK,Kotli AK,"GULPUR, AK",817
+543,Mirpur AK,Kotli AK,"SEHNSA BRANCH, AK",1302
+544,Mirpur AK,Kotli AK,"NIKYAL BRANCH, AK",1303
+545,Mirpur AK,Kotli AK,"CHAROHI, AK",1462
+546,Mirpur AK,Kotli AK,KHUIRATTA BRANCH AK,1465
+547,Mirpur AK,Kotli AK,Leri Tatapani Branch AK,1788
+548,Mirpur AK,Bhimber AK,Bhimber Branch AK,455
+549,Mirpur AK,Bhimber AK,"SAMAHNI, AK",1787
+550,Mirpur AK,Bhimber AK,Barnal Branch AK,1845
+551,Mirpur AK,Bhimber AK,Dist Complex Branch Bhimber AK,2217
+552,Karachi West,Central,NAZIMABAD,42
+553,Karachi West,Central,NORTH KARACHI,1086
+554,Karachi West,Central,SAKHI HASSAN,1067
+555,Karachi West,Central,Orangi Town,1055
+556,Karachi West,East,AWAMI MARKAZ,1920
+557,Karachi West,East,DISTRICT COUNCIL,108
+558,Karachi West,East,F.T.C.,274
+559,Karachi West,East,P.E.C.H.S.(CBA),48
+560,Karachi West,East,SHAHEED-E-MILLAT RD,144
+561,Karachi West,Kemari,PNAD MAURIPUR,180
+562,Karachi West,Kemari,S.I.T.E.,64
+563,Karachi West,Korangi,KORANGI INDUS. AREA,255
+564,Karachi West,Malir,AIRPORT,3
+565,Karachi West,Malir,C.O.D.,159
+566,Karachi West,Malir,LANDHI TOWNSHIP,257
+567,Karachi West,Malir,MODEL COLONY,1070
+568,Karachi West,Malir,N.E.D. UNIVERSITY,1063
+569,Karachi West,Malir,PORT QASIM,279
+570,Karachi West,Malir,S.P.I.T. LANDHI,103
+571,Karachi West,South,M.A. JINNAH ROAD,27
+572,Karachi West,West,KANNUP Br,152
+573,Gwadar,Gwadar,Gwadar,79
+574,Gwadar,Gwadar,Deep Sea Port Br,2258
+575,Gwadar,Lasbela,Hub Chowki,258
+576,Gwadar,Lasbela,Uthal,109
+577,Gwadar,Lasbela,Main Bazar Hub,2191
+578,Gwadar,Lasbela,Windar,1089
+579,Gwadar,Lasbela,Bela,145
+580,Gwadar,Khuzdar,Khuzdar,192
+581,Gwadar,Kalat,Kalat,1049
+582,Gwadar,Mastung,Mastung,31
+583,Gwadar,Turbat,Turbat,140
+584,Gwadar,Turbat,Main Bazar Turbat,2186
+585,Gwadar,Surab,Surab,1994
+586,Gwadar,Awaran,Awaran,1993
+587,Lahore Central,Lahore,"Main Branch, Lahore",300
+588,Lahore Central,Lahore,Lahore Cantt Branch,356
+589,Lahore Central,Lahore,Regal Chowk Branch,409
+590,Lahore Central,Lahore,Rehman Plaza Branch,1857
+591,Lahore Central,Lahore,DHS T Block Branch,323
+592,Lahore Central,Lahore,Bagbanpura Branch,540
+593,Lahore Central,Lahore,Wapda House Branch,416
+594,Lahore Central,Lahore,Shahdra Branch,452
+595,Lahore Central,Lahore,Durand Road Branch,483
+596,Lahore Central,Lahore,Chaubrji Branch,493
+597,Lahore Central,Lahore,Dina Nath Branch,877
+598,Lahore Central,Lahore,Anarkali Branch,303
+599,Lahore Central,Lahore,Badami Bagh Branch,1997
+600,Lahore Central,Lahore,Saddar Bazar,1523
+601,Lahore Central,Lahore,Mughalpura Branch,649
+602,Lahore Central,Lahore,Walton Road,1618
+603,Lahore Central,Lahore,Davis Road Branch,1524
+604,Peshawar,Charsadda,Tehsil BazarCharsada,410
+605,Peshawar,Charsadda,Shabqadar,1435
+606,Peshawar,Kohat,Main Branch Kohat,354
+607,Peshawar,Kohat,Behzadi Chakar Kot,918
+608,Peshawar,Kohat,Hangu Road Kohat,1311
+609,Peshawar,Kohat,Lachi,1452
+610,Peshawar,Kohat,K.D.A.Kohat,1803
+611,Peshawar,Nowshera,Saddar Bazar Nowshera,566
+612,Peshawar,Nowshera,Taru Jabba,824
+613,Peshawar,Nowshera,Shaidu,1431
+614,Peshawar,Peshawar,Nowshera Cantt,382
+615,Peshawar,Peshawar,Peshawar Cantt,386
+616,Peshawar,Peshawar,Peshawar City,387
+617,Peshawar,Peshawar,University Campus,388
+618,Peshawar,Peshawar,G.T.Road,517
+619,Peshawar,Peshawar,Khyber Bazar,598
+620,Peshawar,Peshawar,Civil Secretariat,986
+621,Peshawar,Peshawar,Warsak Road,1499
+622,Peshawar,Peshawar,Kohat Road,1512
+623,Peshawar,Peshawar,Hayatabad Township,1759
+624,Peshawar,Peshawar,Saddar Road Peshawar,1859
+625,Peshawar,Peshawar,Ring Road,2300
+626,Mansehra,Mansehra,M Br Mansehra,364
+627,Mansehra,Mansehra,Balakot Branch,574
+628,Mansehra,Mansehra,Oghi Branch,617
+629,Mansehra,Mansehra,Gari Habibullah Branch,665
+630,Mansehra,Mansehra,Lassan Nawab Sahib,1358
+631,Mansehra,Mansehra,Village Dab Mansehra,1372
+632,Mansehra,Mansehra,Baffa,1423
+633,Mansehra,Mansehra,Hazara University,1487
+634,Mansehra,Mansehra,College Chowk Mansehra,1798
+635,Mansehra,Mansehra,Village Noghazi Mansehra,1907
+636,Mansehra,Mansehra,Shinkyari Cantt,1797
+637,Mansehra,Shangla Swat,Bisham Branch,1535
+638,Mansehra,Upper Kohistan,Dassu,1691
+639,Mansehra,Battagram,Battagram,926
+640,Mansehra,Abbottabad,Dhani,1376
+641,Mansehra,Torghar,Judbah,2087
+642,Mansehra,Lower Kohistan,Pattan,1377
+643,Vehari,VEHARI,"Main Branch, Burewala",314
+644,Vehari,VEHARI,"Main Branch, Vehari",414
+645,Vehari,VEHARI,"Main Branch, Mailsi",497
+646,Vehari,VEHARI,Ghalla Mandi Burewala,738
+647,Vehari,VEHARI,Ghalla Mandi Gaggoo,761
+648,Vehari,Khanewal,"Main Branch, Mianchannu",368
+649,Vehari,Khanewal,Jahanian Branch,550
+650,Vehari,Khanewal,CHAK NO 168/10 R,1801
+651,Vehari,Khanewal,"D.C. Branch, Khanewal",734
+652,Vehari,Khanewal,"T.C. Branch, Mianchannu",1839
+653,Vehari,Khanewal,Katcha Khuh Branch,561
+654,Vehari,Bahawalpur,Ghalla Mandi HasilPur,339
+655,Vehari,Bahawalpur,Khair Pur Tamewali,705
+656,Vehari,Bahawal Nagar,Main Road Chishtian,320
+657,Vehari,Bahawal Nagar,Ghalla Mandi Chishtian,710
+658,Vehari,Bahawal Nagar,Dharanwala,712
+659,Sukkur,Ghotki,Ghotki Branch,118
+660,Sukkur,Ghotki,Mirpur Mathelo Branch,137
+661,Sukkur,Ghotki,Ubauro Branch,213
+662,Sukkur,Ghotki,Daharki Branch,1928
+663,Sukkur,Ghotki,Khanpur Mahar Branch,2103
+664,Sukkur,Khairpur Mirs,Main Branch Khairpur,19
+665,Sukkur,Khairpur Mirs,Kotdiji Branch,135
+666,Sukkur,Khairpur Mirs,Thari Mirwah Branch,212
+667,Sukkur,Khairpur Mirs,Pir Jo Goth,95
+668,Sukkur,Khairpur Mirs,Ranipur Branch,214
+669,Sukkur,Khairpur Mirs,Gambat Branch,13
+670,Sukkur,Khairpur Mirs,Setharja Branch,141
+671,Sukkur,Khairpur Mirs,Pacca Chang Branch,190
+672,Sukkur,Khairpur Mirs,Chundiko Branch,241
+673,Sukkur,Naushahro Feroze,Naushahro Feroze Branch,41
+674,Sukkur,Naushahro Feroze,Kandiaro Branch,93
+675,Sukkur,Naushahro Feroze,Mehrabpur Branch,34
+676,Sukkur,Naushahro Feroze,Paddidon Branch,2023
+677,Sukkur,Sukkur,Main Branch Sukkur,65
+678,Sukkur,Sukkur,Pano Akil City Branch,46
+679,Sukkur,Sukkur,Rohri Branch,54
+680,Sukkur,Sukkur,Saleh Pat Branch,2101

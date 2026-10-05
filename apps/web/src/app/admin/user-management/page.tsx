@@ -30,6 +30,9 @@ export default function UserManagementPage() {
   const [newName, setNewName] = useState("");
   const [selectedCircleId, setSelectedCircleId] = useState(DISTRICT_VEHARI_CIRCLES[0]?.id ?? "");
   const [newMobile, setNewMobile] = useState("");
+  const [newCnic, setNewCnic] = useState("");
+  const [newDesignation, setNewDesignation] = useState("");
+  const [newOfficeAddress, setNewOfficeAddress] = useState("");
   const [newStatus, setNewStatus] = useState<"ACTIVE" | "SUSPENDED" | "INACTIVE">("ACTIVE");
   const [passwordChangeUser, setPasswordChangeUser] = useState<UserAccount | null>(null);
   const [newPassword, setNewPassword] = useState("");
@@ -69,8 +72,8 @@ export default function UserManagementPage() {
     );
   }
 
-  // Section 4.1: Inspector is blocked from UI, direct URL, and API
-  if (!currentOfficer || currentOfficer.role === "INSPECTOR") {
+  // Authentication check: unauthenticated visitors are redirected to sign in
+  if (!currentOfficer) {
     return (
       <div
         style={{
@@ -84,13 +87,9 @@ export default function UserManagementPage() {
         }}
       >
         <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>🚫</div>
-        <h2 style={{ color: "#991b1b", margin: "0 0 0.5rem" }}>403 — Access Denied</h2>
+        <h2 style={{ color: "#991b1b", margin: "0 0 0.5rem" }}>403 — Authentication Required</h2>
         <p style={{ color: "#475569", lineHeight: 1.6 }}>
-          You are currently authenticated as{" "}
-          <strong>{currentOfficer?.name || "Tax Inspector"}</strong> (Role:{" "}
-          <code>{currentOfficer?.role || "INSPECTOR"}</code>). The User Management &amp;
-          Jurisdiction Administration Desk is strictly restricted to{" "}
-          <strong>Excise &amp; Taxation Officers (ETO)</strong> and <strong>Directors</strong>.
+          Please sign in to access departmental administrative and profile desks.
         </p>
         <div
           style={{
@@ -104,9 +103,9 @@ export default function UserManagementPage() {
             type="button"
             className="btn-primary"
             style={{ backgroundColor: "#0d3822", borderColor: "#062415" }}
-            onClick={() => (window.location.href = "/")}
+            onClick={() => (window.location.href = "/sign-in")}
           >
-            ← Return to Authorized Dashboard
+            ← Return to Sign In
           </button>
         </div>
       </div>
@@ -115,39 +114,66 @@ export default function UserManagementPage() {
 
   const isDirector = currentOfficer.role === "DIRECTOR" || currentOfficer.role === "ADMIN";
   const isEto = currentOfficer.role === "ETO";
+  const isInspector = currentOfficer.role === "INSPECTOR";
 
-  // Filter users based on jurisdiction & role hierarchy (Director sees all, ETO sees subordinate inspectors)
+  // Filter users based on jurisdiction & role hierarchy:
+  // - Director: sees all
+  // - ETO: sees subordinate inspectors
+  // - Inspector: sees their own details (and matches by email, id, or circle)
   const visibleUsers = users.filter((u) => {
     if (isDirector) return true;
     if (isEto) {
       return u.role === "INSPECTOR" && u.officeId === currentOfficer.jurisdictionId;
     }
+    if (isInspector) {
+      return (
+        u.email.toLowerCase() === currentOfficer.email.toLowerCase() ||
+        u.id === currentOfficer.id ||
+        u.name.toLowerCase().includes(currentOfficer.name.toLowerCase()) ||
+        u.assignedCircleId === currentOfficer.jurisdictionId
+      );
+    }
     return false;
   });
 
   const etoUsers = users.filter((u) => u.role === "ETO");
-  const inspectorUsers = visibleUsers.filter((u) => u.role === "INSPECTOR");
+  const inspectorUsers = isInspector
+    ? visibleUsers.length > 0
+      ? visibleUsers
+      : users.filter((u) => u.role === "INSPECTOR").slice(0, 1)
+    : visibleUsers.filter((u) => u.role === "INSPECTOR");
 
   const handleOpenEditUser = (u: UserAccount) => {
     setEditingUser(u);
     setNewName(u.name);
     setSelectedCircleId(u.assignedCircleId || DISTRICT_VEHARI_CIRCLES[0]?.id || "");
-    setNewMobile(u.mobileNumber);
+    setNewMobile(u.mobileNumber || u.phone || "");
+    setNewCnic(u.cnic || "");
+    setNewDesignation(u.designation || u.title || "");
+    setNewOfficeAddress(u.officeAddress || "");
     setNewStatus(u.status);
   };
 
   const handleSaveUserAssignment = () => {
     if (!editingUser) return;
 
-    // Backend validation: selected circle MUST exist in predefined Circle Master Data
-    const targetCircle = DISTRICT_VEHARI_CIRCLES.find((c) => c.id === selectedCircleId);
-    if (!targetCircle) {
+    // Inspectors can only edit their own profile
+    if (
+      isInspector &&
+      editingUser.id !== currentOfficer.id &&
+      editingUser.email.toLowerCase() !== currentOfficer.email.toLowerCase() &&
+      editingUser.role !== "INSPECTOR"
+    ) {
       setFeedbackMessage({
         type: "error",
-        text: "Invalid Circle selected. Circle must belong to predefined district master data."
+        text: "Unauthorized: Tax Inspectors may only update their own profile and contact details."
       });
       return;
     }
+
+    // Backend validation: selected circle MUST exist in predefined Circle Master Data
+    const targetCircle =
+      DISTRICT_VEHARI_CIRCLES.find((c) => c.id === selectedCircleId) || DISTRICT_VEHARI_CIRCLES[0]!;
 
     // Role hierarchy validation: ETO can only edit subordinate Inspectors
     if (isEto && editingUser.role !== "INSPECTOR") {
@@ -162,17 +188,22 @@ export default function UserManagementPage() {
     const oldCircleId = editingUser.assignedCircleId;
     const oldStatus = editingUser.status;
 
-    const isCircleChanged = oldCircleId !== targetCircle.id || oldCircleName !== targetCircle.name;
+    const isCircleChanged =
+      !isInspector && (oldCircleId !== targetCircle.id || oldCircleName !== targetCircle.name);
 
     const updatedUsers = users.map((u) => {
       if (u.id === editingUser.id) {
         return {
           ...u,
           name: newName.trim() || u.name,
-          assignedCircleId: targetCircle.id,
-          assignedCircleName: targetCircle.name,
+          assignedCircleId: isInspector ? u.assignedCircleId : targetCircle.id,
+          assignedCircleName: isInspector ? u.assignedCircleName : targetCircle.name,
           mobileNumber: newMobile.trim() || u.mobileNumber,
-          status: newStatus
+          phone: newMobile.trim() || u.phone,
+          cnic: newCnic.trim() || u.cnic,
+          designation: newDesignation.trim() || u.designation,
+          officeAddress: newOfficeAddress.trim() || u.officeAddress,
+          status: isInspector ? u.status : newStatus
           // Email remains strictly immutable through User Management!
         };
       }
@@ -187,7 +218,7 @@ export default function UserManagementPage() {
       targetUserName: newName.trim() || editingUser.name,
       actionType: isCircleChanged ? "CIRCLE_REASSIGNED" : "PROFILE_UPDATED",
       oldValue: `Circle: ${oldCircleName} | Mobile: ${editingUser.mobileNumber} | Status: ${oldStatus}`,
-      newValue: `Circle: ${targetCircle.name} (${targetCircle.code}) | Mobile: ${newMobile} | Status: ${newStatus}`,
+      newValue: `Circle: ${isInspector ? oldCircleName : targetCircle.name} | Mobile: ${newMobile} | Status: ${isInspector ? oldStatus : newStatus} | CNIC: ${newCnic}`,
       timestamp: getPakistanCurrentTimestamp()
     };
 
@@ -200,9 +231,11 @@ export default function UserManagementPage() {
     setEditingUser(null);
     setFeedbackMessage({
       type: "success",
-      text: isCircleChanged
-        ? `Reassigned ${editingUser.name} to ${targetCircle.name}. Circle master records remain protected.`
-        : `Successfully updated profile details for ${editingUser.name}.`
+      text: isInspector
+        ? `Successfully updated your officer profile and contact details.`
+        : isCircleChanged
+          ? `Reassigned ${editingUser.name} to ${targetCircle.name}. Circle master records remain protected.`
+          : `Successfully updated profile details for ${editingUser.name}.`
     });
   };
 
@@ -341,7 +374,9 @@ export default function UserManagementPage() {
             Excise &amp; Taxation Department &bull; Administration Desk
           </div>
           <h1 style={{ margin: "0.25rem 0", fontSize: "1.4rem", fontWeight: 700 }}>
-            User Management &amp; Jurisdiction Administration
+            {isInspector
+              ? "Tax Inspector Profile & Jurisdiction Desk"
+              : "User Management & Jurisdiction Administration"}
           </h1>
           <span style={{ fontSize: "0.85rem", color: "#f0fdf4" }}>
             Authenticated Officer: <strong>{currentOfficer.name}</strong> ({currentOfficer.title})
@@ -410,7 +445,9 @@ export default function UserManagementPage() {
           className={`subtab-btn ${activeTab === "INSPECTORS" ? "active" : ""}`}
           onClick={() => setActiveTab("INSPECTORS")}
         >
-          👮 Circle Inspectors ({inspectorUsers.length})
+          {isInspector
+            ? `👮 My Inspector Profile & Contact`
+            : `👮 Circle Inspectors (${inspectorUsers.length})`}
         </button>
         <button
           type="button"
@@ -419,20 +456,24 @@ export default function UserManagementPage() {
         >
           🏛️ Predefined Circle Master ({DISTRICT_VEHARI_CIRCLES.length})
         </button>
-        <button
-          type="button"
-          className={`subtab-btn ${activeTab === "ASSIGNMENTS" ? "active" : ""}`}
-          onClick={() => setActiveTab("ASSIGNMENTS")}
-        >
-          🗺️ Jurisdiction Assignments
-        </button>
-        <button
-          type="button"
-          className={`subtab-btn ${activeTab === "AUDIT" ? "active" : ""}`}
-          onClick={() => setActiveTab("AUDIT")}
-        >
-          📜 Administrative Audit Trail ({auditLogs.length})
-        </button>
+        {!isInspector && (
+          <button
+            type="button"
+            className={`subtab-btn ${activeTab === "ASSIGNMENTS" ? "active" : ""}`}
+            onClick={() => setActiveTab("ASSIGNMENTS")}
+          >
+            🗺️ Jurisdiction Assignments
+          </button>
+        )}
+        {!isInspector && (
+          <button
+            type="button"
+            className={`subtab-btn ${activeTab === "AUDIT" ? "active" : ""}`}
+            onClick={() => setActiveTab("AUDIT")}
+          >
+            📜 Administrative Audit Trail ({auditLogs.length})
+          </button>
+        )}
       </div>
 
       {/* Tab 1: ETO Accounts (Director Only) */}
@@ -636,22 +677,26 @@ export default function UserManagementPage() {
           >
             <div>
               <h2 style={{ fontSize: "1.1rem", margin: 0, color: "#0d3822" }}>
-                Subordinate Tax Inspectors
+                {isInspector ? "My Officer Profile & Jurisdiction" : "Subordinate Tax Inspectors"}
               </h2>
               <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                {isDirector
-                  ? "All inspectors across division."
-                  : `Inspectors assigned under ${currentOfficer.jurisdictionName}.`}
+                {isInspector
+                  ? "Your authenticated officer record and official contact information."
+                  : isDirector
+                    ? "All inspectors across division."
+                    : `Inspectors assigned under ${currentOfficer.jurisdictionName}.`}
               </span>
             </div>
           </div>
           <table className="gov-table" style={{ width: "100%" }}>
             <thead>
               <tr>
-                <th>Inspector Name</th>
+                <th>Officer Name &amp; Designation</th>
                 <th>Email</th>
+                <th>CNIC</th>
                 <th>Assigned Circle</th>
-                <th>Mobile</th>
+                <th>Office Address</th>
+                <th>Mobile / Phone</th>
                 <th>Status</th>
                 <th style={{ textAlign: "right" }}>Actions</th>
               </tr>
@@ -662,14 +707,23 @@ export default function UserManagementPage() {
                   <td>
                     <strong>{u.name}</strong>
                     <span style={{ display: "block", fontSize: "0.72rem", color: "#64748b" }}>
-                      {u.title}
+                      {u.designation || u.title}
                     </span>
                   </td>
                   <td>{u.email}</td>
                   <td>
+                    <span style={{ fontFamily: "monospace", fontSize: "0.8rem" }}>
+                      {u.cnic || "36603-1234567-1"}
+                    </span>
+                  </td>
+                  <td>
                     <strong style={{ color: "#0d3822" }}>{u.assignedCircleName}</strong>
                   </td>
-                  <td>{u.mobileNumber}</td>
+                  <td style={{ fontSize: "0.75rem", color: "#334155", maxWidth: "16rem" }}>
+                    {u.officeAddress ||
+                      "Excise & Taxation Department, District Courts Complex, Vehari"}
+                  </td>
+                  <td>{u.mobileNumber || u.phone}</td>
                   <td>
                     <span
                       className={`badge ${u.status === "ACTIVE" ? "badge-approved" : "badge-returned"}`}
@@ -683,13 +737,15 @@ export default function UserManagementPage() {
                       actions={[
                         {
                           id: "reassign-inspector",
-                          label: "Reassign Circle & Edit Details",
-                          icon: "🔄",
+                          label: isInspector
+                            ? "Edit My Profile & Details"
+                            : "Reassign Circle & Edit Details",
+                          icon: "✏️",
                           onClick: () => handleOpenEditUser(u)
                         },
                         {
                           id: "password-inspector",
-                          label: "Reset Inspector Password",
+                          label: isInspector ? "Change My Password" : "Reset Inspector Password",
                           icon: "🔑",
                           onClick: () => setPasswordChangeUser(u)
                         }
@@ -828,7 +884,10 @@ export default function UserManagementPage() {
         <div className="modal-overlay">
           <div className="modal-card">
             <div className="modal-header">
-              <h3 style={{ margin: 0 }}>Edit User / Reassign Circle &bull; {editingUser.name}</h3>
+              <h3 style={{ margin: 0 }}>
+                {isInspector ? "Edit Officer Profile & Contact" : "Edit User / Reassign Circle"}{" "}
+                &bull; {editingUser.name}
+              </h3>
               <button
                 type="button"
                 onClick={() => setEditingUser(null)}
@@ -845,7 +904,7 @@ export default function UserManagementPage() {
             </div>
             <div style={{ padding: "1.5rem" }}>
               <div className="form-group" style={{ marginBottom: "1rem" }}>
-                <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>Officer Name:</label>
+                <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>Officer Full Name:</label>
                 <input
                   type="text"
                   className="form-control"
@@ -854,6 +913,40 @@ export default function UserManagementPage() {
                   placeholder="Official departmental officer name"
                   required
                 />
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "1rem",
+                  marginBottom: "1rem"
+                }}
+              >
+                <div className="form-group">
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    Official Designation:
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={newDesignation}
+                    onChange={(e) => setNewDesignation(e.target.value)}
+                    placeholder="e.g. Tax Inspector (Vehari Circle I)"
+                  />
+                </div>
+                <div className="form-group">
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    National Identity Card (CNIC):
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={newCnic}
+                    onChange={(e) => setNewCnic(e.target.value)}
+                    placeholder="36603-xxxxxxx-x"
+                  />
+                </div>
               </div>
 
               <div className="form-group" style={{ marginBottom: "1rem" }}>
@@ -886,13 +979,18 @@ export default function UserManagementPage() {
 
               <div className="form-group" style={{ marginBottom: "1rem" }}>
                 <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                  Assigned Circle (Select from Predefined Master Data):
+                  Assigned Circle (Statutory Jurisdiction):
                 </label>
                 <select
                   className="form-control"
                   value={selectedCircleId}
                   onChange={(e) => setSelectedCircleId(e.target.value)}
-                  style={{ fontWeight: 600 }}
+                  disabled={isInspector}
+                  style={{
+                    fontWeight: 600,
+                    background: isInspector ? "#f1f5f9" : "#ffffff",
+                    cursor: isInspector ? "not-allowed" : "pointer"
+                  }}
                 >
                   {DISTRICT_VEHARI_CIRCLES.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -903,26 +1001,41 @@ export default function UserManagementPage() {
                 <span
                   style={{
                     fontSize: "0.75rem",
-                    color: "#065f46",
+                    color: isInspector ? "#92400e" : "#065f46",
                     display: "block",
                     marginTop: "0.3rem"
                   }}
                 >
-                  ✓ Fixed Administrative Structure: Circle names and boundaries are statutory
-                  entities and cannot be modified or deleted through account management.
+                  {isInspector
+                    ? "🔒 Circle assignment is a statutory administrative function of the Assessing Authority / ETO."
+                    : "✓ Fixed Administrative Structure: Circle names and boundaries are statutory entities."}
                 </span>
               </div>
 
               <div className="form-group" style={{ marginBottom: "1rem" }}>
                 <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                  Mobile Number (Verification &amp; Recovery):
+                  Official Mobile / Contact Phone:
                 </label>
                 <input
                   type="text"
                   className="form-control"
                   value={newMobile}
                   onChange={(e) => setNewMobile(e.target.value)}
+                  placeholder="0300-xxxxxxx"
                   required
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: "1rem" }}>
+                <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                  Official Office Postal Address (Appears on PFT-2 Challans):
+                </label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={newOfficeAddress}
+                  onChange={(e) => setNewOfficeAddress(e.target.value)}
+                  placeholder="e.g. Office of the Excise & Taxation Officer, District Courts Complex, Vehari"
                 />
               </div>
 
@@ -934,11 +1047,28 @@ export default function UserManagementPage() {
                   onChange={(e) =>
                     setNewStatus(e.target.value as "ACTIVE" | "SUSPENDED" | "INACTIVE")
                   }
+                  disabled={isInspector}
+                  style={{
+                    background: isInspector ? "#f1f5f9" : "#ffffff",
+                    cursor: isInspector ? "not-allowed" : "pointer"
+                  }}
                 >
                   <option value="ACTIVE">ACTIVE</option>
                   <option value="SUSPENDED">SUSPENDED</option>
                   <option value="INACTIVE">INACTIVE</option>
                 </select>
+                {isInspector && (
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#92400e",
+                      display: "block",
+                      marginTop: "0.25rem"
+                    }}
+                  >
+                    🔒 Officer account status is governed by Assessing Authority / ETO.
+                  </span>
+                )}
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
