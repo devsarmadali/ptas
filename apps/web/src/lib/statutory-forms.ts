@@ -12,6 +12,7 @@ import {
   computeDefaulterAging,
   generateDocumentPin,
   getStatutoryRuleById,
+  getStatutoryRuleBySubclassification,
   type DefaulterAgingInfo,
   type DefaulterAgingStatus,
   type DemandLedgerEntry,
@@ -65,6 +66,167 @@ export function formatFullSubclassCode(
   }
 
   return code || cat;
+}
+
+/**
+ * Resolves the official, statutory descriptive label/text for a given subclassification code.
+ * E.g. "6(2)(a)(i)" -> "Real Estate Agents / Property Dealers"
+ *      "6(x)" -> "Jewelers, Departmental Stores, Electronic Goods Stores"
+ *      "1(i)" -> "Paid-up capital up to Rs 5 million"
+ */
+export function getSubclassLabel(
+  rawSubCode?: string | null,
+  categoryCode?: string | null,
+  statutoryRuleId?: string | null,
+  fallbackLabel?: string | null
+): string {
+  // 1. If a valid, non-placeholder fallbackLabel is provided, sanitize and check it
+  if (fallbackLabel && typeof fallbackLabel === "string") {
+    const trimmed = fallbackLabel.trim();
+    if (
+      trimmed &&
+      trimmed.toLowerCase() !== "under review" &&
+      trimmed.toLowerCase() !== "pending review" &&
+      trimmed.toLowerCase() !== "pending statutory classification" &&
+      trimmed !== rawSubCode &&
+      trimmed !== categoryCode &&
+      !/^class\s*\d+$/i.test(trimmed)
+    ) {
+      return trimmed;
+    }
+  }
+
+  const code = formatFullSubclassCode(rawSubCode, categoryCode, statutoryRuleId);
+
+  // 2. Check rule by ID if provided
+  if (statutoryRuleId) {
+    const byId = getStatutoryRuleById(statutoryRuleId);
+    if (byId?.subclassification_label && byId.subclassification_label.trim() !== "") {
+      return byId.subclassification_label.trim();
+    }
+    if (byId?.subcategory && byId.subcategory.trim() !== "") {
+      return byId.subcategory.trim();
+    }
+  }
+
+  // 3. Check domain rules by subclassification code
+  if (code) {
+    const bySub = getStatutoryRuleBySubclassification(code);
+    if (bySub?.subclassification_label && bySub.subclassification_label.trim() !== "") {
+      return bySub.subclassification_label.trim();
+    }
+    if (bySub?.subcategory && bySub.subcategory.trim() !== "") {
+      return bySub.subcategory.trim();
+    }
+
+    // Also check stripped code without category prefix if code starts with category
+    const cat = (categoryCode ?? "").trim();
+    if (cat && code.startsWith(cat)) {
+      const stripped = code.slice(cat.length);
+      const byStripped = getStatutoryRuleBySubclassification(stripped);
+      if (byStripped?.subclassification_label) return byStripped.subclassification_label.trim();
+      if (byStripped?.subcategory) return byStripped.subcategory.trim();
+    }
+  }
+
+  // 4. Fallback lookup for known statutory schedules and survey legacy codes
+  const normalized = (code || "").replace(/\s+/g, "").toLowerCase();
+  if (
+    normalized.includes("6(2)(a)(i)") ||
+    normalized.includes("2(a)(i)") ||
+    normalized.includes("6(vii)(d)")
+  ) {
+    return "Real Estate Agents / Property Dealers";
+  }
+  if (normalized.includes("6(2)(a)(ii)") || normalized.includes("2(a)(ii)")) {
+    return "Motor Vehicle Dealers";
+  }
+  if (normalized.includes("6(vii)(c)") || normalized.includes("2(a)(iii)")) {
+    return "Motorcycle / Scooter Dealers";
+  }
+  if (normalized.includes("6(vii)(a)")) {
+    return "Members of Stock Exchanges";
+  }
+  if (normalized.includes("6(vii)(b)")) {
+    return "Money Changers";
+  }
+  if (normalized.includes("6(vii)(e)")) {
+    return "Recruiting Agents";
+  }
+  if (normalized.includes("6(x)")) {
+    return "Jewelers, Departmental Stores, Electronic Goods Stores";
+  }
+  if (normalized.includes("6(i)")) {
+    return "Medical Consultants or Specialists / Dental Surgeons";
+  }
+  if (normalized.includes("6(ii)")) {
+    return "Registered Medical Practitioners";
+  }
+  if (normalized.includes("6(iii)")) {
+    return "Homoeopaths, Hakeems and Ayurvedics";
+  }
+  if (normalized.includes("6(iv)")) {
+    return "Auditing Firms";
+  }
+  if (normalized.includes("6(v)")) {
+    return "Management, Tax & Technical Consultants / Architects";
+  }
+  if (normalized.includes("6(vi)")) {
+    return "Lawyers";
+  }
+  if (normalized.includes("6(viii)")) {
+    return "Carriage of Goods & Passengers by Road";
+  }
+  if (normalized.includes("6(ix)")) {
+    return "Health Clubs and Gymnasiums";
+  }
+  if (normalized.includes("6(xi)")) {
+    return "Tobacco Vendors";
+  }
+  if (normalized.startsWith("1(i)")) return "Paid-up capital up to Rs 5 million";
+  if (normalized.startsWith("1(ii)")) return "Paid-up capital > Rs 5M and <= Rs 50M";
+  if (normalized.startsWith("1(iii)")) return "Paid-up capital > Rs 50M and <= Rs 100M";
+  if (normalized.startsWith("1(iv)")) return "Paid-up capital > Rs 100M and <= Rs 200M";
+  if (normalized.startsWith("1(v)")) return "Paid-up capital exceeding Rs 200M";
+  if (normalized.startsWith("2(i)")) return "Employees not exceeding 10";
+  if (normalized.startsWith("2(ii)")) return "Employees exceeding 10 but not exceeding 25";
+  if (normalized.startsWith("2(iii)")) return "Employees exceeding 25";
+  if (normalized.startsWith("3(i)")) return "10+ Employees Commercial Establishments";
+  if (normalized.startsWith("3(ii)")) return "Other Commercial Establishments";
+  if (normalized.startsWith("4(i)")) return "Commercial Importers / Exporters";
+  if (normalized.startsWith("5(i)")) return "Contractors / Builders / Suppliers";
+  if (normalized.startsWith("7")) return "Petrol Pumps / CNG Stations";
+  if (normalized.startsWith("8")) return "Property Developers / Builders / Marketing Agents";
+  if (normalized.startsWith("9")) return "Restaurants / Fast Food / Bakers";
+  if (normalized.startsWith("10")) return "Service Stations / Car Wash";
+  if (normalized.startsWith("11")) return "Marriage Halls / Banquet Halls / Event Complexes";
+
+  return fallbackLabel || "";
+}
+
+/**
+ * Formats a subclassification code and its descriptive title for select dropdowns.
+ * E.g.: "Code 6(2)(a)(i) — Real Estate Agents / Property Dealers"
+ */
+export function formatSubclassOption(
+  rawSubCode?: string | null,
+  categoryCode?: string | null,
+  statutoryRuleId?: string | null,
+  explicitLabel?: string | null
+): string {
+  const code = formatFullSubclassCode(rawSubCode, categoryCode, statutoryRuleId);
+  const label = getSubclassLabel(rawSubCode, categoryCode, statutoryRuleId, explicitLabel);
+  const codeDisplay = code ? (code.toLowerCase().startsWith("code") ? code : `Code ${code}`) : "";
+
+  if (!codeDisplay) return label || "All Sub-Classes";
+  if (
+    !label ||
+    label.toLowerCase() === code.toLowerCase() ||
+    label.toLowerCase() === "under review"
+  ) {
+    return codeDisplay;
+  }
+  return `${codeDisplay} — ${label}`;
 }
 
 export function cleanCircleName(circle?: string): string {
@@ -388,6 +550,7 @@ export interface FormPFT3RowModel {
   readonly scheduleEntry: string;
   readonly categoryName: string;
   readonly subclassificationCode: string | null;
+  readonly subclassificationName?: string | null | undefined;
   readonly statutoryTertiaryCode?: string | null;
   readonly tertiarySlab: string | null;
   readonly slabRatePkr: number;
@@ -1353,6 +1516,16 @@ export function generateFormPFT3Rows(units: readonly StoredUnit[]): readonly For
     const summary = computeUnitFinancialSummary(u);
     const latestAssessment = u.assessments[0];
 
+    const rawSubCode = u.statutoryRule.subclassification_code || u.subclassificationCode;
+    const subName =
+      u.statutoryRule.subclassification_label ??
+      u.statutoryRule.subcategory ??
+      getSubclassLabel(
+        rawSubCode,
+        u.categoryCode || u.statutoryRule.category_code,
+        u.statutoryRuleId
+      );
+
     return {
       sourceUnitId: u.id,
       serialNumber: idx + 1,
@@ -1364,7 +1537,8 @@ export function generateFormPFT3Rows(units: readonly StoredUnit[]): readonly For
       identifier: `${u.identifierType}: ${u.identifierValue}`,
       scheduleEntry: getScheduleEntryLabel(u.statutoryRule),
       categoryName: u.statutoryRule.category,
-      subclassificationCode: u.statutoryRule.subclassification_code,
+      subclassificationCode: rawSubCode ?? null,
+      subclassificationName: subName || null,
       statutoryTertiaryCode: u.statutoryRule.statutory_tertiary_code,
       tertiarySlab: u.statutoryRule.statutory_tertiary_classification ?? null,
       slabRatePkr: u.statutoryRule.annual_rate_pkr,

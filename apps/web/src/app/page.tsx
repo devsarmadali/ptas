@@ -2041,21 +2041,21 @@ export default function HomePage({
     return units.filter((u) => u.assessments[0]?.status === "APPROVED");
   }, [units]);
 
-  // Statutory Circle Notice Dispatch & Service Register (Rule 6)
+  // Statutory Circle Notice Dispatch & Service Register (Rule 6) - restricted strictly to PFT-3 enrolled units
   const circleDispatchRegisterData = useMemo(() => {
-    return generateCircleDispatchRegister(units, "2026-07-02");
-  }, [units]);
+    return generateCircleDispatchRegister(pft3EnrolledUnits, "2026-07-02");
+  }, [pft3EnrolledUnits]);
 
-  // Phase 7: Executive MIS Analytics Metrics
+  // Phase 7: Executive MIS Analytics Metrics - strictly computed on PFT-3 enrolled units
   const misMetrics: ExecutiveMetrics = useMemo(() => {
     return computeExecutiveMetrics(
-      units,
+      pft3EnrolledUnits,
       appeals,
       discontinuances,
       refundAdjustments,
       clearanceCertificates
     );
-  }, [units, appeals, discontinuances, refundAdjustments, clearanceCertificates]);
+  }, [pft3EnrolledUnits, appeals, discontinuances, refundAdjustments, clearanceCertificates]);
 
   // Phase 9: Effective Perspective for Analytics Dashboard
   const effectivePerspective: "INSPECTOR" | "ETO" | "DIRECTOR" =
@@ -2077,13 +2077,9 @@ export default function HomePage({
   ) => {
     switch (schedule) {
       case "PFT3_REGISTER": {
-        const pft3Units = units.filter(
-          (u) =>
-            !u.demandUnit?.permanentDemandNo?.startsWith("V-") && !u.demandNumber?.startsWith("V-")
-        );
         downloadCsvFile(
           "PFT-3_Assessment_Register_Vehari_2026.csv",
-          exportPft3RegisterCsv(pft3Units)
+          exportPft3RegisterCsv(pft3EnrolledUnits)
         );
         showToast("success", "Form P.F.T-3 Register CSV downloaded.");
         break;
@@ -2091,14 +2087,14 @@ export default function HomePage({
       case "DEFAULTER_ROLL":
         downloadCsvFile(
           "PTAS_Defaulter_Arrears_Roll_Vehari_2026.csv",
-          exportDefaulterRecoveryCsv(units)
+          exportDefaulterRecoveryCsv(pft3EnrolledUnits)
         );
         showToast("success", "Defaulter & Arrears Recovery Roll CSV downloaded.");
         break;
       case "NOTICE_DISPATCH":
         downloadCsvFile(
           "Notice_Dispatch_Service_Register_Vehari_2026.csv",
-          exportNoticeDispatchCsv(units)
+          exportNoticeDispatchCsv(pft3EnrolledUnits)
         );
         showToast("success", "Notice Dispatch & Service Register CSV downloaded.");
         break;
@@ -2137,11 +2133,10 @@ export default function HomePage({
   ) => {
     switch (schedule) {
       case "PFT3_REGISTER": {
-        const approvedUnits = units.filter((u) => u.assessments[0]?.status === "APPROVED");
         downloadOfficialPdf({
           type: "FORM_PFT3_REGISTER",
           documentIdOrData: {
-            rows: generateFormPFT3Rows(approvedUnits.length > 0 ? approvedUnits : units)
+            rows: generateFormPFT3Rows(pft3EnrolledUnits)
           },
           defaultFilename: "Form_PFT3_Statutory_Assessment_Register.pdf"
         });
@@ -2149,7 +2144,7 @@ export default function HomePage({
         break;
       }
       case "DEFAULTER_ROLL": {
-        const defaulterUnits = units.filter((u) => computeUnitBalance(u) > 0);
+        const defaulterUnits = pft3EnrolledUnits.filter((u) => computeUnitBalance(u) > 0);
         const rows = defaulterUnits.map((u, i) => {
           const balance = computeUnitBalance(u);
           const aging = computeUnitDefaulterAging(u, "2026-09-01");
@@ -2192,7 +2187,7 @@ export default function HomePage({
         break;
       }
       case "NOTICE_DISPATCH": {
-        const dispatchReg = generateCircleDispatchRegister(units);
+        const dispatchReg = generateCircleDispatchRegister(pft3EnrolledUnits);
         downloadOfficialPdf({
           type: "STATUTORY_REPORT",
           documentIdOrData: {
