@@ -71,7 +71,8 @@ import {
   numberToWordsPkr,
   computeUnitBalance,
   computeUnitFinancialSummary,
-  computeUnitDefaulterAging
+  computeUnitDefaulterAging,
+  formatFullSubclassCode
 } from "../lib/statutory-forms";
 import {
   type BulkSurveyParseResult,
@@ -494,6 +495,7 @@ export default function HomePage({
   const [pft3CircleFilter, setPft3CircleFilter] = useState("ALL");
   const [pft3LocalityFilter, setPft3LocalityFilter] = useState("ALL");
   const [pft3CategoryFilter, setPft3CategoryFilter] = useState("ALL");
+  const [pft3SubclassFilter, setPft3SubclassFilter] = useState("ALL");
   const [pft3SearchExecuted, setPft3SearchExecuted] = useState(false);
   const [pft3CurrentPage, setPft3CurrentPage] = useState(1);
   const PFT3_PAGE_SIZE = 20;
@@ -505,6 +507,7 @@ export default function HomePage({
   const [potentialCircleFilter, setPotentialCircleFilter] = useState("ALL");
   const [potentialLocalityFilter, setPotentialLocalityFilter] = useState("ALL");
   const [potentialClassificationFilter, setPotentialClassificationFilter] = useState("ALL");
+  const [potentialSubclassFilter, setPotentialSubclassFilter] = useState("ALL");
   const [potentialCurrentPage, setPotentialCurrentPage] = useState(1);
   const POTENTIAL_PAGE_SIZE = 20;
 
@@ -527,9 +530,6 @@ export default function HomePage({
   const [potNewRuleId, setPotNewRuleId] = useState("PFT-1-01");
   const [potNewCircleName, setPotNewCircleName] = useState("Vehari Circle I (City / Commercial)");
   const [potNewTehsil, setPotNewTehsil] = useState("Vehari");
-
-  // Receipts Filter Controls
-  const [receiptSourceFilter, setReceiptSourceFilter] = useState("ALL");
 
   // Supabase Real Auth & Session State (Phase 5)
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -617,6 +617,7 @@ export default function HomePage({
   const [unitsStatusFilter, setUnitsStatusFilter] = useState<
     "ALL" | "DRAFT" | "SUBMITTED" | "RETURNED" | "APPROVED"
   >("ALL");
+  const [unitsSubclassFilter, setUnitsSubclassFilter] = useState("ALL");
 
   // PFT-2 Filters & Modals
   const [pft2StatusFilter, setPft2StatusFilter] = useState<
@@ -664,7 +665,9 @@ export default function HomePage({
   const [receiptDateFrom, setReceiptDateFrom] = useState("");
   const [receiptDateTo, setReceiptDateTo] = useState("");
   const [receiptCategoryFilter, setReceiptCategoryFilter] = useState("ALL");
+  const [receiptSubclassFilter, setReceiptSubclassFilter] = useState("ALL");
   const [receiptChannelFilter, setReceiptChannelFilter] = useState("ALL");
+  const [receiptSourceFilter, setReceiptSourceFilter] = useState<string>("ALL");
   const [showReceiptDocumentModal, setShowReceiptDocumentModal] = useState(false);
   const [activeReceiptRecord, setActiveReceiptRecord] = useState<StatutoryReceiptRecord | null>(
     null
@@ -1687,17 +1690,66 @@ export default function HomePage({
     );
   }, [units]);
 
-  const formPFT3Rows = useMemo(() => {
-    return generateFormPFT3Rows(
-      units.filter(
-        (unit) =>
-          unit.assessments[0]?.status === "APPROVED" &&
-          unit.pft3Registered !== false &&
-          !unit.demandUnit?.permanentDemandNo?.startsWith("V-") &&
-          !unit.demandNumber?.startsWith("V-")
-      )
+  const activePotentialIds = useMemo(() => {
+    return new Set(potentialUnits.filter((p) => p.status === "ACTIVE").map((p) => p.id));
+  }, [potentialUnits]);
+
+  const activePotentialPins = useMemo(() => {
+    return new Set(
+      potentialUnits
+        .filter((p) => p.status === "ACTIVE")
+        .flatMap((p) => [p.pinNumber, p.potentialNumber, p.provincialUin].filter(Boolean))
     );
-  }, [units]);
+  }, [potentialUnits]);
+
+  const pft3EnrolledUnits = useMemo(() => {
+    return units.filter((unit) => {
+      // Exclude prospective/potential register units
+      if (
+        unit.demandUnit?.permanentDemandNo?.startsWith("V-") ||
+        unit.demandNumber?.startsWith("V-")
+      ) {
+        return false;
+      }
+      if (
+        unit.pinNumber?.startsWith("Potential-") ||
+        unit.provincialUin?.startsWith("Potential-")
+      ) {
+        return false;
+      }
+      if (activePotentialIds.has(unit.id)) return false;
+      if (unit.pinNumber && activePotentialPins.has(unit.pinNumber)) return false;
+      if (unit.demandNumber && activePotentialPins.has(unit.demandNumber)) return false;
+      if (unit.provincialUin && activePotentialPins.has(unit.provincialUin)) return false;
+
+      // Must be officially approved and registered in PFT-3
+      return (
+        unit.pft3Registered === true ||
+        (unit.assessments[0]?.status === "APPROVED" && unit.pft3Registered !== false)
+      );
+    });
+  }, [units, activePotentialIds, activePotentialPins]);
+
+  const pft3EnrolledUnitIds = useMemo(() => {
+    return new Set(pft3EnrolledUnits.map((u) => u.id));
+  }, [pft3EnrolledUnits]);
+
+  const formPFT3Rows = useMemo(() => {
+    return generateFormPFT3Rows(pft3EnrolledUnits);
+  }, [pft3EnrolledUnits]);
+
+  const pft3AvailableSubclasses = useMemo(() => {
+    const codes = new Set<string>();
+    for (const row of formPFT3Rows) {
+      if (pft3CategoryFilter !== "ALL") {
+        if (row.categoryName !== pft3CategoryFilter && row.scheduleEntry !== pft3CategoryFilter) {
+          continue;
+        }
+      }
+      if (row.subclassificationCode) codes.add(row.subclassificationCode);
+    }
+    return Array.from(codes).sort();
+  }, [formPFT3Rows, pft3CategoryFilter]);
 
   const filteredFormPFT3Rows = useMemo(() => {
     return formPFT3Rows.filter((row) => {
@@ -1726,6 +1778,15 @@ export default function HomePage({
           row.categoryName !== pft3CategoryFilter &&
           row.scheduleEntry !== pft3CategoryFilter
         ) {
+          return false;
+        }
+      }
+      if (pft3SubclassFilter !== "ALL") {
+        const code =
+          row.subclassificationCode ||
+          targetUnit.subclassificationCode ||
+          targetUnit.statutoryRule?.subclassification_code;
+        if (code !== pft3SubclassFilter) {
           return false;
         }
       }
@@ -1761,6 +1822,7 @@ export default function HomePage({
     pft3CircleFilter,
     pft3LocalityFilter,
     pft3CategoryFilter,
+    pft3SubclassFilter,
     officer.jurisdictionName
   ]);
 
@@ -1805,6 +1867,7 @@ export default function HomePage({
     setPft3CircleFilter("ALL");
     setPft3LocalityFilter("ALL");
     setPft3CategoryFilter("ALL");
+    setPft3SubclassFilter("ALL");
     setPft3CurrentPage(1);
     setPft3SearchExecuted(false);
   };
@@ -1828,6 +1891,15 @@ export default function HomePage({
         if (
           u.categoryCode !== potentialClassificationFilter &&
           u.categoryName !== potentialClassificationFilter
+        ) {
+          return false;
+        }
+      }
+      if (potentialSubclassFilter !== "ALL") {
+        const uSubclass = u.subclassificationCode || u.statutoryRule?.subclassification_code;
+        if (
+          uSubclass !== potentialSubclassFilter &&
+          u.subclassificationName !== potentialSubclassFilter
         ) {
           return false;
         }
@@ -1862,8 +1934,25 @@ export default function HomePage({
     potentialCircleFilter,
     potentialLocalityFilter,
     potentialClassificationFilter,
+    potentialSubclassFilter,
     potentialSearchQuery
   ]);
+
+  const potentialAvailableSubclasses = useMemo(() => {
+    const codes = new Set<string>();
+    for (const u of potentialUnits) {
+      if (
+        potentialClassificationFilter !== "ALL" &&
+        u.categoryCode !== potentialClassificationFilter &&
+        u.categoryName !== potentialClassificationFilter
+      ) {
+        continue;
+      }
+      const code = u.subclassificationCode || u.statutoryRule?.subclassification_code;
+      if (code) codes.add(code);
+    }
+    return Array.from(codes).sort();
+  }, [potentialUnits, potentialClassificationFilter]);
 
   // Potential Register KPI Metrics (strictly separate; never aggregated into PFT-3)
   const potentialKpiMetrics = useMemo(() => {
@@ -1909,6 +1998,7 @@ export default function HomePage({
     setPotentialCircleFilter("ALL");
     setPotentialLocalityFilter("ALL");
     setPotentialClassificationFilter("ALL");
+    setPotentialSubclassFilter("ALL");
     setPotentialCurrentPage(1);
   };
 
@@ -4401,7 +4491,7 @@ export default function HomePage({
             <div className="route-hub-content">
               <div className="route-hub-title-row">
                 <span className="route-hub-title">Demand Desk</span>
-                <span className="route-hub-badge">{units.length} Assessed</span>
+                <span className="route-hub-badge">{formPFT3Rows.length} Assessed</span>
               </div>
               <p className="route-hub-desc">Potential &amp; Form P.F.T-3 Assessment Registers</p>
             </div>
@@ -4507,7 +4597,7 @@ export default function HomePage({
                 className={`subtab-btn ${pathname === "/demand/pft3" || pathname === "/demand" || pathname === "/" || activeTab === "REGISTER_PFT3" ? "active" : ""}`}
                 style={{ textDecoration: "none" }}
               >
-                📋 Form P.F.T-3 Assessment Register ({units.length})
+                📋 Form P.F.T-3 Assessment Register ({formPFT3Rows.length})
               </Link>
             </>
           )}
@@ -4519,7 +4609,8 @@ export default function HomePage({
                 className={`subtab-btn ${pathname === "/assessment/survey" || activeTab === "UNITS" ? "active" : ""}`}
                 style={{ textDecoration: "none" }}
               >
-                🏢 Tax Units &amp; Survey
+                🏢 Tax Units &amp; Survey (
+                {units.filter((u) => !pft3EnrolledUnitIds.has(u.id)).length})
               </Link>
               <Link
                 href={asRoute("/assessment/queue")}
@@ -4536,7 +4627,7 @@ export default function HomePage({
                 className="subtab-btn"
                 style={{ textDecoration: "none" }}
               >
-                📋 Form P.F.T-3 Register ({units.length}) ↗
+                📋 Form P.F.T-3 Register ({formPFT3Rows.length}) ↗
               </Link>
             </>
           )}
@@ -4713,13 +4804,29 @@ export default function HomePage({
         {/* TAB 1: TAX UNITS & REGISTRATION */}
         {activeTab === "UNITS" &&
           (() => {
-            const draftUnitsCount = units.filter(
+            // Clean up units that have already been enrolled in Form P.F.T-3 Register
+            const surveyPendingUnits = units.filter((u) => !pft3EnrolledUnitIds.has(u.id));
+
+            const draftUnitsCount = surveyPendingUnits.filter(
               (u) => (u.assessments[0]?.status ?? "DRAFT") === "DRAFT"
             ).length;
 
-            const filteredSurveyUnits = units.filter((u) => {
+            const surveyAvailableSubclasses = Array.from(
+              new Set(
+                surveyPendingUnits
+                  .map((u) => u.subclassificationCode || u.statutoryRule?.subclassification_code)
+                  .filter((c): c is string => Boolean(c))
+              )
+            ).sort();
+
+            const filteredSurveyUnits = surveyPendingUnits.filter((u) => {
               const currentStatus = u.assessments[0]?.status ?? "DRAFT";
               if (unitsStatusFilter !== "ALL" && currentStatus !== unitsStatusFilter) return false;
+              if (unitsSubclassFilter !== "ALL") {
+                const uSubclass =
+                  u.subclassificationCode || u.statutoryRule?.subclassification_code;
+                if (uSubclass !== unitsSubclassFilter) return false;
+              }
               if (unitsSearchQuery.trim()) {
                 const q = unitsSearchQuery.toLowerCase();
                 const match =
@@ -4741,10 +4848,11 @@ export default function HomePage({
               <section className="content-panel">
                 <div className="panel-header">
                   <div>
-                    <h2>{officer.jurisdictionName} Taxpayer Units</h2>
+                    <h2>{officer.jurisdictionName} Taxpayer Units (Survey Pipeline)</h2>
                     <p>
-                      Official registry of commercial establishments, companies, and professions
-                      governed by Section 3 of the Punjab Finance Act 1977.
+                      Official field survey registry of prospective establishments undergoing
+                      verification. Units officially approved and enrolled in the Form P.F.T-3
+                      Register are isolated to the Demand Register.
                     </p>
                   </div>
                   <div
@@ -4820,28 +4928,67 @@ export default function HomePage({
                         backgroundColor: "#ffffff"
                       }}
                     >
-                      <option value="ALL">All Statuses ({units.length})</option>
+                      <option value="ALL">All Survey Pipeline ({surveyPendingUnits.length})</option>
                       <option value="DRAFT">Feeded / Updated ({draftUnitsCount})</option>
                       <option value="SUBMITTED">
                         Submitted (
-                        {units.filter((u) => u.assessments[0]?.status === "SUBMITTED").length})
+                        {
+                          surveyPendingUnits.filter((u) => u.assessments[0]?.status === "SUBMITTED")
+                            .length
+                        }
+                        )
                       </option>
                       <option value="RETURNED">
                         Returned (
-                        {units.filter((u) => u.assessments[0]?.status === "RETURNED").length})
+                        {
+                          surveyPendingUnits.filter((u) => u.assessments[0]?.status === "RETURNED")
+                            .length
+                        }
+                        )
                       </option>
                       <option value="APPROVED">
                         Approved (
-                        {units.filter((u) => u.assessments[0]?.status === "APPROVED").length})
+                        {
+                          surveyPendingUnits.filter((u) => u.assessments[0]?.status === "APPROVED")
+                            .length
+                        }
+                        )
                       </option>
                     </select>
                   </div>
-                  {(unitsSearchQuery || unitsStatusFilter !== "ALL") && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
+                      Sub-Class:
+                    </label>
+                    <select
+                      aria-label="Filter by Sub-Class"
+                      value={unitsSubclassFilter}
+                      onChange={(e) => setUnitsSubclassFilter(e.target.value)}
+                      style={{
+                        padding: "0.45rem 0.75rem",
+                        borderRadius: "6px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.85rem",
+                        backgroundColor: "#ffffff"
+                      }}
+                    >
+                      <option value="ALL">All Sub-Classes</option>
+                      {surveyAvailableSubclasses.map((code) => (
+                        <option key={code} value={code}>
+                          {formatFullSubclassCode(code)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {(unitsSearchQuery ||
+                    unitsStatusFilter !== "ALL" ||
+                    unitsSubclassFilter !== "ALL") && (
                     <button
                       type="button"
                       onClick={() => {
                         setUnitsSearchQuery("");
                         setUnitsStatusFilter("ALL");
+                        setUnitsSubclassFilter("ALL");
                       }}
                       className="btn-secondary btn-sm"
                       style={{ fontSize: "0.75rem" }}
@@ -5565,6 +5712,42 @@ export default function HomePage({
               </div>
 
               <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    color: "#475569",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  Sub-Class
+                </label>
+                <select
+                  aria-label="Filter by Sub-Class"
+                  value={potentialSubclassFilter}
+                  onChange={(e) => {
+                    setPotentialSubclassFilter(e.target.value);
+                    setPotentialCurrentPage(1);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "0.45rem 0.65rem",
+                    fontSize: "0.85rem",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1"
+                  }}
+                >
+                  <option value="ALL">All Sub-Classes</option>
+                  {potentialAvailableSubclasses.map((code) => (
+                    <option key={code} value={code}>
+                      {formatFullSubclassCode(code)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <button
                   type="button"
                   onClick={handleResetPotentialFilters}
@@ -6072,6 +6255,37 @@ export default function HomePage({
                     fontSize: "0.75rem",
                     fontWeight: 700,
                     color: "#475569",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  Sub-Class:
+                </label>
+                <select
+                  aria-label="Filter by Sub-Class"
+                  className="form-control"
+                  style={{ width: "100%", fontSize: "0.85rem" }}
+                  value={pft3SubclassFilter}
+                  onChange={(e) => {
+                    setPft3SubclassFilter(e.target.value);
+                    setPft3CurrentPage(1);
+                  }}
+                >
+                  <option value="ALL">All Sub-Classes</option>
+                  {pft3AvailableSubclasses.map((code) => (
+                    <option key={code} value={code}>
+                      {formatFullSubclassCode(code)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    color: "#475569",
                     marginBottom: "0.25rem",
                     visibility: "hidden"
                   }}
@@ -6098,6 +6312,7 @@ export default function HomePage({
                     pft3CircleFilter !== "ALL" ||
                     pft3LocalityFilter !== "ALL" ||
                     pft3CategoryFilter !== "ALL" ||
+                    pft3SubclassFilter !== "ALL" ||
                     pft3SearchExecuted) && (
                     <button
                       type="button"
@@ -9452,6 +9667,50 @@ export default function HomePage({
                     marginBottom: "0.25rem"
                   }}
                 >
+                  Sub-Class:
+                </label>
+                <select
+                  aria-label="Filter by Sub-Class"
+                  className="form-control"
+                  style={{ width: "100%", fontSize: "0.85rem" }}
+                  value={receiptSubclassFilter}
+                  onChange={(e) => setReceiptSubclassFilter(e.target.value)}
+                >
+                  <option value="ALL">All Sub-Classes</option>
+                  {(() => {
+                    const codes = new Set<string>();
+                    for (const r of statutoryReceipts) {
+                      if (
+                        receiptCategoryFilter !== "ALL" &&
+                        !r.statutoryCategory
+                          .toLowerCase()
+                          .includes(receiptCategoryFilter.toLowerCase())
+                      ) {
+                        continue;
+                      }
+                      if (r.subclassificationCode) codes.add(r.subclassificationCode);
+                    }
+                    return Array.from(codes)
+                      .sort()
+                      .map((code) => (
+                        <option key={code} value={code}>
+                          {formatFullSubclassCode(code)}
+                        </option>
+                      ));
+                  })()}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    color: "#475569",
+                    marginBottom: "0.25rem"
+                  }}
+                >
                   Payment Source:
                 </label>
                 <select
@@ -9472,6 +9731,7 @@ export default function HomePage({
                 receiptDateFrom ||
                 receiptDateTo ||
                 receiptCategoryFilter !== "ALL" ||
+                receiptSubclassFilter !== "ALL" ||
                 receiptChannelFilter !== "ALL" ||
                 receiptSourceFilter !== "ALL") && (
                 <div>
@@ -9484,6 +9744,7 @@ export default function HomePage({
                       setReceiptDateFrom("");
                       setReceiptDateTo("");
                       setReceiptCategoryFilter("ALL");
+                      setReceiptSubclassFilter("ALL");
                       setReceiptChannelFilter("ALL");
                       setReceiptSourceFilter("ALL");
                     }}
@@ -9528,6 +9789,11 @@ export default function HomePage({
                         !r.statutoryCategory
                           .toLowerCase()
                           .includes(receiptCategoryFilter.toLowerCase())
+                      )
+                        return false;
+                      if (
+                        receiptSubclassFilter !== "ALL" &&
+                        r.subclassificationCode !== receiptSubclassFilter
                       )
                         return false;
                       if (receiptDateFrom && r.dateOfReceipt < receiptDateFrom) return false;
