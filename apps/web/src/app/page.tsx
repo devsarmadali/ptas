@@ -1831,11 +1831,15 @@ export default function HomePage({
   // and dynamically updates whenever filters (search query, district, circle, locality, classification) are applied.
   const pft3KpiMetrics = useMemo(() => {
     const targetRows = filteredFormPFT3Rows;
+    let totalCurrentDemand = 0;
+    let totalArrears = 0;
     let totalDemand = 0;
     let totalPaid = 0;
     let outstandingBalance = 0;
 
     for (const r of targetRows) {
+      totalCurrentDemand += r.assessedCurrentTax;
+      totalArrears += r.arrears;
       totalDemand += r.totalDemand;
       totalPaid += r.totalPaid;
       outstandingBalance += r.outstandingBalance;
@@ -1843,6 +1847,8 @@ export default function HomePage({
 
     return {
       totalUnits: targetRows.length,
+      totalCurrentDemand,
+      totalArrears,
       totalDemand,
       totalPaid,
       outstandingBalance
