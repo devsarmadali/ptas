@@ -120,15 +120,17 @@ export function validateDocumentAuthorization(
 
   // Excise & Taxation Officer (Assessing Authority)
   if (role === "EXCISE_TAXATION_OFFICER" || role === "ETO") {
+    const targetDistrict =
+      target?.district || (target as Record<string, unknown> | null)?.districtName;
     if (
       context.district &&
-      target?.district &&
-      context.district.toLowerCase() !== target.district.toLowerCase()
+      targetDistrict &&
+      context.district.toLowerCase() !== String(targetDistrict).toLowerCase()
     ) {
       return {
         allowed: false,
         authorized: false,
-        reason: `District jurisdiction mismatch: record district ${target.district} is outside officer district ${context.district}`
+        reason: `District jurisdiction mismatch: record district ${targetDistrict} is outside officer district ${context.district}`
       };
     }
     return { allowed: true, authorized: true, reason: "AUTHORIZED_ETO_OFFICE" };
@@ -145,15 +147,16 @@ export function validateDocumentAuthorization(
       };
     }
 
+    const targetCircle = target?.circle || (target as Record<string, unknown> | null)?.circleName;
     if (
       context.circle &&
-      target?.circle &&
-      context.circle.toLowerCase() !== target.circle.toLowerCase()
+      targetCircle &&
+      context.circle.toLowerCase() !== String(targetCircle).toLowerCase()
     ) {
       return {
         allowed: false,
         authorized: false,
-        reason: `Circle jurisdiction mismatch: circle ${target.circle} does not match assigned circle ${context.circle}`
+        reason: `Circle jurisdiction mismatch: circle ${targetCircle} does not match assigned circle ${context.circle}`
       };
     }
 
@@ -250,6 +253,16 @@ export function validateDocumentLifecycleState(
             "Assessment has not been approved by the Assessing Authority (ETO). Statutory Form PFT-1 Notice requires an approved assessment.",
           reason:
             "Assessment has not received ETO approval. Form PFT-1 Notice requires an approved assessment."
+        };
+      }
+
+      if (assessmentStatus === "APPROVED" || isProvisional) {
+        return {
+          isValid: true,
+          allowed: true,
+          code: "VALID",
+          message: "Notice of Demand is in approved status.",
+          reason: "Valid approved notice."
         };
       }
 
@@ -501,8 +514,13 @@ export async function generateAuthoritativePdf(
     }
 
     case "FORM_PFT1_NOTICE": {
-      // Check if structured FormPFT1Model is provided directly
-      if (typeof targetData === "object" && targetData !== null && "demandNumber" in targetData) {
+      // Check if structured FormPFT1Model is provided directly (must have noticeNumber and serviceReceipt)
+      if (
+        typeof targetData === "object" &&
+        targetData !== null &&
+        "noticeNumber" in targetData &&
+        "serviceReceipt" in targetData
+      ) {
         return generatePft1DemandNoticePdf(targetData as FormPFT1Model, options);
       }
 

@@ -15641,8 +15641,11 @@ export default function HomePage({
                     onClick={() =>
                       downloadOfficialPdf({
                         type: "FORM_PFT1_NOTICE",
-                        documentIdOrData: pft1Unit,
-                        defaultFilename: `Form_PFT1_Notice_${pft1Data.demandNumber?.replace(/\//g, "_") ?? "notice"}.pdf`
+                        documentIdOrData: pft1Data ?? pft1Unit,
+                        options: {
+                          isProvisional: Boolean(pft1Data && !pft1Data.isApproved)
+                        },
+                        defaultFilename: `Form_PFT1_Notice_${pft1Data?.demandNumber?.replace(/\//g, "_") ?? "notice"}.pdf`
                       }).catch((err) =>
                         showToast(
                           "error",

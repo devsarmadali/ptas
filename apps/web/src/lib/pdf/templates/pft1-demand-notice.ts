@@ -69,7 +69,7 @@ export async function generatePft1DemandNoticePdf(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.2);
   doc.setTextColor(30, 58, 138); // blue
-  doc.text(notice.noticeNumber, left + 24, mY);
+  doc.text(notice.noticeNumber || "PFT1-DEMAND-NOTICE", left + 24, mY);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.0);
@@ -78,7 +78,7 @@ export async function generatePft1DemandNoticePdf(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.5);
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(notice.demandNumber, left + 138, mY);
+  doc.text(notice.demandNumber || "N/A", left + 138, mY);
 
   // Row 2: Issue Date, Jurisdiction & Due Date Callout
   mY += 6.5;
@@ -131,7 +131,7 @@ export async function generatePft1DemandNoticePdf(
   doc.text("Legal Name:", left + 4, tY);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.8);
-  doc.text(notice.assesseeLegalName, left + 26, tY);
+  doc.text(notice.assesseeLegalName || "Taxpayer Assessee", left + 26, tY);
 
   if (notice.assesseeTradeName && notice.assesseeTradeName !== notice.assesseeLegalName) {
     doc.setFontSize(7.8);
@@ -153,7 +153,7 @@ export async function generatePft1DemandNoticePdf(
   doc.text("Provincial UIN:", left + 105, tY);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(30, 58, 138);
-  doc.text(notice.provincialUin || notice.pin, left + 128, tY);
+  doc.text(notice.provincialUin || notice.pin || "N/A", left + 128, tY);
 
   // Row 3: Commercial Address
   tY += 5.2;
@@ -213,7 +213,7 @@ export async function generatePft1DemandNoticePdf(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.0);
   doc.setTextColor(...PDF_COLORS.primary);
-  doc.text(`PKR ${notice.taxAmount.toLocaleString()}`, left + contentWidth - 4, curY + 5.5, {
+  doc.text(`PKR ${(notice.taxAmount ?? 0).toLocaleString()}`, left + contentWidth - 4, curY + 5.5, {
     align: "right"
   });
 
@@ -233,9 +233,14 @@ export async function generatePft1DemandNoticePdf(
 
   doc.setFontSize(11.0);
   doc.setTextColor(22, 101, 52);
-  doc.text(`PKR ${notice.taxAmount.toLocaleString()} /-`, left + contentWidth - 4, curY + 5.8, {
-    align: "right"
-  });
+  doc.text(
+    `PKR ${(notice.taxAmount ?? 0).toLocaleString()} /-`,
+    left + contentWidth - 4,
+    curY + 5.8,
+    {
+      align: "right"
+    }
+  );
 
   curY += totalBoxH + 2.5;
 
@@ -297,7 +302,7 @@ export async function generatePft1DemandNoticePdf(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.5);
   doc.setTextColor(30, 58, 138);
-  doc.text(notice.pin, left + 2 + secBoxW / 2, secBoxY + 4.3, { align: "center" });
+  doc.text(notice.pin || "N/A", left + 2 + secBoxW / 2, secBoxY + 4.3, { align: "center" });
 
   // Right: Assessing Authority Signature & Seal Block
   const sigX = left + contentWidth - 75;
@@ -355,15 +360,15 @@ export async function generatePft1DemandNoticePdf(
   doc.setTextColor(...PDF_COLORS.textDark);
 
   // Line 1: Demand No, Tax Amount, Due Date
-  doc.text(`Demand Number: ${notice.demandNumber}`, left + 4, receiptY);
-  doc.text(`Tax Payable: PKR ${notice.taxAmount.toLocaleString()}`, left + 62, receiptY);
+  doc.text(`Demand Number: ${notice.demandNumber || "N/A"}`, left + 4, receiptY);
+  doc.text(`Tax Payable: PKR ${(notice.taxAmount ?? 0).toLocaleString()}`, left + 62, receiptY);
   doc.text(`Due Date: ${notice.dueDate || "31/08/2026"}`, left + 125, receiptY);
 
   // Line 2: Legal Name, CNIC/NTN, PIN
   receiptY += 5.0;
-  doc.text(`Assessee: ${notice.assesseeLegalName}`, left + 4, receiptY);
+  doc.text(`Assessee: ${notice.assesseeLegalName || "Taxpayer"}`, left + 4, receiptY);
   doc.text(`CNIC/NTN: ${notice.taxNumber || "N/A"}`, left + 85, receiptY);
-  doc.text(`PIN: ${notice.provincialUin || notice.pin}`, left + 138, receiptY);
+  doc.text(`PIN: ${notice.provincialUin || notice.pin || "N/A"}`, left + 138, receiptY);
 
   // Line 3: Served By, Date of Service
   receiptY += 5.2;

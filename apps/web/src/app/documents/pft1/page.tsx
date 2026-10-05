@@ -153,8 +153,13 @@ function FormPft1NoticeContent() {
             onClick={() =>
               downloadOfficialPdf({
                 type: "FORM_PFT1_NOTICE",
-                documentIdOrData: unit,
+                documentIdOrData: pft1Data,
+                options: {
+                  isProvisional: !pft1Data.isApproved
+                },
                 defaultFilename: `Form_PFT1_Notice_${pft1Data.demandNumber.replace(/\//g, "_")}.pdf`
+              }).catch((err) => {
+                alert(`Unable to generate Form P.F.T-1 PDF: ${(err as Error).message}`);
               })
             }
             title="Download official Form P.F.T-1 Notice of Tax Demand as PDF"
