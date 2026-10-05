@@ -7,6 +7,8 @@ import {
   loadPersistedPotentialUnits,
   savePersistedPotentialUnits,
   migratePotentialUnitToPft3,
+  migrateVDemandUnitsToPotentialRegister,
+  V_UNITS_MIGRATION_FLAG_KEY,
   importPotentialUnitsCsv,
   generatePotentialCsvTemplate,
   POTENTIAL_UNITS_STORAGE_KEY
@@ -143,5 +145,100 @@ describe("Potential Assessment Register Persistence & Migration Layer", () => {
     // Ledger has assessment and payment credit
     expect(migratedUnit.ledgerEntries.length).toBeGreaterThanOrEqual(2);
     expect(migratedUnit.ledgerEntries.some((e) => e.entryType === "PAYMENT_CREDIT")).toBe(true);
+  });
+
+  it("migrates V- demand units to potential register with zero arrears and idempotent flag", () => {
+    // Initial state has seed potential units
+    const initialUnits = loadPersistedPotentialUnits();
+    const initialCount = initialUnits.length;
+
+    const mockSurveyUnits = [
+      {
+        id: "unit-v1",
+        legalName: "Vehari Trading Corp",
+        tradeName: "V-Trade",
+        identifierType: "CNIC",
+        identifierValue: "36603-1111111-1",
+        address: "Club Road",
+        locality: "Club Road Commercial Area",
+        circleId: "00000000-0000-4000-8000-000000000004",
+        circleName: "Vehari Circle I (City / Commercial)",
+        districtName: "Vehari",
+        categoryCode: "1",
+        subclassificationCode: "1(i)",
+        statutoryRuleId: "PFT-1.i",
+        assessmentNumber: "ASM-V-01-100",
+        demandNumber: "V-01-100",
+        provincialUin: "237-0010106110200100-01",
+        demandUnit: {
+          id: "dem-v1",
+          taxpayerId: "tax-v1",
+          permanentDemandNo: "V-01-100",
+          createdAt: new Date().toISOString()
+        },
+        assessments: [],
+        assessmentVersions: [
+          {
+            id: "av-v1",
+            assessmentId: "asm-v1",
+            versionNo: 1,
+            status: "APPROVED" as const,
+            reason: "Initial survey",
+            createdBy: "Survey",
+            snapshot: {
+              taxAmount: 10000,
+              statutoryCategory: "Commercial",
+              legalBasis: "Punjab Finance Act",
+              ruleId: "PFT-1.i",
+              subclassificationCode: "1(i)"
+            },
+            createdAt: new Date().toISOString()
+          }
+        ],
+        ledgerEntries: [],
+        openingArrears: 5000, // Arrears in PFT-3 survey
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: "unit-non-v",
+        legalName: "Standard Corp",
+        identifierType: "CNIC",
+        identifierValue: "36603-2222222-2",
+        address: "Main Road",
+        demandNumber: "D-0500",
+        demandUnit: {
+          id: "dem-non-v",
+          taxpayerId: "tax-non-v",
+          permanentDemandNo: "D-0500",
+          createdAt: new Date().toISOString()
+        },
+        assessments: [],
+        assessmentVersions: [],
+        ledgerEntries: [],
+        createdAt: new Date().toISOString()
+      }
+    ] as unknown as StoredUnit[];
+
+    migrateVDemandUnitsToPotentialRegister(mockSurveyUnits);
+
+    // Verify flag was set
+    expect(localStorage.getItem(V_UNITS_MIGRATION_FLAG_KEY)).not.toBeNull();
+
+    // Verify potential units were updated
+    const after = loadPersistedPotentialUnits();
+    expect(after.length).toBe(initialCount + 1);
+
+    const migrated = after.find((u) => u.legalName === "Vehari Trading Corp");
+    expect(migrated).toBeDefined();
+    expect(migrated?.potentialNumber).toMatch(/^POT-/);
+    expect(migrated?.pinNumber).toBe("Potential-237-0010106110200100-01");
+    expect(migrated?.openingArrears).toBe(0); // STRICT DOMAIN RULE: zero arrears
+    expect(migrated?.annualRatePkr).toBe(10000);
+    expect(migrated?.status).toBe("ACTIVE");
+
+    // Idempotency: running again should not add more
+    migrateVDemandUnitsToPotentialRegister(mockSurveyUnits);
+    const afterSecond = loadPersistedPotentialUnits();
+    expect(afterSecond.length).toBe(after.length);
   });
 });

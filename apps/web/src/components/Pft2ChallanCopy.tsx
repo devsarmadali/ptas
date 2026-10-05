@@ -3,6 +3,8 @@
 import React from "react";
 import { StatutoryQrCode } from "./StatutoryQrCode";
 import type { FormPFT2CopyModel } from "../lib/statutory-forms";
+import { cleanCircleName } from "../lib/statutory-forms";
+import { generateDocumentPin } from "@ptas/domain";
 import {
   formatChallanDisplayDate,
   formatChallanTaxYear,
@@ -27,7 +29,15 @@ export interface Pft2ChallanCopyProps {
  * - Compact Bank Counterfoil positioned immediately below tax information with no dead space.
  */
 export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
-  const cleanScope = cleanChallanScope(
+  const isProvisionalChallan = Boolean(
+    copy.isProvisional ||
+    copy.pft2TypeLabel === "PROVISIONAL" ||
+    copy.assessmentInfo.demandNo?.startsWith("POT-") ||
+    copy.pin?.startsWith("Potential-") ||
+    copy.taxpayerInfo.provincialUin?.startsWith("Potential-")
+  );
+
+  const rawScope = cleanChallanScope(
     copy.pft2TypeLabel ||
       (copy.demandScope === "ARREAR"
         ? "ARREARS"
@@ -35,6 +45,12 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           ? "COMBINED (CURRENT + ARREARS)"
           : "CURRENT")
   );
+
+  const cleanScope = rawScope.includes("PROVISIONAL")
+    ? rawScope
+    : isProvisionalChallan
+      ? `PROVISIONAL — ${rawScope}`
+      : rawScope;
 
   const scopeColor = cleanScope.includes("ARREAR")
     ? "#b45309"
@@ -46,6 +62,15 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
   const displayDueDate = formatChallanDisplayDate(copy.dueDate || "31/08/2026");
   const displayTaxYear = formatChallanTaxYear(copy.taxYear);
   const taxpayerPin = copy.taxpayerInfo.provincialUin || copy.pin;
+
+  const securityCode =
+    copy.securityCode && /^\d{6}$/.test(copy.securityCode)
+      ? copy.securityCode
+      : copy.pin && /^\d{6}$/.test(copy.pin)
+        ? copy.pin
+        : generateDocumentPin(
+            copy.noticeNumber || copy.assessmentInfo.demandNo || copy.pin || copy.qrPayload
+          );
 
   return (
     <div
@@ -99,13 +124,13 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
             <div
               style={{
                 fontFamily: "monospace",
-                fontSize: "0.78rem",
+                fontSize: "0.82rem",
                 fontWeight: 800,
                 color: "#1e3a8a",
                 lineHeight: 1.15
               }}
             >
-              {copy.pin}
+              {securityCode}
             </div>
           </div>
         </div>
@@ -177,9 +202,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
             }}
           >
             <span>PFT2 &bull; PAYMENT CHALLAN</span>
-            {(copy.pft2TypeLabel === "PROVISIONAL" ||
-              copy.assessmentInfo.demandNo?.startsWith("POT-") ||
-              copy.pin?.startsWith("Potential-")) && (
+            {isProvisionalChallan && (
               <span
                 style={{
                   background: "#fef3c7",
@@ -203,7 +226,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
               marginTop: "0.05rem"
             }}
           >
-            Rule 9 &bull; [{cleanScope}]
+            Rule 9 &bull; [{isProvisionalChallan ? `PROVISIONAL — ${cleanScope}` : cleanScope}]
           </div>
           <div
             style={{
@@ -350,7 +373,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
             CIRCLE
           </span>
           <span style={{ fontWeight: 700, color: "#166534", fontSize: "0.72rem" }}>
-            {copy.assessmentInfo.circleName || "Vehari Circle I (City / Commercial)"}
+            {cleanCircleName(copy.assessmentInfo.circleName || copy.circleName)}
           </span>
         </div>
 
@@ -491,7 +514,8 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
               lineHeight: 1.3
             }}
           >
-            {copy.taxpayerInfo.classification}
+            {copy.taxpayerInfo.classification?.replace(/Class undefined/gi, "Class 1") ||
+              "Class 1 - Companies"}
           </span>
         </div>
 
@@ -517,11 +541,18 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
               lineHeight: 1.3
             }}
           >
-            {copy.taxpayerInfo.subclassificationCode
-              ? `Code ${copy.taxpayerInfo.subclassificationCode}${copy.taxpayerInfo.subclassificationLabel ? ` — ${copy.taxpayerInfo.subclassificationLabel}` : ""}${copy.taxpayerInfo.tertiarySlab ? ` (${copy.taxpayerInfo.tertiarySlab})` : ""}`
-              : copy.taxpayerInfo.subclassificationLabel ||
-                copy.taxpayerInfo.tertiarySlab ||
-                "General / Standard Class"}
+            {(() => {
+              const subCode = copy.taxpayerInfo.subclassificationCode?.trim();
+              const subLabel = copy.taxpayerInfo.subclassificationLabel?.trim();
+              const tertiary = copy.taxpayerInfo.tertiarySlab?.trim();
+              if (subCode && subCode !== "1" && subCode !== "undefined") {
+                return `Code ${subCode}${subLabel ? ` — ${subLabel}` : ""}${tertiary ? ` (${tertiary})` : ""}`;
+              }
+              if (subLabel && subLabel !== "1") {
+                return `${subLabel}${tertiary ? ` (${tertiary})` : ""}`;
+              }
+              return tertiary || "General / Standard Class";
+            })()}
           </span>
         </div>
 

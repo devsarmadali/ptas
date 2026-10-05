@@ -19,8 +19,24 @@ import {
 export { computeLedgerBalance, computeDefaulterAging };
 import type { MockOfficer, StoredUnit } from "./pilot-store";
 
+export function cleanCircleName(circle?: string): string {
+  if (!circle) return "Vehari Circle I";
+  return circle
+    .replace(/^CIRCLE\s*[-:]?\s*/i, "")
+    .replace(/\s*\([^)]*(City|Commercial|Rural|Industrial|Grain Market)[^)]*\)/gi, "")
+    .trim();
+}
+
 export function getScheduleEntryLabel(rule: StatutoryRuleDefinition): string {
-  return `Class ${rule.rule_code}`;
+  const code =
+    rule.rule_code ||
+    (rule as unknown as { category_code?: string }).category_code ||
+    (rule as unknown as { schedule_entry?: string }).schedule_entry ||
+    "1";
+  if (!code || code === "undefined") {
+    return "Class 1";
+  }
+  return String(code).startsWith("Class") ? String(code) : `Class ${code}`;
 }
 
 export interface Pft2NoticeNumberOptions {
@@ -224,6 +240,8 @@ export interface FormPFT2CopyModel {
   readonly copyTitleUrdu: string;
   readonly noticeNumber?: string | undefined;
   readonly pin?: string | undefined;
+  readonly securityCode?: string | undefined;
+  readonly isProvisional?: boolean | undefined;
   readonly formType?: string | undefined;
   readonly demandScope?: string | undefined;
   readonly pft2TypeLabel?: string | undefined;
@@ -235,6 +253,7 @@ export interface FormPFT2CopyModel {
   readonly district: string;
   readonly tehsil?: string | undefined;
   readonly locality?: string | undefined;
+  readonly circleName?: string | undefined;
   readonly taxYear: string;
   readonly dueDate: string;
   readonly issueDate?: string | undefined;
@@ -289,6 +308,8 @@ export interface FormPFT2Model {
   readonly challanNumber: string;
   readonly noticeNumber: string;
   readonly pin: string;
+  readonly securityCode?: string | undefined;
+  readonly isProvisional?: boolean | undefined;
   readonly issueDate?: string | undefined;
   readonly dueDate?: string | undefined;
   challanStatus?: string | undefined;
@@ -690,6 +711,8 @@ export interface GenerateFormPFT2Options {
   readonly paymentScope?: string | undefined;
   readonly noticeNumber?: string | undefined;
   readonly pin?: string | undefined;
+  readonly securityCode?: string | undefined;
+  readonly isProvisional?: boolean | undefined;
   readonly challanStatus?: string | undefined;
   readonly isTampered?: boolean | undefined;
   readonly tamperedAmount?: number | undefined;
@@ -722,19 +745,32 @@ export function generateFormPFT2(
     }
   }
 
-  const isPartial = opts.isPartial ?? opts.paymentScope === "PARTIAL";
-  const paymentScope = opts.paymentScope ?? (isPartial ? "PARTIAL" : "FULL");
-  const demandScope = opts.demandScope ?? (arrears > 0 ? "COMBINED" : "CURRENT");
+  const isProvisional = Boolean(
+    opts.isProvisional ||
+    unit.provincialUin?.startsWith("Potential-") ||
+    unit.pinNumber?.startsWith("Potential-") ||
+    unit.demandUnit?.permanentDemandNo?.startsWith("POT-")
+  );
+
+  const isPartial = isProvisional ? false : (opts.isPartial ?? opts.paymentScope === "PARTIAL");
+  const paymentScope = isProvisional
+    ? "FULL"
+    : (opts.paymentScope ?? (isPartial ? "PARTIAL" : "FULL"));
+  const demandScope = isProvisional
+    ? "CURRENT"
+    : (opts.demandScope ?? (arrears > 0 ? "COMBINED" : "CURRENT"));
   const formType = opts.formType ?? "STD";
 
   const isArrearScope = demandScope === "ARREAR" || demandScope === "ARREARS";
   const isCombinedScope = demandScope === "COMBINED";
 
-  const pft2TypeLabel = isArrearScope
-    ? "ARREARS"
-    : isCombinedScope
-      ? "COMBINED (CURRENT + ARREARS)"
-      : "CURRENT";
+  const pft2TypeLabel = isProvisional
+    ? "PROVISIONAL"
+    : isArrearScope
+      ? "ARREARS"
+      : isCombinedScope
+        ? "COMBINED (CURRENT + ARREARS)"
+        : "CURRENT";
 
   const scopeCurrentTax = isArrearScope ? 0 : baseTax;
   const scopeArrears = isArrearScope ? arrears : isCombinedScope ? arrears : 0;
@@ -769,7 +805,7 @@ export function generateFormPFT2(
   const issueDate = opts.issueDate || "2026-07-01";
   const taxYear = "2026-2027";
   const district = unit.districtName || "Vehari";
-  const circleName = unit.circleName || "Vehari Circle I (City / Commercial)";
+  const circleName = cleanCircleName(unit.circleName || "Vehari Circle I");
   const tehsil =
     unit.locality?.toLowerCase().includes("burewala") ||
     circleName.toLowerCase().includes("burewala")
@@ -793,22 +829,39 @@ export function generateFormPFT2(
     });
 
   const pin = opts.pin || generateDocumentPin(noticeNumber || challanNumber);
+  const securityCode =
+    opts.securityCode ||
+    (opts.pin && /^\d{6}$/.test(opts.pin)
+      ? opts.pin
+      : generateDocumentPin(noticeNumber || challanNumber));
 
-  const subclassificationCode = unit.statutoryRule.subclassification_code;
-  const subclassificationLabel = unit.statutoryRule.subclassification_label ?? null;
-  const statutoryTertiaryCode = unit.statutoryRule.statutory_tertiary_code;
-  const categoryName = unit.statutoryRule.category;
-  const tertiarySlab = unit.statutoryRule.statutory_tertiary_classification ?? null;
+  const subclassificationCode =
+    unit.statutoryRule.subclassification_code ||
+    (unit as unknown as { subclassificationCode?: string }).subclassificationCode ||
+    null;
+  const subclassificationLabel =
+    unit.statutoryRule.subclassification_label ||
+    unit.statutoryRule.subcategory ||
+    (unit as unknown as { subclassificationName?: string }).subclassificationName ||
+    null;
+  const statutoryTertiaryCode =
+    unit.statutoryRule.statutory_tertiary_code ||
+    (unit as unknown as { statutoryTertiaryCode?: string }).statutoryTertiaryCode ||
+    null;
+  const categoryName =
+    unit.statutoryRule.category || (unit as unknown as { category?: string }).category || "";
+  const tertiarySlab =
+    unit.statutoryRule.statutory_tertiary_classification ||
+    (unit as unknown as { tertiarySlab?: string }).tertiarySlab ||
+    null;
   const slabRatePkr = unit.statutoryRule.annual_rate_pkr;
-  const rateBasis = unit.statutoryRule.rate_basis;
+  const rateBasis = unit.statutoryRule.rate_basis || "per annum";
   const scheduleEntry = getScheduleEntryLabel(unit.statutoryRule);
 
   const classificationParts = [
     scheduleEntry,
     categoryName,
-    unit.statutoryRule.subclassification_label
-      ? `Subclass: ${unit.statutoryRule.subclassification_label}`
-      : null,
+    subclassificationLabel ? `Subclass: ${subclassificationLabel}` : null,
     tertiarySlab ? `Tertiary: ${tertiarySlab}` : null,
     `(PKR ${slabRatePkr.toLocaleString()} ${rateBasis})`
   ].filter(Boolean);
@@ -819,7 +872,7 @@ export function generateFormPFT2(
     `FORM P.F.T-2: PUNJAB PROFESSIONS & TRADES TAX PAYMENT CHALLAN [${pft2TypeLabel}]`,
     "(Section 3 of Punjab Finance Act 1977 read with rule 9 of the Punjab Professions & Trades Tax Rules, 1977)",
     `Head of Account: ${headOfAccount}`,
-    `Challan No: ${challanNumber} | Notice No: ${noticeNumber} | Security PIN: ${pin}`,
+    `Challan No: ${challanNumber} | Notice No: ${noticeNumber} | Security PIN: ${securityCode}`,
     `District: ${district} | Tehsil: ${tehsil} | Circle: ${circleName} | Locality: ${locality || "N/A"}`,
     `Tax Year: ${taxYear} | Due Date: ${dueDate}`,
     `Form Type: ${formType} | Scope: ${demandScope} (${pft2TypeLabel}) (${paymentScope})${isPartial ? ` | Remaining Balance: PKR ${remainingBalance}` : ""}`,
@@ -831,15 +884,17 @@ export function generateFormPFT2(
     `Amount in Words: ${totalPayableWords}`,
     `Assessment Information: Demand No: ${demandNo} | Circle: ${circleName}`,
     `Assessing Authority: ${opts?.officer?.name || "Excise & Taxation Officer (Assessing Authority)"}, Tehsil ${tehsil}`,
-    "Authorized Treasury: National Bank of Pakistan (Main Branch Vehari) / State Bank of Pakistan / ePay Punjab"
+    "Authorized Treasury: National Bank of Pakistan (Main Branch Vehari)"
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalChallanText);
-  const qrPayload = `PTAS-PUNJAB:PFT-2:${challanNumber}:DEMAND=${demandNo}:AMOUNT=${totalPayable}:DUE=${dueDate}:SHA=${officialSha256.slice(0, 16)}:PIN=${pin}`;
+  const qrPayload = `PTAS-PUNJAB:PFT-2:${challanNumber}:DEMAND=${demandNo}:AMOUNT=${totalPayable}:DUE=${dueDate}:SHA=${officialSha256.slice(0, 16)}:PIN=${securityCode}`;
 
   const sharedData = {
     noticeNumber,
     pin,
+    securityCode,
+    isProvisional,
     formType,
     demandScope,
     pft2TypeLabel,
@@ -851,6 +906,7 @@ export function generateFormPFT2(
     district,
     tehsil,
     locality,
+    circleName,
     taxYear,
     dueDate,
     issueDate,
@@ -924,6 +980,8 @@ export function generateFormPFT2(
     challanNumber,
     noticeNumber,
     pin,
+    securityCode,
+    isProvisional,
     issueDate,
     dueDate,
     formType,

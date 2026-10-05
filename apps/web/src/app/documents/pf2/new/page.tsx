@@ -17,6 +17,7 @@ import { downloadOfficialPdf } from "../../../../lib/pdf";
 import { saveIssuedPft2Challan } from "../../../../lib/challan-storage";
 import {
   loadPersistedPotentialUnits,
+  migrateVDemandUnitsToPotentialRegister,
   type PotentialUnitRecord
 } from "../../../../lib/potential-units-storage";
 
@@ -30,7 +31,12 @@ function DocumentIssuanceContent() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  // Detect provisional/potential unit context from URL param
+  const isProvisionalContext =
+    unitParam.startsWith("Potential-") || unitParam.toLowerCase().startsWith("pot-");
+
   // Form Controls
+  // For provisional challans: scope is statutorily fixed to Current Year / Full Assessed
   const [demandScope, setDemandScope] = useState<"CURRENT" | "ARREAR" | "COMBINED">("CURRENT");
   const formType = "STANDARD";
   const [paymentScope, setPaymentScope] = useState<"FULL" | "PARTIAL">("FULL");
@@ -54,8 +60,12 @@ function DocumentIssuanceContent() {
     void loadOperationalSurveyUnits()
       .then((units) => {
         if (cancelled) return;
+        migrateVDemandUnitsToPotentialRegister(units || []);
         const available = (units && units.length > 0 ? units : []).filter(
-          (u) => u.assessments[0]?.status === "APPROVED"
+          (u) =>
+            u.assessments[0]?.status === "APPROVED" &&
+            !u.demandUnit?.permanentDemandNo?.startsWith("V-") &&
+            !u.demandNumber?.startsWith("V-")
         );
 
         let found =
@@ -708,231 +718,326 @@ function DocumentIssuanceContent() {
               fontSize: "0.85rem"
             }}
           >
-            {/* Challan Scope Radio Group */}
-            <div>
-              <span
+            {isProvisionalContext ? (
+              /* Provisional / Potential Unit: Only Due Date is configurable.
+                 Challan Scope and Payment Scope are statutorily locked. */
+              <div
                 style={{
-                  display: "block",
-                  fontWeight: 700,
-                  color: "#1e293b",
-                  marginBottom: "0.35rem"
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))",
+                  gap: "1rem",
+                  alignItems: "flex-start"
                 }}
               >
-                Challan Scope:
-              </span>
-              <div
-                style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", alignItems: "center" }}
-              >
-                <label
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.4rem",
-                    cursor: "pointer",
-                    fontWeight: 600,
-                    color: demandScope === "CURRENT" ? "#065f46" : "#475569"
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="pf2DemandScopeRadio"
-                    value="CURRENT"
-                    checked={demandScope === "CURRENT"}
-                    onChange={() => {
-                      setDemandScope("CURRENT");
-                      setErrorMessage("");
-                    }}
-                  />
-                  <span>
-                    01 - Current Year Demand (PKR{" "}
-                    {(validation.currentOutstanding ?? 0).toLocaleString()})
-                  </span>
-                </label>
-
-                <label
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.4rem",
-                    cursor: "pointer",
-                    fontWeight: 600,
-                    color: demandScope === "ARREAR" ? "#065f46" : "#475569"
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="pf2DemandScopeRadio"
-                    value="ARREAR"
-                    checked={demandScope === "ARREAR"}
-                    onChange={() => {
-                      setDemandScope("ARREAR");
-                      setErrorMessage("");
-                    }}
-                  />
-                  <span>
-                    02 - Arrears Demand (PKR {(validation.arrearBalance ?? 0).toLocaleString()})
-                  </span>
-                </label>
-
-                <label
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.4rem",
-                    cursor: "pointer",
-                    fontWeight: 600,
-                    color: demandScope === "COMBINED" ? "#065f46" : "#475569"
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="pf2DemandScopeRadio"
-                    value="COMBINED"
-                    checked={demandScope === "COMBINED"}
-                    onChange={() => {
-                      setDemandScope("COMBINED");
-                      setErrorMessage("");
-                    }}
-                  />
-                  <span>
-                    03 - Combined Current &amp; Arrears (PKR{" "}
-                    {(
-                      (validation.currentOutstanding ?? 0) +
-                      (validation.arrearBalance ?? 0) +
-                      (validation.penalties ?? 0)
-                    ).toLocaleString()}
-                    )
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            {/* Payment Scope Radio Group & Due Date Grid */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))",
-                gap: "1rem",
-                alignItems: "flex-start"
-              }}
-            >
-              <div>
-                <span
-                  style={{
-                    display: "block",
-                    fontWeight: 700,
-                    color: "#1e293b",
-                    marginBottom: "0.35rem"
-                  }}
-                >
-                  Payment Scope:
-                </span>
                 <div
                   style={{
-                    display: "flex",
-                    gap: "1.25rem",
-                    flexWrap: "wrap",
-                    alignItems: "center"
+                    background: "#f0fdf4",
+                    border: "1px solid #bbf7d0",
+                    borderRadius: "6px",
+                    padding: "0.65rem 0.85rem"
                   }}
                 >
-                  <label
+                  <div
                     style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.4rem",
-                      cursor: "pointer",
-                      fontWeight: 600,
-                      color: paymentScope === "FULL" ? "#065f46" : "#475569"
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      color: "#166534",
+                      marginBottom: "0.25rem"
                     }}
                   >
-                    <input
-                      type="radio"
-                      name="pf2PaymentScopeRadio"
-                      value="FULL"
-                      checked={paymentScope === "FULL"}
-                      onChange={() => setPaymentScope("FULL")}
-                    />
-                    <span>Full Assessed (PKR {validation.calculatedAmount.toLocaleString()})</span>
-                  </label>
-
-                  <label
+                    Challan Scope (Locked — Statutory Rule 9)
+                  </div>
+                  <div style={{ fontWeight: 700, color: "#0f172a" }}>01 — Current Year Demand</div>
+                  <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "0.15rem" }}>
+                    Provisional challans cover current-year demand only. Arrears are not applicable.
+                  </div>
+                </div>
+                <div
+                  style={{
+                    background: "#f0fdf4",
+                    border: "1px solid #bbf7d0",
+                    borderRadius: "6px",
+                    padding: "0.65rem 0.85rem"
+                  }}
+                >
+                  <div
                     style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.4rem",
-                      cursor: "pointer",
-                      fontWeight: 600,
-                      color: paymentScope === "PARTIAL" ? "#065f46" : "#475569"
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      color: "#166534",
+                      marginBottom: "0.25rem"
                     }}
                   >
-                    <input
-                      type="radio"
-                      name="pf2PaymentScopeRadio"
-                      value="PARTIAL"
-                      checked={paymentScope === "PARTIAL"}
-                      onChange={() => setPaymentScope("PARTIAL")}
-                    />
-                    <span>Partial / Installment</span>
+                    Payment Scope (Locked — No Partial)
+                  </div>
+                  <div style={{ fontWeight: 700, color: "#0f172a" }}>
+                    Full Assessed — PKR {validation.calculatedAmount.toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "0.15rem" }}>
+                    Partial payment is not permitted on provisional issuances.
+                  </div>
+                </div>
+                <div>
+                  <label
+                    htmlFor="pf2-due-date-input"
+                    style={{
+                      display: "block",
+                      fontWeight: 700,
+                      color: "#1e293b",
+                      marginBottom: "0.35rem"
+                    }}
+                  >
+                    Statutory Due Date (Calendar Month):
                   </label>
+                  <input
+                    id="pf2-due-date-input"
+                    type="date"
+                    className="form-control"
+                    style={{ fontSize: "0.85rem", padding: "0.35rem 0.6rem", maxWidth: "16rem" }}
+                    value={dueDate}
+                    min={minDueDate}
+                    max={maxDueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                  />
                 </div>
               </div>
+            ) : (
+              /* Standard Established-Unit Challan: Full scope selection */
+              <>
+                {/* Challan Scope Radio Group */}
+                <div>
+                  <span
+                    style={{
+                      display: "block",
+                      fontWeight: 700,
+                      color: "#1e293b",
+                      marginBottom: "0.35rem"
+                    }}
+                  >
+                    Challan Scope:
+                  </span>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "1.25rem",
+                      flexWrap: "wrap",
+                      alignItems: "center"
+                    }}
+                  >
+                    <label
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                        color: demandScope === "CURRENT" ? "#065f46" : "#475569"
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="pf2DemandScopeRadio"
+                        value="CURRENT"
+                        checked={demandScope === "CURRENT"}
+                        onChange={() => {
+                          setDemandScope("CURRENT");
+                          setErrorMessage("");
+                        }}
+                      />
+                      <span>
+                        01 - Current Year Demand (PKR{" "}
+                        {(validation.currentOutstanding ?? 0).toLocaleString()})
+                      </span>
+                    </label>
 
-              <div>
-                <label
-                  htmlFor="pf2-due-date-input"
+                    <label
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                        color: demandScope === "ARREAR" ? "#065f46" : "#475569"
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="pf2DemandScopeRadio"
+                        value="ARREAR"
+                        checked={demandScope === "ARREAR"}
+                        onChange={() => {
+                          setDemandScope("ARREAR");
+                          setErrorMessage("");
+                        }}
+                      />
+                      <span>
+                        02 - Arrears Demand (PKR {(validation.arrearBalance ?? 0).toLocaleString()})
+                      </span>
+                    </label>
+
+                    <label
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                        color: demandScope === "COMBINED" ? "#065f46" : "#475569"
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="pf2DemandScopeRadio"
+                        value="COMBINED"
+                        checked={demandScope === "COMBINED"}
+                        onChange={() => {
+                          setDemandScope("COMBINED");
+                          setErrorMessage("");
+                        }}
+                      />
+                      <span>
+                        03 - Combined Current &amp; Arrears (PKR{" "}
+                        {(
+                          (validation.currentOutstanding ?? 0) +
+                          (validation.arrearBalance ?? 0) +
+                          (validation.penalties ?? 0)
+                        ).toLocaleString()}
+                        )
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Payment Scope Radio Group & Due Date Grid */}
+                <div
                   style={{
-                    display: "block",
-                    fontWeight: 700,
-                    color: "#1e293b",
-                    marginBottom: "0.35rem"
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))",
+                    gap: "1rem",
+                    alignItems: "flex-start"
                   }}
                 >
-                  Statutory Due Date (Calendar Month):
-                </label>
-                <input
-                  id="pf2-due-date-input"
-                  type="date"
-                  className="form-control"
-                  style={{ fontSize: "0.85rem", padding: "0.35rem 0.6rem", maxWidth: "16rem" }}
-                  value={dueDate}
-                  min={minDueDate}
-                  max={maxDueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                />
-              </div>
-            </div>
+                  <div>
+                    <span
+                      style={{
+                        display: "block",
+                        fontWeight: 700,
+                        color: "#1e293b",
+                        marginBottom: "0.35rem"
+                      }}
+                    >
+                      Payment Scope:
+                    </span>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "1.25rem",
+                        flexWrap: "wrap",
+                        alignItems: "center"
+                      }}
+                    >
+                      <label
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                          cursor: "pointer",
+                          fontWeight: 600,
+                          color: paymentScope === "FULL" ? "#065f46" : "#475569"
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="pf2PaymentScopeRadio"
+                          value="FULL"
+                          checked={paymentScope === "FULL"}
+                          onChange={() => setPaymentScope("FULL")}
+                        />
+                        <span>
+                          Full Assessed (PKR {validation.calculatedAmount.toLocaleString()})
+                        </span>
+                      </label>
 
-            {paymentScope === "PARTIAL" && (
-              <div
-                style={{
-                  background: "#fffbeb",
-                  border: "1px solid #fde68a",
-                  borderRadius: "6px",
-                  padding: "0.6rem 0.85rem",
-                  maxWidth: "24rem"
-                }}
-              >
-                <label
-                  style={{
-                    display: "block",
-                    fontWeight: 700,
-                    color: "#92400e",
-                    marginBottom: "0.25rem",
-                    fontSize: "0.8rem"
-                  }}
-                >
-                  Enter Partial Amount to Demand (PKR):
-                </label>
-                <input
-                  type="number"
-                  className="form-control"
-                  style={{ fontSize: "0.85rem", padding: "0.35rem 0.6rem" }}
-                  value={partialAmount}
-                  min={100}
-                  max={validation.calculatedAmount}
-                  onChange={(e) => setPartialAmount(Number(e.target.value))}
-                />
-              </div>
+                      <label
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                          cursor: "pointer",
+                          fontWeight: 600,
+                          color: paymentScope === "PARTIAL" ? "#065f46" : "#475569"
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="pf2PaymentScopeRadio"
+                          value="PARTIAL"
+                          checked={paymentScope === "PARTIAL"}
+                          onChange={() => setPaymentScope("PARTIAL")}
+                        />
+                        <span>Partial / Installment</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="pf2-due-date-input"
+                      style={{
+                        display: "block",
+                        fontWeight: 700,
+                        color: "#1e293b",
+                        marginBottom: "0.35rem"
+                      }}
+                    >
+                      Statutory Due Date (Calendar Month):
+                    </label>
+                    <input
+                      id="pf2-due-date-input"
+                      type="date"
+                      className="form-control"
+                      style={{ fontSize: "0.85rem", padding: "0.35rem 0.6rem", maxWidth: "16rem" }}
+                      value={dueDate}
+                      min={minDueDate}
+                      max={maxDueDate}
+                      onChange={(e) => setDueDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {paymentScope === "PARTIAL" && (
+                  <div
+                    style={{
+                      background: "#fffbeb",
+                      border: "1px solid #fde68a",
+                      borderRadius: "6px",
+                      padding: "0.6rem 0.85rem",
+                      maxWidth: "24rem"
+                    }}
+                  >
+                    <label
+                      style={{
+                        display: "block",
+                        fontWeight: 700,
+                        color: "#92400e",
+                        marginBottom: "0.25rem",
+                        fontSize: "0.8rem"
+                      }}
+                    >
+                      Enter Partial Amount to Demand (PKR):
+                    </label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      style={{ fontSize: "0.85rem", padding: "0.35rem 0.6rem" }}
+                      value={partialAmount}
+                      min={100}
+                      max={validation.calculatedAmount}
+                      onChange={(e) => setPartialAmount(Number(e.target.value))}
+                    />
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

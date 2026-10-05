@@ -27,6 +27,8 @@ import {
   formatChallanTaxYear,
   cleanChallanScope
 } from "../../pft2-formatters";
+import { cleanCircleName } from "../../statutory-forms";
+import { generateDocumentPin } from "@ptas/domain";
 
 // ── Statutory Colour Palette ──────────────────────────────────────────────────
 const C = {
@@ -114,11 +116,22 @@ export async function generatePft2ChallanPdf(
     doc.setLineWidth(0.2);
     doc.roundedRect(qrX, secBoxY, secBoxW, secBoxH, 0.6, 0.6, "FD");
 
-    const codeVal = copy.pin ?? challan.pin;
+    const secCode =
+      copy.securityCode && /^\d{6}$/.test(copy.securityCode)
+        ? copy.securityCode
+        : copy.pin && /^\d{6}$/.test(copy.pin)
+          ? copy.pin
+          : generateDocumentPin(
+              copy.noticeNumber ||
+                copy.assessmentInfo?.demandNo ||
+                copy.pin ||
+                challan.pin ||
+                copy.qrPayload
+            );
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10.0);
     doc.setTextColor(...C.blueDeep);
-    doc.text(codeVal, qrX + secBoxW / 2, secBoxY + 4.3, { align: "center" });
+    doc.text(secCode, qrX + secBoxW / 2, secBoxY + 4.3, { align: "center" });
 
     // Right region: Centered authority header
     const deptX = innerX + QR_SIZE + 2.5;
@@ -162,8 +175,23 @@ export async function generatePft2ChallanPdf(
     doc.setTextColor(...C.primary);
     doc.text("PFT2 \u2022 PAYMENT CHALLAN", deptCX, curY + 19.8, { align: "center" });
 
-    // 6. Scope & Rule 9
-    const cleanScope = cleanChallanScope(copy.pft2TypeLabel || copy.demandScope || "CURRENT");
+    const isProvisional = Boolean(
+      copy.isProvisional ||
+      challan.isProvisional ||
+      copy.pft2TypeLabel === "PROVISIONAL" ||
+      challan.pft2TypeLabel === "PROVISIONAL" ||
+      copy.assessmentInfo?.demandNo?.startsWith("POT-") ||
+      challan.copies?.[0]?.assessmentInfo?.demandNo?.startsWith("POT-") ||
+      copy.pin?.startsWith("Potential-") ||
+      challan.pin?.startsWith("Potential-") ||
+      copy.taxpayerInfo?.provincialUin?.startsWith("Potential-")
+    );
+    const rawScope = cleanChallanScope(copy.pft2TypeLabel || copy.demandScope || "CURRENT");
+    const cleanScope = rawScope.includes("PROVISIONAL")
+      ? rawScope
+      : isProvisional
+        ? `PROVISIONAL \u2014 ${rawScope}`
+        : rawScope;
     const scopeColor = cleanScope.includes("ARREAR")
       ? C.amber
       : cleanScope.includes("COMBINED")
@@ -302,7 +330,7 @@ export async function generatePft2ChallanPdf(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.6);
     doc.setTextColor(...C.primaryLight);
-    const circleText = copy.assessmentInfo.circleName || "Vehari Circle I (City / Commercial)";
+    const circleText = cleanCircleName(copy.assessmentInfo.circleName || copy.circleName);
     doc.text(circleText, metaL + leftLabelW, mY + META_ROW_H * 0.72);
     mY += META_ROW_H;
 
@@ -406,9 +434,11 @@ export async function generatePft2ChallanPdf(
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.2);
-    doc.setTextColor(...C.textDark);
-    const classLines = doc.splitTextToSize(copy.taxpayerInfo.classification, valColW);
-    doc.text(classLines[0] ?? copy.taxpayerInfo.classification, valColX, curY + 3.2);
+    const classVal =
+      copy.taxpayerInfo.classification?.replace(/Class undefined/gi, "Class 1") ||
+      "Class 1 - Companies";
+    const classLines = doc.splitTextToSize(classVal, valColW);
+    doc.text(classLines[0] ?? classVal, valColX, curY + 3.2);
     if (classLines.length > 1) {
       curY += 3.8;
       doc.text(classLines[1] ?? "", valColX, curY + 3.2);
@@ -423,9 +453,18 @@ export async function generatePft2ChallanPdf(
     const subCode = copy.taxpayerInfo.subclassificationCode;
     const subLabel = copy.taxpayerInfo.subclassificationLabel;
     const tertiary = copy.taxpayerInfo.tertiarySlab;
-    const subClassText = subCode
-      ? `Code ${subCode}${subLabel ? ` \u2014 ${subLabel}` : ""}${tertiary ? ` (${tertiary})` : ""}`
-      : subLabel || tertiary || "General / Standard Class";
+    const subClassText = (() => {
+      const sCode = subCode?.trim();
+      const sLabel = subLabel?.trim();
+      const tert = tertiary?.trim();
+      if (sCode && sCode !== "1" && sCode !== "undefined") {
+        return `Code ${sCode}${sLabel ? ` \u2014 ${sLabel}` : ""}${tert ? ` (${tert})` : ""}`;
+      }
+      if (sLabel && sLabel !== "1") {
+        return `${sLabel}${tert ? ` (${tert})` : ""}`;
+      }
+      return tert || "General / Standard Class";
+    })();
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.4);

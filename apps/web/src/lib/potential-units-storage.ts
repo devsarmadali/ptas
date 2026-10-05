@@ -5,6 +5,7 @@ import {
   getAllStatutoryRules
 } from "@ptas/domain";
 import type { StoredUnit } from "./pilot-store";
+import { getSupabaseAuthClient } from "./supabase-auth";
 
 export const POTENTIAL_UNITS_STORAGE_KEY = "ptas_potential_units_v2";
 export const POTENTIAL_UNITS_UPDATED_EVENT = "ptas-potential-units-updated";
@@ -275,6 +276,148 @@ export function savePersistedPotentialUnits(units: readonly PotentialUnitRecord[
 }
 
 /**
+ * Load potential assessment units from Supabase RPC list_potential_assessment_units.
+ * Returns null if network/session error occurs (falling back to localStorage).
+ */
+export async function fetchPotentialAssessmentUnitsFromDatabase(): Promise<
+  PotentialUnitRecord[] | null
+> {
+  if (typeof window === "undefined") return null;
+  try {
+    const supabase = getSupabaseAuthClient();
+    const { data, error } = await supabase.rpc("list_potential_assessment_units");
+    if (error || !Array.isArray(data)) {
+      return null;
+    }
+    if (data.length === 0) {
+      return [];
+    }
+    const rows = data as unknown as Array<Record<string, unknown>>;
+    const units: PotentialUnitRecord[] = rows.map((row) => {
+      const catCode = String(row.category_code || "1");
+      const subCode = row.subclassification_code ? String(row.subclassification_code) : undefined;
+      const rule = resolveRule(catCode, subCode);
+      const potNum = String(row.potential_number || "");
+      const pinNum = formatPotentialPin(String(row.pin_number || potNum));
+      return {
+        id: String(row.id),
+        potentialNumber: potNum,
+        pinNumber: pinNum,
+        provincialUin: pinNum,
+        legalName: String(row.legal_name || "Unnamed Unit"),
+        tradeName: row.trade_name ? String(row.trade_name) : undefined,
+        identifierType: String(row.identifier_type).toUpperCase() === "NTN" ? "NTN" : "CNIC",
+        identifierValue: String(row.identifier_value || "36603-0000000-0"),
+        address: String(row.address || "Vehari"),
+        locality: row.locality ? String(row.locality) : undefined,
+        circleId: String(row.circle_id || "00000000-0000-4000-8000-000000000004"),
+        circleName: String(row.circle_name || "Vehari Circle I (City / Commercial)"),
+        districtName: String(row.district_name || "Vehari"),
+        categoryCode: catCode,
+        categoryName: String(row.category_name || rule.category),
+        subclassificationCode: subCode ?? rule.subclassification_code,
+        subclassificationName: row.subclassification_name
+          ? String(row.subclassification_name)
+          : rule.subcategory,
+        statutoryTertiaryCode: row.statutory_tertiary_code
+          ? String(row.statutory_tertiary_code)
+          : rule.statutory_tertiary_code,
+        statutoryTertiaryClassification: row.statutory_tertiary_classification
+          ? String(row.statutory_tertiary_classification)
+          : rule.statutory_tertiary_classification,
+        statutoryRuleId: String(row.statutory_rule_id || rule.rule_id),
+        statutoryRule: rule,
+        annualRatePkr: Number(row.annual_rate_pkr) || rule.annual_rate_pkr || 4000,
+        openingArrears: 0,
+        status:
+          row.status === "MIGRATED" || row.status === "CANCELLED"
+            ? (row.status as "MIGRATED" | "CANCELLED")
+            : ("ACTIVE" as const),
+        migratedToDemandNo: row.migrated_to_demand_no
+          ? String(row.migrated_to_demand_no)
+          : undefined,
+        migratedAt: row.migrated_at ? String(row.migrated_at) : undefined,
+        createdAt: String(row.created_at || new Date().toISOString()),
+        createdBy: row.created_by ? String(row.created_by) : undefined
+      };
+    });
+    savePersistedPotentialUnits(units);
+    return units;
+  } catch (err) {
+    console.warn("fetchPotentialAssessmentUnitsFromDatabase encountered error:", err);
+    return null;
+  }
+}
+
+/**
+ * Persist a newly created potential unit to Supabase via create_potential_assessment_unit RPC.
+ */
+export async function persistPotentialUnitToDatabase(
+  unit: PotentialUnitRecord
+): Promise<PotentialUnitRecord | null> {
+  if (typeof window === "undefined") return null;
+  try {
+    const supabase = getSupabaseAuthClient();
+    const payload = {
+      potential_number: unit.potentialNumber,
+      pin_number: unit.pinNumber,
+      provincial_uin: unit.provincialUin,
+      legal_name: unit.legalName,
+      trade_name: unit.tradeName,
+      identifier_type: unit.identifierType,
+      identifier_value: unit.identifierValue,
+      address: unit.address,
+      locality: unit.locality,
+      circle_id: unit.circleId,
+      circle_name: unit.circleName,
+      district_name: unit.districtName,
+      category_code: unit.categoryCode,
+      category_name: unit.categoryName,
+      subclassification_code: unit.subclassificationCode,
+      subclassification_name: unit.subclassificationName,
+      statutory_tertiary_code: unit.statutoryTertiaryCode,
+      statutory_tertiary_classification: unit.statutoryTertiaryClassification,
+      statutory_rule_id: unit.statutoryRuleId,
+      annual_rate_pkr: unit.annualRatePkr,
+      opening_arrears: 0
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.rpc as any)("create_potential_assessment_unit", {
+      p_unit: payload
+    });
+    if (error) {
+      console.warn("persistPotentialUnitToDatabase error:", error.message);
+      return null;
+    }
+    return unit;
+  } catch (err) {
+    console.warn("persistPotentialUnitToDatabase failed:", err);
+    return null;
+  }
+}
+
+/**
+ * Update a potential unit's status in Supabase when migrated to PFT-3.
+ */
+export async function recordPotentialUnitMigrationInDatabase(
+  potentialId: string,
+  assignedDemandNo: string
+): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    const supabase = getSupabaseAuthClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase.rpc as any)("migrate_potential_unit_to_pft3", {
+      p_potential_id: potentialId,
+      p_assigned_demand_no: assignedDemandNo
+    });
+  } catch (err) {
+    console.warn("recordPotentialUnitMigrationInDatabase failed:", err);
+  }
+}
+
+/**
  * Migrate a Potential Assessment Unit into the Form P.F.T-3 Assessment Register upon realization of payment.
  */
 export function migratePotentialUnitToPft3(
@@ -420,6 +563,102 @@ export function migratePotentialUnitToPft3(
   };
 
   return { migratedUnit, assignedDemandNo, cleanPin };
+}
+
+export const V_UNITS_MIGRATION_FLAG_KEY = "ptas_v_units_migration_done";
+
+/**
+ * One-time migration: convert V- demand units loaded from Supabase
+ * into PotentialUnitRecord entries and seed them into localStorage.
+ * Potential units strictly have no arrears (openingArrears: 0).
+ * Idempotent — skips if already performed or if no V- units present.
+ */
+export function migrateVDemandUnitsToPotentialRegister(surveyUnits: readonly StoredUnit[]): void {
+  if (typeof window === "undefined") return;
+  if (localStorage.getItem(V_UNITS_MIGRATION_FLAG_KEY)) return;
+
+  const vUnits = surveyUnits.filter(
+    (u) => u.demandUnit?.permanentDemandNo?.startsWith("V-") || u.demandNumber?.startsWith("V-")
+  );
+  if (vUnits.length === 0) return;
+
+  const existing = loadPersistedPotentialUnits();
+  const existingPotNos = new Set(existing.map((e) => e.potentialNumber));
+  const existingPins = new Set(existing.map((e) => e.pinNumber));
+  const existingProvincialUins = new Set(existing.map((e) => e.provincialUin));
+
+  let maxSeq = existing.reduce((max, u) => {
+    const m = u.potentialNumber.match(/\d+/);
+    return m ? Math.max(max, parseInt(m[0], 10)) : max;
+  }, 0);
+
+  const newPots: PotentialUnitRecord[] = [];
+  for (const u of vUnits) {
+    const demandNo = u.demandUnit?.permanentDemandNo || u.demandNumber || "";
+    const rawPin = u.provincialUin || u.pinNumber || demandNo;
+    const pin = formatPotentialPin(rawPin);
+
+    // Skip duplicates
+    if (
+      existingPins.has(pin) ||
+      existingPins.has(rawPin) ||
+      existingProvincialUins.has(pin) ||
+      existingProvincialUins.has(rawPin)
+    ) {
+      continue;
+    }
+
+    let potNum: string;
+    do {
+      maxSeq++;
+      potNum = `POT-${maxSeq.toString().padStart(4, "0")}`;
+    } while (existingPotNos.has(potNum));
+
+    existingPotNos.add(potNum);
+    existingPins.add(pin);
+    existingProvincialUins.add(pin);
+
+    const rule =
+      u.statutoryRule ||
+      resolveRule(u.statutoryRuleId || u.categoryCode || "1", u.subclassificationCode || undefined);
+    const annualRate =
+      u.assessmentVersions?.[0]?.snapshot?.taxAmount ?? rule?.annual_rate_pkr ?? 4000;
+
+    newPots.push({
+      id: `v-migrated-${u.id}`,
+      potentialNumber: potNum,
+      pinNumber: pin,
+      provincialUin: pin,
+      legalName: u.legalName,
+      tradeName: u.tradeName,
+      identifierType: u.identifierType,
+      identifierValue: u.identifierValue,
+      address: u.address,
+      locality: u.locality,
+      circleId: u.circleId || "00000000-0000-4000-8000-000000000004",
+      circleName: u.circleName || "Vehari Circle I (City / Commercial)",
+      districtName: u.districtName ?? "Vehari",
+      categoryCode: u.categoryCode ?? rule?.category_code ?? "1",
+      categoryName: rule?.category ?? "Commercial Establishments",
+      subclassificationCode: u.subclassificationCode ?? rule?.subclassification_code,
+      subclassificationName: rule?.subcategory,
+      statutoryTertiaryCode: u.statutoryTertiaryCode ?? rule?.statutory_tertiary_code,
+      statutoryTertiaryClassification: rule?.statutory_tertiary_classification,
+      statutoryRuleId: u.statutoryRuleId ?? rule?.rule_id ?? "PFT-1.i",
+      statutoryRule: rule,
+      annualRatePkr: annualRate,
+      openingArrears: 0, // Potential register strictly has no arrears
+      status: "ACTIVE",
+      createdAt: new Date().toISOString(),
+      createdBy: "System Migration (V- Demand Units)"
+    });
+  }
+
+  if (newPots.length > 0) {
+    const updated = [...existing, ...newPots];
+    savePersistedPotentialUnits(updated);
+  }
+  localStorage.setItem(V_UNITS_MIGRATION_FLAG_KEY, new Date().toISOString());
 }
 
 /**

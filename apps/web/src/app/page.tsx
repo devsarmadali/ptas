@@ -127,7 +127,11 @@ import {
   type PotentialUnitRecord,
   loadPersistedPotentialUnits,
   savePersistedPotentialUnits,
+  fetchPotentialAssessmentUnitsFromDatabase,
+  persistPotentialUnitToDatabase,
+  recordPotentialUnitMigrationInDatabase,
   migratePotentialUnitToPft3,
+  migrateVDemandUnitsToPotentialRegister,
   importPotentialUnitsCsv,
   generatePotentialCsvTemplate,
   formatPotentialPin,
@@ -687,6 +691,15 @@ export default function HomePage({
     try {
       const liveUnits = await loadOperationalSurveyUnits();
       setUnits(liveUnits);
+
+      // Load potential units from database table, fallback to synced local storage
+      const dbPotential = await fetchPotentialAssessmentUnitsFromDatabase();
+      if (dbPotential && dbPotential.length > 0) {
+        setPotentialUnits(dbPotential);
+      } else {
+        migrateVDemandUnitsToPotentialRegister(liveUnits);
+        setPotentialUnits(loadPersistedPotentialUnits());
+      }
       const { challans: syncedChallans, receipts: syncedReceipts } =
         ensureChallansAndReceiptsForUnits(liveUnits);
       setPft2Challans(syncedChallans);
@@ -1677,7 +1690,11 @@ export default function HomePage({
   const formPFT3Rows = useMemo(() => {
     return generateFormPFT3Rows(
       units.filter(
-        (unit) => unit.assessments[0]?.status === "APPROVED" && unit.pft3Registered !== false
+        (unit) =>
+          unit.assessments[0]?.status === "APPROVED" &&
+          unit.pft3Registered !== false &&
+          !unit.demandUnit?.permanentDemandNo?.startsWith("V-") &&
+          !unit.demandNumber?.startsWith("V-")
       )
     );
   }, [units]);
@@ -1795,6 +1812,9 @@ export default function HomePage({
   // Potential Register Filtered Rows
   const filteredPotentialUnits = useMemo(() => {
     return potentialUnits.filter((u) => {
+      // MIGRATED units have been enrolled in PFT-3; exclude from active pipeline view
+      if (u.status === "MIGRATED") return false;
+
       if (potentialDistrictFilter !== "ALL") {
         if ((u.districtName ?? "Vehari") !== potentialDistrictFilter) return false;
       }
@@ -1960,10 +1980,18 @@ export default function HomePage({
       | "SLAB_DISTRIBUTION"
   ) => {
     switch (schedule) {
-      case "PFT3_REGISTER":
-        downloadCsvFile("PFT-3_Assessment_Register_Vehari_2026.csv", exportPft3RegisterCsv(units));
+      case "PFT3_REGISTER": {
+        const pft3Units = units.filter(
+          (u) =>
+            !u.demandUnit?.permanentDemandNo?.startsWith("V-") && !u.demandNumber?.startsWith("V-")
+        );
+        downloadCsvFile(
+          "PFT-3_Assessment_Register_Vehari_2026.csv",
+          exportPft3RegisterCsv(pft3Units)
+        );
         showToast("success", "Form P.F.T-3 Register CSV downloaded.");
         break;
+      }
       case "DEFAULTER_ROLL":
         downloadCsvFile(
           "PTAS_Defaulter_Arrears_Roll_Vehari_2026.csv",
@@ -3437,6 +3465,7 @@ export default function HomePage({
     const updated = [newPotUnit, ...potentialUnits];
     setPotentialUnits(updated);
     savePersistedPotentialUnits(updated);
+    void persistPotentialUnitToDatabase(newPotUnit);
     setShowAddPotentialModal(false);
 
     // Reset inputs
@@ -3586,12 +3615,14 @@ export default function HomePage({
     const nowTime = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 
     // 1. Check for Potential Unit Migration
+    // Match by unitId, potentialNumber, demandNumber, or statutory taxpayer PIN (not the 6-digit document security PIN)
     const matchingPotential = potentialUnits.find(
       (p) =>
         p.id === receivingChallan.unitId ||
         p.potentialNumber === receivingChallan.potentialNumber ||
         p.potentialNumber === receivingChallan.demandNumber ||
-        p.pinNumber === receivingChallan.pin
+        p.pinNumber === receivingChallan.provincialUin ||
+        p.provincialUin === receivingChallan.provincialUin
     );
 
     let assignedDemandNo = receivingChallan.demandNumber;
@@ -3648,6 +3679,7 @@ export default function HomePage({
       );
       setPotentialUnits(updatedPotList);
       savePersistedPotentialUnits(updatedPotList);
+      void recordPotentialUnitMigrationInDatabase(potTarget.id, assignedDemandNo);
     }
 
     // 2. Create Receipt Record with locked statutory amount and validated date

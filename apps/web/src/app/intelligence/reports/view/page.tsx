@@ -70,7 +70,11 @@ function ReportViewContent() {
 
   const units = pilotState.units || [];
   const pft3Units = units.filter(
-    (unit) => unit.assessments[0]?.status === "APPROVED" && unit.pft3Registered !== false
+    (unit) =>
+      unit.assessments[0]?.status === "APPROVED" &&
+      unit.pft3Registered !== false &&
+      !unit.demandUnit?.permanentDemandNo?.startsWith("V-") &&
+      !unit.demandNumber?.startsWith("V-")
   );
   const clearanceCertificates = pilotState.clearanceCertificates || [];
   const discontinuances = pilotState.discontinuances || [];
