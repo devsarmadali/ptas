@@ -17,6 +17,7 @@ import { downloadOfficialPdf } from "../../../../lib/pdf";
 import { saveIssuedPft2Challan } from "../../../../lib/challan-storage";
 import {
   loadPersistedPotentialUnits,
+  convertPotentialUnitToStoredUnit,
   migrateVDemandUnitsToPotentialRegister,
   type PotentialUnitRecord
 } from "../../../../lib/potential-units-storage";
@@ -89,60 +90,7 @@ function DocumentIssuanceContent() {
               decodeURIComponent(unitParam) === p.pinNumber
           );
           if (pot) {
-            found = {
-              id: pot.id,
-              provincialUin: pot.pinNumber,
-              pinNumber: pot.pinNumber,
-              legalName: pot.legalName,
-              tradeName: pot.tradeName,
-              address: pot.address,
-              locality: pot.locality,
-              circleName: pot.circleName ?? "Circle-Vehari",
-              districtName: pot.districtName ?? "Vehari",
-              category: pot.categoryName,
-              subclass: pot.subclassificationName || pot.categoryCode,
-              statutoryRule: {
-                category: pot.categoryName,
-                subclassification_code: pot.categoryCode,
-                subclassification_label: pot.subclassificationName,
-                statutory_rate_pkr: pot.annualRatePkr,
-                annual_rate_pkr: pot.annualRatePkr,
-                schedule_entry: pot.categoryCode
-              },
-              openingArrears: 0,
-              identifiers: [{ type: pot.identifierType, value: pot.identifierValue }],
-              demandUnit: {
-                id: pot.id,
-                permanentDemandNo: pot.potentialNumber,
-                taxpayerUnitId: pot.id,
-                circleId: pot.circleId,
-                status: "ACTIVE"
-              },
-              assessments: [
-                {
-                  id: `ass-${pot.id}`,
-                  status: "APPROVED",
-                  taxpayerUnitId: pot.id,
-                  financialYear: "2025-2026",
-                  approvedAt: pot.createdAt
-                }
-              ],
-              assessmentVersions: [
-                {
-                  id: `ver-${pot.id}`,
-                  versionNumber: 1,
-                  approvedBy: "Excise & Taxation Officer",
-                  snapshot: {
-                    taxAmount: pot.annualRatePkr,
-                    category: pot.categoryName,
-                    subclass: pot.subclassificationName
-                  }
-                }
-              ],
-              ledgerEntries: [],
-              surveys: []
-            } as unknown as StoredUnit;
-
+            found = convertPotentialUnitToStoredUnit(pot);
             available.push(found);
           }
         }

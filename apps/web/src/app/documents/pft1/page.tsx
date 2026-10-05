@@ -6,6 +6,7 @@ import { type StoredUnit } from "../../../lib/pilot-store";
 import { loadOperationalSurveyUnits } from "../../../lib/operational-survey";
 import {
   loadPersistedPotentialUnits,
+  convertPotentialUnitToStoredUnit,
   type PotentialUnitRecord
 } from "../../../lib/potential-units-storage";
 import { generateFormPFT1 } from "../../../lib/statutory-forms";
@@ -23,7 +24,11 @@ function FormPft1NoticeContent() {
 
   useEffect(() => {
     let cancelled = false;
-    void loadOperationalSurveyUnits()
+    loadOperationalSurveyUnits()
+      .catch((err) => {
+        console.warn("Could not load operational survey units for PFT-1:", err);
+        return [] as StoredUnit[];
+      })
       .then((available) => {
         if (cancelled) return;
 
@@ -47,55 +52,7 @@ function FormPft1NoticeContent() {
               decodeURIComponent(unitParam) === p.pinNumber
           );
           if (pot) {
-            found = {
-              id: pot.id,
-              provincialUin: pot.pinNumber,
-              pinNumber: pot.pinNumber,
-              legalName: pot.legalName,
-              tradeName: pot.tradeName,
-              address: pot.address,
-              locality: pot.locality,
-              circleName: pot.circleName ?? "Circle-Vehari",
-              districtName: pot.districtName ?? "Vehari",
-              identifiers: [{ type: pot.identifierType, value: pot.identifierValue }],
-              demandUnit: {
-                id: pot.id,
-                permanentDemandNo: pot.potentialNumber,
-                taxpayerUnitId: pot.id,
-                circleId: pot.circleId,
-                status: "ACTIVE"
-              },
-              assessments: [
-                {
-                  id: `asm-${pot.id}`,
-                  demandUnitId: pot.id,
-                  financialYearId: "2026-2027",
-                  status: "APPROVED",
-                  taxpayerClass: pot.categoryCode,
-                  annualDemand: pot.annualRatePkr,
-                  currentVersionId: `v-${pot.id}`
-                }
-              ],
-              assessmentVersions: [
-                {
-                  id: `v-${pot.id}`,
-                  assessmentId: `asm-${pot.id}`,
-                  versionNumber: 1,
-                  status: "APPROVED",
-                  createdAt: pot.createdAt,
-                  createdBy: pot.createdBy || "System",
-                  snapshot: {
-                    taxAmount: pot.annualRatePkr,
-                    categoryCode: pot.categoryCode,
-                    categoryTitle: pot.categoryName,
-                    subclassificationCode: pot.subclassificationCode || "",
-                    subclassificationTitle: pot.subclassificationName || ""
-                  }
-                }
-              ],
-              ledgerEntries: [],
-              surveys: []
-            } as unknown as StoredUnit;
+            found = convertPotentialUnitToStoredUnit(pot);
           }
         }
 

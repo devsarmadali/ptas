@@ -106,6 +106,109 @@ export function resolveDemandNumberCollision(
 }
 
 /**
+ * Converts a PotentialUnitRecord into a complete, valid StoredUnit model.
+ * Provides fully resolved statutoryRule, approved assessment version,
+ * and zero arrears, ensuring Form PFT-1, Unit Dossier, and PFT-2 can render without crashes.
+ */
+export function convertPotentialUnitToStoredUnit(pot: PotentialUnitRecord): StoredUnit {
+  const rule =
+    pot.statutoryRule && pot.statutoryRule.rule_id
+      ? pot.statutoryRule
+      : resolveRule(
+          pot.statutoryRuleId || pot.categoryCode,
+          pot.subclassificationCode || undefined
+        );
+
+  const subclassificationCode =
+    pot.subclassificationCode && pot.subclassificationCode !== pot.categoryCode
+      ? pot.subclassificationCode
+      : rule.subclassification_code || pot.subclassificationCode || pot.categoryCode;
+
+  const subclassificationName =
+    pot.subclassificationName || rule.subcategory || rule.subclassification_label;
+
+  const annualRate = pot.annualRatePkr || rule.annual_rate_pkr || 4000;
+  const pin = pot.pinNumber || pot.provincialUin;
+
+  return {
+    id: pot.id,
+    legalName: pot.legalName,
+    tradeName: pot.tradeName || pot.legalName,
+    identifierType: pot.identifierType,
+    identifierValue: pot.identifierValue,
+    address: pot.address,
+    locality: pot.locality || "Vehari City Commercial Zone",
+    circleId: pot.circleId,
+    circleName: pot.circleName ?? "Vehari Circle I (City / Commercial)",
+    districtName: pot.districtName ?? "Vehari",
+    categoryCode: pot.categoryCode || rule.category_code,
+    subclassificationCode,
+    statutoryTertiaryCode: pot.statutoryTertiaryCode || rule.statutory_tertiary_code,
+    statutoryRuleId: pot.statutoryRuleId || rule.rule_id,
+    statutoryRule: {
+      ...rule,
+      category_code: pot.categoryCode || rule.category_code,
+      category: pot.categoryName || rule.category,
+      subclassification_code: subclassificationCode,
+      subcategory: subclassificationName || rule.subcategory,
+      subclassification_label: subclassificationName || rule.subcategory || null,
+      annual_rate_pkr: annualRate,
+      statutory_tertiary_code: pot.statutoryTertiaryCode || rule.statutory_tertiary_code || null,
+      statutory_tertiary_classification:
+        pot.statutoryTertiaryClassification || rule.statutory_tertiary_classification || null
+    },
+    assessmentNumber: `POT-ASM-${pot.potentialNumber.replace(/^POT-?/i, "")}`,
+    demandNumber: pot.potentialNumber,
+    pinNumber: pin,
+    provincialUin: pin,
+    pft3Registered: false,
+    demandUnit: {
+      id: pot.id,
+      taxpayerId: pot.id,
+      permanentDemandNo: pot.potentialNumber,
+      createdAt: pot.createdAt || new Date().toISOString()
+    },
+    assessments: [
+      {
+        id: `asm-${pot.id}`,
+        taxpayerId: pot.id,
+        financialYearId: "2026-2027",
+        status: "APPROVED",
+        currentVersionNo: 1,
+        createdBy: pot.createdBy || "System (Potential Register)",
+        createdAt: pot.createdAt || new Date().toISOString()
+      }
+    ],
+    assessmentVersions: [
+      {
+        id: `v-${pot.id}`,
+        assessmentId: `asm-${pot.id}`,
+        versionNo: 1,
+        status: "APPROVED",
+        createdAt: pot.createdAt || new Date().toISOString(),
+        createdBy: pot.createdBy || "System (Potential Register)",
+        approvedBy: "ETO / Assessing Authority",
+        approvedAt: pot.createdAt || new Date().toISOString(),
+        snapshot: {
+          taxAmount: annualRate,
+          openingArrears: 0,
+          statutoryCategory: pot.categoryName || rule.category,
+          legalBasis: rule.official_text || "Punjab Finance Act, 1977",
+          ruleId: pot.statutoryRuleId || rule.rule_id,
+          categoryCode: pot.categoryCode,
+          categoryTitle: pot.categoryName || rule.category,
+          subclassificationCode: subclassificationCode,
+          subclassificationTitle: subclassificationName || rule.subcategory
+        }
+      }
+    ],
+    ledgerEntries: [],
+    openingArrears: 0,
+    createdAt: pot.createdAt || new Date().toISOString()
+  };
+}
+
+/**
  * Seed initial mock potential assessment units in Vehari district for operational inspection.
  */
 export function createInitialPotentialUnits(): PotentialUnitRecord[] {

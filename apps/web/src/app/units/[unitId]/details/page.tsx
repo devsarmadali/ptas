@@ -7,7 +7,10 @@ import {
   type StatutoryReceiptRecord
 } from "../../../../lib/pilot-store";
 import { loadOperationalSurveyUnits } from "../../../../lib/operational-survey";
-import { loadPersistedPotentialUnits } from "../../../../lib/potential-units-storage";
+import {
+  loadPersistedPotentialUnits,
+  convertPotentialUnitToStoredUnit
+} from "../../../../lib/potential-units-storage";
 import {
   computeUnitFinancialSummary,
   getScheduleEntryLabel
@@ -29,7 +32,11 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
 
   useEffect(() => {
     let cancelled = false;
-    void loadOperationalSurveyUnits()
+    loadOperationalSurveyUnits()
+      .catch((err) => {
+        console.warn("Could not load operational survey units in details page:", err);
+        return [] as StoredUnit[];
+      })
       .then((available) => {
         if (cancelled) return;
 
@@ -58,31 +65,7 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
               (unitId && p.legalName.toLowerCase().includes(unitId.toLowerCase()))
           );
           if (pot) {
-            found = {
-              id: pot.id,
-              provincialUin: pot.pinNumber,
-              pinNumber: pot.pinNumber,
-              legalName: pot.legalName,
-              tradeName: pot.tradeName,
-              address: pot.address,
-              locality: pot.locality,
-              circleName: pot.circleName ?? "Circle-Vehari",
-              districtName: pot.districtName ?? "Vehari",
-              category: pot.categoryName,
-              subclass: pot.subclassificationName || pot.categoryCode,
-              identifiers: [{ type: pot.identifierType, value: pot.identifierValue }],
-              demandUnit: {
-                id: pot.id,
-                permanentDemandNo: pot.potentialNumber,
-                taxpayerUnitId: pot.id,
-                circleId: pot.circleId,
-                status: "ACTIVE"
-              },
-              assessments: [],
-              assessmentVersions: [],
-              ledgerEntries: [],
-              surveys: []
-            } as unknown as StoredUnit;
+            found = convertPotentialUnitToStoredUnit(pot);
           }
         }
 

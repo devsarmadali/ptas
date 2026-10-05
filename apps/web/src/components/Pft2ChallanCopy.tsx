@@ -3,7 +3,7 @@
 import React from "react";
 import { StatutoryQrCode } from "./StatutoryQrCode";
 import type { FormPFT2CopyModel } from "../lib/statutory-forms";
-import { cleanCircleName } from "../lib/statutory-forms";
+import { cleanCircleName, formatFullSubclassCode } from "../lib/statutory-forms";
 import { generateDocumentPin } from "@ptas/domain";
 import {
   formatChallanDisplayDate,
@@ -230,10 +230,10 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           </div>
           <div
             style={{
-              fontSize: "0.58rem",
-              fontWeight: 700,
+              fontSize: "0.68rem",
+              fontWeight: 800,
               color: "#b45309",
-              marginTop: "0.05rem"
+              marginTop: "0.08rem"
             }}
           >
             Head: {copy.headOfAccount.replace(/\s*-\s*Provincial|\s*\(Provincial\)/gi, "").trim()}
@@ -359,10 +359,9 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           </span>
         </div>
 
-        {/* Row 4: Circle Name */}
+        {/* Row 4: Circle | Locality Grid (Locality moved up next to Circle) */}
         <div
           style={{
-            gridColumn: "span 2",
             display: "flex",
             alignItems: "baseline",
             borderTop: "1px dashed #e2e8f0",
@@ -376,8 +375,25 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
             {cleanCircleName(copy.assessmentInfo.circleName || copy.circleName)}
           </span>
         </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            justifyContent: "flex-end",
+            borderTop: "1px dashed #e2e8f0",
+            paddingTop: "0.18rem"
+          }}
+        >
+          <span style={{ fontWeight: 700, color: "#334155", marginRight: "0.4rem" }}>LOCALITY</span>
+          <span style={{ color: "#0f172a" }}>
+            {copy.locality ||
+              copy.assessmentInfo.locality ||
+              copy.taxpayerInfo.address.split(",")[0] ||
+              "City Zone"}
+          </span>
+        </div>
 
-        {/* Row 5: Locality | Issue Date */}
+        {/* Row 5: Issue Date | Due Date Grid (Both dates in a single row! Word STATUTORY removed) */}
         <div
           style={{
             display: "flex",
@@ -387,14 +403,9 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           }}
         >
           <span style={{ width: "6.8rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
-            LOCALITY
+            ISSUE DATE
           </span>
-          <span style={{ color: "#0f172a" }}>
-            {copy.locality ||
-              copy.assessmentInfo.locality ||
-              copy.taxpayerInfo.address.split(",")[0] ||
-              "City Zone"}
-          </span>
+          <span>{displayIssueDate}</span>
         </div>
         <div
           style={{
@@ -405,29 +416,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
             paddingTop: "0.18rem"
           }}
         >
-          <span style={{ fontWeight: 700, color: "#334155", marginRight: "0.4rem" }}>
-            ISSUE DATE
-          </span>
-          <span>{displayIssueDate}</span>
-        </div>
-
-        {/* Row 6: Due Date (Full Width Callout) */}
-        <div
-          style={{
-            gridColumn: "span 2",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
-            borderRadius: "3px",
-            padding: "0.18rem 0.4rem",
-            marginTop: "0.1rem"
-          }}
-        >
-          <span style={{ fontWeight: 700, color: "#b91c1c", fontSize: "0.68rem" }}>
-            STATUTORY DUE DATE
-          </span>
+          <span style={{ fontWeight: 700, color: "#b91c1c", marginRight: "0.4rem" }}>DUE DATE</span>
           <span style={{ fontWeight: 800, color: "#b91c1c", fontSize: "0.76rem" }}>
             {displayDueDate}
           </span>
@@ -542,14 +531,24 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
             }}
           >
             {(() => {
-              const subCode = copy.taxpayerInfo.subclassificationCode?.trim();
-              const subLabel = copy.taxpayerInfo.subclassificationLabel?.trim();
+              const rawSubCode = copy.taxpayerInfo.subclassificationCode?.trim();
+              const catCode =
+                copy.taxpayerInfo.categoryCode ||
+                copy.taxpayerInfo.classification?.split("-")[0]?.replace(/[^0-9]/g, "");
               const tertiary = copy.taxpayerInfo.tertiarySlab?.trim();
-              if (subCode && subCode !== "1" && subCode !== "undefined") {
-                return `Code ${subCode}${subLabel ? ` — ${subLabel}` : ""}${tertiary ? ` (${tertiary})` : ""}`;
+              const resolvedCode = formatFullSubclassCode(
+                rawSubCode,
+                catCode,
+                copy.taxpayerInfo.statutoryRuleId,
+                copy.taxpayerInfo.statutoryTertiaryCode
+              );
+              const sCode = resolvedCode.replace(/^Code\s+/i, "").trim();
+              const subLabel = copy.taxpayerInfo.subclassificationLabel?.trim();
+              if (sCode && sCode !== "1" && sCode !== "undefined") {
+                return `Code ${sCode}${subLabel ? ` — ${subLabel}` : ""}${tertiary && tertiary !== subLabel ? ` (${tertiary})` : ""}`;
               }
               if (subLabel && subLabel !== "1") {
-                return `${subLabel}${tertiary ? ` (${tertiary})` : ""}`;
+                return `${subLabel}${tertiary && tertiary !== subLabel ? ` (${tertiary})` : ""}`;
               }
               return tertiary || "General / Standard Class";
             })()}
@@ -606,56 +605,63 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
         >
           <tbody>
             <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-              <td style={{ padding: "0.18rem 0.35rem", color: "#334155" }}>Current Tax Demand</td>
+              <td style={{ padding: "0.22rem 0.35rem", color: "#334155", fontSize: "0.72rem" }}>
+                Current Tax Demand
+              </td>
               <td
                 style={{
-                  padding: "0.18rem 0.35rem",
+                  padding: "0.22rem 0.35rem",
                   textAlign: "right",
                   fontVariantNumeric: "tabular-nums",
-                  fontWeight: 600
+                  fontWeight: 700,
+                  fontSize: "0.82rem"
                 }}
               >
                 Rs. {copy.taxPayable.currentTax.toLocaleString()}
               </td>
             </tr>
             <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-              <td style={{ padding: "0.18rem 0.35rem", color: "#334155" }}>Prior Year Arrears</td>
+              <td style={{ padding: "0.22rem 0.35rem", color: "#334155", fontSize: "0.72rem" }}>
+                Prior Year Arrears
+              </td>
               <td
                 style={{
-                  padding: "0.18rem 0.35rem",
+                  padding: "0.22rem 0.35rem",
                   textAlign: "right",
                   fontVariantNumeric: "tabular-nums",
-                  fontWeight: 600
+                  fontWeight: 700,
+                  fontSize: "0.82rem"
                 }}
               >
                 Rs. {copy.taxPayable.arrears.toLocaleString()}
               </td>
             </tr>
             <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-              <td style={{ padding: "0.18rem 0.35rem", color: "#334155" }}>
+              <td style={{ padding: "0.22rem 0.35rem", color: "#334155", fontSize: "0.72rem" }}>
                 Late Surcharge / Penalty
               </td>
               <td
                 style={{
-                  padding: "0.18rem 0.35rem",
+                  padding: "0.22rem 0.35rem",
                   textAlign: "right",
                   fontVariantNumeric: "tabular-nums",
-                  fontWeight: 600
+                  fontWeight: 700,
+                  fontSize: "0.82rem"
                 }}
               >
                 Rs. {copy.taxPayable.penalty.toLocaleString()}
               </td>
             </tr>
             <tr style={{ fontWeight: 800, background: "#dcfce7" }}>
-              <td style={{ padding: "0.24rem 0.35rem", color: "#166534", fontSize: "0.74rem" }}>
+              <td style={{ padding: "0.28rem 0.35rem", color: "#166534", fontSize: "0.8rem" }}>
                 TOTAL PAYABLE
               </td>
               <td
                 style={{
-                  padding: "0.24rem 0.35rem",
+                  padding: "0.28rem 0.35rem",
                   textAlign: "right",
                   color: "#166534",
-                  fontSize: "0.82rem",
+                  fontSize: "0.95rem",
                   fontWeight: 800,
                   fontVariantNumeric: "tabular-nums"
                 }}

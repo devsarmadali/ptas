@@ -27,7 +27,7 @@ import {
   formatChallanTaxYear,
   cleanChallanScope
 } from "../../pft2-formatters";
-import { cleanCircleName } from "../../statutory-forms";
+import { cleanCircleName, formatFullSubclassCode } from "../../statutory-forms";
 import { generateDocumentPin } from "@ptas/domain";
 
 // ── Statutory Colour Palette ──────────────────────────────────────────────────
@@ -203,9 +203,9 @@ export async function generatePft2ChallanPdf(
     doc.setTextColor(...scopeColor);
     doc.text(`Rule 9 \u2022 [${cleanScope}]`, deptCX, curY + 23.4, { align: "center" });
 
-    // 7. Head of Account
+    // 7. Head of Account (Prominent 8.2pt bold)
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.4);
+    doc.setFontSize(8.2);
     doc.setTextColor(...C.amber);
     const rawHead = copy.headOfAccount || "B01601 (Punjab Professional Tax)";
     const cleanHead = rawHead.replace(/\s*-\s*Provincial|\s*\(Provincial\)/gi, "").trim();
@@ -213,7 +213,7 @@ export async function generatePft2ChallanPdf(
     const headLines = doc.splitTextToSize(headText, deptW - 1);
     doc.text(headLines[0] ?? headText, deptCX, curY + 26.8, { align: "center" });
 
-    curY += 32.0;
+    curY += 32.5;
 
     // Header divider line (green)
     doc.setDrawColor(...C.primary);
@@ -223,11 +223,10 @@ export async function generatePft2ChallanPdf(
 
     // ══════════════════════════════════════════════════════════════════════════
     // SECTION 2 — IDENTIFICATION & ADMINISTRATIVE GRID (SPACIOUS, ZERO COLLISION)
-    // Notice No, PIN, Demand No + Tax Year, District + Tehsil, Circle, Locality + Issue Date, Due Date
+    // Notice No, PIN, Demand No + Tax Year, District + Tehsil, Circle + Locality, Issue Date + Due Date
     // ══════════════════════════════════════════════════════════════════════════
-    const META_ROW_H = 4.8;
-    const DUE_ROW_H = 5.6;
-    const metaBoxH = 6 * META_ROW_H + DUE_ROW_H;
+    const META_ROW_H = 4.9;
+    const metaBoxH = 6 * META_ROW_H;
 
     doc.setFillColor(...C.bgMeta);
     doc.setDrawColor(...C.borderMed);
@@ -236,10 +235,10 @@ export async function generatePft2ChallanPdf(
 
     let mY = curY;
     const metaL = innerX + 1.8;
-    const metaMid = innerX + 44.0;
+    const metaMid = innerX + 39.5;
     const metaR = innerX + innerW - 1.8;
     const LABEL_FS = 6.8;
-    const leftLabelW = 20.0;
+    const leftLabelW = 18.0;
 
     // Row 0: Notice No (Full Width)
     doc.setFont("helvetica", "bold");
@@ -279,7 +278,11 @@ export async function generatePft2ChallanPdf(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(LABEL_FS);
     doc.setTextColor(...C.textDark);
-    doc.text("DEMAND NO.", metaL, mY + META_ROW_H * 0.72);
+    const isPotential =
+      copy.assessmentInfo.demandNo?.startsWith("POT-") ||
+      copy.pft2TypeLabel === "PROVISIONAL" ||
+      copy.pin?.startsWith("Potential-");
+    doc.text(isPotential ? "POTENTIAL NO." : "DEMAND NO.", metaL, mY + META_ROW_H * 0.72);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.4);
     doc.setTextColor(...C.primaryLight);
@@ -317,7 +320,7 @@ export async function generatePft2ChallanPdf(
     doc.text(displayTehsil, metaR, mY + META_ROW_H * 0.72, { align: "right" });
     mY += META_ROW_H;
 
-    // Row 4: Circle Name (Spacious Row)
+    // Row 4: Circle | Locality Grid (Locality moved up next to Circle column)
     doc.setDrawColor(...C.borderLight);
     doc.setLineDashPattern([0.8, 0.8], 0);
     doc.line(metaL, mY, metaR, mY);
@@ -331,10 +334,25 @@ export async function generatePft2ChallanPdf(
     doc.setFontSize(7.6);
     doc.setTextColor(...C.primaryLight);
     const circleText = cleanCircleName(copy.assessmentInfo.circleName || copy.circleName);
-    doc.text(circleText, metaL + leftLabelW, mY + META_ROW_H * 0.72);
+    const circleLines = doc.splitTextToSize(circleText, metaMid - metaL - leftLabelW - 0.5);
+    doc.text(circleLines[0] ?? circleText, metaL + leftLabelW, mY + META_ROW_H * 0.72);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(LABEL_FS);
+    doc.setTextColor(...C.textDark);
+    doc.text("LOCALITY", metaMid, mY + META_ROW_H * 0.72);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.4);
+    const localityText =
+      copy.locality ||
+      copy.assessmentInfo.locality ||
+      copy.taxpayerInfo.address.split(",")[0] ||
+      "City Zone";
+    const locLines = doc.splitTextToSize(localityText, metaR - metaMid - 13.5);
+    doc.text(locLines[0] ?? localityText, metaR, mY + META_ROW_H * 0.72, { align: "right" });
     mY += META_ROW_H;
 
-    // Row 5: Locality | Issue Date
+    // Row 5: Issue Date | Due Date Grid (Both dates in a row! Word "STATUTORY" removed)
     doc.setDrawColor(...C.borderLight);
     doc.setLineDashPattern([0.8, 0.8], 0);
     doc.line(metaL, mY, metaR, mY);
@@ -343,46 +361,26 @@ export async function generatePft2ChallanPdf(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(LABEL_FS);
     doc.setTextColor(...C.textDark);
-    doc.text("LOCALITY", metaL, mY + META_ROW_H * 0.72);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.4);
-    doc.setTextColor(...C.textDark);
-    const localityText =
-      copy.locality ||
-      copy.assessmentInfo.locality ||
-      copy.taxpayerInfo.address.split(",")[0] ||
-      "City Zone";
-    const locLines = doc.splitTextToSize(localityText, metaMid - metaL - leftLabelW - 1.0);
-    doc.text(locLines[0] ?? localityText, metaL + leftLabelW, mY + META_ROW_H * 0.72);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(LABEL_FS);
-    doc.setTextColor(...C.textDark);
-    doc.text("ISSUE DATE", metaMid, mY + META_ROW_H * 0.72);
+    doc.text("ISSUE DATE", metaL, mY + META_ROW_H * 0.72);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.8);
     const displayIssue = formatChallanDisplayDate(
       copy.issueDate || (challan as { issueDate?: string }).issueDate || "2026-07-01"
     );
-    doc.text(displayIssue, metaR, mY + META_ROW_H * 0.72, { align: "right" });
-    mY += META_ROW_H;
-
-    // Row 6: Due Date (Prominent Red Callout Row)
-    doc.setFillColor(...C.redBg);
-    doc.rect(innerX + 0.2, mY, innerW - 0.4, DUE_ROW_H - 0.2, "F");
+    doc.text(displayIssue, metaL + leftLabelW, mY + META_ROW_H * 0.72);
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.6);
+    doc.setFontSize(LABEL_FS);
     doc.setTextColor(...C.red);
-    doc.text("STATUTORY DUE DATE", metaL, mY + DUE_ROW_H * 0.7);
-
+    doc.text("DUE DATE", metaMid, mY + META_ROW_H * 0.72);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.0);
-    doc.text(formatChallanDisplayDate(copy.dueDate), metaR, mY + DUE_ROW_H * 0.7, {
+    doc.setFontSize(8.6);
+    doc.setTextColor(...C.red);
+    doc.text(formatChallanDisplayDate(copy.dueDate), metaR, mY + META_ROW_H * 0.72, {
       align: "right"
     });
 
-    curY += metaBoxH + 2.5;
+    curY += metaBoxH + 3.4;
 
     // ══════════════════════════════════════════════════════════════════════════
     // SECTION 3 — TAXPAYER DETAILS (PROMINENT, LARGE TYPOGRAPHY, ZERO CLIPPING)
@@ -450,18 +448,27 @@ export async function generatePft2ChallanPdf(
     curY += 4.6;
 
     // Row 3b: SUB-CLASS (Sub-Classification Code & Description)
-    const subCode = copy.taxpayerInfo.subclassificationCode;
-    const subLabel = copy.taxpayerInfo.subclassificationLabel;
+    const rawSubCode = copy.taxpayerInfo.subclassificationCode;
+    const catCode =
+      copy.taxpayerInfo.categoryCode ||
+      copy.taxpayerInfo.classification?.split("-")[0]?.replace(/[^0-9]/g, "");
     const tertiary = copy.taxpayerInfo.tertiarySlab;
+    const resolvedCode = formatFullSubclassCode(
+      rawSubCode,
+      catCode,
+      copy.taxpayerInfo.statutoryRuleId,
+      copy.taxpayerInfo.statutoryTertiaryCode
+    );
+    const subLabel = copy.taxpayerInfo.subclassificationLabel;
     const subClassText = (() => {
-      const sCode = subCode?.trim();
+      const sCode = resolvedCode.replace(/^Code\s+/i, "").trim();
       const sLabel = subLabel?.trim();
       const tert = tertiary?.trim();
       if (sCode && sCode !== "1" && sCode !== "undefined") {
-        return `Code ${sCode}${sLabel ? ` \u2014 ${sLabel}` : ""}${tert ? ` (${tert})` : ""}`;
+        return `Code ${sCode}${sLabel ? ` \u2014 ${sLabel}` : ""}${tert && tert !== sLabel ? ` (${tert})` : ""}`;
       }
       if (sLabel && sLabel !== "1") {
-        return `${sLabel}${tert ? ` (${tert})` : ""}`;
+        return `${sLabel}${tert && tert !== sLabel ? ` (${tert})` : ""}`;
       }
       return tert || "General / Standard Class";
     })();
@@ -480,7 +487,7 @@ export async function generatePft2ChallanPdf(
       curY += 3.6;
       doc.text(subLines[1] ?? "", valColX, curY + 3.2);
     }
-    curY += 4.6;
+    curY += 4.8;
 
     // Row 4: ADDRESS (Readable 8.0pt)
     doc.setFont("helvetica", "bold");
@@ -497,21 +504,21 @@ export async function generatePft2ChallanPdf(
       curY += 3.8;
       doc.text(addrLines[1] ?? "", valColX, curY + 3.2);
     }
-    curY += 5.2;
+    curY += 5.6;
 
     // ══════════════════════════════════════════════════════════════════════════
     // SECTION 4 — DETAIL OF TAX PAYABLE TABLE (LARGE FONTS, ACCOUNTING GRADE)
     // ══════════════════════════════════════════════════════════════════════════
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.4);
+    doc.setFontSize(8.6);
     doc.setTextColor(...C.primary);
     doc.text("DETAIL OF TAX PAYABLE", innerX + 1.0, curY + 2.8);
-    curY += 4.0;
+    curY += 4.2;
 
     const tblL = innerX;
     const tblR = innerX + innerW;
     const tblW = innerW;
-    const ROW_H = 5.8;
+    const ROW_H = 6.4;
 
     const tableData: {
       label: string;
@@ -543,14 +550,14 @@ export async function generatePft2ChallanPdf(
       });
     }
 
-    const tableH = (tableData.length - 1) * ROW_H + 8.2;
+    const tableH = (tableData.length - 1) * ROW_H + 9.0;
     doc.setDrawColor(...C.borderMed);
     doc.setLineWidth(0.2);
     doc.rect(tblL, curY, tblW, tableH);
 
     let tRowY = curY;
     tableData.forEach((row, idx) => {
-      const thisRowH = row.total ? 8.2 : ROW_H;
+      const thisRowH = row.total ? 9.0 : ROW_H;
       if (row.total) {
         doc.setFillColor(...C.primaryBg);
         doc.rect(tblL, tRowY, tblW, thisRowH, "F");
@@ -566,41 +573,41 @@ export async function generatePft2ChallanPdf(
       }
 
       doc.setFont("helvetica", row.bold ? "bold" : "normal");
-      doc.setFontSize(row.total ? 9.5 : 7.8);
+      doc.setFontSize(row.total ? 10.2 : 8.4);
       doc.setTextColor(...(row.total ? C.primaryLight : row.amber ? C.amberText : C.textDark));
       doc.text(row.label, tblL + 2.5, tRowY + thisRowH * 0.68);
 
-      doc.setFont("helvetica", row.bold ? "bold" : "normal");
-      doc.setFontSize(row.total ? 12.0 : 8.5);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(row.total ? 13.5 : 10.2);
       doc.text(row.value, tblR - 2.5, tRowY + thisRowH * 0.68, { align: "right" });
 
       tRowY += thisRowH;
     });
 
-    curY += tableH + 1.8;
+    curY += tableH + 2.2;
 
-    // Amount in Words (Prominent Mint Callout Box with Larger 8.4pt Bold Text)
-    const wordsH = 7.2;
+    // Amount in Words (Prominent Mint Callout Box with Larger 8.8pt Bold Text)
+    const wordsH = 7.6;
     doc.setFillColor(...C.primaryMint);
     doc.setDrawColor(...C.primaryLight);
     doc.setLineWidth(0.2);
     doc.roundedRect(tblL, curY, tblW, wordsH, 0.6, 0.6, "FD");
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.0);
+    doc.setFontSize(8.2);
     doc.setTextColor(...C.primary);
-    doc.text("Amount in Words:", tblL + 2.0, curY + 4.6);
+    doc.text("Amount in Words:", tblL + 2.0, curY + 4.8);
 
     const prefixW = doc.getTextWidth("Amount in Words:") + 2.5;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.4);
+    doc.setFontSize(8.8);
     doc.setTextColor(...C.blueDeep);
     const wordsText = copy.taxPayable.totalPayableWords;
     const wordsLines = doc.splitTextToSize(wordsText, tblW - prefixW - 3.5);
-    doc.text(wordsLines[0] ?? wordsText, tblL + 2.0 + prefixW, curY + 4.6);
+    doc.text(wordsLines[0] ?? wordsText, tblL + 2.0 + prefixW, curY + 4.8);
     if (wordsLines.length > 1) {
       curY += 3.8;
-      doc.text(wordsLines[1] ?? "", tblL + 2.0 + prefixW, curY + 4.6);
+      doc.text(wordsLines[1] ?? "", tblL + 2.0 + prefixW, curY + 4.8);
     }
 
     // ══════════════════════════════════════════════════════════════════════════

@@ -11,6 +11,7 @@ import {
   computeLedgerBalance,
   computeDefaulterAging,
   generateDocumentPin,
+  getStatutoryRuleById,
   type DefaulterAgingInfo,
   type DefaulterAgingStatus,
   type DemandLedgerEntry,
@@ -18,6 +19,53 @@ import {
 } from "@ptas/domain";
 export { computeLedgerBalance, computeDefaulterAging };
 import type { MockOfficer, StoredUnit } from "./pilot-store";
+
+/**
+ * Resolves a full, authoritative statutory subclass code.
+ * Ensures codes like "6(2)(a)(i)", "6(ii)", "3(i)(b)", "1(ii)" are properly formatted
+ * with their category prefix and never truncated to just bare category numbers like "3" or "6".
+ */
+export function formatFullSubclassCode(
+  rawSubCode?: string | null,
+  categoryCode?: string | null,
+  statutoryRuleId?: string | null,
+  tertiaryCode?: string | null
+): string {
+  const cat = (categoryCode ?? "").trim();
+  let code = (rawSubCode ?? "").trim();
+
+  // If code is empty or just the bare category number (e.g. "3" or "6"), resolve from ruleId or tertiaryCode
+  if (!code || code === cat) {
+    if (tertiaryCode && tertiaryCode.trim() !== cat) {
+      code = tertiaryCode.trim();
+    } else if (statutoryRuleId) {
+      const byId = getStatutoryRuleById(statutoryRuleId);
+      if (byId?.rule_code && byId.rule_code !== cat) {
+        code = byId.rule_code;
+      } else if (byId?.statutory_tertiary_code && byId.statutory_tertiary_code !== cat) {
+        code = byId.statutory_tertiary_code;
+      } else if (byId?.subclassification_code && byId.subclassification_code !== cat) {
+        code = byId.subclassification_code;
+      } else {
+        const match = statutoryRuleId.match(/^PFT-(\d+)\.(.+)$/i);
+        if (match && match[1] && match[2]) {
+          const parts = match[2]
+            .split(".")
+            .map((p) => `(${p})`)
+            .join("");
+          code = `${match[1]}${parts}`;
+        }
+      }
+    }
+  }
+
+  // If code starts with parentheses like "(i)(b)" or "(2)(a)(i)" and lacks category prefix, prepend category
+  if (cat && code.startsWith("(") && !code.startsWith(cat)) {
+    code = `${cat}${code}`;
+  }
+
+  return code || cat;
+}
 
 export function cleanCircleName(circle?: string): string {
   if (!circle) return "Vehari Circle I";
@@ -262,6 +310,8 @@ export interface FormPFT2CopyModel {
     readonly taxNo: string;
     readonly provincialUin?: string | undefined;
     readonly classification: string;
+    readonly categoryCode?: string | undefined;
+    readonly statutoryRuleId?: string | undefined;
     readonly subclassificationCode: string | null;
     readonly subclassificationLabel?: string | null | undefined;
     readonly statutoryTertiaryCode?: string | null;
@@ -835,10 +885,17 @@ export function generateFormPFT2(
       ? opts.pin
       : generateDocumentPin(noticeNumber || challanNumber));
 
-  const subclassificationCode =
-    unit.statutoryRule.subclassification_code ||
+  const rawSubCode =
+    unit.statutoryRule?.subclassification_code ||
     (unit as unknown as { subclassificationCode?: string }).subclassificationCode ||
     null;
+  const categoryCode = unit.categoryCode || unit.statutoryRule?.category_code || "";
+  const subclassificationCode = formatFullSubclassCode(
+    rawSubCode,
+    categoryCode,
+    unit.statutoryRuleId || unit.statutoryRule?.rule_id,
+    unit.statutoryTertiaryCode || unit.statutoryRule?.statutory_tertiary_code
+  );
   const subclassificationLabel =
     unit.statutoryRule.subclassification_label ||
     unit.statutoryRule.subcategory ||
@@ -915,6 +972,8 @@ export function generateFormPFT2(
       taxNo: `${unit.identifierType}: ${unit.identifierValue}`,
       provincialUin: unit.provincialUin,
       classification: `${scheduleEntry} - ${categoryName}`,
+      categoryCode,
+      statutoryRuleId: unit.statutoryRuleId || unit.statutoryRule?.rule_id,
       subclassificationCode,
       subclassificationLabel,
       statutoryTertiaryCode,

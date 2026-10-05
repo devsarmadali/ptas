@@ -241,4 +241,47 @@ describe("Potential Assessment Register Persistence & Migration Layer", () => {
     const afterSecond = loadPersistedPotentialUnits();
     expect(afterSecond.length).toBe(after.length);
   });
+
+  it("converts a PotentialUnitRecord into a valid StoredUnit that works with Form PFT-1 and PFT-2", async () => {
+    const { convertPotentialUnitToStoredUnit } = await import("../src/lib/potential-units-storage");
+    const { generateFormPFT1, generateFormPFT2, formatFullSubclassCode } =
+      await import("../src/lib/statutory-forms");
+
+    const initialUnits = createInitialPotentialUnits();
+    const pot = initialUnits[0]!;
+    expect(pot).toBeDefined();
+
+    const stored = convertPotentialUnitToStoredUnit(pot);
+
+    // Verify vital StoredUnit properties
+    expect(stored.id).toBe(pot.id);
+    expect(stored.pinNumber).toBe(pot.pinNumber);
+    expect(stored.statutoryRule).toBeDefined();
+    expect(stored.statutoryRule.category).toBe(pot.categoryName);
+    expect(stored.statutoryRule.subclassification_code).toBe("1(i)");
+    expect(stored.assessments).toHaveLength(1);
+    expect(stored.assessments[0]?.status).toBe("APPROVED");
+    expect(stored.assessmentVersions).toHaveLength(1);
+    expect(stored.assessmentVersions[0]?.snapshot.taxAmount).toBe(pot.annualRatePkr);
+    expect(stored.openingArrears).toBe(0);
+
+    // Verify Form PFT-1 generation succeeds without throwing undefined errors
+    const pft1 = generateFormPFT1(stored);
+    expect(pft1).toBeDefined();
+    expect(pft1.assesseeLegalName).toBe(pot.legalName);
+    expect(pft1.taxAmount).toBe(pot.annualRatePkr);
+    expect(pft1.scheduleEntry).toContain("Class 1");
+
+    // Verify Form PFT-2 generation succeeds
+    const pft2 = generateFormPFT2(stored);
+    expect(pft2).toBeDefined();
+    expect(pft2.copies[0]?.taxpayerInfo.subclassificationCode).toBe("1(i)");
+
+    // Test formatFullSubclassCode
+    expect(formatFullSubclassCode("3(i)(b)", "3")).toBe("3(i)(b)");
+    expect(formatFullSubclassCode("3", "3", "PFT-3.i.b")).toBe("3(i)(b)");
+    expect(formatFullSubclassCode("(2)(a)(i)", "6")).toBe("6(2)(a)(i)");
+    expect(formatFullSubclassCode("6(ii)", "6")).toBe("6(ii)");
+    expect(formatFullSubclassCode(null, "6", "PFT-6.ii")).toBe("6(ii)");
+  });
 });
