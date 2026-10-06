@@ -1,6 +1,7 @@
 import type { StoredUnit, Pft2ChallanRecord, StatutoryReceiptRecord } from "./pilot-store";
 import { numberToWordsPkr, generatePft2NoticeNumber } from "./statutory-forms";
 import { generateDocumentPin } from "@ptas/domain";
+import { loadPersistedMigratedUnits } from "./potential-units-storage";
 
 export const PFT2_CHALLANS_STORAGE_KEY = "ptas_pft2_challans_v4";
 export const STATUTORY_RECEIPTS_STORAGE_KEY = "ptas_statutory_receipts_v4";
@@ -181,4 +182,135 @@ export function ensureChallansAndReceiptsForUnits(units?: readonly StoredUnit[])
   savePersistedStatutoryReceipts(mergedReceipts);
 
   return { challans: mergedChallans, receipts: mergedReceipts };
+}
+
+/**
+ * Merges persisted migrated potential units and applies any received challans
+ * or statutory receipts to unit ledger entries to ensure realized recovery is accurate.
+ */
+export function applyReceiptsAndMigratedUnitsToStoredUnits(
+  baseUnits: readonly StoredUnit[]
+): StoredUnit[] {
+  const migratedUnits = loadPersistedMigratedUnits();
+  const storedReceipts = loadPersistedStatutoryReceipts();
+  const storedChallans = loadPersistedPft2Challans();
+
+  // Combine base units with migrated units, deduplicating by ID and demandNumber
+  const unitMap = new Map<string, StoredUnit>();
+  for (const u of baseUnits) {
+    unitMap.set(u.id, u);
+  }
+  for (const mu of migratedUnits) {
+    unitMap.set(mu.id, mu);
+  }
+
+  const allUnits = Array.from(unitMap.values());
+  const receivedChallans = storedChallans.filter((c) => c.status === "RECEIVED");
+
+  return allUnits.map((unit) => {
+    // Normalise existing ledger entries so PAYMENT_CREDIT is always negative
+    const updatedLedger = unit.ledgerEntries.map((e) => {
+      if (e.entryType === "PAYMENT_CREDIT" && e.amount > 0) {
+        return { ...e, amount: -Math.abs(e.amount) };
+      }
+      return e;
+    });
+    let ledgerModified = updatedLedger.some((e, i) => e !== unit.ledgerEntries[i]);
+
+    // Check matching statutory receipts
+    const matchingReceipts = storedReceipts.filter(
+      (r) =>
+        r.unitId === unit.id ||
+        (r.demandNumber &&
+          (r.demandNumber === unit.demandUnit?.permanentDemandNo ||
+            r.demandNumber === unit.demandNumber)) ||
+        (r.provincialUin &&
+          (r.provincialUin === unit.provincialUin || r.provincialUin === unit.pinNumber))
+    );
+
+    for (const r of matchingReceipts) {
+      const alreadyCredited = updatedLedger.some(
+        (e) =>
+          (e.entryType === "PAYMENT_CREDIT" &&
+            (e.sourceId === r.receiptNumber ||
+              e.idempotencyKey === `idem-rcpt-${r.receiptNumber}`)) ||
+          e.metadata?.receiptNumber === r.receiptNumber
+      );
+      if (!alreadyCredited && r.amountPaidPkr > 0) {
+        updatedLedger.push({
+          id: `led-rcpt-${r.receiptNumber}`,
+          demandUnitId: unit.demandUnit?.id ?? `dem-${unit.id}`,
+          financialYearId: "FY-2026-27",
+          entryType: "PAYMENT_CREDIT",
+          amount: -Math.abs(r.amountPaidPkr),
+          sourceType: "PAYMENT_RECEIPT",
+          sourceId: r.receiptNumber,
+          idempotencyKey: `idem-rcpt-${r.receiptNumber}`,
+          correlationId: `corr-rcpt-${r.receiptNumber}`,
+          postedBy: r.receivingOfficerName || "Authorized Treasury Counter (NBP)",
+          postedAt: r.dateOfReceipt ? `${r.dateOfReceipt}T00:00:00.000Z` : new Date().toISOString(),
+          metadata: {
+            receiptNumber: r.receiptNumber,
+            paymentChannel: r.paymentChannel,
+            bankScrollRef: r.bankScrollRef,
+            challanNumber: r.challanNumber
+          }
+        });
+        ledgerModified = true;
+      }
+    }
+
+    // Check matching received challans if receipt not yet created
+    const matchingReceivedChallans = receivedChallans.filter(
+      (c) =>
+        c.unitId === unit.id ||
+        (c.demandNumber &&
+          (c.demandNumber === unit.demandUnit?.permanentDemandNo ||
+            c.demandNumber === unit.demandNumber)) ||
+        (c.provincialUin &&
+          (c.provincialUin === unit.provincialUin || c.provincialUin === unit.pinNumber))
+    );
+
+    for (const c of matchingReceivedChallans) {
+      const receiptNo = c.receiptNumber;
+      const alreadyCredited = updatedLedger.some(
+        (e) =>
+          (e.entryType === "PAYMENT_CREDIT" &&
+            (e.sourceId === c.challanNumber || (receiptNo && e.sourceId === receiptNo))) ||
+          e.metadata?.challanNumber === c.challanNumber ||
+          (receiptNo && e.metadata?.receiptNumber === receiptNo)
+      );
+      if (!alreadyCredited && c.amountPayable > 0) {
+        updatedLedger.push({
+          id: `led-ch-${c.challanNumber}`,
+          demandUnitId: unit.demandUnit?.id ?? `dem-${unit.id}`,
+          financialYearId: "FY-2026-27",
+          entryType: "PAYMENT_CREDIT",
+          amount: -Math.abs(c.amountPayable),
+          sourceType: "CHALLAN_PFT2",
+          sourceId: c.challanNumber,
+          idempotencyKey: `idem-ch-${c.challanNumber}`,
+          correlationId: `corr-ch-${c.challanNumber}`,
+          postedBy: c.receivedBy || "Authorized Treasury Counter (NBP)",
+          postedAt: c.receivedAt ? `${c.receivedAt}T00:00:00.000Z` : new Date().toISOString(),
+          metadata: {
+            receiptNumber: c.receiptNumber,
+            challanNumber: c.challanNumber,
+            paymentChannel: c.paymentChannel,
+            bankScrollRef: c.bankScrollRef
+          }
+        });
+        ledgerModified = true;
+      }
+    }
+
+    if (ledgerModified) {
+      return {
+        ...unit,
+        ledgerEntries: updatedLedger
+      };
+    }
+
+    return unit;
+  });
 }

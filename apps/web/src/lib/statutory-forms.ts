@@ -1390,7 +1390,7 @@ export function computeUnitFinancialSummary(unit: StoredUnit): UnitFinancialSumm
       penalties += entry.amount;
     } else if (entry.entryType === "ASSESSMENT_DEMAND") {
       hasAssessmentDemandInLedger = true;
-    } else if (entry.amount < 0) {
+    } else if (entry.entryType === "PAYMENT_CREDIT" || entry.amount < 0) {
       totalPaid += Math.abs(entry.amount);
       const entryDate = entry.postedAt.split("T")[0];
       if (!lastPaymentDate || (entryDate && entryDate > lastPaymentDate)) {
@@ -1833,7 +1833,9 @@ export function generateTaxClearanceCertificate(
   }
 
   const totalPaid = Math.abs(
-    unit.ledgerEntries.filter((e) => e.amount < 0).reduce((sum, e) => sum + e.amount, 0)
+    unit.ledgerEntries
+      .filter((e) => e.entryType === "PAYMENT_CREDIT" || e.amount < 0)
+      .reduce((sum, e) => sum + (e.amount < 0 ? e.amount : -e.amount), 0)
   );
 
   const cleanSuffix = unit.id

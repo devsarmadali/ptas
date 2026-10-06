@@ -559,7 +559,12 @@ export function computeLedgerBalance(
     ? entries.filter((e) => e.financialYearId === financialYearId)
     : entries;
 
-  const total = filtered.reduce((acc, entry) => acc + entry.amount, 0);
+  const total = filtered.reduce((acc, entry) => {
+    // Statutory double-entry demand ledger rule: PAYMENT_CREDIT always reduces the balance
+    const entryAmount =
+      entry.entryType === "PAYMENT_CREDIT" && entry.amount > 0 ? -entry.amount : entry.amount;
+    return acc + entryAmount;
+  }, 0);
   return roundToTwoDecimals(total);
 }
 

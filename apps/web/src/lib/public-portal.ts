@@ -715,7 +715,7 @@ export function lookupTaxpayerLiability(
   for (const e of unit.ledgerEntries) {
     if (e.entryType === "PENALTY_DEMAND") {
       penalties += e.amount;
-    } else if (e.amount < 0) {
+    } else if (e.entryType === "PAYMENT_CREDIT" || e.amount < 0) {
       totalPaid += Math.abs(e.amount);
     }
   }

@@ -396,100 +396,320 @@ function ReportViewContent() {
           </div>
         )}
 
-        {reportKey === "PFT3_REGISTER" && (
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: "0.75rem",
-              marginBottom: "1.25rem"
-            }}
-          >
-            <thead>
-              <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>PDN</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Assessee Legal Name</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>CNIC / NTN</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Category / Entry</th>
-                <th style={{ padding: "0.35rem", textAlign: "right" }}>Demand (PKR)</th>
-                <th style={{ padding: "0.35rem", textAlign: "right" }}>Penalty (PKR)</th>
-                <th style={{ padding: "0.35rem", textAlign: "right" }}>Paid (PKR)</th>
-                <th style={{ padding: "0.35rem", textAlign: "right" }}>Balance (PKR)</th>
-                <th style={{ padding: "0.35rem", textAlign: "center" }}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pft3Units.map((u) => {
-                const baseTax = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
-                let penalty = 0;
-                let paid = 0;
-                for (const e of u.ledgerEntries) {
-                  if (e.entryType === "PENALTY_DEMAND") penalty += e.amount;
-                  if (e.amount < 0) paid += Math.abs(e.amount);
-                }
-                const bal = computeLedgerBalance(u.ledgerEntries);
-                return (
-                  <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                    <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                      {u.demandUnit.permanentDemandNo}
-                      {u.provincialUin ? (
-                        <span style={{ display: "block", fontSize: "0.7rem", color: "#0369a1" }}>
-                          {u.provincialUin}
-                        </span>
-                      ) : null}
-                    </td>
-                    <td style={{ padding: "0.35rem" }}>
-                      <strong>{u.legalName}</strong>
-                    </td>
-                    <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                      {u.identifierValue}
-                    </td>
-                    <td style={{ padding: "0.35rem" }}>
-                      Class {u.statutoryRule.subclassification_code}
-                    </td>
-                    <td style={{ padding: "0.35rem", textAlign: "right", fontFamily: "monospace" }}>
-                      {baseTax.toLocaleString()}
-                    </td>
-                    <td
+        {reportKey === "PFT3_REGISTER" &&
+          (() => {
+            let totalCurrentDemand = 0;
+            let totalArrears = 0;
+            let totalDemand = 0;
+            let totalPaid = 0;
+            let outstandingBalance = 0;
+
+            for (const u of pft3Units) {
+              const s = computeUnitFinancialSummary(u);
+              totalCurrentDemand += s.assessedCurrentTax;
+              totalArrears += s.arrears;
+              totalDemand += s.totalDemand;
+              totalPaid += s.totalPaid;
+              outstandingBalance += s.outstandingBalance;
+            }
+
+            return (
+              <div>
+                {/* Statutory Summary KPI banner */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
+                    gap: "0.85rem",
+                    marginBottom: "1.25rem",
+                    fontFamily: "system-ui, -apple-system, sans-serif"
+                  }}
+                >
+                  <div
+                    style={{
+                      background: "#f0fdf4",
+                      border: "1px solid #bbf7d0",
+                      padding: "0.85rem",
+                      borderRadius: "6px"
+                    }}
+                  >
+                    <span
                       style={{
-                        padding: "0.35rem",
-                        textAlign: "right",
-                        fontFamily: "monospace",
-                        color: penalty > 0 ? "#b91c1c" : undefined
-                      }}
-                    >
-                      {penalty > 0 ? penalty.toLocaleString() : "0"}
-                    </td>
-                    <td
-                      style={{
-                        padding: "0.35rem",
-                        textAlign: "right",
-                        fontFamily: "monospace",
-                        color: "#166534"
-                      }}
-                    >
-                      {paid.toLocaleString()}
-                    </td>
-                    <td
-                      style={{
-                        padding: "0.35rem",
-                        textAlign: "right",
-                        fontFamily: "monospace",
+                        fontSize: "0.75rem",
+                        color: "#166534",
                         fontWeight: 700,
-                        color: bal > 0 ? "#b91c1c" : "#166534"
+                        display: "block"
                       }}
                     >
-                      {bal.toLocaleString()}
-                    </td>
-                    <td style={{ padding: "0.35rem", textAlign: "center" }}>
-                      {bal <= 0 ? "PAID" : "ARREARS"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+                      TOTAL UNITS ASSESSED
+                    </span>
+                    <strong
+                      style={{
+                        fontSize: "1.3rem",
+                        color: "#14532d",
+                        marginTop: "0.2rem",
+                        display: "block"
+                      }}
+                    >
+                      {pft3Units.length.toLocaleString()} Units
+                    </strong>
+                  </div>
+
+                  <div
+                    style={{
+                      background: "#f0f9ff",
+                      border: "1px solid #bae6fd",
+                      padding: "0.85rem",
+                      borderRadius: "6px"
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#0369a1",
+                        fontWeight: 700,
+                        display: "block"
+                      }}
+                    >
+                      CURRENT YEAR DEMAND
+                    </span>
+                    <strong
+                      style={{
+                        fontSize: "1.3rem",
+                        color: "#0c4a6e",
+                        marginTop: "0.2rem",
+                        display: "block"
+                      }}
+                    >
+                      PKR {totalCurrentDemand.toLocaleString()}
+                    </strong>
+                  </div>
+
+                  <div
+                    style={{
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      padding: "0.85rem",
+                      borderRadius: "6px"
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#b91c1c",
+                        fontWeight: 700,
+                        display: "block"
+                      }}
+                    >
+                      ARREARS
+                    </span>
+                    <strong
+                      style={{
+                        fontSize: "1.3rem",
+                        color: "#991b1b",
+                        marginTop: "0.2rem",
+                        display: "block"
+                      }}
+                    >
+                      PKR {totalArrears.toLocaleString()}
+                    </strong>
+                  </div>
+
+                  <div
+                    style={{
+                      background: "#eff6ff",
+                      border: "1px solid #bfdbfe",
+                      padding: "0.85rem",
+                      borderRadius: "6px"
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#1e40af",
+                        fontWeight: 700,
+                        display: "block"
+                      }}
+                    >
+                      TOTAL ASSESSED DEMAND
+                    </span>
+                    <strong
+                      style={{
+                        fontSize: "1.3rem",
+                        color: "#1e3a8a",
+                        marginTop: "0.2rem",
+                        display: "block"
+                      }}
+                    >
+                      PKR {totalDemand.toLocaleString()}
+                    </strong>
+                  </div>
+
+                  <div
+                    style={{
+                      background: "#ecfdf5",
+                      border: "1px solid #a7f3d0",
+                      padding: "0.85rem",
+                      borderRadius: "6px"
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#065f46",
+                        fontWeight: 700,
+                        display: "block"
+                      }}
+                    >
+                      TOTAL REALIZED / RECOVERED
+                    </span>
+                    <strong
+                      style={{
+                        fontSize: "1.3rem",
+                        color: "#064e3b",
+                        marginTop: "0.2rem",
+                        display: "block"
+                      }}
+                    >
+                      PKR {totalPaid.toLocaleString()}
+                    </strong>
+                  </div>
+
+                  <div
+                    style={{
+                      background: "#fffbeb",
+                      border: "1px solid #fde68a",
+                      padding: "0.85rem",
+                      borderRadius: "6px"
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#92400e",
+                        fontWeight: 700,
+                        display: "block"
+                      }}
+                    >
+                      OUTSTANDING BALANCE
+                    </span>
+                    <strong
+                      style={{
+                        fontSize: "1.3rem",
+                        color: "#78350f",
+                        marginTop: "0.2rem",
+                        display: "block"
+                      }}
+                    >
+                      PKR {outstandingBalance.toLocaleString()}
+                    </strong>
+                  </div>
+                </div>
+
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    fontSize: "0.75rem",
+                    marginBottom: "1.25rem"
+                  }}
+                >
+                  <thead>
+                    <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                      <th style={{ padding: "0.35rem", textAlign: "left" }}>PDN</th>
+                      <th style={{ padding: "0.35rem", textAlign: "left" }}>Assessee Legal Name</th>
+                      <th style={{ padding: "0.35rem", textAlign: "left" }}>CNIC / NTN</th>
+                      <th style={{ padding: "0.35rem", textAlign: "left" }}>Category / Entry</th>
+                      <th style={{ padding: "0.35rem", textAlign: "right" }}>Demand (PKR)</th>
+                      <th style={{ padding: "0.35rem", textAlign: "right" }}>Penalty (PKR)</th>
+                      <th style={{ padding: "0.35rem", textAlign: "right" }}>Paid (PKR)</th>
+                      <th style={{ padding: "0.35rem", textAlign: "right" }}>Balance (PKR)</th>
+                      <th style={{ padding: "0.35rem", textAlign: "center" }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pft3Units.map((u) => {
+                      const baseTax = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+                      let penalty = 0;
+                      let paid = 0;
+                      for (const e of u.ledgerEntries) {
+                        if (e.entryType === "PENALTY_DEMAND") penalty += e.amount;
+                        if (e.entryType === "PAYMENT_CREDIT" || e.amount < 0)
+                          paid += Math.abs(e.amount);
+                      }
+                      const bal = computeLedgerBalance(u.ledgerEntries);
+                      return (
+                        <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                          <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                            {u.demandUnit.permanentDemandNo}
+                            {u.provincialUin ? (
+                              <span
+                                style={{ display: "block", fontSize: "0.7rem", color: "#0369a1" }}
+                              >
+                                {u.provincialUin}
+                              </span>
+                            ) : null}
+                          </td>
+                          <td style={{ padding: "0.35rem" }}>
+                            <strong>{u.legalName}</strong>
+                          </td>
+                          <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                            {u.identifierValue}
+                          </td>
+                          <td style={{ padding: "0.35rem" }}>
+                            Class {u.statutoryRule.subclassification_code}
+                          </td>
+                          <td
+                            style={{
+                              padding: "0.35rem",
+                              textAlign: "right",
+                              fontFamily: "monospace"
+                            }}
+                          >
+                            {baseTax.toLocaleString()}
+                          </td>
+                          <td
+                            style={{
+                              padding: "0.35rem",
+                              textAlign: "right",
+                              fontFamily: "monospace",
+                              color: penalty > 0 ? "#b91c1c" : undefined
+                            }}
+                          >
+                            {penalty > 0 ? penalty.toLocaleString() : "0"}
+                          </td>
+                          <td
+                            style={{
+                              padding: "0.35rem",
+                              textAlign: "right",
+                              fontFamily: "monospace",
+                              color: "#166534"
+                            }}
+                          >
+                            {paid.toLocaleString()}
+                          </td>
+                          <td
+                            style={{
+                              padding: "0.35rem",
+                              textAlign: "right",
+                              fontFamily: "monospace",
+                              fontWeight: 700,
+                              color: bal > 0 ? "#b91c1c" : "#166534"
+                            }}
+                          >
+                            {bal.toLocaleString()}
+                          </td>
+                          <td style={{ padding: "0.35rem", textAlign: "center" }}>
+                            {bal <= 0 ? "PAID" : "ARREARS"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
 
         {reportKey === "DEFAULTER_ROLL" && (
           <table

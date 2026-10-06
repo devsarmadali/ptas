@@ -816,7 +816,7 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
                         <td>{entry.postedAt ? entry.postedAt.split("T")[0] : "-"}</td>
                         <td>
                           <strong>PKR {Math.abs(entry.amount).toLocaleString()}</strong>
-                          {entry.amount < 0 && (
+                          {(entry.amount < 0 || entry.entryType === "PAYMENT_CREDIT") && (
                             <span
                               style={{ color: "#166534", fontSize: "0.75rem", marginLeft: "4px" }}
                             >

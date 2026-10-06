@@ -121,6 +121,7 @@ import {
   loadPersistedStatutoryReceipts,
   savePersistedStatutoryReceipts,
   ensureChallansAndReceiptsForUnits,
+  applyReceiptsAndMigratedUnitsToStoredUnits,
   CHALLANS_UPDATED_EVENT,
   RECEIPTS_UPDATED_EVENT
 } from "../lib/challan-storage";
@@ -693,21 +694,22 @@ export default function HomePage({
     setOperationalUnitsError(null);
     try {
       const liveUnits = await loadOperationalSurveyUnits();
-      setUnits(liveUnits);
+      const syncedUnits = applyReceiptsAndMigratedUnitsToStoredUnits(liveUnits);
+      setUnits(syncedUnits);
 
       // Load potential units from database table, fallback to synced local storage
       const dbPotential = await fetchPotentialAssessmentUnitsFromDatabase();
       if (dbPotential && dbPotential.length > 0) {
         setPotentialUnits(dbPotential);
       } else {
-        migrateVDemandUnitsToPotentialRegister(liveUnits);
+        migrateVDemandUnitsToPotentialRegister(syncedUnits);
         setPotentialUnits(loadPersistedPotentialUnits());
       }
       const { challans: syncedChallans, receipts: syncedReceipts } =
-        ensureChallansAndReceiptsForUnits(liveUnits);
+        ensureChallansAndReceiptsForUnits(syncedUnits);
       setPft2Challans(syncedChallans);
       setStatutoryReceipts(syncedReceipts);
-      const firstId = liveUnits[0]?.id ?? "";
+      const firstId = syncedUnits[0]?.id ?? "";
       setSelectedUnitId(firstId);
       setPaymentUnitId(firstId);
       setAppealUnitId(firstId);
@@ -5983,8 +5985,8 @@ export default function HomePage({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
-                gap: "1rem",
+                gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
+                gap: "0.85rem",
                 marginBottom: "1.5rem"
               }}
             >
@@ -6008,6 +6010,52 @@ export default function HomePage({
                   }}
                 >
                   {pft3KpiMetrics.totalUnits.toLocaleString()} Units
+                </strong>
+              </div>
+
+              <div
+                style={{
+                  background: "#f0f9ff",
+                  border: "1px solid #bae6fd",
+                  padding: "0.85rem",
+                  borderRadius: "6px"
+                }}
+              >
+                <span style={{ fontSize: "0.75rem", color: "#0369a1", fontWeight: 700 }}>
+                  CURRENT YEAR DEMAND
+                </span>
+                <strong
+                  style={{
+                    fontSize: "1.4rem",
+                    display: "block",
+                    color: "#0c4a6e",
+                    marginTop: "0.2rem"
+                  }}
+                >
+                  PKR {pft3KpiMetrics.totalCurrentDemand.toLocaleString()}
+                </strong>
+              </div>
+
+              <div
+                style={{
+                  background: "#fef2f2",
+                  border: "1px solid #fecaca",
+                  padding: "0.85rem",
+                  borderRadius: "6px"
+                }}
+              >
+                <span style={{ fontSize: "0.75rem", color: "#b91c1c", fontWeight: 700 }}>
+                  ARREARS
+                </span>
+                <strong
+                  style={{
+                    fontSize: "1.4rem",
+                    display: "block",
+                    color: "#991b1b",
+                    marginTop: "0.2rem"
+                  }}
+                >
+                  PKR {pft3KpiMetrics.totalArrears.toLocaleString()}
                 </strong>
               </div>
 
@@ -12159,7 +12207,31 @@ export default function HomePage({
                         marginTop: "0.25rem"
                       }}
                     >
-                      <span style={{ color: "#64748b" }}>Assessed Demand:</span>
+                      <span style={{ color: "#0369a1" }}>Current Year Demand:</span>
+                      <strong style={{ color: "#0c4a6e", fontFamily: "monospace" }}>
+                        PKR {pft3KpiMetrics.totalCurrentDemand.toLocaleString()}
+                      </strong>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginTop: "0.25rem"
+                      }}
+                    >
+                      <span style={{ color: "#b91c1c" }}>Arrears:</span>
+                      <strong style={{ color: "#991b1b", fontFamily: "monospace" }}>
+                        PKR {pft3KpiMetrics.totalArrears.toLocaleString()}
+                      </strong>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginTop: "0.25rem"
+                      }}
+                    >
+                      <span style={{ color: "#64748b" }}>Total Assessed Demand:</span>
                       <strong style={{ color: "#0f172a", fontFamily: "monospace" }}>
                         PKR {misMetrics.kpis.totalAssessedGross.toLocaleString()}
                       </strong>

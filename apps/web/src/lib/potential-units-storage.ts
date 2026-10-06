@@ -587,7 +587,7 @@ export function migratePotentialUnitToPft3(
       demandUnitId: `dem-${unitId}`,
       financialYearId: "FY-2026-27",
       entryType: "PAYMENT_CREDIT",
-      amount: paidAmount,
+      amount: -Math.abs(paidAmount),
       sourceType: "PAYMENT",
       sourceId: `pay-${unitId}`,
       idempotencyKey: `idem-pay-${unitId}`,
@@ -665,7 +665,49 @@ export function migratePotentialUnitToPft3(
     createdAt: nowIso
   };
 
+  savePersistedMigratedUnit(migratedUnit);
+
   return { migratedUnit, assignedDemandNo, cleanPin };
+}
+
+export const MIGRATED_UNITS_STORAGE_KEY = "ptas_migrated_units_v1";
+
+/**
+ * Safely load persisted migrated units from browser storage.
+ */
+export function loadPersistedMigratedUnits(): StoredUnit[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(MIGRATED_UNITS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed as StoredUnit[];
+  } catch (err) {
+    console.warn("Failed to load persisted migrated units:", err);
+  }
+  return [];
+}
+
+/**
+ * Save migrated units to browser storage.
+ */
+export function savePersistedMigratedUnits(units: readonly StoredUnit[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(MIGRATED_UNITS_STORAGE_KEY, JSON.stringify(units));
+  } catch (err) {
+    console.error("Failed to save persisted migrated units:", err);
+  }
+}
+
+/**
+ * Persist an individual migrated unit into storage.
+ */
+export function savePersistedMigratedUnit(unit: StoredUnit): void {
+  if (typeof window === "undefined") return;
+  const existing = loadPersistedMigratedUnits();
+  const filtered = existing.filter((u) => u.id !== unit.id && u.demandNumber !== unit.demandNumber);
+  savePersistedMigratedUnits([unit, ...filtered]);
 }
 
 export const V_UNITS_MIGRATION_FLAG_KEY = "ptas_v_units_migration_done";

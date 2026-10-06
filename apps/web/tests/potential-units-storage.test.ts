@@ -7,6 +7,8 @@ import {
   loadPersistedPotentialUnits,
   savePersistedPotentialUnits,
   migratePotentialUnitToPft3,
+  loadPersistedMigratedUnits,
+  savePersistedMigratedUnits,
   migrateVDemandUnitsToPotentialRegister,
   V_UNITS_MIGRATION_FLAG_KEY,
   importPotentialUnitsCsv,
@@ -144,7 +146,13 @@ describe("Potential Assessment Register Persistence & Migration Layer", () => {
 
     // Ledger has assessment and payment credit
     expect(migratedUnit.ledgerEntries.length).toBeGreaterThanOrEqual(2);
-    expect(migratedUnit.ledgerEntries.some((e) => e.entryType === "PAYMENT_CREDIT")).toBe(true);
+    const payEntry = migratedUnit.ledgerEntries.find((e) => e.entryType === "PAYMENT_CREDIT");
+    expect(payEntry).toBeDefined();
+    expect(payEntry?.amount).toBe(-target.annualRatePkr);
+
+    // Persisted in migrated units storage
+    const persisted = loadPersistedMigratedUnits();
+    expect(persisted.some((u) => u.id === migratedUnit.id)).toBe(true);
   });
 
   it("migrates V- demand units to potential register with zero arrears and idempotent flag", () => {

@@ -6,10 +6,12 @@ import {
   loadPersistedStatutoryReceipts,
   savePersistedStatutoryReceipts,
   ensureChallansAndReceiptsForUnits,
+  applyReceiptsAndMigratedUnitsToStoredUnits,
   PFT2_CHALLANS_STORAGE_KEY,
   STATUTORY_RECEIPTS_STORAGE_KEY
 } from "../src/lib/challan-storage";
 import { createInitialPilotUnits, type Pft2ChallanRecord } from "../src/lib/pilot-store";
+import { computeUnitFinancialSummary } from "../src/lib/statutory-forms";
 
 class MockStorage {
   private store = new Map<string, string>();
@@ -194,5 +196,44 @@ describe("Form P.F.T-2 Challans & Statutory Receipts Persistence Layer", () => {
     expect(challans).toHaveLength(1);
     expect(receipts).toHaveLength(1);
     expect(receipts[0]?.receiptNumber).toBe("RCPT-00001");
+  });
+
+  it("applies received challans and receipts to unit ledgers and updates recovery", () => {
+    const units = createInitialPilotUnits();
+    const targetUnit = units[0]!;
+
+    // Save a received challan
+    const challan: Pft2ChallanRecord = {
+      id: "pft2-v4-rec-01",
+      challanNumber: "PFT2-0099",
+      noticeNumber: "PFT2-0099-2607010101-5000",
+      demandNumber: targetUnit.demandUnit.permanentDemandNo,
+      unitId: targetUnit.id,
+      legalName: targetUnit.legalName,
+      identifierType: targetUnit.identifierType,
+      identifierValue: targetUnit.identifierValue,
+      address: targetUnit.address,
+      category: targetUnit.categoryCode,
+      subclassificationCode: targetUnit.subclassificationCode ?? null,
+      tertiarySlab: null,
+      amountPayable: 5000,
+      issueDate: "2026-07-01",
+      dueDate: "2026-08-31",
+      status: "RECEIVED",
+      receiptNumber: "RCPT-0099",
+      officialSha256: "sha-02",
+      qrPayload: "qr-02"
+    };
+    savePersistedPft2Challans([challan]);
+
+    const syncedUnits = applyReceiptsAndMigratedUnitsToStoredUnits(units);
+    const updated = syncedUnits.find((u) => u.id === targetUnit.id)!;
+
+    const paymentEntry = updated.ledgerEntries.find((e) => e.sourceId === "PFT2-0099");
+    expect(paymentEntry).toBeDefined();
+    expect(paymentEntry?.amount).toBe(-5000);
+
+    const summary = computeUnitFinancialSummary(updated);
+    expect(summary.totalPaid).toBeGreaterThanOrEqual(5000);
   });
 });
