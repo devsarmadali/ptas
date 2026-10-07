@@ -1,12 +1,127 @@
 import type { StoredUnit, Pft2ChallanRecord, StatutoryReceiptRecord } from "./pilot-store";
+export type { Pft2ChallanRecord, StatutoryReceiptRecord };
 import { numberToWordsPkr, generatePft2NoticeNumber } from "./statutory-forms";
 import { generateDocumentPin } from "@ptas/domain";
 import { loadPersistedMigratedUnits } from "./potential-units-storage";
+import { getSupabaseAuthClient } from "./supabase-auth";
+import type { Json } from "@ptas/database/types";
 
 export const PFT2_CHALLANS_STORAGE_KEY = "ptas_pft2_challans_v4";
 export const STATUTORY_RECEIPTS_STORAGE_KEY = "ptas_statutory_receipts_v4";
 export const CHALLANS_UPDATED_EVENT = "ptas-challans-updated";
 export const RECEIPTS_UPDATED_EVENT = "ptas-receipts-updated";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+export interface ChallanJurisdictionCodes {
+  districtCode: string;
+  circleCode: string;
+}
+
+/** Resolve registered numbering identifiers through the server-authorized hierarchy. */
+export async function loadChallanJurisdictionCodes(
+  jurisdictionId: string
+): Promise<ChallanJurisdictionCodes> {
+  const supabase = getSupabaseAuthClient();
+  const { data, error } = await supabase.rpc("get_challan_jurisdiction_codes", {
+    p_jurisdiction_id: jurisdictionId
+  });
+  if (error) throw new Error(`Unable to resolve challan jurisdiction codes: ${error.message}`);
+  if (!isRecord(data)) throw new Error("Jurisdiction code registry returned an invalid record");
+  const districtCode = String(data.district_code ?? "").trim();
+  const circleCode = String(data.circle_code ?? "").trim();
+  if (!districtCode || !circleCode) {
+    throw new Error("District and circle challan codes are not configured");
+  }
+  return { districtCode, circleCode };
+}
+
+/** Load the jurisdiction-scoped statutory registers from PostgreSQL. */
+export async function loadDurableChallanRegistry(): Promise<{
+  challans: Pft2ChallanRecord[];
+  receipts: StatutoryReceiptRecord[];
+}> {
+  const supabase = getSupabaseAuthClient();
+  const [challansResult, receiptsResult] = await Promise.all([
+    supabase.rpc("list_pft2_challan_registry"),
+    supabase.rpc("list_pft2_receipt_registry")
+  ]);
+  if (challansResult.error) {
+    throw new Error(`Unable to load PFT-2 challans: ${challansResult.error.message}`);
+  }
+  if (receiptsResult.error) {
+    throw new Error(`Unable to load statutory receipts: ${receiptsResult.error.message}`);
+  }
+  return {
+    challans: Array.isArray(challansResult.data)
+      ? (challansResult.data as unknown as Pft2ChallanRecord[])
+      : [],
+    receipts: Array.isArray(receiptsResult.data)
+      ? (receiptsResult.data as unknown as StatutoryReceiptRecord[])
+      : []
+  };
+}
+
+/** Issue a challan transactionally; the canonical Notice No. is also its Challan No. */
+export async function issueDurablePft2Challan(
+  draft: Pft2ChallanRecord,
+  idempotencyKey: string,
+  correlationId: string
+): Promise<Pft2ChallanRecord> {
+  if (!draft.noticeNumber || draft.challanNumber !== draft.noticeNumber) {
+    throw new Error("Challan No. must be identical to the canonical Notice No.");
+  }
+  const supabase = getSupabaseAuthClient();
+  const { data, error } = await supabase.rpc("issue_pft2_challan_record", {
+    p_challan: draft as unknown as Json,
+    p_idempotency_key: idempotencyKey,
+    p_correlation_id: correlationId
+  });
+  if (error) throw new Error(`Unable to issue PFT-2 challan: ${error.message}`);
+  if (!isRecord(data)) throw new Error("PFT-2 issuance returned an invalid record");
+  return data as unknown as Pft2ChallanRecord;
+}
+
+export async function receiveDurablePft2Challan(
+  challan: Pft2ChallanRecord,
+  receipt: StatutoryReceiptRecord,
+  idempotencyKey: string,
+  correlationId: string
+): Promise<StatutoryReceiptRecord> {
+  const supabase = getSupabaseAuthClient();
+  const { data, error } = await supabase.rpc("receive_pft2_challan_record", {
+    p_challan_id: challan.id,
+    p_is_potential: challan.isProvisional === true,
+    p_receipt: receipt as unknown as Json,
+    p_idempotency_key: idempotencyKey,
+    p_correlation_id: correlationId
+  });
+  if (error) throw new Error(`Unable to receive PFT-2 challan: ${error.message}`);
+  const payload = isRecord(data) ? data : {};
+  if (!isRecord(payload.receipt)) throw new Error("Receipt command returned an invalid record");
+  return payload.receipt as unknown as StatutoryReceiptRecord;
+}
+
+export async function cancelDurablePft2Challan(
+  challan: Pft2ChallanRecord,
+  reason: string,
+  idempotencyKey: string,
+  correlationId: string
+): Promise<Pft2ChallanRecord> {
+  const supabase = getSupabaseAuthClient();
+  const { data, error } = await supabase.rpc("cancel_pft2_challan_record", {
+    p_challan_id: challan.id,
+    p_is_potential: challan.isProvisional === true,
+    p_reason: reason,
+    p_idempotency_key: idempotencyKey,
+    p_correlation_id: correlationId
+  });
+  if (error) throw new Error(`Unable to cancel PFT-2 challan: ${error.message}`);
+  if (!isRecord(data)) throw new Error("PFT-2 cancellation returned an invalid record");
+  return data as unknown as Pft2ChallanRecord;
+}
 
 /**
  * Safely load persisted Form PFT-2 Challans from browser storage.
@@ -195,13 +310,38 @@ export function applyReceiptsAndMigratedUnitsToStoredUnits(
   const storedReceipts = loadPersistedStatutoryReceipts();
   const storedChallans = loadPersistedPft2Challans();
 
-  // Combine base units with migrated units, deduplicating by ID and demandNumber
+  // Combine base units with migrated units, deduplicating by ID, demandNumber, and PIN
   const unitMap = new Map<string, StoredUnit>();
   for (const u of baseUnits) {
     unitMap.set(u.id, u);
   }
   for (const mu of migratedUnits) {
-    unitMap.set(mu.id, mu);
+    const existingKey = Array.from(unitMap.keys()).find((k) => {
+      const existing = unitMap.get(k)!;
+      return (
+        existing.id === mu.id ||
+        (mu.demandNumber &&
+          (existing.demandNumber === mu.demandNumber ||
+            existing.demandUnit?.permanentDemandNo === mu.demandNumber)) ||
+        (mu.provincialUin &&
+          (existing.provincialUin === mu.provincialUin || existing.pinNumber === mu.provincialUin))
+      );
+    });
+    if (existingKey) {
+      const existing = unitMap.get(existingKey)!;
+      unitMap.set(existingKey, {
+        ...existing,
+        ...mu,
+        id: existing.id,
+        pft3Registered: true,
+        ledgerEntries:
+          mu.ledgerEntries.length > existing.ledgerEntries.length
+            ? mu.ledgerEntries
+            : existing.ledgerEntries
+      });
+    } else {
+      unitMap.set(mu.id, mu);
+    }
   }
 
   const allUnits = Array.from(unitMap.values());
@@ -225,16 +365,24 @@ export function applyReceiptsAndMigratedUnitsToStoredUnits(
           (r.demandNumber === unit.demandUnit?.permanentDemandNo ||
             r.demandNumber === unit.demandNumber)) ||
         (r.provincialUin &&
-          (r.provincialUin === unit.provincialUin || r.provincialUin === unit.pinNumber))
+          (r.provincialUin === unit.provincialUin || r.provincialUin === unit.pinNumber)) ||
+        (r.pin && (r.pin === unit.pinNumber || r.pin === unit.provincialUin)) ||
+        (r.identifierValue && r.identifierValue === unit.identifierValue)
     );
 
     for (const r of matchingReceipts) {
       const alreadyCredited = updatedLedger.some(
         (e) =>
-          (e.entryType === "PAYMENT_CREDIT" &&
-            (e.sourceId === r.receiptNumber ||
-              e.idempotencyKey === `idem-rcpt-${r.receiptNumber}`)) ||
-          e.metadata?.receiptNumber === r.receiptNumber
+          e.entryType === "PAYMENT_CREDIT" &&
+          (e.sourceId === r.receiptNumber ||
+            e.idempotencyKey === `idem-rcpt-${r.receiptNumber}` ||
+            e.idempotencyKey === `idem-${r.receiptNumber}` ||
+            e.correlationId === `corr-${r.receiptNumber}` ||
+            e.metadata?.receiptNumber === r.receiptNumber ||
+            (r.challanNumber &&
+              (e.sourceId === r.challanNumber ||
+                e.idempotencyKey === `idem-ch-${r.challanNumber}` ||
+                e.metadata?.challanNumber === r.challanNumber)))
       );
       if (!alreadyCredited && r.amountPaidPkr > 0) {
         updatedLedger.push({
@@ -268,17 +416,25 @@ export function applyReceiptsAndMigratedUnitsToStoredUnits(
           (c.demandNumber === unit.demandUnit?.permanentDemandNo ||
             c.demandNumber === unit.demandNumber)) ||
         (c.provincialUin &&
-          (c.provincialUin === unit.provincialUin || c.provincialUin === unit.pinNumber))
+          (c.provincialUin === unit.provincialUin || c.provincialUin === unit.pinNumber)) ||
+        (c.pin && (c.pin === unit.pinNumber || c.pin === unit.provincialUin)) ||
+        (c.identifierValue && c.identifierValue === unit.identifierValue)
     );
 
     for (const c of matchingReceivedChallans) {
       const receiptNo = c.receiptNumber;
       const alreadyCredited = updatedLedger.some(
         (e) =>
-          (e.entryType === "PAYMENT_CREDIT" &&
-            (e.sourceId === c.challanNumber || (receiptNo && e.sourceId === receiptNo))) ||
-          e.metadata?.challanNumber === c.challanNumber ||
-          (receiptNo && e.metadata?.receiptNumber === receiptNo)
+          e.entryType === "PAYMENT_CREDIT" &&
+          (e.sourceId === c.challanNumber ||
+            e.idempotencyKey === `idem-ch-${c.challanNumber}` ||
+            e.metadata?.challanNumber === c.challanNumber ||
+            (receiptNo &&
+              (e.sourceId === receiptNo ||
+                e.idempotencyKey === `idem-${receiptNo}` ||
+                e.idempotencyKey === `idem-rcpt-${receiptNo}` ||
+                e.correlationId === `corr-${receiptNo}` ||
+                e.metadata?.receiptNumber === receiptNo)))
       );
       if (!alreadyCredited && c.amountPayable > 0) {
         updatedLedger.push({

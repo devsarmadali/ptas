@@ -293,9 +293,9 @@ export async function loadOperationalContext(): Promise<{
     throw new Error("Unable to load operational context: authenticated PTAS session required");
   }
 
-  const [officer, units] = await Promise.all([
+  const [officer, rawUnits] = await Promise.all([
     resolveAuthenticatedOfficer(data.user),
     loadOperationalSurveyUnits()
   ]);
-  return { officer, units };
+  return { officer, units: rawUnits };
 }

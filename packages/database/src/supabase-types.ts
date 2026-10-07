@@ -546,6 +546,62 @@ export type Database = {
         };
         Returns: Json;
       };
+      list_pft2_challan_registry: {
+        Args: Record<PropertyKey, never>;
+        Returns: Json;
+      };
+      get_challan_jurisdiction_codes: {
+        Args: { p_jurisdiction_id: string };
+        Returns: Json;
+      };
+      list_pft2_receipt_registry: {
+        Args: Record<PropertyKey, never>;
+        Returns: Json;
+      };
+      issue_pft2_challan_record: {
+        Args: {
+          p_challan: Json;
+          p_idempotency_key: string;
+          p_correlation_id: string;
+        };
+        Returns: Json;
+      };
+      receive_pft2_challan_record: {
+        Args: {
+          p_challan_id: string;
+          p_is_potential: boolean;
+          p_receipt: Json;
+          p_idempotency_key: string;
+          p_correlation_id: string;
+        };
+        Returns: Json;
+      };
+      cancel_pft2_challan_record: {
+        Args: {
+          p_challan_id: string;
+          p_is_potential: boolean;
+          p_reason: string;
+          p_idempotency_key: string;
+          p_correlation_id: string;
+        };
+        Returns: Json;
+      };
+      create_individual_survey_unit: {
+        Args: {
+          p_unit: Json;
+          p_idempotency_key: string;
+          p_correlation_id: string;
+        };
+        Returns: Json;
+      };
+      create_potential_assessment_unit: {
+        Args: { p_unit: Json };
+        Returns: Json;
+      };
+      migrate_potential_unit_to_pft3: {
+        Args: { p_potential_id: string; p_assigned_demand_no: string };
+        Returns: Json;
+      };
     };
     Enums: {
       [_ in never]: never;

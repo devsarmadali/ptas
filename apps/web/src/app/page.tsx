@@ -14,7 +14,6 @@ import {
   computeDefaulterAging,
   computeLedgerBalance,
   createAppellateAdjustmentEntry,
-  createAssessment,
   createDemandLedgerEntry,
   createInitialDemandEntry,
   createPaymentReceiptEntry,
@@ -116,28 +115,20 @@ import {
   calculateReceiptsExecutiveSummary
 } from "../lib/receipt-generator";
 import {
-  loadPersistedPft2Challans,
-  savePersistedPft2Challans,
-  loadPersistedStatutoryReceipts,
-  savePersistedStatutoryReceipts,
-  ensureChallansAndReceiptsForUnits,
-  applyReceiptsAndMigratedUnitsToStoredUnits,
-  CHALLANS_UPDATED_EVENT,
-  RECEIPTS_UPDATED_EVENT
+  loadDurableChallanRegistry,
+  issueDurablePft2Challan,
+  receiveDurablePft2Challan,
+  cancelDurablePft2Challan,
+  loadChallanJurisdictionCodes,
+  type ChallanJurisdictionCodes
 } from "../lib/challan-storage";
 import {
   type PotentialUnitRecord,
-  loadPersistedPotentialUnits,
-  savePersistedPotentialUnits,
   fetchPotentialAssessmentUnitsFromDatabase,
   persistPotentialUnitToDatabase,
-  recordPotentialUnitMigrationInDatabase,
-  migratePotentialUnitToPft3,
-  migrateVDemandUnitsToPotentialRegister,
   importPotentialUnitsCsv,
   generatePotentialCsvTemplate,
-  formatPotentialPin,
-  POTENTIAL_UNITS_UPDATED_EVENT
+  formatPotentialPin
 } from "../lib/potential-units-storage";
 import {
   type CitizenPaymentSimulationResult,
@@ -525,6 +516,7 @@ export default function HomePage({
   const [potNewIdValue, setPotNewIdValue] = useState("");
   const [potNewAddress, setPotNewAddress] = useState("");
   const [potNewLocality, setPotNewLocality] = useState("");
+  const [potNewOpeningArrears, setPotNewOpeningArrears] = useState(0);
   const [potNewCategoryCode, setPotNewCategoryCode] = useState("1");
   const [potNewSubclassCode, setPotNewSubclassCode] = useState("1(i)");
   const [potNewTertiaryCode, setPotNewTertiaryCode] = useState("");
@@ -646,6 +638,8 @@ export default function HomePage({
   // Issue Form PFT-2 Challan Modal State
   const [showIssuePft2Modal, setShowIssuePft2Modal] = useState(false);
   const [issuePft2UnitId, setIssuePft2UnitId] = useState("");
+  const [issuePft2JurisdictionCodes, setIssuePft2JurisdictionCodes] =
+    useState<ChallanJurisdictionCodes | null>(null);
   const [issuePft2DueDate, setIssuePft2DueDate] = useState("2026-08-31");
   const [issuePft2IssueDate] = useState("2026-09-20");
   const [issuePft2FormType] = useState<
@@ -656,6 +650,24 @@ export default function HomePage({
   >("CURRENT");
   const [issuePft2PaymentScope, setIssuePft2PaymentScope] = useState<"FULL" | "PARTIAL">("FULL");
   const [issuePft2PartialAmount, setIssuePft2PartialAmount] = useState<number>(0);
+
+  useEffect(() => {
+    if (!showIssuePft2Modal) return;
+    const selectedUnit = units.find((candidate) => candidate.id === issuePft2UnitId) ?? units[0];
+    if (!selectedUnit) return;
+    let cancelled = false;
+    setIssuePft2JurisdictionCodes(null);
+    void loadChallanJurisdictionCodes(selectedUnit.circleId)
+      .then((codes) => {
+        if (!cancelled) setIssuePft2JurisdictionCodes(codes);
+      })
+      .catch(() => {
+        if (!cancelled) setIssuePft2JurisdictionCodes(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [issuePft2UnitId, showIssuePft2Modal, units]);
 
   // Single Challan Print/Download Modal State
   const [activePrintChallan, setActivePrintChallan] = useState<Pft2ChallanRecord | null>(null);
@@ -694,22 +706,17 @@ export default function HomePage({
     setOperationalUnitsError(null);
     try {
       const liveUnits = await loadOperationalSurveyUnits();
-      const syncedUnits = applyReceiptsAndMigratedUnitsToStoredUnits(liveUnits);
-      setUnits(syncedUnits);
+      setUnits(liveUnits);
 
-      // Load potential units from database table, fallback to synced local storage
+      // PostgreSQL is the sole system of record for the potential register.
       const dbPotential = await fetchPotentialAssessmentUnitsFromDatabase();
-      if (dbPotential && dbPotential.length > 0) {
-        setPotentialUnits(dbPotential);
-      } else {
-        migrateVDemandUnitsToPotentialRegister(syncedUnits);
-        setPotentialUnits(loadPersistedPotentialUnits());
-      }
+      if (dbPotential === null) throw new Error("Unable to load the potential register");
+      setPotentialUnits(dbPotential);
       const { challans: syncedChallans, receipts: syncedReceipts } =
-        ensureChallansAndReceiptsForUnits(syncedUnits);
+        await loadDurableChallanRegistry();
       setPft2Challans(syncedChallans);
       setStatutoryReceipts(syncedReceipts);
-      const firstId = syncedUnits[0]?.id ?? "";
+      const firstId = liveUnits[0]?.id ?? "";
       setSelectedUnitId(firstId);
       setPaymentUnitId(firstId);
       setAppealUnitId(firstId);
@@ -729,26 +736,15 @@ export default function HomePage({
   // by the authenticated officer's active role and jurisdiction assignment.
   useEffect(() => {
     let sub: { unsubscribe: () => void } | undefined;
-    const handleStorageOrFocus = () => {
-      const freshChallans = loadPersistedPft2Challans();
-      setPft2Challans(freshChallans);
-      const freshReceipts = loadPersistedStatutoryReceipts();
-      setStatutoryReceipts(freshReceipts);
-      const freshPotential = loadPersistedPotentialUnits();
-      setPotentialUnits(freshPotential);
+    const handleFocus = () => {
+      void refreshOperationalSurveyUnits().catch(() => undefined);
     };
 
     try {
       localStorage.removeItem("ptas_pilot_vehari_v3");
-      // Load any existing persisted challans & receipts immediately on mount
-      handleStorageOrFocus();
 
       if (typeof window !== "undefined") {
-        window.addEventListener("storage", handleStorageOrFocus);
-        window.addEventListener(CHALLANS_UPDATED_EVENT, handleStorageOrFocus);
-        window.addEventListener(RECEIPTS_UPDATED_EVENT, handleStorageOrFocus);
-        window.addEventListener(POTENTIAL_UNITS_UPDATED_EVENT, handleStorageOrFocus);
-        window.addEventListener("focus", handleStorageOrFocus);
+        window.addEventListener("focus", handleFocus);
       }
       // Check URL search parameters on mount for backward-compatible deep links
       if (typeof window !== "undefined") {
@@ -823,10 +819,7 @@ export default function HomePage({
     return () => {
       sub?.unsubscribe();
       if (typeof window !== "undefined") {
-        window.removeEventListener("storage", handleStorageOrFocus);
-        window.removeEventListener(CHALLANS_UPDATED_EVENT, handleStorageOrFocus);
-        window.removeEventListener(RECEIPTS_UPDATED_EVENT, handleStorageOrFocus);
-        window.removeEventListener("focus", handleStorageOrFocus);
+        window.removeEventListener("focus", handleFocus);
       }
     };
   }, []);
@@ -1202,7 +1195,7 @@ export default function HomePage({
   }, [units]);
 
   // Handler: Add New Unit
-  const handleAddUnit = (e: React.FormEvent) => {
+  const handleAddUnit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLegalName.trim()) {
       showToast("error", "Legal name is mandatory");
@@ -1254,87 +1247,27 @@ export default function HomePage({
       return;
     }
 
-    const unitId = `unit-${Date.now()}`;
-    const demandUnitId = `du-${Date.now()}`;
-    const correlationId = `corr-unit-${Date.now()}`;
-
-    const actor: AuditActor = {
-      userId: officer.id,
-      roleCode: officer.role,
-      jurisdictionId: officer.jurisdictionId
-    };
-
-    // Create Draft Assessment under selected rule
-    const { assessment, version } = createAssessment<StoredUnitSnapshot>(
-      {
-        id: `asm-${Date.now()}`,
-        taxpayerId: unitId,
-        financialYearId: FINANCIAL_YEAR_2026_27,
-        snapshot: {
-          taxAmount: rule.annual_rate_pkr,
-          statutoryCategory: rule.category,
-          legalBasis: rule.official_text,
-          ruleId: rule.rule_id,
-          ruleCode: rule.rule_code,
-          subclassificationCode: rule.subclassification_code,
-          statutoryTertiaryCode: rule.statutory_tertiary_code,
-          rateSourceLevel: rule.rate_source_level
-        }
+    const requestId = crypto.randomUUID();
+    const { data, error } = await getSupabaseAuthClient().rpc("create_individual_survey_unit", {
+      p_unit: {
+        legal_name: newLegalName.trim(),
+        trade_name: newTradeName.trim(),
+        identifier_type: newIdentifierType,
+        identifier_value: newIdentifierValue.trim(),
+        address: newAddress.trim(),
+        locality: newLocality.trim(),
+        statutory_rule_id: rule.rule_id,
+        opening_arrears: 0
       },
-      actor
-    );
-
-    const provincialUin = generateUinForUnit({
-      jurisdiction: VEHARI_PILOT_JURISDICTION,
-      rule,
-      allRules,
-      sequenceNumber: units.length + 1
+      p_idempotency_key: `survey-individual:${officer.id}:${requestId}`,
+      p_correlation_id: `survey-individual:${requestId}`
     });
-
-    const newUnit: StoredUnit = {
-      id: unitId,
-      assessmentNumber: `ASM-${new Date().getFullYear()}-${String(units.length + 1).padStart(4, "0")}`,
-      demandNumber: undefined,
-      pinNumber: undefined,
-      locality: newLocality.trim() || undefined,
-      legalName: newLegalName.trim(),
-      tradeName: newTradeName.trim() || undefined,
-      identifierType: newIdentifierType,
-      identifierValue: newIdentifierValue.trim(),
-      address: newAddress.trim() || "Tehsil Vehari, Punjab",
-      circleId: CIRCLE_VEHARI_ID,
-      categoryCode: rule.category_code,
-      subclassificationCode: rule.subclassification_code,
-      statutoryTertiaryCode: rule.statutory_tertiary_code,
-      statutoryRuleId: rule.rule_id,
-      statutoryRule: rule,
-      provincialUin,
-      demandUnit: {
-        id: demandUnitId,
-        taxpayerId: unitId,
-        permanentDemandNo: String(units.length + 1).padStart(4, "0"),
-        createdAt: new Date().toISOString()
-      },
-      assessments: [assessment],
-      assessmentVersions: [version],
-      ledgerEntries: [],
-      createdAt: new Date().toISOString()
-    };
-
-    const auditItem: PilotAuditItem = {
-      id: `audit-${Date.now()}`,
-      eventType: "TAX_UNIT_REGISTERED",
-      actorName: officer.name,
-      actorRole: officer.role,
-      target: newUnit.legalName,
-      timestamp: new Date().toISOString(),
-      correlationId,
-      details: `Registered unit under Class ${rule.rule_code} (${rule.category}) with Assessment No. ${newUnit.assessmentNumber} at official statutory rate PKR ${rule.annual_rate_pkr.toLocaleString()}`
-    };
-
-    const updated = [newUnit, ...units];
-    const updatedAudits = [auditItem, ...auditLogs];
-    syncState(updated, updatedAudits);
+    if (error) {
+      showToast("error", `Unable to add survey unit: ${error.message}`);
+      return;
+    }
+    const created = data as { id?: string } | null;
+    await refreshOperationalSurveyUnits();
 
     // Reset Form
     setNewLegalName("");
@@ -1347,10 +1280,10 @@ export default function HomePage({
     setNewTertiaryCode("3(i)(b)");
     setNewRuleId("PFT-3.i.b");
     setShowAddUnitModal(false);
-    setSelectedUnitId(unitId);
+    if (created?.id) setSelectedUnitId(created.id);
     showToast(
       "success",
-      `Unit '${newUnit.legalName}' successfully registered under Class ${rule.rule_code} (UIN: ${provincialUin}, PKR ${rule.annual_rate_pkr})`
+      `Unit '${newLegalName.trim()}' permanently added to the survey pipeline under Class ${rule.rule_code}.`
     );
   };
 
@@ -1719,16 +1652,19 @@ export default function HomePage({
       ) {
         return false;
       }
+
+      // If officially registered in Form P.F.T-3 (via ETO approval or payment realization migration)
+      if (unit.pft3Registered === true) {
+        return true;
+      }
+
       if (activePotentialIds.has(unit.id)) return false;
       if (unit.pinNumber && activePotentialPins.has(unit.pinNumber)) return false;
       if (unit.demandNumber && activePotentialPins.has(unit.demandNumber)) return false;
       if (unit.provincialUin && activePotentialPins.has(unit.provincialUin)) return false;
 
       // Must be officially approved and registered in PFT-3
-      return (
-        unit.pft3Registered === true ||
-        (unit.assessments[0]?.status === "APPROVED" && unit.pft3Registered !== false)
-      );
+      return unit.assessments[0]?.status === "APPROVED" && unit.pft3Registered !== false;
     });
   }, [units, activePotentialIds, activePotentialPins]);
 
@@ -3435,69 +3371,77 @@ export default function HomePage({
   };
 
   // Phase 10: PFT-2 Challan Management & Statutory Receipt Handlers
-  const handleIssueProvisionalPft2 = (unit: PotentialUnitRecord) => {
+  const handleIssueProvisionalPft2 = async (unit: PotentialUnitRecord) => {
     const payableAmount = unit.annualRatePkr + (unit.openingArrears ?? 0);
-    const challanSeq = String(pft2Challans.length + 1).padStart(4, "0");
-    const challanNumber = `PFT2-${challanSeq}`;
     const issueDate = new Date().toISOString().split("T")[0]!;
     const due = new Date();
     due.setDate(due.getDate() + 30);
     const dueDate = due.toISOString().split("T")[0]!;
-    const noticeNumber = generatePft2NoticeNumber({
-      demandNumber: unit.potentialNumber,
-      issueDate,
-      amount: payableAmount,
-      formTypeCode: "01",
-      demandScope: (unit.openingArrears ?? 0) > 0 ? "COMBINED" : "CURRENT",
-      paymentScope: "FULL"
-    });
+    try {
+      const jurisdictionCodes = await loadChallanJurisdictionCodes(unit.circleId);
+      const noticeNumber = generatePft2NoticeNumber({
+        demandNumber: unit.potentialNumber,
+        issueDate,
+        amount: payableAmount,
+        formTypeCode: "01",
+        demandScope: (unit.openingArrears ?? 0) > 0 ? "COMBINED" : "CURRENT",
+        paymentScope: "FULL",
+        ...jurisdictionCodes
+      });
 
-    const provisionalChallan: Pft2ChallanRecord = {
-      id: `pft2-prov-${Date.now()}`,
-      challanNumber,
-      noticeNumber,
-      demandNumber: unit.potentialNumber,
-      potentialNumber: unit.potentialNumber,
-      unitId: unit.id,
-      legalName: unit.legalName,
-      tradeName: unit.tradeName,
-      identifierType: unit.identifierType,
-      identifierValue: unit.identifierValue,
-      address: unit.address,
-      category: unit.categoryName,
-      subclassificationCode: unit.subclassificationCode ?? null,
-      statutoryTertiaryCode: unit.statutoryTertiaryCode ?? null,
-      tertiarySlab: null,
-      amountPayable: payableAmount,
-      pin: unit.pinNumber,
-      provincialUin: unit.pinNumber,
-      formType: "PROVISIONAL",
-      isProvisional: true,
-      demandScope: (unit.openingArrears ?? 0) > 0 ? "COMBINED" : "CURRENT",
-      paymentScope: "FULL",
-      fullAssessedAmount: payableAmount,
-      issueDate,
-      dueDate,
-      status: "ISSUED",
-      paymentChannel: "National Bank of Pakistan",
-      officialSha256: `sha256-prov-${challanNumber}-${Date.now()}`,
-      qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT2-PROV&ref=${challanNumber}&pdn=${unit.potentialNumber}&amt=${payableAmount}`
-    };
+      const provisionalChallan: Pft2ChallanRecord = {
+        id: unit.id,
+        challanNumber: noticeNumber,
+        noticeNumber,
+        demandNumber: unit.potentialNumber,
+        potentialNumber: unit.potentialNumber,
+        unitId: unit.id,
+        legalName: unit.legalName,
+        tradeName: unit.tradeName,
+        identifierType: unit.identifierType,
+        identifierValue: unit.identifierValue,
+        address: unit.address,
+        category: unit.categoryName,
+        subclassificationCode: unit.subclassificationCode ?? null,
+        statutoryTertiaryCode: unit.statutoryTertiaryCode ?? null,
+        tertiarySlab: null,
+        amountPayable: payableAmount,
+        pin: unit.pinNumber,
+        provincialUin: unit.pinNumber,
+        formType: "PROVISIONAL",
+        isProvisional: true,
+        demandScope: (unit.openingArrears ?? 0) > 0 ? "COMBINED" : "CURRENT",
+        paymentScope: "FULL",
+        fullAssessedAmount: payableAmount,
+        issueDate,
+        dueDate,
+        status: "ISSUED",
+        paymentChannel: "National Bank of Pakistan",
+        officialSha256: computeContentSha256(
+          `PTAS:PFT2:${noticeNumber}:${unit.potentialNumber}:${payableAmount}:${dueDate}`
+        ),
+        qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT2-PROV&ref=${noticeNumber}&pdn=${unit.potentialNumber}&amt=${payableAmount}`
+      };
 
-    const updated = [provisionalChallan, ...pft2Challans];
-    setPft2Challans(updated);
-    savePersistedPft2Challans(updated);
+      const issued = await issueDurablePft2Challan(
+        provisionalChallan,
+        `pft2-issue:${unit.id}:${noticeNumber}`,
+        `pft2-issue:${crypto.randomUUID()}`
+      );
+      setPft2Challans((current) => [issued, ...current.filter((c) => c.id !== issued.id)]);
 
-    showToast(
-      "success",
-      `✓ Form P.F.T-2 Provisional Challan ${challanNumber} issued for Potential Unit ${unit.potentialNumber} (${unit.legalName})!`
-    );
+      showToast(
+        "success",
+        `✓ Form P.F.T-2 Notice ${issued.noticeNumber} issued for Potential Unit ${unit.potentialNumber} (${unit.legalName})!`
+      );
 
-    // Switch to Potential Challans tab in Revenue Desk
-    switchTab("POTENTIAL_PFT2");
+      switchTab("POTENTIAL_PFT2");
+    } catch (error) {
+      showToast("error", error instanceof Error ? error.message : "Unable to issue challan.");
+    }
   };
 
-  const handleAddPotentialUnit = (e: React.FormEvent) => {
+  const handleAddPotentialUnit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!potNewLegalName.trim() || !potNewIdValue.trim()) {
       showToast("error", "Legal Name and Identifier are mandatory.");
@@ -3549,16 +3493,21 @@ export default function HomePage({
       statutoryRuleId: rule.rule_id,
       statutoryRule: rule,
       annualRatePkr: rule.annual_rate_pkr ?? 4000,
-      openingArrears: 0,
+      openingArrears: potNewOpeningArrears,
       status: "ACTIVE",
       createdAt: new Date().toISOString(),
       createdBy: `${officer.name} (${officer.title})`
     };
 
-    const updated = [newPotUnit, ...potentialUnits];
-    setPotentialUnits(updated);
-    savePersistedPotentialUnits(updated);
-    void persistPotentialUnitToDatabase(newPotUnit);
+    const created = await persistPotentialUnitToDatabase(newPotUnit);
+    if (!created) {
+      showToast(
+        "error",
+        "Potential unit was not saved to the database. No browser-only record was created."
+      );
+      return;
+    }
+    setPotentialUnits((current) => [created, ...current.filter((unit) => unit.id !== created.id)]);
     setShowAddPotentialModal(false);
 
     // Reset inputs
@@ -3567,8 +3516,9 @@ export default function HomePage({
     setPotNewIdValue("");
     setPotNewAddress("");
     setPotNewLocality("");
+    setPotNewOpeningArrears(0);
 
-    showToast("success", `✓ Potential Unit ${potNum} successfully registered.`);
+    showToast("success", `✓ Potential Unit ${created.potentialNumber} permanently registered.`);
   };
 
   const handleDownloadPotentialTemplate = () => {
@@ -3585,7 +3535,7 @@ export default function HomePage({
     showToast("info", "Official Potential Units discovery CSV template downloaded.");
   };
 
-  const handleImportPotentialCsv = () => {
+  const handleImportPotentialCsv = async () => {
     if (!potentialCsvInput.trim()) {
       showToast("error", "CSV content cannot be empty.");
       return;
@@ -3603,16 +3553,24 @@ export default function HomePage({
       return;
     }
 
-    const updated = [...importedUnits, ...potentialUnits];
-    setPotentialUnits(updated);
-    savePersistedPotentialUnits(updated);
+    const persisted = (
+      await Promise.all(importedUnits.map((unit) => persistPotentialUnitToDatabase(unit)))
+    ).filter((unit): unit is PotentialUnitRecord => unit !== null);
+    if (persisted.length !== importedUnits.length) {
+      showToast(
+        "error",
+        `Only ${persisted.length} of ${importedUnits.length} potential units were saved. Refreshing the database register.`
+      );
+    }
+    const refreshed = await fetchPotentialAssessmentUnitsFromDatabase();
+    setPotentialUnits(refreshed ?? persisted);
     setShowImportPotentialModal(false);
     setPotentialCsvInput("");
     setPotentialImportErrors([]);
 
     showToast(
       "success",
-      `✓ Successfully imported ${importedUnits.length} potential units into the Potential Register.`
+      `✓ Permanently imported ${persisted.length} potential units into the Potential Register.`
     );
   };
 
@@ -3672,7 +3630,7 @@ export default function HomePage({
     setShowReceivePft2Modal(true);
   };
 
-  const handleConfirmReceivePft2 = () => {
+  const handleConfirmReceivePft2 = async () => {
     if (!receivingChallan) return;
 
     // Statutory Rule: Challan payable amount cannot be altered during receipting
@@ -3708,72 +3666,38 @@ export default function HomePage({
     const nowTime = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 
     // 1. Check for Potential Unit Migration
-    // Match by unitId, potentialNumber, demandNumber, or statutory taxpayer PIN (not the 6-digit document security PIN)
+    // Match by unitId, potentialNumber, demandNumber, provincialUin, or identifierValue
     const matchingPotential = potentialUnits.find(
       (p) =>
         p.id === receivingChallan.unitId ||
-        p.potentialNumber === receivingChallan.potentialNumber ||
-        p.potentialNumber === receivingChallan.demandNumber ||
-        p.pinNumber === receivingChallan.provincialUin ||
-        p.provincialUin === receivingChallan.provincialUin
+        (receivingChallan.potentialNumber &&
+          p.potentialNumber === receivingChallan.potentialNumber) ||
+        (receivingChallan.demandNumber && p.potentialNumber === receivingChallan.demandNumber) ||
+        (receivingChallan.provincialUin &&
+          (p.pinNumber === receivingChallan.provincialUin ||
+            p.provincialUin === receivingChallan.provincialUin)) ||
+        (receivingChallan.identifierValue && p.identifierValue === receivingChallan.identifierValue)
     );
 
-    let assignedDemandNo = receivingChallan.demandNumber;
-    let cleanPin = receivingChallan.pin || "";
+    const assignedDemandNo = receivingChallan.demandNumber;
+    const cleanPin = receivingChallan.pin || "";
     const isPotentialMigration = Boolean(receivingChallan.isProvisional || matchingPotential);
 
-    let targetUnit = units.find((u) => u.id === receivingChallan.unitId);
+    const targetUnit = units.find(
+      (u) =>
+        u.id === receivingChallan.unitId ||
+        (receivingChallan.demandNumber &&
+          (u.demandUnit?.permanentDemandNo === receivingChallan.demandNumber ||
+            u.demandNumber === receivingChallan.demandNumber)) ||
+        (receivingChallan.provincialUin &&
+          (u.provincialUin === receivingChallan.provincialUin ||
+            u.pinNumber === receivingChallan.provincialUin)) ||
+        (receivingChallan.identifierValue && u.identifierValue === receivingChallan.identifierValue)
+    );
     let updatedUnits = units;
 
-    if (isPotentialMigration) {
-      const potTarget: PotentialUnitRecord = matchingPotential || {
-        id: receivingChallan.unitId,
-        potentialNumber: receivingChallan.potentialNumber || receivingChallan.demandNumber,
-        pinNumber: receivingChallan.pin || `Potential-${receivingChallan.challanNumber}`,
-        provincialUin: receivingChallan.provincialUin || receivingChallan.pin || "",
-        legalName: receivingChallan.legalName,
-        tradeName: receivingChallan.tradeName,
-        identifierType: (receivingChallan.identifierType as "CNIC" | "NTN") || "CNIC",
-        identifierValue: receivingChallan.identifierValue,
-        address: receivingChallan.address,
-        locality: "Vehari City Commercial Zone",
-        circleId: "00000000-0000-4000-8000-000000000004",
-        circleName: "Circle-Vehari",
-        districtName: "Vehari",
-        categoryCode: "1",
-        categoryName: receivingChallan.category,
-        subclassificationCode: receivingChallan.subclassificationCode,
-        statutoryRuleId: "PFT-1.i",
-        statutoryRule: getStatutoryRuleById("PFT-1.i")!,
-        annualRatePkr: payableAmount,
-        openingArrears: 0,
-        status: "ACTIVE",
-        createdAt: new Date().toISOString()
-      };
-
-      const migration = migratePotentialUnitToPft3(potTarget, units, payableAmount);
-      assignedDemandNo = migration.assignedDemandNo;
-      cleanPin = migration.cleanPin;
-
-      // Add newly migrated unit to Form P.F.T-3 register
-      updatedUnits = [migration.migratedUnit, ...units];
-      targetUnit = migration.migratedUnit;
-
-      // Mark potential unit as MIGRATED
-      const updatedPotList = potentialUnits.map((p) =>
-        p.id === potTarget.id || p.potentialNumber === potTarget.potentialNumber
-          ? {
-              ...p,
-              status: "MIGRATED" as const,
-              migratedToDemandNo: assignedDemandNo,
-              migratedAt: new Date().toISOString()
-            }
-          : p
-      );
-      setPotentialUnits(updatedPotList);
-      savePersistedPotentialUnits(updatedPotList);
-      void recordPotentialUnitMigrationInDatabase(potTarget.id, assignedDemandNo);
-    }
+    // Receiving payment is durable, but it does not itself authorize a PFT-3
+    // assessment. Potential-unit promotion remains a separate ETO action.
 
     // 2. Create Receipt Record with locked statutory amount and validated date
     const newReceipt: StatutoryReceiptRecord = {
@@ -3782,7 +3706,7 @@ export default function HomePage({
       paymentSource: isPotentialMigration ? "MANUAL" : "ISSUED_PFT2",
       challanNumber: receivingChallan.challanNumber,
       demandNumber: assignedDemandNo,
-      unitId: receivingChallan.unitId,
+      unitId: targetUnit?.id || receivingChallan.unitId,
       assesseeLegalName: receivingChallan.legalName,
       assesseeTradeName: receivingChallan.tradeName,
       identifierType: receivingChallan.identifierType,
@@ -3801,21 +3725,42 @@ export default function HomePage({
       receivingOfficerName: officer.name,
       receivingOfficerTitle: officer.title,
       pin: cleanPin || generateDocumentPin(receiptNumber),
-      officialSha256: `sha256-receipt-${receiptNumber}-${Date.now()}`,
+      provincialUin:
+        receivingChallan.provincialUin ||
+        targetUnit?.provincialUin ||
+        targetUnit?.pinNumber ||
+        cleanPin,
+      officialSha256: computeContentSha256(
+        `${receiptNumber}|${receivingChallan.challanNumber}|${payableAmount}|${receiveDate}|${receiveBankScrollRef.trim()}`
+      ),
       qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-REC&ref=${receiptNumber}&pdn=${assignedDemandNo}&amt=${payableAmount}`,
       remarks: receiveRemarks
     };
 
+    let durableReceipt: StatutoryReceiptRecord;
+    try {
+      durableReceipt = await receiveDurablePft2Challan(
+        receivingChallan,
+        newReceipt,
+        `pft2-receive:${receivingChallan.id}:${receiveBankScrollRef.trim()}`,
+        `pft2-receive:${crypto.randomUUID()}`
+      );
+    } catch (error) {
+      showToast("error", error instanceof Error ? error.message : "Unable to receive challan.");
+      return;
+    }
+
     // 3. Update Challan status and attributes
     const updatedChallans = pft2Challans.map((c) =>
-      c.id === receivingChallan.id
+      c.id === receivingChallan.id ||
+      (receivingChallan.challanNumber && c.challanNumber === receivingChallan.challanNumber)
         ? {
             ...c,
             status: "RECEIVED" as Pft2Status,
-            isProvisional: false,
+            isProvisional: receivingChallan.isProvisional,
             demandNumber: assignedDemandNo,
             pin: cleanPin || c.pin,
-            provincialUin: cleanPin || c.provincialUin,
+            provincialUin: receivingChallan.provincialUin || c.provincialUin || cleanPin,
             receiptNumber,
             receivedAt: receiveDate,
             receivedBy: `${officer.name} (${officer.title})`,
@@ -3828,9 +3773,9 @@ export default function HomePage({
     // 4. Post PAYMENT_CREDIT to Unit's Demand Ledger if already in PFT-3
     if (!isPotentialMigration && targetUnit) {
       const paymentEntry = createPaymentReceiptEntry({
-        demandUnitId: targetUnit.demandUnit.id,
+        demandUnitId: targetUnit.demandUnit?.id ?? `dem-${targetUnit.id}`,
         amount: payableAmount,
-        financialYearId: "2026-2027",
+        financialYearId: "FY-2026-27",
         receiptNumber,
         paymentChannel: receivePaymentChannel.includes("ePay") ? "EPAY_PUNJAB" : "CHALLAN_32A",
         actorId: officer.id,
@@ -3849,7 +3794,7 @@ export default function HomePage({
     const auditItem: PilotAuditItem = {
       id: `audit-${Date.now()}`,
       eventType: isPotentialMigration
-        ? "POTENTIAL_UNIT_MIGRATED_TO_PFT3"
+        ? "POTENTIAL_CHALLAN_PAYMENT_RECEIVED"
         : "CHALLAN_RECEIVED_CONVERTED_TO_RECEIPT",
       actorName: officer.name,
       actorRole: officer.role,
@@ -3857,17 +3802,15 @@ export default function HomePage({
       timestamp: new Date().toISOString(),
       correlationId: `corr-${receiptNumber}`,
       details: isPotentialMigration
-        ? `Potential Unit ${matchingPotential?.potentialNumber ?? receivingChallan.demandNumber} realized statutory payment (PKR ${payableAmount.toLocaleString()}) via ${receivePaymentChannel} [CPR: ${receiveBankScrollRef.trim()}]. Migrated to Form P.F.T-3 Register as Demand No. ${assignedDemandNo}. Clean Statutory PIN: ${cleanPin}. Receipt: ${receiptNumber}.`
+        ? `Potential Unit ${matchingPotential?.potentialNumber ?? receivingChallan.demandNumber} realized statutory payment (PKR ${payableAmount.toLocaleString()}) via ${receivePaymentChannel} [CPR: ${receiveBankScrollRef.trim()}]. Receipt ${receiptNumber} recorded; P.F.T-3 promotion remains subject to ETO approval.`
         : `Form P.F.T-2 ${receivingChallan.challanNumber} received and credited (PKR ${payableAmount.toLocaleString()}) via ${receivePaymentChannel} [CPR: ${receiveBankScrollRef.trim()}]. Generated Statutory Receipt ${receiptNumber}.`
     };
 
-    const updatedReceipts = [newReceipt, ...statutoryReceipts];
+    const updatedReceipts = [durableReceipt, ...statutoryReceipts];
     const updatedAudits = [auditItem, ...auditLogs];
 
     setPft2Challans(updatedChallans);
-    savePersistedPft2Challans(updatedChallans);
     setStatutoryReceipts(updatedReceipts);
-    savePersistedStatutoryReceipts(updatedReceipts);
     setUnits(updatedUnits);
     setAuditLogs(updatedAudits);
 
@@ -3877,7 +3820,7 @@ export default function HomePage({
     if (isPotentialMigration) {
       showToast(
         "success",
-        `✓ Payment received! Potential unit migrated to Form P.F.T-3 Register as Demand No. ${assignedDemandNo} with clean PIN ${cleanPin}. Statutory Receipt ${receiptNumber} generated.`
+        `✓ Payment received and Statutory Receipt ${receiptNumber} recorded. P.F.T-3 promotion remains pending ETO approval.`
       );
     } else {
       showToast(
@@ -3887,7 +3830,7 @@ export default function HomePage({
     }
 
     // Automatically display the new Receipt document
-    setActiveReceiptRecord(newReceipt);
+    setActiveReceiptRecord(durableReceipt);
     setShowReceiptDocumentModal(true);
   };
 
@@ -3897,39 +3840,28 @@ export default function HomePage({
     setShowCancelPft2Modal(true);
   };
 
-  const handleConfirmCancelPft2 = () => {
+  const handleConfirmCancelPft2 = async () => {
     if (!cancellingChallan) return;
     if (!cancelPft2Reason.trim()) {
       showToast("error", "Cancellation justification is required by statutory audit rules.");
       return;
     }
 
-    const updatedChallans = pft2Challans.map((c) =>
-      c.id === cancellingChallan.id
-        ? {
-            ...c,
-            status: "CANCELLED" as Pft2Status,
-            cancelledReason: cancelPft2Reason.trim(),
-            cancelledAt: new Date().toISOString().split("T")[0]!,
-            cancelledBy: `${officer.name} (${officer.title})`
-          }
-        : c
+    let cancelled: Pft2ChallanRecord;
+    try {
+      cancelled = await cancelDurablePft2Challan(
+        cancellingChallan,
+        cancelPft2Reason.trim(),
+        `pft2-cancel:${cancellingChallan.id}`,
+        `pft2-cancel:${crypto.randomUUID()}`
+      );
+    } catch (error) {
+      showToast("error", error instanceof Error ? error.message : "Unable to cancel challan.");
+      return;
+    }
+    setPft2Challans((current) =>
+      current.map((item) => (item.id === cancelled.id ? cancelled : item))
     );
-
-    const auditItem: PilotAuditItem = {
-      id: `audit-${Date.now()}`,
-      eventType: "CHALLAN_CANCELLED",
-      actorName: officer.name,
-      actorRole: officer.role,
-      target: cancellingChallan.legalName,
-      timestamp: new Date().toISOString(),
-      correlationId: `corr-cancel-${cancellingChallan.challanNumber}`,
-      details: `Form P.F.T-2 ${cancellingChallan.challanNumber} marked CANCELLED. Reason: ${cancelPft2Reason}`
-    };
-
-    setPft2Challans(updatedChallans);
-    savePersistedPft2Challans(updatedChallans);
-    setAuditLogs([auditItem, ...auditLogs]);
 
     setShowCancelPft2Modal(false);
     setCancellingChallan(null);
@@ -3962,7 +3894,7 @@ export default function HomePage({
     setShowReceiptDocumentModal(true);
   };
 
-  const handleConfirmIssuePft2 = () => {
+  const handleConfirmIssuePft2 = async () => {
     const targetUnit = units.find((u) => u.id === issuePft2UnitId);
     if (!targetUnit) {
       showToast("error", "Please select a valid taxpayer establishment.");
@@ -4011,22 +3943,31 @@ export default function HomePage({
     const amountPayable = isPartial ? issuePft2PartialAmount : fullAssessed;
     const remainingBalance = isPartial ? Math.max(0, fullAssessed - amountPayable) : 0;
 
+    let jurisdictionCodes: ChallanJurisdictionCodes;
+    try {
+      jurisdictionCodes = await loadChallanJurisdictionCodes(targetUnit.circleId);
+      setIssuePft2JurisdictionCodes(jurisdictionCodes);
+    } catch (error) {
+      showToast(
+        "error",
+        error instanceof Error ? error.message : "Unable to resolve jurisdiction codes."
+      );
+      return;
+    }
     const noticeNumber = generatePft2NoticeNumber({
       demandNumber: targetUnit.demandUnit.permanentDemandNo,
       issueDate: issuePft2IssueDate,
       formTypeCode: issuePft2FormType,
       demandScope: issuePft2DemandScope,
       paymentScope: issuePft2PaymentScope,
-      amount: amountPayable
+      amount: amountPayable,
+      ...jurisdictionCodes
     });
 
     const pin = generateDocumentPin(noticeNumber);
-    const nextSeq = pft2Challans.length + 1;
-    const challanNumber = formatStandardDocNumber({ docCode: "PFT2", sequence: nextSeq });
-
     const newChallanRecord: Pft2ChallanRecord = {
-      id: `pft2-${Date.now()}-${nextSeq}`,
-      challanNumber,
+      id: targetUnit.id,
+      challanNumber: noticeNumber,
       demandNumber: targetUnit.demandUnit.permanentDemandNo,
       unitId: targetUnit.id,
       legalName: targetUnit.legalName,
@@ -4052,34 +3993,27 @@ export default function HomePage({
       dueDate: issuePft2DueDate,
       status: "ISSUED",
       officialSha256: computeContentSha256(
-        `PTAS:PFT2:${challanNumber}:${noticeNumber}:${pin}:${amountPayable}:${issuePft2DueDate}`
+        `PTAS:PFT2:${noticeNumber}:${pin}:${amountPayable}:${issuePft2DueDate}`
       ),
-      qrPayload: `PTAS-PUNJAB:PFT-2:${challanNumber}:DEMAND=${targetUnit.demandUnit.permanentDemandNo}:AMOUNT=${amountPayable}:DUE=${issuePft2DueDate}:PIN=${pin}`
+      qrPayload: `PTAS-PUNJAB:PFT-2:${noticeNumber}:DEMAND=${targetUnit.demandUnit.permanentDemandNo}:AMOUNT=${amountPayable}:DUE=${issuePft2DueDate}:PIN=${pin}`
     };
-
-    const auditItem: PilotAuditItem = {
-      id: `audit-${Date.now()}`,
-      eventType: "PFT2_CHALLAN_ISSUED",
-      actorName: officer.name,
-      actorRole: officer.role,
-      target: targetUnit.legalName,
-      timestamp: new Date().toISOString(),
-      correlationId: `corr-${challanNumber}`,
-      details: `Form P.F.T-2 Challan issued: Notice No ${noticeNumber} | Security PIN ${pin} | Amount PKR ${amountPayable.toLocaleString()} [${issuePft2FormType} - ${issuePft2DemandScope} - ${issuePft2PaymentScope}]. Due: ${issuePft2DueDate}.`
-    };
-
-    const updatedChallans = [newChallanRecord, ...pft2Challans];
-    const updatedAudits = [auditItem, ...auditLogs];
-
-    setPft2Challans(updatedChallans);
-    savePersistedPft2Challans(updatedChallans);
-    setAuditLogs(updatedAudits);
-
-    setShowIssuePft2Modal(false);
-    showToast("success", `✓ Form P.F.T-2 Challan issued! Notice: ${noticeNumber} (PIN: ${pin}).`);
-
-    setActivePrintChallan(newChallanRecord);
-    setShowPrintChallanModal(true);
+    try {
+      const issued = await issueDurablePft2Challan(
+        newChallanRecord,
+        `pft2-issue:${targetUnit.id}:${noticeNumber}`,
+        `pft2-issue:${crypto.randomUUID()}`
+      );
+      setPft2Challans((current) => [issued, ...current.filter((c) => c.id !== issued.id)]);
+      setShowIssuePft2Modal(false);
+      showToast(
+        "success",
+        `✓ Form P.F.T-2 issued with Notice No. ${issued.noticeNumber} (PIN: ${issued.pin ?? pin}).`
+      );
+      setActivePrintChallan(issued);
+      setShowPrintChallanModal(true);
+    } catch (error) {
+      showToast("error", error instanceof Error ? error.message : "Unable to issue challan.");
+    }
   };
 
   const handlePrintPft2Challan = (challan: Pft2ChallanRecord) => {
@@ -4862,6 +4796,19 @@ export default function HomePage({
                     className="panel-actions"
                     style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
                   >
+                    {officer.role === "INSPECTOR" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingUnitId(null);
+                          setShowAddUnitModal(true);
+                        }}
+                        className="btn-primary"
+                        title="Add one field-survey unit to the database"
+                      >
+                        ➕ Add Individual Unit
+                      </button>
+                    )}
                     {(officer.role === "INSPECTOR" || officer.role === "ETO") && (
                       <button
                         type="button"
@@ -5417,7 +5364,7 @@ export default function HomePage({
                   className="btn-primary"
                   onClick={() => {
                     const csvRows = [
-                      "Potential No,Provisional PIN,Legal Name,Trade Name,Identifier Type,Identifier Value,Address,Locality,Circle,Statutory Category,Annual Rate PKR,Status",
+                      "Potential No,Provisional PIN,Legal Name,Trade Name,Identifier Type,Identifier Value,Address,Locality,Circle,Statutory Category,Annual Rate PKR,Arrears PKR,Total Potential Demand PKR,Status",
                       ...filteredPotentialUnits.map((u) =>
                         [
                           `"${u.potentialNumber}"`,
@@ -5431,6 +5378,8 @@ export default function HomePage({
                           `"${u.circleName || "Vehari Circle I (City / Commercial)"}"`,
                           `"${u.categoryName.replace(/"/g, '""')}"`,
                           u.annualRatePkr,
+                          u.openingArrears ?? 0,
+                          u.annualRatePkr + (u.openingArrears ?? 0),
                           `"${u.status}"`
                         ].join(",")
                       )
@@ -5773,6 +5722,8 @@ export default function HomePage({
                     <th>Location &amp; Locality</th>
                     <th>Statutory Classification</th>
                     <th style={{ textAlign: "right" }}>Annual Rate</th>
+                    <th style={{ textAlign: "right" }}>Arrears</th>
+                    <th style={{ textAlign: "right" }}>Total Demand</th>
                     <th>Pipeline Status</th>
                     <th style={{ textAlign: "right" }}>Actions</th>
                   </tr>
@@ -5781,7 +5732,7 @@ export default function HomePage({
                   {paginatedPotentialUnits.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={10}
                         style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
                       >
                         No prospective units found matching filter criteria. Click &quot;Add
@@ -5855,6 +5806,12 @@ export default function HomePage({
                           <div style={{ fontWeight: 700, color: "#166534" }}>
                             PKR {u.annualRatePkr.toLocaleString()}
                           </div>
+                        </td>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          PKR {(u.openingArrears ?? 0).toLocaleString()}
+                        </td>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap", fontWeight: 700 }}>
+                          PKR {(u.annualRatePkr + (u.openingArrears ?? 0)).toLocaleString()}
                         </td>
                         <td>
                           {u.status === "ACTIVE" ? (
@@ -20456,15 +20413,18 @@ export default function HomePage({
                   : 0;
 
                 const liveNoticeNumber = selectedUnit
-                  ? generatePft2NoticeNumber({
-                      demandNumber: selectedUnit.demandUnit.permanentDemandNo,
-                      issueDate: issuePft2IssueDate,
-                      formTypeCode: issuePft2FormType,
-                      demandScope: issuePft2DemandScope,
-                      paymentScope: issuePft2PaymentScope,
-                      amount: effectiveAmount
-                    })
-                  : "PFT2-...";
+                  ? issuePft2JurisdictionCodes
+                    ? generatePft2NoticeNumber({
+                        demandNumber: selectedUnit.demandUnit.permanentDemandNo,
+                        issueDate: issuePft2IssueDate,
+                        formTypeCode: issuePft2FormType,
+                        demandScope: issuePft2DemandScope,
+                        paymentScope: issuePft2PaymentScope,
+                        amount: effectiveAmount,
+                        ...issuePft2JurisdictionCodes
+                      })
+                    : "District/Circle codes loading…"
+                  : "Select a unit";
 
                 const livePin = generateDocumentPin(liveNoticeNumber);
 
@@ -22516,6 +22476,45 @@ export default function HomePage({
                 </div>
               )}
 
+              <div style={{ marginBottom: "1rem" }}>
+                <label
+                  htmlFor="potential-opening-arrears"
+                  style={{
+                    display: "block",
+                    fontSize: "0.8rem",
+                    fontWeight: 600,
+                    color: "#334155",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  Opening arrears / credit (PKR)
+                </label>
+                <input
+                  id="potential-opening-arrears"
+                  type="number"
+                  step="0.01"
+                  value={potNewOpeningArrears}
+                  onChange={(event) => setPotNewOpeningArrears(Number(event.target.value) || 0)}
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1"
+                  }}
+                />
+                <span
+                  style={{
+                    display: "block",
+                    marginTop: "0.25rem",
+                    fontSize: "0.72rem",
+                    color: "#64748b"
+                  }}
+                >
+                  Use a positive amount for payable arrears and a negative amount for carried
+                  credit.
+                </span>
+              </div>
+
               {/* Provisional PIN Preview and Rate Card */}
               <div
                 style={{
@@ -22540,7 +22539,7 @@ export default function HomePage({
                     <code style={{ color: "#1e40af" }}>{potPreviewPin}</code>
                   </span>
                   <span>
-                    <strong>Account Head:</strong> B01601
+                    <strong>Opening balance:</strong> PKR {potNewOpeningArrears.toLocaleString()}
                   </span>
                 </div>
                 <div>
@@ -22551,6 +22550,10 @@ export default function HomePage({
                   <div style={{ color: "#166534", fontWeight: 700, marginTop: "0.35rem" }}>
                     Statutory Annual Tax Rate: PKR{" "}
                     {potSelectedStatutoryRule.annual_rate_pkr.toLocaleString()}
+                    {" • Total potential demand: PKR "}
+                    {(
+                      potSelectedStatutoryRule.annual_rate_pkr + potNewOpeningArrears
+                    ).toLocaleString()}
                   </div>
                 )}
               </div>

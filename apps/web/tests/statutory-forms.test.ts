@@ -190,8 +190,8 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
       paymentScope: "01",
       amount: 5000
     });
-    // PFT2 - Demand No. - Year(26)Month(09)Date(20)FormType(01)Scope(01) - Amount
-    expect(noticeNo1).toBe("PFT2-0001-2609200101-5000");
+    // Draft payload prefix is replaced server-side by registered district/circle codes.
+    expect(noticeNo1).toBe("PFT2-0001-260920010101-5000");
 
     const noticeNo2 = generatePft2NoticeNumber({
       demandNumber: "0002",
@@ -201,8 +201,20 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
       paymentScope: "PARTIAL",
       amount: 2500
     });
-    // Converts text input gracefully to numeric digit codes: 02 (NCUM), 03 (COMB)
-    expect(noticeNo2).toBe("PFT2-0002-2609200203-2500");
+    // Converts text input to 02 (NCUM), 03 (COMB), 02 (PARTIAL).
+    expect(noticeNo2).toBe("PFT2-0002-260920020302-2500");
+
+    const canonicalNoticeNo = generatePft2NoticeNumber({
+      demandNumber: "1184",
+      issueDate: "2026-10-03",
+      districtCode: "VHR",
+      circleCode: "01",
+      formTypeCode: "STANDARD",
+      demandScope: "CURRENT",
+      paymentScope: "FULL",
+      amount: 2000
+    });
+    expect(canonicalNoticeNo).toBe("VHR-01-1184-261003010101-2000");
   });
 
   it("generates Form P.F.T-2 with custom options, partial payment, and document security PIN", () => {

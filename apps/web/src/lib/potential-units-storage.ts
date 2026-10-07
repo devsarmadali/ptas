@@ -6,6 +6,7 @@ import {
 } from "@ptas/domain";
 import type { StoredUnit } from "./pilot-store";
 import { getSupabaseAuthClient } from "./supabase-auth";
+import type { Json } from "@ptas/database/types";
 
 export const POTENTIAL_UNITS_STORAGE_KEY = "ptas_potential_units_v2";
 export const POTENTIAL_UNITS_UPDATED_EVENT = "ptas-potential-units-updated";
@@ -431,7 +432,7 @@ export async function fetchPotentialAssessmentUnitsFromDatabase(): Promise<
         statutoryRuleId: String(row.statutory_rule_id || rule.rule_id),
         statutoryRule: rule,
         annualRatePkr: Number(row.annual_rate_pkr) || rule.annual_rate_pkr || 4000,
-        openingArrears: 0,
+        openingArrears: Number(row.opening_arrears) || 0,
         status:
           row.status === "MIGRATED" || row.status === "CANCELLED"
             ? (row.status as "MIGRATED" | "CANCELLED")
@@ -482,18 +483,21 @@ export async function persistPotentialUnitToDatabase(
       statutory_tertiary_classification: unit.statutoryTertiaryClassification,
       statutory_rule_id: unit.statutoryRuleId,
       annual_rate_pkr: unit.annualRatePkr,
-      opening_arrears: 0
+      opening_arrears: unit.openingArrears ?? 0,
+      correlation_id: `potential-unit:${crypto.randomUUID()}`
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase.rpc as any)("create_potential_assessment_unit", {
-      p_unit: payload
+    const { data, error } = await supabase.rpc("create_potential_assessment_unit", {
+      p_unit: payload as unknown as Json
     });
     if (error) {
       console.warn("persistPotentialUnitToDatabase error:", error.message);
       return null;
     }
-    return unit;
+    if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+    const createdId = String((data as Record<string, unknown>).id ?? "");
+    const refreshed = await fetchPotentialAssessmentUnitsFromDatabase();
+    return refreshed?.find((candidate) => candidate.id === createdId) ?? null;
   } catch (err) {
     console.warn("persistPotentialUnitToDatabase failed:", err);
     return null;
@@ -510,8 +514,7 @@ export async function recordPotentialUnitMigrationInDatabase(
   if (typeof window === "undefined") return;
   try {
     const supabase = getSupabaseAuthClient();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase.rpc as any)("migrate_potential_unit_to_pft3", {
+    await supabase.rpc("migrate_potential_unit_to_pft3", {
       p_potential_id: potentialId,
       p_assigned_demand_no: assignedDemandNo
     });
@@ -608,9 +611,12 @@ export function migratePotentialUnitToPft3(
     identifierType: potentialUnit.identifierType,
     identifierValue: potentialUnit.identifierValue,
     address: potentialUnit.address,
-    locality: potentialUnit.locality,
+    locality: potentialUnit.locality || "Vehari City Commercial Zone",
     circleId: potentialUnit.circleId || "00000000-0000-4000-8000-000000000004",
-    circleName: potentialUnit.circleName || "Circle-Vehari",
+    circleName:
+      potentialUnit.circleName && potentialUnit.circleName !== "Circle-Vehari"
+        ? potentialUnit.circleName
+        : "Vehari Circle I (City / Commercial)",
     districtName: potentialUnit.districtName || "Vehari",
     categoryCode: potentialUnit.categoryCode,
     subclassificationCode: potentialUnit.subclassificationCode,
@@ -671,6 +677,7 @@ export function migratePotentialUnitToPft3(
 }
 
 export const MIGRATED_UNITS_STORAGE_KEY = "ptas_migrated_units_v1";
+export const MIGRATED_UNITS_UPDATED_EVENT = "ptas-migrated-units-updated";
 
 /**
  * Safely load persisted migrated units from browser storage.
@@ -695,6 +702,7 @@ export function savePersistedMigratedUnits(units: readonly StoredUnit[]): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(MIGRATED_UNITS_STORAGE_KEY, JSON.stringify(units));
+    window.dispatchEvent(new CustomEvent(MIGRATED_UNITS_UPDATED_EVENT, { detail: units }));
   } catch (err) {
     console.error("Failed to save persisted migrated units:", err);
   }

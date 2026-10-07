@@ -252,6 +252,8 @@ export function getScheduleEntryLabel(rule: StatutoryRuleDefinition): string {
 export interface Pft2NoticeNumberOptions {
   demandNumber: string;
   issueDate: string; // YYYY-MM-DD
+  districtCode?: string | undefined;
+  circleCode?: string | undefined;
   formTypeCode?: string | undefined; // "01" | "02" | "03" | "04" | "STD" | string
   demandScope?: "01" | "02" | "03" | "CURRENT" | "ARREAR" | "COMBINED" | string | undefined;
   paymentScope?: "01" | "02" | "FULL" | "PARTIAL" | string | undefined;
@@ -261,7 +263,7 @@ export interface Pft2NoticeNumberOptions {
 /**
  * Official Punjab Form P.F.T-2 Notice / Challan Number Generator
  * Follows exact statutory pattern with numeric digit codes (NO text codes):
- * PFT2 - Demand No. - Issued month code - issue date code - form type code - current/arrear code - combined/partial code - amount
+ * District - Circle - Demand No. - Issued month code - issue date code - form type code - current/arrear code - combined/partial code - amount
  *
  * Digit Codes:
  * - Form Type Code (2 digits):
@@ -277,7 +279,7 @@ export interface Pft2NoticeNumberOptions {
  *     01 = Full / Combined Payment
  *     02 = Partial Payment
  *
- * Example: PFT2-0001-09-20-01-01-01-5000
+ * Example: VHR-01-1184-261003010101-2000
  */
 /**
  * Formats a demand number to circle-wise 4 digits (e.g. "0005").
@@ -359,9 +361,28 @@ export function generatePft2NoticeNumber(params: Pft2NoticeNumberOptions): strin
 
   const amountInt = Math.round(params.amount || 0);
 
-  // Reconstructed pattern: PFT2-{demandClean}-{yearCode}{monthCode}{dateCode}{formTypeDigit}{scopeDigit}-{amountInt}
-  // All internal dashes removed, year code block inserted, combination code digit 01 discarded
-  return `PFT2-${demandClean}-${yearCode}${monthCode}${dateCode}${formTypeDigit}${scopeDigit}-${amountInt}`;
+  // Full / partial payment digit code (01: Full, 02: Partial)
+  const rawPaymentScope = (params.paymentScope || "01").toUpperCase().trim();
+  let paymentScopeDigit = "01";
+  if (
+    rawPaymentScope === "02" ||
+    rawPaymentScope === "2" ||
+    rawPaymentScope === "PART" ||
+    rawPaymentScope === "PARTIAL"
+  ) {
+    paymentScopeDigit = "02";
+  } else if (/^\d+$/.test(rawPaymentScope)) {
+    paymentScopeDigit = rawPaymentScope.padStart(2, "0");
+  }
+
+  const districtCode = params.districtCode?.trim().toUpperCase();
+  const circleCode = params.circleCode?.trim().toUpperCase();
+  const prefix = districtCode && circleCode ? `${districtCode}-${circleCode}` : "PFT2";
+
+  // Canonical Notice No. is also the Challan No. across every issuance surface.
+  // PFT2 remains only as a compatibility draft prefix when jurisdiction codes
+  // have not yet been resolved; the database command rejects/prefixes it before issue.
+  return `${prefix}-${demandClean}-${yearCode}${monthCode}${dateCode}${formTypeDigit}${scopeDigit}${paymentScopeDigit}-${amountInt}`;
 }
 
 export type StatutoryDocCode =

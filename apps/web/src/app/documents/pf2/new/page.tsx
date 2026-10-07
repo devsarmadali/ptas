@@ -11,14 +11,17 @@ import {
 } from "../../../../lib/pilot-store";
 import { loadOperationalSurveyUnits } from "../../../../lib/operational-survey";
 import { generateFormPFT2, generatePft2NoticeNumber } from "../../../../lib/statutory-forms";
-import { generateDocumentPin } from "@ptas/domain";
+import { computeContentSha256, generateDocumentPin } from "@ptas/domain";
 import { Pft2ChallanDocument } from "../../../../components/Pft2ChallanDocument";
 import { downloadOfficialPdf } from "../../../../lib/pdf";
-import { saveIssuedPft2Challan } from "../../../../lib/challan-storage";
 import {
-  loadPersistedPotentialUnits,
+  issueDurablePft2Challan,
+  loadChallanJurisdictionCodes,
+  type ChallanJurisdictionCodes
+} from "../../../../lib/challan-storage";
+import {
   convertPotentialUnitToStoredUnit,
-  migrateVDemandUnitsToPotentialRegister,
+  fetchPotentialAssessmentUnitsFromDatabase,
   type PotentialUnitRecord
 } from "../../../../lib/potential-units-storage";
 
@@ -54,14 +57,14 @@ function DocumentIssuanceContent() {
   const [isIssuing, setIsIssuing] = useState(false);
   const [isPdfLoading, setIsPdfLoading] = useState(false);
   const [showConfigPanel, setShowConfigPanel] = useState(true);
+  const [jurisdictionCodes, setJurisdictionCodes] = useState<ChallanJurisdictionCodes | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setFetchError(null);
     void loadOperationalSurveyUnits()
-      .then((units) => {
+      .then(async (units) => {
         if (cancelled) return;
-        migrateVDemandUnitsToPotentialRegister(units || []);
         const available = (units && units.length > 0 ? units : []).filter(
           (u) =>
             u.assessments[0]?.status === "APPROVED" &&
@@ -80,7 +83,8 @@ function DocumentIssuanceContent() {
           ) ?? null;
 
         if (!found && unitParam) {
-          const potList = loadPersistedPotentialUnits();
+          const potList = await fetchPotentialAssessmentUnitsFromDatabase();
+          if (potList === null) throw new Error("Unable to load the potential register");
           const pot = potList.find(
             (p: PotentialUnitRecord) =>
               p.pinNumber === unitParam ||
@@ -122,6 +126,15 @@ function DocumentIssuanceContent() {
             url.searchParams.set("pin", found.provincialUin);
             window.history.replaceState(null, "", url.toString());
           }
+          void loadChallanJurisdictionCodes(found.circleId)
+            .then((codes) => {
+              if (!cancelled) setJurisdictionCodes(codes);
+            })
+            .catch((err: unknown) => {
+              if (!cancelled) {
+                setFetchError(err instanceof Error ? err.message : String(err));
+              }
+            });
         }
       })
       .catch((err: unknown) => {
@@ -154,6 +167,12 @@ function DocumentIssuanceContent() {
       setPartialAmount(Math.round(assessed / 2));
       setIssuedChallan(null);
       setErrorMessage("");
+      setJurisdictionCodes(null);
+      void loadChallanJurisdictionCodes(selected.circleId)
+        .then(setJurisdictionCodes)
+        .catch((err: unknown) => {
+          setErrorMessage(err instanceof Error ? err.message : String(err));
+        });
       if (typeof window !== "undefined") {
         const url = new URL(window.location.href);
         url.searchParams.delete("unit");
@@ -214,9 +233,13 @@ function DocumentIssuanceContent() {
       ? Math.min(partialAmount, validation.calculatedAmount)
       : validation.calculatedAmount;
 
-  const handleConfirmIssuance = () => {
+  const handleConfirmIssuance = async () => {
     if (!validation.canIssue) {
       setErrorMessage(validation.error || "Cannot issue challan with invalid financial balance.");
+      return;
+    }
+    if (!jurisdictionCodes) {
+      setErrorMessage("District and circle challan codes are not available.");
       return;
     }
 
@@ -237,17 +260,14 @@ function DocumentIssuanceContent() {
         return;
       }
 
-      const serial =
-        freshUnit.demandUnit?.permanentDemandNo?.replace(/[^0-9]/g, "").slice(-4) ||
-        String(Date.now()).slice(-4);
-      const challanNumber = `PFT2-VHR-2026-${serial.padStart(5, "0")}`;
       const noticeNumber = generatePft2NoticeNumber({
         demandNumber: freshUnit.demandUnit?.permanentDemandNo || "0001",
         issueDate: systemIssueDate,
         formTypeCode: formType,
         demandScope,
         paymentScope,
-        amount: effectivePayableAmount
+        amount: effectivePayableAmount,
+        ...jurisdictionCodes
       });
       const pin = generateDocumentPin(noticeNumber);
 
@@ -256,8 +276,8 @@ function DocumentIssuanceContent() {
         freshUnit.demandUnit?.permanentDemandNo?.startsWith("POT-");
 
       const newChallan: Pft2ChallanRecord = {
-        id: `pft2-gen-${Date.now()}`,
-        challanNumber,
+        id: freshUnit.id,
+        challanNumber: noticeNumber,
         demandNumber: freshUnit.demandUnit?.permanentDemandNo || "",
         unitId: freshUnit.id,
         legalName: freshUnit.legalName,
@@ -287,12 +307,18 @@ function DocumentIssuanceContent() {
         status: "ISSUED",
         isProvisional,
         potentialNumber: isProvisional ? freshUnit.demandUnit?.permanentDemandNo : undefined,
-        officialSha256: `sha256-gen-${pin}-${Date.now()}`,
+        officialSha256: computeContentSha256(
+          `${noticeNumber}|${freshUnit.id}|${effectivePayableAmount}|${systemIssueDate}|${dueDate}`
+        ),
         qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-2&ref=${noticeNumber}&pdn=${freshUnit.demandUnit?.permanentDemandNo || ""}&amt=${effectivePayableAmount}&pin=${pin}`
       };
 
-      saveIssuedPft2Challan(newChallan);
-      setIssuedChallan(newChallan);
+      const issued = await issueDurablePft2Challan(
+        newChallan,
+        `pft2-issue:${freshUnit.id}:${noticeNumber}`,
+        `pft2-issue:${crypto.randomUUID()}`
+      );
+      setIssuedChallan(issued);
       setErrorMessage("");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -311,7 +337,8 @@ function DocumentIssuanceContent() {
       formTypeCode: formType,
       demandScope,
       paymentScope,
-      amount: effectivePayableAmount
+      amount: effectivePayableAmount,
+      ...(jurisdictionCodes ?? {})
     });
 
   const activePin = issuedChallan?.pin ?? generateDocumentPin(activeNoticeNumber);
