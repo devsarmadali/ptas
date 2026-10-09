@@ -6,6 +6,7 @@
 
 import { jsPDF } from "jspdf";
 import QRCode from "qrcode";
+import { PUNJAB_LOGO_DATA_URL, PUNJAB_LOGO_ASPECT_RATIO } from "./punjab-logo";
 
 export const PDF_COLORS = {
   primary: [13, 56, 34] as [number, number, number], // #0d3822 Punjab Green
@@ -78,6 +79,17 @@ export function renderDocumentHeader(doc: jsPDF, options: HeaderOptions): number
   // Punjab Government Top Seal Bar
   doc.setFillColor(...PDF_COLORS.primary);
   doc.rect(10, startY, pageWidth - 20, 1.5, "F");
+
+  // Official Government of the Punjab Seal (Bilateral flanking crests)
+  const logoW = 15.0;
+  const logoH = logoW / PUNJAB_LOGO_ASPECT_RATIO; // 15.0 / 1.1976 = ~12.52mm
+  const logoY = startY + 2.5;
+
+  // Top-left Punjab Official Seal
+  doc.addImage(PUNJAB_LOGO_DATA_URL, "PNG", 12.0, logoY, logoW, logoH);
+
+  // Top-right Punjab Official Seal
+  doc.addImage(PUNJAB_LOGO_DATA_URL, "PNG", pageWidth - 12.0 - logoW, logoY, logoW, logoH);
 
   // Main Government Heading
   doc.setFont("helvetica", "bold");

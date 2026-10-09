@@ -2,11 +2,20 @@ import type { StatutoryRuleDefinition, DemandLedgerEntry } from "@ptas/domain";
 import {
   getStatutoryRuleById,
   getStatutoryRuleBySubclassification,
-  getAllStatutoryRules
+  getAllStatutoryRules,
+  normalizeIdentifier,
+  maskIdentifier
 } from "@ptas/domain";
-import type { StoredUnit } from "./pilot-store";
+import type { StoredUnit, MockOfficer } from "./pilot-store";
+import { DISTRICT_VEHARI_CIRCLES } from "./pilot-store";
 import { getSupabaseAuthClient } from "./supabase-auth";
 import type { Json } from "@ptas/database/types";
+import {
+  MAX_BULK_IMPORT_ROWS,
+  normalizeEntityLegalName,
+  validateOfficerImportJurisdiction
+} from "./bulk-import-standards";
+import { parseCsvContent } from "./bulk-survey";
 
 export const POTENTIAL_UNITS_STORAGE_KEY = "ptas_potential_units_v2";
 export const POTENTIAL_UNITS_UPDATED_EVENT = "ptas-potential-units-updated";
@@ -891,32 +900,59 @@ export function generatePotentialCsvTemplate(): string {
   return `\uFEFF${headers}\r\n${sampleRows}\r\n`;
 }
 
+export interface BulkPotentialValidationRow {
+  readonly rowNumber: number;
+  readonly rawData: Record<string, string>;
+  readonly status: "VALID" | "ERROR";
+  readonly errors: readonly string[];
+  readonly warnings: readonly string[];
+  readonly parsedUnit?: PotentialUnitRecord | undefined;
+}
+
+export interface BulkPotentialParseResult {
+  readonly totalRows: number;
+  readonly validRowsCount: number;
+  readonly errorRowsCount: number;
+  readonly duplicateCount: number;
+  readonly rows: readonly BulkPotentialValidationRow[];
+  readonly validUnits: readonly PotentialUnitRecord[];
+}
+
 /**
- * Parse and import potential units from a raw CSV or structured text.
- * Requires no ETO approval; Inspector can immediately import into the Potential Register.
+ * Standardized parser and validator for Bulk Potential Discovery Units ingestion.
+ * Aligned with Survey Import: enforces role/jurisdiction boundaries, circle-scoped legal name
+ * duplication discard rules, and 10,000 maximum row batch limits.
+ *
+ * Operational difference: valid units become immediately ACTIVE upon import without ETO approval.
  */
-export function importPotentialUnitsCsv(
+export function parseBulkPotentialUnits(
   csvContent: string,
   existingPotentialUnits: readonly PotentialUnitRecord[],
-  officerName = "Inspector Field Survey"
-): {
-  importedUnits: PotentialUnitRecord[];
-  errors: string[];
-} {
-  const lines = csvContent
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
+  officerOrName?: MockOfficer | string | undefined,
+  existingPft3Units: readonly StoredUnit[] = []
+): BulkPotentialParseResult {
+  const officer = typeof officerOrName === "object" ? officerOrName : undefined;
+  const officerName =
+    typeof officerOrName === "string"
+      ? officerOrName
+      : officer
+        ? `${officer.name} (${officer.title})`
+        : "Inspector Field Survey";
 
-  const errors: string[] = [];
-  const importedUnits: PotentialUnitRecord[] = [];
-
-  if (lines.length === 0) {
-    return { importedUnits, errors: ["CSV content is empty."] };
+  const rawRows = parseCsvContent(csvContent);
+  if (rawRows.length === 0) {
+    return {
+      totalRows: 0,
+      validRowsCount: 0,
+      errorRowsCount: 0,
+      duplicateCount: 0,
+      rows: [],
+      validUnits: []
+    };
   }
 
-  // Parse header if present
-  const firstLineCols = lines[0]!.split(",").map((c) =>
+  // Detect header row
+  const firstLineCols = rawRows[0]!.map((c) =>
     c
       .replace(/^["']|["']$/g, "")
       .trim()
@@ -924,39 +960,146 @@ export function importPotentialUnitsCsv(
   );
 
   const hasHeaders =
-    firstLineCols.some((c) => c.includes("legal") || c.includes("name")) ||
-    firstLineCols.some((c) => c.includes("identifier") || c.includes("cnic")) ||
-    firstLineCols.some((c) => c.includes("district") || c.includes("circle"));
+    firstLineCols.some((c) => c.includes("legal") || c.includes("name") || c.includes("entity")) ||
+    firstLineCols.some(
+      (c) => c.includes("identifier") || c.includes("cnic") || c.includes("ntn")
+    ) ||
+    firstLineCols.some((c) => c.includes("district") || c.includes("circle") || c.includes("zone"));
 
-  const startIndex = hasHeaders ? 1 : 0;
+  const dataRows = hasHeaders ? rawRows.slice(1) : rawRows;
+
+  if (dataRows.length > MAX_BULK_IMPORT_ROWS) {
+    return {
+      totalRows: dataRows.length,
+      validRowsCount: 0,
+      errorRowsCount: dataRows.length,
+      duplicateCount: 0,
+      rows: [
+        {
+          rowNumber: 1,
+          rawData: {},
+          status: "ERROR",
+          errors: [
+            `Upload exceeds maximum statutory batch limit of ${MAX_BULK_IMPORT_ROWS.toLocaleString()} records (found ${dataRows.length}).`
+          ],
+          warnings: []
+        }
+      ],
+      validUnits: []
+    };
+  }
+
   const headerMap = new Map<string, number>();
-
   if (hasHeaders) {
     firstLineCols.forEach((col, idx) => {
-      if (col.includes("district")) headerMap.set("district", idx);
-      else if (col.includes("circle")) headerMap.set("circle", idx);
-      else if (col.includes("tehsil")) headerMap.set("tehsil", idx);
-      else if (col.includes("locality")) headerMap.set("locality", idx);
-      else if (col.includes("address")) headerMap.set("address", idx);
-      else if (col.includes("legal") || (col.includes("name") && !col.includes("trade"))) {
+      const clean = col.replace(/[^a-z0-9]/g, "");
+      if (clean.includes("district")) headerMap.set("district", idx);
+      else if (clean.includes("circle")) headerMap.set("circle", idx);
+      else if (clean.includes("tehsil")) headerMap.set("tehsil", idx);
+      else if (clean.includes("locality")) headerMap.set("locality", idx);
+      else if (clean.includes("address")) headerMap.set("address", idx);
+      else if (
+        clean.includes("legalname") ||
+        clean.includes("entityname") ||
+        (clean.includes("legal") && !clean.includes("trade"))
+      ) {
         headerMap.set("legalName", idx);
-      } else if (col.includes("trade") || col.includes("business")) headerMap.set("tradeName", idx);
-      else if (col.includes("id type") || col.includes("identifier type")) {
+      } else if (
+        clean.includes("taxpayername") ||
+        clean.includes("proprietor") ||
+        clean.includes("tradename") ||
+        clean.includes("trade")
+      ) {
+        headerMap.set("tradeName", idx);
+      } else if (clean.includes("identifiertype") || clean.includes("idtype")) {
         headerMap.set("idType", idx);
       } else if (
-        col.includes("id val") ||
-        col.includes("identifier val") ||
-        col === "identifier" ||
-        col === "cnic" ||
-        col === "ntn"
+        clean.includes("identifiervalue") ||
+        clean.includes("idval") ||
+        clean === "identifier" ||
+        clean === "cnic" ||
+        clean === "ntn"
       ) {
         headerMap.set("idVal", idx);
-      } else if (col.includes("cat") || col.includes("class")) {
-        if (col.includes("sub")) headerMap.set("subCode", idx);
-        else headerMap.set("catCode", idx);
+      } else if (clean.includes("statutoryrule") || clean.includes("ruleid")) {
+        headerMap.set("ruleId", idx);
+      } else if (clean.includes("taxclass") || clean.includes("taxassessmentoption")) {
+        headerMap.set("taxClass", idx);
+      } else if (
+        clean.includes("subclass") ||
+        clean.includes("subcode") ||
+        clean.includes("schedulesubclass")
+      ) {
+        headerMap.set("subCode", idx);
+      } else if (
+        clean.includes("cat") ||
+        clean.includes("categorycode") ||
+        clean.includes("primaryclass")
+      ) {
+        headerMap.set("catCode", idx);
+      } else if (clean.includes("division")) {
+        headerMap.set("division", idx);
+      } else if (clean.includes("region")) {
+        headerMap.set("region", idx);
+      } else if (clean.includes("zone")) {
+        headerMap.set("zone", idx);
       }
     });
   }
+
+  // Build existing identifier index (across both potential units and existing registered PFT-3 units)
+  const existingIdIndex = new Map<string, { legalName: string; refNo: string }>();
+  // Build existing circle-scoped legal name index
+  const existingCircleLegalNameIndex = new Map<string, { legalName: string; refNo: string }>();
+
+  for (const u of existingPotentialUnits) {
+    try {
+      const norm = normalizeIdentifier(u.identifierType, u.identifierValue);
+      existingIdIndex.set(norm, { legalName: u.legalName, refNo: u.potentialNumber });
+    } catch {
+      existingIdIndex.set(u.identifierValue.trim(), {
+        legalName: u.legalName,
+        refNo: u.potentialNumber
+      });
+    }
+
+    if (u.legalName && u.circleId) {
+      const normName = normalizeEntityLegalName(u.legalName);
+      existingCircleLegalNameIndex.set(`${u.circleId}:${normName}`, {
+        legalName: u.legalName,
+        refNo: u.potentialNumber
+      });
+    }
+  }
+
+  for (const p of existingPft3Units) {
+    try {
+      const norm = normalizeIdentifier(p.identifierType, p.identifierValue);
+      if (!existingIdIndex.has(norm)) {
+        existingIdIndex.set(norm, {
+          legalName: p.legalName,
+          refNo: p.demandUnit?.permanentDemandNo || p.assessmentNumber || p.id
+        });
+      }
+    } catch {
+      // ignore unparseable historical pins
+    }
+
+    if (p.legalName && p.circleId) {
+      const normName = normalizeEntityLegalName(p.legalName);
+      const circleKey = `${p.circleId}:${normName}`;
+      if (!existingCircleLegalNameIndex.has(circleKey)) {
+        existingCircleLegalNameIndex.set(circleKey, {
+          legalName: p.legalName,
+          refNo: p.demandUnit?.permanentDemandNo || p.assessmentNumber || p.id
+        });
+      }
+    }
+  }
+
+  // Intra-batch duplicate indices
+  const inBatchIdIndex = new Map<string, number>();
+  const inBatchCircleLegalNameIndex = new Map<string, number>();
 
   let currentSequence =
     existingPotentialUnits.reduce((max, u) => {
@@ -965,129 +1108,250 @@ export function importPotentialUnitsCsv(
       return Math.max(max, val);
     }, 0) + 1;
 
-  for (let i = startIndex; i < lines.length; i++) {
-    const line = lines[i]!;
-    const cols = line.split(",").map((c) => c.replace(/^["']|["']$/g, "").trim());
-    if (cols.length < 2) continue;
+  const validatedRows: BulkPotentialValidationRow[] = [];
+  const validUnits: PotentialUnitRecord[] = [];
+  let duplicateCount = 0;
 
-    let legalName: string;
-    let tradeName: string | undefined;
-    let idTypeVal: string;
-    let idVal: string;
-    let catCode: string;
-    let subCode: string | undefined;
-    let address: string;
-    let locality: string;
-    let circleStr: string;
-    let districtStr: string;
+  for (let idx = 0; idx < dataRows.length; idx++) {
+    const cols = dataRows[idx]!;
+    const rowNumber = hasHeaders ? idx + 2 : idx + 1;
+    const errors: string[] = [];
+    const warnings: string[] = [];
 
+    const rowMap: Record<string, string> = {};
     if (hasHeaders && headerMap.size >= 2) {
-      legalName = (headerMap.has("legalName") ? cols[headerMap.get("legalName")!] : cols[0]) || "";
-      idVal = (headerMap.has("idVal") ? cols[headerMap.get("idVal")!] : cols[1]) || "";
-      tradeName = headerMap.has("tradeName") ? cols[headerMap.get("tradeName")!] : undefined;
-      idTypeVal = headerMap.has("idType") ? cols[headerMap.get("idType")!] || "" : "";
-      catCode = (headerMap.has("catCode") ? cols[headerMap.get("catCode")!] : cols[2]) || "1";
-      subCode = headerMap.has("subCode") ? cols[headerMap.get("subCode")!] : cols[3] || undefined;
-      address =
-        (headerMap.has("address") ? cols[headerMap.get("address")!] : cols[4]) ||
-        "Vehari Commercial Area";
-      locality =
-        (headerMap.has("locality") ? cols[headerMap.get("locality")!] : cols[5]) ||
-        "Vehari City Commercial Zone";
-      circleStr =
-        (headerMap.has("circle") ? cols[headerMap.get("circle")!] : "") ||
-        "Vehari Circle I (City / Commercial)";
-      districtStr = (headerMap.has("district") ? cols[headerMap.get("district")!] : "") || "Vehari";
+      for (const [key, colIdx] of headerMap.entries()) {
+        rowMap[key] = (cols[colIdx] ?? "").trim();
+      }
     } else if (cols.length >= 10) {
-      // 10 or 11 column template layout
-      districtStr = cols[0] || "Vehari";
-      circleStr = cols[1] || "Vehari Circle I (City / Commercial)";
-      locality = cols[3] || "Vehari City Commercial Zone";
-      address = cols[4] || "Vehari Commercial Area";
-      legalName = cols[5] || `Establishment ${currentSequence}`;
-      tradeName = cols[6] || undefined;
-      idTypeVal = cols[7] || "";
-      idVal = cols[8] || `36603-${Math.floor(1000000 + Math.random() * 9000000)}-1`;
-      catCode = cols[9] || "1";
-      subCode = cols[10] || undefined;
+      // Standard 10/11-column template:
+      // District, Circle, Tehsil, Locality, Commercial Address, Legal Name, Trade Name, ID Type, ID Val, Cat Code, Sub Code
+      rowMap["district"] = cols[0] || "Vehari";
+      rowMap["circle"] = cols[1] || "Vehari Circle I (City / Commercial)";
+      rowMap["tehsil"] = cols[2] || "Vehari";
+      rowMap["locality"] = cols[3] || "Vehari City Commercial Zone";
+      rowMap["address"] = cols[4] || "Vehari Commercial Area";
+      rowMap["legalName"] = cols[5] || "";
+      rowMap["tradeName"] = cols[6] || "";
+      rowMap["idType"] = cols[7] || "";
+      rowMap["idVal"] = cols[8] || "";
+      rowMap["catCode"] = cols[9] || "1";
+      rowMap["subCode"] = cols[10] || "";
     } else {
       // Legacy positional layout
-      districtStr = "Vehari";
-      circleStr = "Vehari Circle I (City / Commercial)";
-      idTypeVal = "";
-      legalName = cols[0] || `Establishment ${currentSequence}`;
-      idVal = cols[1] || `36603-${Math.floor(1000000 + Math.random() * 9000000)}-1`;
-      catCode = cols[2] || "1";
-      subCode = cols[3] || undefined;
-      address = cols[4] || "Vehari Commercial Area";
-      locality = cols[5] || "Vehari City Commercial Zone";
-      tradeName = cols[7] || undefined;
+      rowMap["legalName"] = cols[0] || "";
+      rowMap["idVal"] = cols[1] || "";
+      rowMap["catCode"] = cols[2] || "1";
+      rowMap["subCode"] = cols[3] || "";
+      rowMap["address"] = cols[4] || "Vehari Commercial Area";
+      rowMap["locality"] = cols[5] || "Vehari City Commercial Zone";
+      rowMap["tradeName"] = cols[7] || "";
+      rowMap["circle"] = cols[6] || "";
     }
 
-    if (!legalName) legalName = `Establishment ${currentSequence}`;
-    if (!idVal) idVal = `36603-${Math.floor(1000000 + Math.random() * 9000000)}-1`;
+    const legalName = rowMap["legalName"] || "";
+    const tradeName = rowMap["tradeName"] || undefined;
+    const idTypeVal = (rowMap["idType"] || "").toUpperCase();
+    const idVal = rowMap["idVal"] || "";
+    const catCode = rowMap["catCode"] || rowMap["ruleId"] || "1";
+    const subCode = rowMap["subCode"] || undefined;
+    const address = rowMap["address"] || "";
+    const locality = rowMap["locality"] || undefined;
+    const circleStr = rowMap["circle"] || undefined;
+    const districtStr = rowMap["district"] || rowMap["zone"] || undefined;
+    const divisionStr = rowMap["division"] || rowMap["region"] || undefined;
 
-    const identifierType: "CNIC" | "NTN" =
-      idTypeVal.toUpperCase() === "NTN" || (!idTypeVal && idVal.includes("-") && idVal.length <= 10)
-        ? "NTN"
-        : "CNIC";
+    // 1. Validate Legal Name
+    if (!legalName) {
+      errors.push("Missing required field: Legal Name");
+    }
 
-    const rule = resolveRule(catCode, subCode);
-    const potNum = `POT-${currentSequence.toString().padStart(4, "0")}`;
-    const pinNumber = formatPotentialPin(
-      `237-00101061102${currentSequence.toString().padStart(4, "0")}-01`
+    // 2. Validate Identifier Value & Infer Type
+    let identifierType: "CNIC" | "NTN" = "CNIC";
+    let normalizedId = "";
+    let maskedId = "";
+
+    if (!idVal && idTypeVal) {
+      errors.push("Identifier Value is required when Identifier Type is supplied");
+    } else if (idVal) {
+      const digitsOnly = idVal.replace(/\D/g, "");
+      if (!idTypeVal || (idTypeVal !== "CNIC" && idTypeVal !== "NTN")) {
+        if (digitsOnly.length === 13) {
+          identifierType = "CNIC";
+        } else if (digitsOnly.length >= 7 && digitsOnly.length <= 8) {
+          identifierType = "NTN";
+        } else {
+          identifierType = "CNIC";
+        }
+      } else {
+        identifierType = idTypeVal as "CNIC" | "NTN";
+      }
+
+      try {
+        normalizedId = normalizeIdentifier(identifierType, idVal);
+        maskedId = maskIdentifier(identifierType, normalizedId);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`Invalid ${identifierType}: ${msg}`);
+      }
+    }
+
+    // 3. Validate Commercial Address
+    if (!address) {
+      errors.push("Missing required field: Commercial Address");
+    }
+
+    // 4. Role & Jurisdiction Boundary Enforcement
+    const jurisResult = validateOfficerImportJurisdiction(
+      officer,
+      circleStr,
+      districtStr,
+      divisionStr
     );
+    if (!jurisResult.allowed && jurisResult.error) {
+      errors.push(jurisResult.error);
+    }
+    const resolvedCircle = jurisResult.resolvedCircle ?? DISTRICT_VEHARI_CIRCLES[0]!;
+    const resolvedDistrict = jurisResult.resolvedDistrict;
 
-    // Resolve authoritative circle and circleId
-    let circleName = "Vehari Circle I (City / Commercial)";
-    let circleId = "00000000-0000-4000-8000-000000000004";
-    const lowerCircle = circleStr.toLowerCase();
-    if (lowerCircle.includes("burewala")) {
-      circleName = "Burewala Circle";
-      circleId = "00000000-0000-4000-8000-000000000003";
-    } else if (lowerCircle.includes("mailsi")) {
-      circleName = "Mailsi Circle";
-      circleId = "00000000-0000-4000-8000-000000000002";
-    } else if (
-      lowerCircle.includes("circle ii") ||
-      lowerCircle.includes("circle 2") ||
-      lowerCircle.includes("grain")
-    ) {
-      circleName = "Vehari Circle II (Grain Market / Rural)";
-      circleId = "00000000-0000-4000-8000-000000000005";
+    // 5. Validate and Resolve Statutory Rule
+    const rule = resolveRule(catCode, subCode);
+
+    // 6. Duplicate Identifier Checks
+    if (normalizedId) {
+      const seenRow = inBatchIdIndex.get(normalizedId);
+      if (seenRow !== undefined) {
+        errors.push(
+          `Duplicate identifier in upload file: ${identifierType} (${maskedId}) already appeared on row ${seenRow}`
+        );
+        duplicateCount++;
+      } else {
+        inBatchIdIndex.set(normalizedId, rowNumber);
+      }
+
+      const existing = existingIdIndex.get(normalizedId);
+      if (existing) {
+        errors.push(
+          `Already registered: ${identifierType} (${maskedId}) exists for "${existing.legalName}" (${existing.refNo})`
+        );
+        duplicateCount++;
+      }
     }
 
-    importedUnits.push({
-      id: `pot-import-${Date.now()}-${currentSequence}`,
-      potentialNumber: potNum,
-      pinNumber,
-      provincialUin: pinNumber,
-      legalName,
-      tradeName,
-      identifierType,
-      identifierValue: idVal,
-      address,
-      locality,
-      circleId,
-      circleName,
-      districtName: districtStr || "Vehari",
-      categoryCode: rule.category_code,
-      categoryName: rule.category,
-      subclassificationCode: rule.subclassification_code,
-      subclassificationName: rule.subcategory,
-      statutoryTertiaryCode: rule.statutory_tertiary_code,
-      statutoryTertiaryClassification: rule.statutory_tertiary_classification,
-      statutoryRuleId: rule.rule_id,
-      statutoryRule: rule,
-      annualRatePkr: rule.annual_rate_pkr ?? 4000,
-      openingArrears: 0,
-      status: "ACTIVE",
-      createdAt: new Date().toISOString(),
-      createdBy: officerName
-    });
+    // 7. Circle-scoped Legal Name Duplication Check
+    // Duplication rules: already existing legal names in that circle must be discarded by flagging them
+    if (legalName && resolvedCircle) {
+      const normLegal = normalizeEntityLegalName(legalName);
+      const circleKey = `${resolvedCircle.id}:${normLegal}`;
 
-    currentSequence++;
+      const seenCircleRow = inBatchCircleLegalNameIndex.get(circleKey);
+      if (seenCircleRow !== undefined) {
+        errors.push(
+          `Duplicate legal name in upload file: Legal name "${legalName}" already appeared on row ${seenCircleRow} for circle "${resolvedCircle.name}". Discarded per circle duplication rules.`
+        );
+        duplicateCount++;
+      } else {
+        inBatchCircleLegalNameIndex.set(circleKey, rowNumber);
+      }
+
+      const existingInCircle = existingCircleLegalNameIndex.get(circleKey);
+      if (existingInCircle) {
+        errors.push(
+          `Duplicate legal name: Legal name "${legalName}" already exists in circle "${resolvedCircle.name}" (Record: ${existingInCircle.refNo}). Discarded per circle duplication rules.`
+        );
+        duplicateCount++;
+      }
+    }
+
+    const isValid = errors.length === 0;
+
+    let parsedUnit: PotentialUnitRecord | undefined;
+    if (isValid) {
+      const potNum = `POT-${currentSequence.toString().padStart(4, "0")}`;
+      const pinNumber = formatPotentialPin(
+        `237-00101061102${currentSequence.toString().padStart(4, "0")}-01`
+      );
+
+      parsedUnit = {
+        id: `pot-import-${Date.now()}-${currentSequence}`,
+        potentialNumber: potNum,
+        pinNumber,
+        provincialUin: pinNumber,
+        legalName,
+        tradeName,
+        identifierType,
+        identifierValue: idVal || `${Math.floor(1000000 + Math.random() * 9000000)}`,
+        address,
+        locality: locality || "Vehari City Commercial Zone",
+        circleId: resolvedCircle.id,
+        circleName: resolvedCircle.name,
+        districtName: resolvedDistrict || "Vehari",
+        categoryCode: rule.category_code,
+        categoryName: rule.category,
+        subclassificationCode: rule.subclassification_code,
+        subclassificationName: rule.subcategory,
+        statutoryTertiaryCode: rule.statutory_tertiary_code,
+        statutoryTertiaryClassification: rule.statutory_tertiary_classification,
+        statutoryRuleId: rule.rule_id,
+        statutoryRule: rule,
+        annualRatePkr: rule.annual_rate_pkr ?? 4000,
+        openingArrears: 0, // Potential register strictly has no arrears
+        status: "ACTIVE", // Immediately operational and active upon import
+        createdAt: new Date().toISOString(),
+        createdBy: officerName
+      };
+
+      validUnits.push(parsedUnit);
+      currentSequence++;
+    }
+
+    validatedRows.push({
+      rowNumber,
+      rawData: rowMap,
+      status: isValid ? "VALID" : "ERROR",
+      errors,
+      warnings,
+      parsedUnit
+    });
   }
 
-  return { importedUnits, errors };
+  const validRowsCount = validatedRows.filter((r) => r.status === "VALID").length;
+  const errorRowsCount = validatedRows.filter((r) => r.status === "ERROR").length;
+
+  return {
+    totalRows: dataRows.length,
+    validRowsCount,
+    errorRowsCount,
+    duplicateCount,
+    rows: validatedRows,
+    validUnits
+  };
+}
+
+/**
+ * Parse and import potential units from CSV or structured text.
+ * Requires no ETO approval; Inspector or ETO can immediately import into the Potential Register.
+ * Backwards-compatible wrapper around parseBulkPotentialUnits.
+ */
+export function importPotentialUnitsCsv(
+  csvContent: string,
+  existingPotentialUnits: readonly PotentialUnitRecord[],
+  officerNameOrOfficer: string | MockOfficer = "Inspector Field Survey",
+  existingPft3Units: readonly StoredUnit[] = []
+): {
+  importedUnits: PotentialUnitRecord[];
+  errors: string[];
+} {
+  const result = parseBulkPotentialUnits(
+    csvContent,
+    existingPotentialUnits,
+    officerNameOrOfficer,
+    existingPft3Units
+  );
+  const errors = result.rows.filter((r) => r.status === "ERROR").flatMap((r) => r.errors);
+
+  return {
+    importedUnits: [...result.validUnits],
+    errors
+  };
 }

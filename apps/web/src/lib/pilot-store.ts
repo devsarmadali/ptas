@@ -113,6 +113,7 @@ export interface StoredUnit {
     "ACTIVE" | "PENDING_INSPECTION" | "INSPECTED" | "DISCONTINUED" | undefined;
   readonly discontinuanceDate?: string | undefined;
   readonly discontinuanceReason?: string | undefined;
+  readonly rowVersion?: number | undefined;
   readonly createdAt: string;
 }
 
@@ -405,6 +406,8 @@ export interface Pft2ChallanRecord {
   readonly paymentChannel?: string | undefined;
   readonly isProvisional?: boolean | undefined;
   readonly potentialNumber?: string | undefined;
+  readonly district?: string | undefined;
+  readonly bankBranch?: string | undefined;
   readonly officialSha256: string;
   readonly qrPayload: string;
 }
@@ -423,6 +426,7 @@ export interface StatutoryReceiptRecord {
   readonly identifierType: string;
   readonly identifierValue: string;
   readonly address: string;
+  readonly district?: string | undefined;
   readonly statutoryCategory: string;
   readonly subclassificationCode: string | null;
   readonly statutoryTertiaryCode?: string | null;

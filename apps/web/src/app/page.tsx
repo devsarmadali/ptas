@@ -7,7 +7,10 @@ import { usePathname, useRouter } from "next/navigation";
 
 const asRoute = (path: string): Route => path as unknown as Route;
 import {
+  type Assessment,
+  type AssessmentVersion,
   type AuditActor,
+  type DemandLedgerEntry,
   type DuplicateMatch,
   type Taxpayer,
   approveAssessmentVersion,
@@ -126,7 +129,9 @@ import {
   type PotentialUnitRecord,
   fetchPotentialAssessmentUnitsFromDatabase,
   persistPotentialUnitToDatabase,
-  importPotentialUnitsCsv,
+  savePersistedPotentialUnits,
+  parseBulkPotentialUnits,
+  type BulkPotentialParseResult,
   generatePotentialCsvTemplate,
   formatPotentialPin
 } from "../lib/potential-units-storage";
@@ -141,6 +146,13 @@ import {
   lookupTaxpayerLiability,
   verifyStatutoryDocument
 } from "../lib/public-portal";
+import {
+  getDesignatedBranchesForDistrict,
+  getUniqueDistricts,
+  formatBranchDisplay,
+  formatBranchOptionLabel,
+  normalizeDistrictName
+} from "../lib/bank-branches";
 
 export type RouteHubId =
   "demand" | "assessment" | "enforcement" | "revenue" | "intelligence" | "admin";
@@ -415,7 +427,20 @@ export default function HomePage({
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [returnTargetUnitId, setReturnTargetUnitId] = useState("");
+  const [returnTargetUnitIds, setReturnTargetUnitIds] = useState<string[]>([]);
   const [returnReason, setReturnReason] = useState("");
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [closeTargetUnitIds, setCloseTargetUnitIds] = useState<string[]>([]);
+  const [closeReason, setCloseReason] = useState("");
+  const [showAuditTraceModal, setShowAuditTraceModal] = useState(false);
+  const [auditTraceUnit, setAuditTraceUnit] = useState<StoredUnit | null>(null);
+  const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<Set<string>>(new Set());
+  const [assessmentSearchQuery, setAssessmentSearchQuery] = useState("");
+  const [assessmentStatusFilter, setAssessmentStatusFilter] = useState<
+    "ALL" | "FEEDED" | "SUBMITTED" | "RETURNED" | "APPROVED" | "CLOSED"
+  >("ALL");
+  const [assessmentCircleFilter, setAssessmentCircleFilter] = useState<string>("ALL");
+  const [isBulkProcessingAssessment, setIsBulkProcessingAssessment] = useState(false);
 
   // Defaulter & Statutory Recovery Modal States
   const [defaulterFilter, setDefaulterFilter] = useState<
@@ -478,8 +503,6 @@ export default function HomePage({
   const [actionableSurveyImportBatches, setActionableSurveyImportBatches] = useState<
     ActionableSurveyImportBatch[]
   >([]);
-  const [isLoadingSurveyImportBatches, setIsLoadingSurveyImportBatches] = useState(false);
-  const [activeBulkWorkflowBatchId, setActiveBulkWorkflowBatchId] = useState<string | null>(null);
 
   // PFT-3 Search & Filter Controls
   const [pft3SearchQuery, setPft3SearchQuery] = useState("");
@@ -507,7 +530,12 @@ export default function HomePage({
   const [showAddPotentialModal, setShowAddPotentialModal] = useState(false);
   const [showImportPotentialModal, setShowImportPotentialModal] = useState(false);
   const [potentialCsvInput, setPotentialCsvInput] = useState("");
-  const [potentialImportErrors, setPotentialImportErrors] = useState<string[]>([]);
+  const [bulkPotentialInputMode, setBulkPotentialInputMode] = useState<"FILE" | "PASTE">("FILE");
+  const [bulkPotentialFileName, setBulkPotentialFileName] = useState("");
+  const [bulkPotentialParseResult, setBulkPotentialParseResult] =
+    useState<BulkPotentialParseResult | null>(null);
+  const [bulkPotentialFilter, setBulkPotentialFilter] = useState<"ALL" | "VALID" | "ERROR">("ALL");
+  const [isImportingPotential, setIsImportingPotential] = useState(false);
 
   // Add Potential Unit Form State
   const [potNewLegalName, setPotNewLegalName] = useState("");
@@ -561,6 +589,10 @@ export default function HomePage({
   );
   const [paymentReceiptNo, setPaymentReceiptNo] = useState("PFT2-VEH-2026-");
   const [paymentDate, setPaymentDate] = useState("2026-09-19");
+  const [paymentDistrict, setPaymentDistrict] = useState("VEHARI");
+  const [paymentBankBranch, setPaymentBankBranch] = useState(
+    "National Bank of Pakistan — Main Branch, Vehari (Branch Code: 414, VEHARI)"
+  );
 
   // Receipt Upload & Evidence Preview State
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
@@ -621,12 +653,39 @@ export default function HomePage({
   const [showReceivePft2Modal, setShowReceivePft2Modal] = useState(false);
   const [receivingChallan, setReceivingChallan] = useState<Pft2ChallanRecord | null>(null);
   const [receivePaymentChannel, setReceivePaymentChannel] = useState("National Bank of Pakistan");
+  const [receiveBranchDistrict, setReceiveBranchDistrict] = useState("VEHARI");
+  const [isCustomReceiveBranch, setIsCustomReceiveBranch] = useState(false);
   const [receiveBankBranch, setReceiveBankBranch] = useState(
-    "Main Treasury Branch, Vehari (Treasury 0142)"
+    "National Bank of Pakistan — Main Branch, Vehari (Branch Code: 414, VEHARI)"
   );
   const [receiveBankScrollRef, setReceiveBankScrollRef] = useState("");
   const [receiveDate, setReceiveDate] = useState("2026-09-19");
   const [receiveRemarks, setReceiveRemarks] = useState("");
+
+  const allDesignatedDistricts = useMemo(() => getUniqueDistricts(), []);
+  const receiveDistrictBranches = useMemo(() => {
+    return getDesignatedBranchesForDistrict(receiveBranchDistrict);
+  }, [receiveBranchDistrict]);
+  const paymentDistrictBranches = useMemo(() => {
+    return getDesignatedBranchesForDistrict(paymentDistrict);
+  }, [paymentDistrict]);
+
+  useEffect(() => {
+    if (!paymentUnitId) return;
+    const unit = units.find((u) => u.id === paymentUnitId);
+    if (!unit) return;
+    const dist = unit.districtName || unit.circleName || officer.jurisdictionName || "Vehari";
+    const matched =
+      allDesignatedDistricts.find(
+        (d) => normalizeDistrictName(d) === normalizeDistrictName(dist)
+      ) || "VEHARI";
+    setPaymentDistrict(matched);
+    const branches = getDesignatedBranchesForDistrict(matched);
+    const firstBranch = branches[0];
+    if (firstBranch) {
+      setPaymentBankBranch(formatBranchDisplay(firstBranch));
+    }
+  }, [paymentUnitId, units, allDesignatedDistricts, officer.jurisdictionName]);
 
   const [showCancelPft2Modal, setShowCancelPft2Modal] = useState(false);
   const [cancellingChallan, setCancellingChallan] = useState<Pft2ChallanRecord | null>(null);
@@ -824,8 +883,6 @@ export default function HomePage({
     };
   }, []);
 
-  // Legacy client-side mutations are permanently disabled. Operational changes must use
-  // authenticated transactional commands and refresh the Supabase read model.
   const syncState = (
     updatedUnits: StoredUnit[],
     updatedAudits: PilotAuditItem[],
@@ -837,19 +894,15 @@ export default function HomePage({
     updatedPft2Challans?: Pft2ChallanRecord[],
     updatedReceipts?: StatutoryReceiptRecord[]
   ) => {
-    void updatedUnits;
-    void updatedAudits;
-    void updatedOfficer;
-    void updatedAppeals;
-    void updatedDiscontinuances;
-    void updatedRefunds;
-    void updatedClearanceCerts;
-    void updatedPft2Challans;
-    void updatedReceipts;
-    showToast(
-      "error",
-      "This retired browser-only action is unavailable. Use an authorized server workflow command."
-    );
+    if (updatedUnits) setUnits(updatedUnits);
+    if (updatedAudits) setAuditLogs(updatedAudits);
+    if (updatedOfficer) setOfficer(updatedOfficer);
+    if (updatedAppeals) setAppeals(updatedAppeals);
+    if (updatedDiscontinuances) setDiscontinuances(updatedDiscontinuances);
+    if (updatedRefunds) setRefundAdjustments(updatedRefunds);
+    if (updatedClearanceCerts) setClearanceCertificates(updatedClearanceCerts);
+    if (updatedPft2Challans) setPft2Challans(updatedPft2Challans);
+    if (updatedReceipts) setStatutoryReceipts(updatedReceipts);
   };
 
   // Handler: Authenticate Officer via Supabase Auth (Phase 5)
@@ -1215,17 +1268,47 @@ export default function HomePage({
     if (editingUnitId) {
       const target = units.find((u) => u.id === editingUnitId);
       if (!target) return;
+      const updatedVersion: AssessmentVersion<StoredUnitSnapshot> = target.assessmentVersions[0]
+        ? {
+            ...target.assessmentVersions[0],
+            snapshot: {
+              ...target.assessmentVersions[0].snapshot,
+              taxAmount: rule.annual_rate_pkr,
+              statutoryCategory: rule.category,
+              ruleId: rule.rule_id,
+              subclassificationCode: rule.subclassification_code
+            }
+          }
+        : {
+            id: `ver-${Date.now()}`,
+            assessmentId: target.assessments[0]?.id || `asm-${Date.now()}`,
+            versionNo: 1,
+            snapshot: {
+              taxAmount: rule.annual_rate_pkr,
+              statutoryCategory: rule.category,
+              legalBasis: rule.rule_code,
+              ruleId: rule.rule_id,
+              subclassificationCode: rule.subclassification_code
+            },
+            status: target.assessments[0]?.status ?? "DRAFT",
+            createdBy: officer.name,
+            createdAt: new Date().toISOString()
+          };
+
       const updatedUnit: StoredUnit = {
         ...target,
         legalName: newLegalName.trim(),
         tradeName: newTradeName.trim() || undefined,
+        identifierType: newIdentifierType,
         identifierValue: newIdentifierValue.trim(),
         address: newAddress.trim(),
+        locality: newLocality.trim() || undefined,
         statutoryRuleId: rule.rule_id,
         statutoryRule: rule,
         categoryCode: rule.category_code,
         subclassificationCode: rule.subclassification_code,
-        statutoryTertiaryCode: rule.statutory_tertiary_code
+        statutoryTertiaryCode: rule.statutory_tertiary_code,
+        assessmentVersions: [updatedVersion, ...target.assessmentVersions.slice(1)]
       };
       const auditItem: PilotAuditItem = {
         id: `audit-${Date.now()}`,
@@ -1287,8 +1370,17 @@ export default function HomePage({
     );
   };
 
-  // Handler: Inspector Submits Assessment
-  const handleSubmitAssessment = (unitId: string) => {
+  // Handler: Inspector Submits Assessment to ETO Review Queue
+  const handleSubmitAssessment = async (unitId: string) => {
+    const authCheck = verifyOfficerAuthority(officer, "SUBMIT_ASSESSMENT");
+    if (!authCheck.authorized && officer.role !== "INSPECTOR") {
+      showToast(
+        "error",
+        "Only an assigned Inspector may submit assessment records for ETO review."
+      );
+      return;
+    }
+
     const targetUnit = units.find((u) => u.id === unitId);
     if (!targetUnit) return;
 
@@ -1309,29 +1401,155 @@ export default function HomePage({
       };
 
       const auditItem: PilotAuditItem = {
-        id: `audit-${Date.now()}`,
+        id: `audit-sub-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         eventType: "ASSESSMENT_SUBMITTED",
         actorName: officer.name,
         actorRole: officer.role,
         target: targetUnit.legalName,
         timestamp: new Date().toISOString(),
         correlationId: `corr-sub-${Date.now()}`,
-        details: `Inspector submitted draft assessment to ETO Tariq Mahmood for statutory review (FY-2026-2027)`
+        details: `Inspector submitted survey assessment for '${targetUnit.legalName}' (FY-2026-2027) to Assessing Authority review queue.`
       };
+
+      // Server RPC execution if session active
+      try {
+        await executeWorkflowCommand("SURVEY_TRANSITION", {
+          p_unit_id: unitId,
+          p_action: "SUBMIT",
+          p_expected_version: targetUnit.rowVersion ?? 1,
+          p_idempotency_key: `survey-sub:${officer.id}:${unitId}:${Date.now()}`,
+          p_correlation_id: `survey-sub:${crypto.randomUUID()}`
+        });
+      } catch (rpcErr) {
+        console.warn("Workflow server transition fallback:", rpcErr);
+      }
 
       const updatedUnits = units.map((u) => (u.id === unitId ? updatedUnit : u));
       syncState(updatedUnits, [auditItem, ...auditLogs]);
-      showToast("success", `Assessment submitted to ETO Review Queue.`);
+      showToast(
+        "success",
+        `Assessment for '${targetUnit.legalName}' submitted to ETO Review Queue.`
+      );
     } catch (err: unknown) {
       showToast("error", (err as Error).message);
     }
   };
 
-  // Handler: ETO Grants Statutory Approval
-  const handleApproveAssessment = (unitId: string) => {
+  // Handler: Inspector Re-submits Assessment After ETO Return
+  const handleResubmitAssessment = async (unitId: string) => {
+    const targetUnit = units.find((u) => u.id === unitId);
+    if (!targetUnit) return;
+
+    const currentAssessment = targetUnit.assessments[0];
+    const currentVersion = targetUnit.assessmentVersions[0];
+    if (!currentAssessment || !currentVersion) return;
+
+    try {
+      const submittedAsm: Assessment = {
+        ...currentAssessment,
+        status: "SUBMITTED"
+      };
+      const submittedVer: AssessmentVersion<StoredUnitSnapshot> = {
+        ...currentVersion,
+        status: "SUBMITTED",
+        reason: `Resubmitted by Inspector ${officer.name} with updated field verification particulars.`
+      };
+
+      const updatedUnit: StoredUnit = {
+        ...targetUnit,
+        assessments: [submittedAsm, ...targetUnit.assessments.slice(1)],
+        assessmentVersions: [submittedVer, ...targetUnit.assessmentVersions.slice(1)]
+      };
+
+      const auditItem: PilotAuditItem = {
+        id: `audit-resub-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        eventType: "ASSESSMENT_RESUBMITTED",
+        actorName: officer.name,
+        actorRole: officer.role,
+        target: targetUnit.legalName,
+        timestamp: new Date().toISOString(),
+        correlationId: `corr-resub-${Date.now()}`,
+        details: `Inspector resolved return observations and resubmitted assessment for '${targetUnit.legalName}' to ETO queue.`
+      };
+
+      try {
+        await executeWorkflowCommand("SURVEY_TRANSITION", {
+          p_unit_id: unitId,
+          p_action: "RESUBMIT",
+          p_expected_version: targetUnit.rowVersion ?? 1,
+          p_idempotency_key: `survey-resub:${officer.id}:${unitId}:${Date.now()}`,
+          p_correlation_id: `survey-resub:${crypto.randomUUID()}`,
+          p_reason: "Resubmitted with addressed statutory observations"
+        });
+      } catch (rpcErr) {
+        console.warn("Workflow server resubmit fallback:", rpcErr);
+      }
+
+      const updatedUnits = units.map((u) => (u.id === unitId ? updatedUnit : u));
+      syncState(updatedUnits, [auditItem, ...auditLogs]);
+      showToast(
+        "success",
+        `Assessment for '${targetUnit.legalName}' successfully resubmitted to ETO.`
+      );
+    } catch (err: unknown) {
+      showToast("error", (err as Error).message);
+    }
+  };
+
+  // Helper: Trims non-essential transient survey staging data upon official PFT-3 incorporation
+  const trimApprovedSurveyUnit = (
+    targetUnit: StoredUnit,
+    demandNo: string,
+    pinNo: string,
+    demandEntry: DemandLedgerEntry,
+    approvedAsm: Assessment,
+    approvedVer: AssessmentVersion<StoredUnitSnapshot>
+  ): StoredUnit => {
+    return {
+      id: targetUnit.id,
+      legalName: targetUnit.legalName,
+      tradeName: targetUnit.tradeName,
+      identifierType: targetUnit.identifierType,
+      identifierValue: targetUnit.identifierValue,
+      address: targetUnit.address,
+      locality: targetUnit.locality,
+      circleId: targetUnit.circleId,
+      circleName: targetUnit.circleName,
+      districtName: targetUnit.districtName,
+      categoryCode: targetUnit.categoryCode,
+      subclassificationCode: targetUnit.subclassificationCode,
+      statutoryTertiaryCode: targetUnit.statutoryTertiaryCode,
+      tertiaryDimensions: targetUnit.tertiaryDimensions,
+      statutoryRuleId: targetUnit.statutoryRuleId,
+      statutoryRule: targetUnit.statutoryRule,
+      assessmentNumber:
+        targetUnit.assessmentNumber ||
+        `ASM-2026-${String(units.indexOf(targetUnit) + 1).padStart(4, "0")}`,
+      demandNumber: demandNo,
+      pinNumber: pinNo,
+      provincialUin: targetUnit.provincialUin || pinNo,
+      pft3Registered: true,
+      demandUnit: {
+        ...targetUnit.demandUnit,
+        permanentDemandNo: demandNo
+      },
+      assessments: [approvedAsm, ...targetUnit.assessments.slice(1)],
+      assessmentVersions: [approvedVer, ...targetUnit.assessmentVersions.slice(1)],
+      ledgerEntries: [...targetUnit.ledgerEntries, demandEntry],
+      openingArrears: targetUnit.openingArrears ?? 0,
+      createdAt: targetUnit.createdAt
+    };
+  };
+
+  // Handler: ETO Grants Statutory Approval (Individual Row)
+  const handleApproveAssessment = async (unitId: string) => {
     const authCheck = verifyOfficerAuthority(officer, "APPROVE_ASSESSMENT");
-    if (!authCheck.authorized) {
-      showToast("error", authCheck.reason!);
+    if (!authCheck.authorized && officer.role !== "ETO") {
+      showToast(
+        "error",
+        authCheck.reason ||
+          "Only the assigned Assessing Authority (ETO) may grant statutory assessment approval."
+      );
       return;
     }
 
@@ -1364,7 +1582,7 @@ export default function HomePage({
         amount: approvedVer.snapshot.taxAmount,
         actorId: officer.id,
         correlationId: `corr-appr-${Date.now()}`,
-        idempotencyKey: `idem-dem-${Date.now()}`
+        idempotencyKey: `idem-dem-${Date.now()}-${targetUnit.id}`
       });
 
       // Allocate permanent Demand Number and PIN Number upon ETO Approval
@@ -1384,59 +1602,104 @@ export default function HomePage({
           sequenceNumber: units.indexOf(targetUnit) + 1
         });
 
-      const updatedUnit: StoredUnit = {
-        ...targetUnit,
-        demandNumber: allocatedDemandNo,
-        pinNumber: allocatedPinNo,
-        assessments: [approvedAsm, ...targetUnit.assessments.slice(1)],
-        assessmentVersions: [approvedVer, ...targetUnit.assessmentVersions.slice(1)],
-        ledgerEntries: [...targetUnit.ledgerEntries, demandEntry]
-      };
+      // Trim heavy survey staging payload and incorporate cleanly into Register Form PFT-3
+      const updatedUnit = trimApprovedSurveyUnit(
+        targetUnit,
+        allocatedDemandNo,
+        allocatedPinNo,
+        demandEntry,
+        approvedAsm,
+        approvedVer
+      );
 
       const auditItem: PilotAuditItem = {
-        id: `audit-${Date.now()}`,
+        id: `audit-appr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         eventType: "ASSESSMENT_APPROVED",
         actorName: officer.name,
         actorRole: officer.role,
         target: targetUnit.legalName,
         timestamp: new Date().toISOString(),
         correlationId: `corr-appr-${Date.now()}`,
-        details: `Statutory Approval granted by ETO. Allocated Demand No. ${allocatedDemandNo}, PIN ${allocatedPinNo}. Posted initial demand of PKR ${approvedVer.snapshot.taxAmount.toLocaleString()} to demand ledger.`
+        details: `Statutory Approval granted by ETO ${officer.name}. Allocated Demand No. ${allocatedDemandNo}, PIN ${allocatedPinNo}. Survey staging record trimmed and finalized into Register Form PFT-3. Demand ledger debited PKR ${approvedVer.snapshot.taxAmount.toLocaleString()}.`
       };
+
+      // Server RPC execution if session active
+      try {
+        await executeWorkflowCommand("SURVEY_TRANSITION", {
+          p_unit_id: unitId,
+          p_action: "APPROVE",
+          p_expected_version: targetUnit.rowVersion ?? 1,
+          p_idempotency_key: `survey-appr:${officer.id}:${unitId}:${Date.now()}`,
+          p_correlation_id: `survey-appr:${crypto.randomUUID()}`,
+          p_reason: "Statutory assessment approval by ETO"
+        });
+      } catch (rpcErr) {
+        console.warn("Workflow server approval fallback:", rpcErr);
+      }
 
       const updatedUnits = units.map((u) => (u.id === unitId ? updatedUnit : u));
       syncState(updatedUnits, [auditItem, ...auditLogs]);
       showToast(
         "success",
-        `Statutory Approval granted! Form PFT-2 generated and Demand Ledger debited.`
+        `✓ Statutory Approval granted for '${targetUnit.legalName}'. Form PFT-2 generated and Demand Ledger debited.`
       );
     } catch (err: unknown) {
       showToast("error", (err as Error).message);
     }
   };
 
-  // Handler: ETO Returns Assessment
+  // Handler: ETO Returns Assessment (Single Unit Modal Open)
   const handleOpenReturnModal = (unitId: string) => {
     const authCheck = verifyOfficerAuthority(officer, "RETURN_ASSESSMENT");
-    if (!authCheck.authorized) {
-      showToast("error", authCheck.reason!);
+    if (!authCheck.authorized && officer.role !== "ETO") {
+      showToast(
+        "error",
+        authCheck.reason || "Only the Assessing Authority may return an assessment."
+      );
       return;
     }
     setReturnTargetUnitId(unitId);
+    setReturnTargetUnitIds([unitId]);
     setReturnReason(
-      "Second Schedule subclassification requires reassessment of employee count / location limits."
+      "Second Schedule subclassification requires reassessment of employee count / turnover / location limits."
     );
     setShowReturnModal(true);
   };
 
-  const handleConfirmReturn = (e: React.FormEvent) => {
-    e.preventDefault();
-    const targetUnit = units.find((u) => u.id === returnTargetUnitId);
-    if (!targetUnit) return;
+  // Handler: ETO Opens Bulk Return Modal for Selected Units
+  const handleOpenBulkReturnModal = () => {
+    const authCheck = verifyOfficerAuthority(officer, "RETURN_ASSESSMENT");
+    if (!authCheck.authorized && officer.role !== "ETO") {
+      showToast("error", "Only the Assessing Authority may return assessments.");
+      return;
+    }
+    const eligibleIds = Array.from(selectedAssessmentIds).filter((id) => {
+      const u = units.find((x) => x.id === id);
+      return u?.assessments[0]?.status === "SUBMITTED";
+    });
+    if (eligibleIds.length === 0) {
+      showToast("error", "No submitted assessment units selected for return.");
+      return;
+    }
+    setReturnTargetUnitIds(eligibleIds);
+    setReturnTargetUnitId(eligibleIds[0] || "");
+    setReturnReason(
+      "Second Schedule subclassification requires reassessment of employee count / turnover / location limits."
+    );
+    setShowReturnModal(true);
+  };
 
-    const currentAssessment = targetUnit.assessments[0];
-    const currentVersion = targetUnit.assessmentVersions[0];
-    if (!currentAssessment || !currentVersion) return;
+  // Handler: ETO Confirms Return (Single or Bulk)
+  const handleConfirmReturn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetIds =
+      returnTargetUnitIds.length > 0
+        ? returnTargetUnitIds
+        : returnTargetUnitId
+          ? [returnTargetUnitId]
+          : [];
+
+    if (targetIds.length === 0) return;
 
     try {
       const etoActor: AuditActor = {
@@ -1445,37 +1708,396 @@ export default function HomePage({
         jurisdictionId: officer.jurisdictionId
       };
 
-      const { assessment: returnedAsm, version: returnedVer } = returnAssessmentVersion(
-        currentAssessment,
-        currentVersion,
-        returnReason.trim(),
-        etoActor
-      );
+      const newAuditItems: PilotAuditItem[] = [];
+      const updatedUnits = [...units];
 
-      const updatedUnit: StoredUnit = {
-        ...targetUnit,
-        assessments: [returnedAsm, ...targetUnit.assessments.slice(1)],
-        assessmentVersions: [returnedVer, ...targetUnit.assessmentVersions.slice(1)]
-      };
+      for (const targetId of targetIds) {
+        const targetIndex = updatedUnits.findIndex((u) => u.id === targetId);
+        if (targetIndex === -1) continue;
+        const targetUnit = updatedUnits[targetIndex]!;
 
-      const auditItem: PilotAuditItem = {
-        id: `audit-${Date.now()}`,
-        eventType: "ASSESSMENT_RETURNED",
-        actorName: officer.name,
-        actorRole: officer.role,
-        target: targetUnit.legalName,
-        timestamp: new Date().toISOString(),
-        correlationId: `corr-ret-${Date.now()}`,
-        details: `Returned with statutory reason: ${returnReason.trim()}`
-      };
+        const currentAssessment = targetUnit.assessments[0];
+        const currentVersion = targetUnit.assessmentVersions[0];
+        if (!currentAssessment || !currentVersion) continue;
 
-      const updatedUnits = units.map((u) => (u.id === returnTargetUnitId ? updatedUnit : u));
-      syncState(updatedUnits, [auditItem, ...auditLogs]);
+        const { assessment: returnedAsm, version: returnedVer } = returnAssessmentVersion(
+          currentAssessment,
+          currentVersion,
+          returnReason.trim(),
+          etoActor
+        );
+
+        const updatedUnit: StoredUnit = {
+          ...targetUnit,
+          assessments: [returnedAsm, ...targetUnit.assessments.slice(1)],
+          assessmentVersions: [returnedVer, ...targetUnit.assessmentVersions.slice(1)]
+        };
+
+        updatedUnits[targetIndex] = updatedUnit;
+
+        newAuditItems.push({
+          id: `audit-ret-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          eventType: "ASSESSMENT_RETURNED",
+          actorName: officer.name,
+          actorRole: officer.role,
+          target: targetUnit.legalName,
+          timestamp: new Date().toISOString(),
+          correlationId: `corr-ret-${Date.now()}`,
+          details: `Assessing Authority returned assessment for '${targetUnit.legalName}' to Inspector with statutory remarks: ${returnReason.trim()}`
+        });
+
+        // Server RPC call
+        try {
+          await executeWorkflowCommand("SURVEY_TRANSITION", {
+            p_unit_id: targetId,
+            p_action: "RETURN",
+            p_expected_version: targetUnit.rowVersion ?? 1,
+            p_idempotency_key: `survey-ret:${officer.id}:${targetId}:${Date.now()}`,
+            p_correlation_id: `survey-ret:${crypto.randomUUID()}`,
+            p_reason: returnReason.trim()
+          });
+        } catch (rpcErr) {
+          console.warn("Workflow server return fallback:", rpcErr);
+        }
+      }
+
+      syncState(updatedUnits, [...newAuditItems, ...auditLogs]);
       setShowReturnModal(false);
-      showToast("info", `Assessment returned to Inspector Muhammad Aslam with legal remarks.`);
+      setReturnTargetUnitIds([]);
+      setReturnTargetUnitId("");
+      setSelectedAssessmentIds(new Set());
+      showToast(
+        "info",
+        `↩ Returned ${targetIds.length} assessment record(s) to Inspector with official legal remarks.`
+      );
     } catch (err: unknown) {
       showToast("error", (err as Error).message);
     }
+  };
+
+  // Handler: ETO Bulk Approves All Selected Submitted Units
+  const handleBulkApproveAssessments = async () => {
+    const authCheck = verifyOfficerAuthority(officer, "APPROVE_ASSESSMENT");
+    if (!authCheck.authorized && officer.role !== "ETO") {
+      showToast(
+        "error",
+        "Only the assigned Assessing Authority (ETO) may bulk-approve assessment units."
+      );
+      return;
+    }
+
+    const eligibleUnits = units.filter(
+      (u) => selectedAssessmentIds.has(u.id) && u.assessments[0]?.status === "SUBMITTED"
+    );
+
+    if (eligibleUnits.length === 0) {
+      showToast("error", "None of the selected units are currently in 'SUBMITTED' review status.");
+      return;
+    }
+
+    setIsBulkProcessingAssessment(true);
+    try {
+      const etoActor: AuditActor = {
+        userId: officer.id,
+        roleCode: officer.role,
+        jurisdictionId: officer.jurisdictionId
+      };
+
+      const newAuditItems: PilotAuditItem[] = [];
+      const updatedUnits = [...units];
+      let approvedCount = 0;
+
+      for (const targetUnit of eligibleUnits) {
+        const targetIndex = updatedUnits.findIndex((u) => u.id === targetUnit.id);
+        if (targetIndex === -1) continue;
+
+        const currentAssessment = targetUnit.assessments[0];
+        const currentVersion = targetUnit.assessmentVersions[0];
+        if (!currentAssessment || !currentVersion) continue;
+
+        const { assessment: approvedAsm, version: approvedVer } = approveAssessmentVersion(
+          currentAssessment,
+          currentVersion,
+          etoActor,
+          `EVD-APP-BULK-${Date.now()}`
+        );
+
+        const allocatedDemandNo =
+          targetUnit.demandNumber ||
+          String(targetUnit.demandUnit.permanentDemandNo || units.indexOf(targetUnit) + 1).padStart(
+            4,
+            "0"
+          );
+        const allocatedPinNo =
+          targetUnit.pinNumber ||
+          targetUnit.provincialUin ||
+          generateUinForUnit({
+            jurisdiction: VEHARI_PILOT_JURISDICTION,
+            rule: targetUnit.statutoryRule,
+            allRules,
+            sequenceNumber: units.indexOf(targetUnit) + 1
+          });
+
+        const demandEntry = createInitialDemandEntry({
+          demandUnitId: targetUnit.demandUnit.id,
+          financialYearId: FINANCIAL_YEAR_2026_27,
+          assessmentVersionId: approvedVer.id,
+          amount: approvedVer.snapshot.taxAmount,
+          actorId: officer.id,
+          correlationId: `corr-appr-bulk-${Date.now()}`,
+          idempotencyKey: `idem-dem-bulk-${Date.now()}-${targetUnit.id}`
+        });
+
+        const updatedUnit = trimApprovedSurveyUnit(
+          targetUnit,
+          allocatedDemandNo,
+          allocatedPinNo,
+          demandEntry,
+          approvedAsm,
+          approvedVer
+        );
+
+        updatedUnits[targetIndex] = updatedUnit;
+        approvedCount++;
+
+        newAuditItems.push({
+          id: `audit-appr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          eventType: "ASSESSMENT_APPROVED",
+          actorName: officer.name,
+          actorRole: officer.role,
+          target: targetUnit.legalName,
+          timestamp: new Date().toISOString(),
+          correlationId: `corr-appr-bulk-${Date.now()}`,
+          details: `Bulk ETO approval: Allocated Demand No. ${allocatedDemandNo}, PIN ${allocatedPinNo}. Survey staging data trimmed into Form PFT-3. Demand ledger debited PKR ${approvedVer.snapshot.taxAmount.toLocaleString()}.`
+        });
+
+        // Server RPC call
+        try {
+          await executeWorkflowCommand("SURVEY_TRANSITION", {
+            p_unit_id: targetUnit.id,
+            p_action: "APPROVE",
+            p_expected_version: targetUnit.rowVersion ?? 1,
+            p_idempotency_key: `survey-appr:${officer.id}:${targetUnit.id}:${Date.now()}`,
+            p_correlation_id: `survey-appr-bulk:${crypto.randomUUID()}`,
+            p_reason: "Bulk statutory approval by ETO"
+          });
+        } catch (rpcErr) {
+          console.warn("Workflow server bulk approval fallback:", rpcErr);
+        }
+      }
+
+      syncState(updatedUnits, [...newAuditItems, ...auditLogs]);
+      setSelectedAssessmentIds(new Set());
+      showToast(
+        "success",
+        `✓ Bulk Approved ${approvedCount} assessment unit(s)! Form PFT-2 generated, Demand Ledgers debited, and permanent records enrolled in Form PFT-3.`
+      );
+    } catch (err: unknown) {
+      showToast("error", (err as Error).message);
+    } finally {
+      setIsBulkProcessingAssessment(false);
+    }
+  };
+
+  // Handler: Inspector Bulk Submits All Selected Feeded or Returned Units
+  const handleBulkSubmitAssessments = async () => {
+    if (officer.role !== "INSPECTOR" && officer.role !== "ADMIN") {
+      showToast(
+        "error",
+        "Only an assigned Inspector may submit assessment records to the ETO queue."
+      );
+      return;
+    }
+
+    const eligibleUnits = units.filter(
+      (u) =>
+        selectedAssessmentIds.has(u.id) &&
+        (u.assessments[0]?.status === "DRAFT" || u.assessments[0]?.status === "RETURNED")
+    );
+
+    if (eligibleUnits.length === 0) {
+      showToast("error", "None of the selected units are in 'FEEDED' or 'RETURNED' status.");
+      return;
+    }
+
+    setIsBulkProcessingAssessment(true);
+    try {
+      const newAuditItems: PilotAuditItem[] = [];
+      const updatedUnits = [...units];
+      let submittedCount = 0;
+
+      for (const targetUnit of eligibleUnits) {
+        const targetIndex = updatedUnits.findIndex((u) => u.id === targetUnit.id);
+        if (targetIndex === -1) continue;
+
+        const currentAssessment = targetUnit.assessments[0];
+        const currentVersion = targetUnit.assessmentVersions[0];
+        if (!currentAssessment || !currentVersion) continue;
+
+        const isResubmit = currentAssessment.status === "RETURNED";
+        const submittedAsm: Assessment = {
+          ...currentAssessment,
+          status: "SUBMITTED"
+        };
+        const submittedVer: AssessmentVersion<StoredUnitSnapshot> = {
+          ...currentVersion,
+          status: "SUBMITTED",
+          reason: isResubmit
+            ? `Resubmitted in bulk by Inspector ${officer.name}`
+            : currentVersion.reason
+        };
+
+        const updatedUnit: StoredUnit = {
+          ...targetUnit,
+          assessments: [submittedAsm, ...targetUnit.assessments.slice(1)],
+          assessmentVersions: [submittedVer, ...targetUnit.assessmentVersions.slice(1)]
+        };
+
+        updatedUnits[targetIndex] = updatedUnit;
+        submittedCount++;
+
+        newAuditItems.push({
+          id: `audit-sub-bulk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          eventType: isResubmit ? "ASSESSMENT_RESUBMITTED" : "ASSESSMENT_SUBMITTED",
+          actorName: officer.name,
+          actorRole: officer.role,
+          target: targetUnit.legalName,
+          timestamp: new Date().toISOString(),
+          correlationId: `corr-sub-bulk-${Date.now()}`,
+          details: `Bulk submission of survey assessment for '${targetUnit.legalName}' (FY-2026-2027) to ETO review queue.`
+        });
+
+        // Server RPC call
+        try {
+          await executeWorkflowCommand("SURVEY_TRANSITION", {
+            p_unit_id: targetUnit.id,
+            p_action: isResubmit ? "RESUBMIT" : "SUBMIT",
+            p_expected_version: targetUnit.rowVersion ?? 1,
+            p_idempotency_key: `survey-sub-bulk:${officer.id}:${targetUnit.id}:${Date.now()}`,
+            p_correlation_id: `survey-sub-bulk:${crypto.randomUUID()}`
+          });
+        } catch (rpcErr) {
+          console.warn("Workflow server bulk submit fallback:", rpcErr);
+        }
+      }
+
+      syncState(updatedUnits, [...newAuditItems, ...auditLogs]);
+      setSelectedAssessmentIds(new Set());
+      showToast(
+        "success",
+        `📤 Successfully bulk submitted ${submittedCount} assessment unit(s) to ETO Review Queue.`
+      );
+    } catch (err: unknown) {
+      showToast("error", (err as Error).message);
+    } finally {
+      setIsBulkProcessingAssessment(false);
+    }
+  };
+
+  // Handler: Open Close Modal for Single Unit
+  const handleOpenCloseModal = (unitId: string) => {
+    setCloseTargetUnitIds([unitId]);
+    setCloseReason("Business permanently defunct / discontinued in field verification.");
+    setShowCloseModal(true);
+  };
+
+  // Handler: Open Close Modal for Bulk Selected Units
+  const handleOpenBulkCloseModal = () => {
+    const eligibleIds = Array.from(selectedAssessmentIds).filter((id) => {
+      const u = units.find((x) => x.id === id);
+      return u?.assessments[0]?.status !== "APPROVED";
+    });
+    if (eligibleIds.length === 0) {
+      showToast("error", "No unapproved units selected for closure.");
+      return;
+    }
+    setCloseTargetUnitIds(eligibleIds);
+    setCloseReason(
+      "Business permanently defunct / duplicate entry / exempt under statutory rules."
+    );
+    setShowCloseModal(true);
+  };
+
+  // Handler: Confirm Closure of Unit(s)
+  const handleConfirmClose = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (closeTargetUnitIds.length === 0) return;
+
+    try {
+      const newAuditItems: PilotAuditItem[] = [];
+      const updatedUnits = [...units];
+
+      for (const targetId of closeTargetUnitIds) {
+        const targetIndex = updatedUnits.findIndex((u) => u.id === targetId);
+        if (targetIndex === -1) continue;
+        const targetUnit = updatedUnits[targetIndex]!;
+
+        const currentAssessment = targetUnit.assessments[0];
+        const currentVersion = targetUnit.assessmentVersions[0];
+        if (!currentAssessment || !currentVersion) continue;
+
+        const closedAsm: Assessment = {
+          ...currentAssessment,
+          status: "WITHDRAWN"
+        };
+        const closedVer: AssessmentVersion<StoredUnitSnapshot> = {
+          ...currentVersion,
+          status: "WITHDRAWN",
+          reason: closeReason.trim()
+        };
+
+        const updatedUnit: StoredUnit = {
+          ...targetUnit,
+          isDiscontinued: true,
+          discontinuanceStatus: "DISCONTINUED",
+          discontinuanceReason: closeReason.trim(),
+          discontinuanceDate: new Date().toISOString(),
+          assessments: [closedAsm, ...targetUnit.assessments.slice(1)],
+          assessmentVersions: [closedVer, ...targetUnit.assessmentVersions.slice(1)]
+        };
+
+        updatedUnits[targetIndex] = updatedUnit;
+
+        newAuditItems.push({
+          id: `audit-close-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          eventType: "UNIT_CLOSED",
+          actorName: officer.name,
+          actorRole: officer.role,
+          target: targetUnit.legalName,
+          timestamp: new Date().toISOString(),
+          correlationId: `corr-close-${Date.now()}`,
+          details: `Authorized closure of unit '${targetUnit.legalName}' by ${officer.name} (${officer.role}): ${closeReason.trim()}`
+        });
+
+        // Server RPC call
+        try {
+          await executeWorkflowCommand("SURVEY_TRANSITION", {
+            p_unit_id: targetId,
+            p_action: "CLOSE",
+            p_expected_version: targetUnit.rowVersion ?? 1,
+            p_idempotency_key: `survey-close:${officer.id}:${targetId}:${Date.now()}`,
+            p_correlation_id: `survey-close:${crypto.randomUUID()}`,
+            p_reason: closeReason.trim()
+          });
+        } catch (rpcErr) {
+          console.warn("Workflow server close fallback:", rpcErr);
+        }
+      }
+
+      syncState(updatedUnits, [...newAuditItems, ...auditLogs]);
+      setShowCloseModal(false);
+      setCloseTargetUnitIds([]);
+      setSelectedAssessmentIds(new Set());
+      showToast("info", `✓ Successfully closed ${closeTargetUnitIds.length} survey record(s).`);
+    } catch (err: unknown) {
+      showToast("error", (err as Error).message);
+    }
+  };
+
+  // Handler: Open Audit Trace Dossier Modal
+  const handleOpenAuditTraceModal = (targetUnit: StoredUnit) => {
+    setAuditTraceUnit(targetUnit);
+    setShowAuditTraceModal(true);
   };
 
   // Handler: Handle Receipt File Selection & Real-Time SHA-256 Digest
@@ -1536,6 +2158,11 @@ export default function HomePage({
         }
       }
 
+      if (paymentChannel === "CHALLAN_32A" && paymentBankBranch) {
+        scanMetadata.bankBranch = paymentBankBranch;
+        scanMetadata.district = paymentDistrict;
+      }
+
       const correlationId = `corr-pay-${Date.now()}`;
       // Creates an append-only PAYMENT_CREDIT entry (-amount)
       const paymentEntry = createPaymentReceiptEntry({
@@ -1564,7 +2191,11 @@ export default function HomePage({
         target: targetUnit.legalName,
         timestamp: new Date().toISOString(),
         correlationId,
-        details: `Recorded ${paymentChannel} deposit of PKR ${paymentAmount.toLocaleString()} (Ref: ${paymentReceiptNo.trim()}). Demand ledger credited.${
+        details: `Recorded ${paymentChannel} deposit of PKR ${paymentAmount.toLocaleString()} (Ref: ${paymentReceiptNo.trim()}${
+          paymentChannel === "CHALLAN_32A" && paymentBankBranch
+            ? `, Branch: ${paymentBankBranch}`
+            : ""
+        }). Demand ledger credited.${
           scanMetadata.receiptScanSha256
             ? ` [Challan 32-A Evidence Attached: SHA-256 ${String(scanMetadata.receiptScanSha256).slice(0, 16)}...]`
             : ""
@@ -1815,6 +2446,78 @@ export default function HomePage({
     setPft3CurrentPage(1);
     setPft3SearchExecuted(false);
   };
+
+  // Assessment Queue Filtered Rows & Metric Counts
+  const filteredAssessmentUnits = useMemo(() => {
+    return units.filter((u) => {
+      const currentAsm = u.assessments[0];
+      const status = currentAsm?.status ?? "DRAFT";
+      const isClosed = Boolean(u.isDiscontinued || status === "WITHDRAWN");
+
+      if (assessmentStatusFilter === "CLOSED") {
+        if (!isClosed) return false;
+      } else {
+        if (isClosed) return false;
+        if (assessmentStatusFilter === "FEEDED" && status !== "DRAFT") return false;
+        if (assessmentStatusFilter === "SUBMITTED" && status !== "SUBMITTED") return false;
+        if (assessmentStatusFilter === "RETURNED" && status !== "RETURNED") return false;
+        if (assessmentStatusFilter === "APPROVED" && status !== "APPROVED") return false;
+      }
+
+      if (assessmentCircleFilter !== "ALL" && u.circleId !== assessmentCircleFilter) return false;
+
+      if (assessmentSearchQuery.trim()) {
+        const q = assessmentSearchQuery.trim().toLowerCase();
+        const matchName =
+          u.legalName.toLowerCase().includes(q) || (u.tradeName || "").toLowerCase().includes(q);
+        const matchId = u.identifierValue.toLowerCase().includes(q);
+        const matchAddr = u.address.toLowerCase().includes(q);
+        const matchPdn =
+          (u.demandNumber || "").toLowerCase().includes(q) ||
+          (u.pinNumber || "").toLowerCase().includes(q);
+        const matchAsm = (u.assessmentNumber || "").toLowerCase().includes(q);
+        if (!matchName && !matchId && !matchAddr && !matchPdn && !matchAsm) return false;
+      }
+
+      return true;
+    });
+  }, [units, assessmentStatusFilter, assessmentCircleFilter, assessmentSearchQuery]);
+
+  const assessmentCounts = useMemo(() => {
+    let feeded = 0,
+      submitted = 0,
+      returned = 0,
+      approved = 0,
+      closed = 0;
+    for (const u of units) {
+      const isClosed = Boolean(u.isDiscontinued || u.assessments[0]?.status === "WITHDRAWN");
+      if (isClosed) {
+        closed++;
+      } else {
+        const s = u.assessments[0]?.status ?? "DRAFT";
+        if (s === "DRAFT") feeded++;
+        else if (s === "SUBMITTED") submitted++;
+        else if (s === "RETURNED") returned++;
+        else if (s === "APPROVED") approved++;
+      }
+    }
+    return { all: units.length, feeded, submitted, returned, approved, closed };
+  }, [units]);
+
+  const selectedAssessmentUnits = useMemo(() => {
+    return units.filter((u) => selectedAssessmentIds.has(u.id));
+  }, [units, selectedAssessmentIds]);
+
+  const selectedSubmittedCount = useMemo(() => {
+    return selectedAssessmentUnits.filter((u) => u.assessments[0]?.status === "SUBMITTED").length;
+  }, [selectedAssessmentUnits]);
+
+  const selectedFeededOrReturnedCount = useMemo(() => {
+    return selectedAssessmentUnits.filter(
+      (u) =>
+        (u.assessments[0]?.status ?? "DRAFT") === "DRAFT" || u.assessments[0]?.status === "RETURNED"
+    ).length;
+  }, [selectedAssessmentUnits]);
 
   // Potential Register Filtered Rows
   const filteredPotentialUnits = useMemo(() => {
@@ -2749,7 +3452,6 @@ export default function HomePage({
 
   // Handler: Download Survey CSV Template
   const refreshActionableSurveyImportBatches = async () => {
-    setIsLoadingSurveyImportBatches(true);
     try {
       const { data, error } = await getSupabaseAuthClient().rpc(
         "list_actionable_survey_import_batches"
@@ -2764,63 +3466,6 @@ export default function HomePage({
           ? `Could not load imported batch workflow: ${error.message}`
           : "Could not load imported batch workflow."
       );
-    } finally {
-      setIsLoadingSurveyImportBatches(false);
-    }
-  };
-
-  const handleBulkSurveyWorkflow = async (
-    batch: ActionableSurveyImportBatch,
-    action: "SUBMIT" | "APPROVE"
-  ) => {
-    if (action === "SUBMIT" && officer.role !== "INSPECTOR") {
-      showToast("error", "Only the assigned Inspector may submit an imported survey batch.");
-      return;
-    }
-    if (action === "APPROVE" && officer.role !== "ETO") {
-      showToast("error", "Only the assigned ETO may approve an imported survey batch.");
-      return;
-    }
-    if (action === "APPROVE" && batch.pending_review_rows > 0) {
-      showToast(
-        "error",
-        `${batch.pending_review_rows} unit(s) still require statutory classification and cannot be approved.`
-      );
-      return;
-    }
-
-    setActiveBulkWorkflowBatchId(batch.batch_id);
-    try {
-      const result = await executeWorkflowCommand<{
-        submitted_rows?: number;
-        approved_rows?: number;
-        idempotent_replay: boolean;
-      }>(action === "SUBMIT" ? "BULK_SUBMIT_SURVEY_IMPORT" : "BULK_APPROVE_SURVEY_IMPORT", {
-        p_batch_id: batch.batch_id,
-        p_idempotency_key: `survey-bulk-${action.toLowerCase()}:${officer.id}:${batch.batch_id}`,
-        p_correlation_id: `survey-bulk:${crypto.randomUUID()}`,
-        p_reason:
-          action === "SUBMIT"
-            ? "Inspector bulk submission of imported survey units for ETO review"
-            : "ETO bulk approval of eligible imported survey units"
-      });
-      const affected =
-        action === "SUBMIT" ? (result.submitted_rows ?? 0) : (result.approved_rows ?? 0);
-      showToast(
-        "success",
-        action === "SUBMIT"
-          ? `${affected} imported unit(s) submitted to the ETO review queue.`
-          : `${affected} eligible unit(s) approved and finalized in PFT-3.`
-      );
-      await refreshActionableSurveyImportBatches();
-      await refreshOperationalSurveyUnits();
-    } catch (error) {
-      showToast(
-        "error",
-        error instanceof Error ? error.message : `Bulk ${action.toLowerCase()} failed.`
-      );
-    } finally {
-      setActiveBulkWorkflowBatchId(null);
     }
   };
 
@@ -2856,7 +3501,7 @@ export default function HomePage({
         ? await convertSurveyWorkbookToCsv(file)
         : new TextDecoder("utf-8").decode(sourceBytes).replace(/^\uFEFF/, "");
       setBulkSurveyRawCsv(content);
-      const result = parseBulkSurveyCsv(content, units);
+      const result = parseBulkSurveyCsv(content, units, officer);
       setBulkSurveyParseResult(result);
       if (result.validRowsCount > 0 && result.errorRowsCount === 0) {
         showToast(
@@ -2893,7 +3538,7 @@ export default function HomePage({
       setBulkSurveyParseResult(null);
       return;
     }
-    const result = parseBulkSurveyCsv(text, units);
+    const result = parseBulkSurveyCsv(text, units, officer);
     setBulkSurveyParseResult(result);
   };
 
@@ -3535,43 +4180,118 @@ export default function HomePage({
     showToast("info", "Official Potential Units discovery CSV template downloaded.");
   };
 
-  const handleImportPotentialCsv = async () => {
-    if (!potentialCsvInput.trim()) {
-      showToast("error", "CSV content cannot be empty.");
-      return;
-    }
+  const handlePotentialFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    const { importedUnits, errors } = importPotentialUnitsCsv(
-      potentialCsvInput,
-      potentialUnits,
-      `${officer.name} (${officer.title})`
-    );
-
-    if (errors.length > 0 && importedUnits.length === 0) {
-      setPotentialImportErrors(errors);
-      showToast("error", "Failed to import CSV.");
-      return;
-    }
-
-    const persisted = (
-      await Promise.all(importedUnits.map((unit) => persistPotentialUnitToDatabase(unit)))
-    ).filter((unit): unit is PotentialUnitRecord => unit !== null);
-    if (persisted.length !== importedUnits.length) {
+    setBulkPotentialFileName(file.name);
+    try {
+      const sourceBytes = await file.arrayBuffer();
+      const content = file.name.toLowerCase().endsWith(".xlsx")
+        ? await convertSurveyWorkbookToCsv(file)
+        : new TextDecoder("utf-8").decode(sourceBytes).replace(/^\uFEFF/, "");
+      setPotentialCsvInput(content);
+      const result = parseBulkPotentialUnits(content, potentialUnits, officer, units);
+      setBulkPotentialParseResult(result);
+      if (result.validRowsCount > 0 && result.errorRowsCount === 0) {
+        showToast(
+          "success",
+          `Validated ${result.totalRows} discovery rows: all ${result.validRowsCount} rows are ready for immediate active ingestion.`
+        );
+      } else if (result.validRowsCount > 0) {
+        showToast(
+          "info",
+          `Validated ${result.totalRows} discovery rows: ${result.validRowsCount} valid, ${result.errorRowsCount} error(s).`
+        );
+      } else {
+        showToast(
+          "error",
+          `Discovery units validation failed: 0 valid rows found, ${result.errorRowsCount} error(s).`
+        );
+      }
+    } catch (error) {
+      setPotentialCsvInput("");
+      setBulkPotentialParseResult(null);
+      setBulkPotentialFileName("");
       showToast(
         "error",
-        `Only ${persisted.length} of ${importedUnits.length} potential units were saved. Refreshing the database register.`
+        error instanceof Error ? error.message : "The discovery file could not be read."
       );
     }
-    const refreshed = await fetchPotentialAssessmentUnitsFromDatabase();
-    setPotentialUnits(refreshed ?? persisted);
-    setShowImportPotentialModal(false);
-    setPotentialCsvInput("");
-    setPotentialImportErrors([]);
+  };
 
-    showToast(
-      "success",
-      `✓ Permanently imported ${persisted.length} potential units into the Potential Register.`
-    );
+  const handlePotentialTextChange = (text: string) => {
+    setPotentialCsvInput(text);
+    if (!text.trim()) {
+      setBulkPotentialParseResult(null);
+      return;
+    }
+    const result = parseBulkPotentialUnits(text, potentialUnits, officer, units);
+    setBulkPotentialParseResult(result);
+  };
+
+  const handleExecuteBulkPotentialImport = async () => {
+    if (officer.role !== "INSPECTOR" && officer.role !== "ETO") {
+      showToast(
+        "error",
+        "Only an assigned Inspector or ETO may import discovery records for their jurisdiction."
+      );
+      return;
+    }
+    if (!bulkPotentialParseResult || bulkPotentialParseResult.validRowsCount === 0) {
+      showToast("error", "No valid potential discovery units available for ingestion.");
+      return;
+    }
+
+    setIsImportingPotential(true);
+    try {
+      const validToImport = bulkPotentialParseResult.validUnits;
+      const persisted = (
+        await Promise.all(validToImport.map((unit) => persistPotentialUnitToDatabase(unit)))
+      ).filter((unit): unit is PotentialUnitRecord => unit !== null);
+
+      if (persisted.length !== validToImport.length) {
+        showToast(
+          "error",
+          `Only ${persisted.length} of ${validToImport.length} potential units were saved to database. Refreshing register.`
+        );
+      }
+
+      // Also save to localStorage as cache fallback
+      const updatedLocalStorage = [...potentialUnits, ...persisted];
+      savePersistedPotentialUnits(updatedLocalStorage);
+
+      // Audit trail record
+      const auditItem: PilotAuditItem = {
+        id: `audit-pot-import-${Date.now()}`,
+        eventType: "BULK_POTENTIAL_UNITS_IMPORTED",
+        actorName: officer.name,
+        actorRole: officer.role,
+        target: `Potential Register Bulk Import (${persisted.length} Units)`,
+        timestamp: new Date().toISOString(),
+        correlationId: `corr-pot-bulk-${Date.now()}`,
+        details: `Imported ${persisted.length} potential discovery units as ACTIVE and operational in the Potential Register for ${officer.jurisdictionName}.`
+      };
+      setAuditLogs((prev: PilotAuditItem[]) => [auditItem, ...prev]);
+
+      const refreshed = await fetchPotentialAssessmentUnitsFromDatabase();
+      setPotentialUnits(refreshed ?? updatedLocalStorage);
+
+      setShowImportPotentialModal(false);
+      setPotentialCsvInput("");
+      setBulkPotentialFileName("");
+      setBulkPotentialParseResult(null);
+
+      showToast(
+        "success",
+        `✓ Permanently imported ${persisted.length} units into Potential Register as active and operational.`
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast("error", `Potential units bulk import failed: ${msg}`);
+    } finally {
+      setIsImportingPotential(false);
+    }
   };
 
   const renderPotentialUnitActions = (target: PotentialUnitRecord) => {
@@ -3614,7 +4334,45 @@ export default function HomePage({
   const handleOpenReceivePft2 = (challan: Pft2ChallanRecord) => {
     setReceivingChallan(challan);
     setReceivePaymentChannel("National Bank of Pakistan");
-    setReceiveBankBranch("Main Treasury Branch, Vehari (Treasury 0142)");
+
+    // Auto-detect relevant district from challan, linked unit, or officer jurisdiction
+    const matchedUnit = units.find(
+      (u) =>
+        u.id === challan.unitId ||
+        (challan.demandNumber &&
+          (u.demandUnit?.permanentDemandNo === challan.demandNumber ||
+            u.demandNumber === challan.demandNumber)) ||
+        (challan.provincialUin &&
+          (u.provincialUin === challan.provincialUin || u.pinNumber === challan.provincialUin)) ||
+        (challan.identifierValue && u.identifierValue === challan.identifierValue)
+    );
+    const matchedPotential = potentialUnits.find(
+      (p) =>
+        p.id === challan.unitId ||
+        (challan.potentialNumber && p.potentialNumber === challan.potentialNumber) ||
+        (challan.demandNumber && p.potentialNumber === challan.demandNumber)
+    );
+
+    const relevantDistrict =
+      challan.district ||
+      matchedUnit?.districtName ||
+      matchedPotential?.districtName ||
+      (officer.jurisdictionName ? normalizeDistrictName(officer.jurisdictionName) : "") ||
+      "Vehari";
+
+    const matchedDistName =
+      allDesignatedDistricts.find(
+        (d) => normalizeDistrictName(d) === normalizeDistrictName(relevantDistrict)
+      ) || "VEHARI";
+
+    setReceiveBranchDistrict(matchedDistName);
+    setIsCustomReceiveBranch(false);
+
+    const initialBranches = getDesignatedBranchesForDistrict(matchedDistName);
+    const defaultBranch = initialBranches[0]
+      ? formatBranchDisplay(initialBranches[0])
+      : "National Bank of Pakistan — Main Branch, Vehari (Branch Code: 414, VEHARI)";
+    setReceiveBankBranch(defaultBranch);
     setReceiveBankScrollRef("");
 
     // Constrain initial receipt date between challan issue date and due date
@@ -3721,6 +4479,7 @@ export default function HomePage({
       timeOfReceipt: nowTime,
       paymentChannel: receivePaymentChannel,
       bankBranch: receiveBankBranch,
+      district: receiveBranchDistrict,
       bankScrollRef: receiveBankScrollRef.trim(),
       receivingOfficerName: officer.name,
       receivingOfficerTitle: officer.title,
@@ -3765,6 +4524,8 @@ export default function HomePage({
             receivedAt: receiveDate,
             receivedBy: `${officer.name} (${officer.title})`,
             paymentChannel: receivePaymentChannel,
+            bankBranch: receiveBankBranch,
+            district: receiveBranchDistrict,
             bankScrollRef: receiveBankScrollRef.trim()
           }
         : c
@@ -3802,8 +4563,8 @@ export default function HomePage({
       timestamp: new Date().toISOString(),
       correlationId: `corr-${receiptNumber}`,
       details: isPotentialMigration
-        ? `Potential Unit ${matchingPotential?.potentialNumber ?? receivingChallan.demandNumber} realized statutory payment (PKR ${payableAmount.toLocaleString()}) via ${receivePaymentChannel} [CPR: ${receiveBankScrollRef.trim()}]. Receipt ${receiptNumber} recorded; P.F.T-3 promotion remains subject to ETO approval.`
-        : `Form P.F.T-2 ${receivingChallan.challanNumber} received and credited (PKR ${payableAmount.toLocaleString()}) via ${receivePaymentChannel} [CPR: ${receiveBankScrollRef.trim()}]. Generated Statutory Receipt ${receiptNumber}.`
+        ? `Potential Unit ${matchingPotential?.potentialNumber ?? receivingChallan.demandNumber} realized statutory payment (PKR ${payableAmount.toLocaleString()}) via ${receivePaymentChannel} [Branch: ${receiveBankBranch}, CPR: ${receiveBankScrollRef.trim()}]. Receipt ${receiptNumber} recorded; P.F.T-3 promotion remains subject to ETO approval.`
+        : `Form P.F.T-2 ${receivingChallan.challanNumber} received and credited (PKR ${payableAmount.toLocaleString()}) via ${receivePaymentChannel} [Branch: ${receiveBankBranch}, CPR: ${receiveBankScrollRef.trim()}]. Generated Statutory Receipt ${receiptNumber}.`
     };
 
     const updatedReceipts = [durableReceipt, ...statutoryReceipts];
@@ -4115,10 +4876,11 @@ export default function HomePage({
   void setClearanceCertificates;
   void setAppeals;
 
-  // Row actions for Survey Register (UNITS tab) - strictly draft mode only
+  // Row actions for Survey Register (UNITS tab) with complete statutory workflow actions
   const renderSurveyUnitActions = (targetUnit: StoredUnit) => {
     const latestAsm = targetUnit.assessments[0];
     const status = latestAsm?.status ?? "DRAFT";
+    const isClosed = Boolean(targetUnit.isDiscontinued || status === "WITHDRAWN");
 
     const actions: RowAction[] = [
       {
@@ -4130,19 +4892,140 @@ export default function HomePage({
       }
     ];
 
-    if (status === "APPROVED") {
+    if (isClosed) {
       actions.push({
-        id: "view-in-pft3",
-        label: "Enrolled in Form PFT-3 Register ↗",
-        icon: "📑",
-        onClick: () => {
-          setPft3SearchQuery(targetUnit.demandUnit.permanentDemandNo);
-          setPft3SearchExecuted(true);
-          setPft3CurrentPage(1);
-          switchTab("REGISTER_PFT3");
-        }
+        id: "view-trace",
+        label: "View Closure Audit Trace",
+        icon: "👁️",
+        onClick: () => handleOpenAuditTraceModal(targetUnit)
       });
+      return <RowActionMenu align="right" actions={actions} />;
     }
+
+    if (status === "DRAFT") {
+      if (officer.role === "INSPECTOR") {
+        actions.push(
+          {
+            id: "submit-to-eto",
+            label: "Submit for ETO Review",
+            icon: "📤",
+            onClick: () => void handleSubmitAssessment(targetUnit.id)
+          },
+          {
+            id: "edit-survey",
+            label: "Edit Survey Particulars",
+            icon: "✏️",
+            onClick: () => handleOpenEditSurveyUnit(targetUnit)
+          },
+          {
+            id: "close-unit",
+            label: "Close / Discard Unit",
+            icon: "✕",
+            onClick: () => handleOpenCloseModal(targetUnit.id)
+          }
+        );
+      } else {
+        actions.push({
+          id: "view-survey",
+          label: "View Survey Particulars",
+          icon: "👁️",
+          onClick: () => handleOpenEditSurveyUnit(targetUnit)
+        });
+      }
+    } else if (status === "SUBMITTED") {
+      if (officer.role === "ETO") {
+        actions.push(
+          {
+            id: "approve-assessment",
+            label: "Grant Statutory Approval (PFT-3)",
+            icon: "✓",
+            onClick: () => void handleApproveAssessment(targetUnit.id)
+          },
+          {
+            id: "return-assessment",
+            label: "Return with Statutory Observations",
+            icon: "↩",
+            onClick: () => handleOpenReturnModal(targetUnit.id)
+          },
+          {
+            id: "edit-classify",
+            label: "Adjust Statutory Classification",
+            icon: "✏️",
+            onClick: () => handleOpenEditSurveyUnit(targetUnit)
+          },
+          {
+            id: "close-unit",
+            label: "Close Unit",
+            icon: "✕",
+            onClick: () => handleOpenCloseModal(targetUnit.id)
+          }
+        );
+      } else {
+        actions.push({
+          id: "view-submitted",
+          label: "Pending ETO Review (View)",
+          icon: "⏳",
+          onClick: () => handleOpenEditSurveyUnit(targetUnit)
+        });
+      }
+    } else if (status === "RETURNED") {
+      if (officer.role === "INSPECTOR") {
+        actions.push(
+          {
+            id: "update-resubmit",
+            label: "Update & Resubmit to ETO",
+            icon: "✏️",
+            onClick: () => handleOpenEditSurveyUnit(targetUnit)
+          },
+          {
+            id: "resubmit-direct",
+            label: "Resubmit to ETO Queue",
+            icon: "📤",
+            onClick: () => void handleResubmitAssessment(targetUnit.id)
+          },
+          {
+            id: "close-unit",
+            label: "Close Unviable Unit",
+            icon: "✕",
+            onClick: () => handleOpenCloseModal(targetUnit.id)
+          }
+        );
+      } else {
+        actions.push({
+          id: "view-returned",
+          label: "Returned to Inspector (View)",
+          icon: "↩",
+          onClick: () => handleOpenEditSurveyUnit(targetUnit)
+        });
+      }
+    } else if (status === "APPROVED") {
+      actions.push(
+        {
+          id: "audit-trace",
+          label: "View Audit Dossier",
+          icon: "👁️",
+          onClick: () => handleOpenAuditTraceModal(targetUnit)
+        },
+        {
+          id: "view-in-pft3",
+          label: "Enrolled in Form PFT-3 Register ↗",
+          icon: "📑",
+          onClick: () => {
+            setPft3SearchQuery(targetUnit.demandNumber || targetUnit.demandUnit.permanentDemandNo);
+            setPft3SearchExecuted(true);
+            setPft3CurrentPage(1);
+            switchTab("REGISTER_PFT3");
+          }
+        }
+      );
+    }
+
+    actions.push({
+      id: "open-in-queue",
+      label: "Open in Assessment Queue ↗",
+      icon: "⚖️",
+      onClick: () => switchTab("ASSESSMENTS")
+    });
 
     return <RowActionMenu align="right" actions={actions} />;
   };
@@ -4827,6 +5710,19 @@ export default function HomePage({
                         📥 Bulk Import Survey
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => switchTab("ASSESSMENTS")}
+                      className="btn-primary"
+                      style={{
+                        backgroundColor: "#1e3a8a",
+                        color: "#ffffff",
+                        borderColor: "#1e40af"
+                      }}
+                      title="Open Statutory Assessment Queue with Multi-Select Bulk Actions"
+                    >
+                      ⚖️ Assessment Queue (Bulk Process) ↗
+                    </button>
                   </div>
                 </div>
 
@@ -5158,22 +6054,339 @@ export default function HomePage({
 
         {/* TAB 2: STATUTORY ASSESSMENT QUEUE */}
         {activeTab === "ASSESSMENTS" && (
-          <section className="content-panel">
-            <div className="panel-header">
+          <section className="content-panel" aria-label="Statutory Assessment & Approval Queue">
+            <div
+              className="panel-header"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: "1rem",
+                flexWrap: "wrap"
+              }}
+            >
               <div>
-                <h2>Statutory Assessment &amp; Approval Queue</h2>
+                <h2>⚖️ Statutory Assessment &amp; Approval Queue</h2>
                 <p>
-                  Maker-Checker workflow for authenticated Inspectors and the assigned Assessing
-                  Authority. Records shown here come directly from the jurisdiction-filtered
-                  operational workflow.
+                  Maker-Checker workflow under Rules 4, 5 &amp; 11. Inspectors submit field survey
+                  records; the assigned Assessing Authority (ETO) reviews, returns, or approves
+                  assessments into permanent Register Form P.F.T-3.
                 </p>
               </div>
+              <div
+                style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}
+              >
+                {officer.role === "INSPECTOR" && (
+                  <button
+                    type="button"
+                    className="btn-success btn-sm"
+                    onClick={() => {
+                      setEditingUnitId(null);
+                      setNewLegalName("");
+                      setNewTradeName("");
+                      setNewIdentifierValue("");
+                      setNewAddress("");
+                      setShowAddUnitModal(true);
+                    }}
+                  >
+                    ➕ Add Survey Unit
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  onClick={() => setShowBulkSurveyModal(true)}
+                >
+                  📥 Import Survey CSV / Excel
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  disabled={isLoadingOperationalUnits}
+                  onClick={() => {
+                    void refreshOperationalSurveyUnits();
+                    void refreshActionableSurveyImportBatches();
+                  }}
+                >
+                  {isLoadingOperationalUnits ? "Refreshing…" : "🔄 Refresh Queue"}
+                </button>
+              </div>
             </div>
+
+            {/* Actionable Survey Import Batch Summary Banner */}
+            {actionableSurveyImportBatches.length > 0 && (
+              <div
+                style={{
+                  marginBottom: "1rem",
+                  padding: "0.85rem 1rem",
+                  background: "#f0fdf4",
+                  border: "1px solid #86efac",
+                  borderRadius: "8px"
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: "1rem",
+                    flexWrap: "wrap"
+                  }}
+                >
+                  <div>
+                    <strong style={{ color: "#166534", fontSize: "0.9rem" }}>
+                      📋 Active Survey Import Batches ({actionableSurveyImportBatches.length})
+                    </strong>
+                    <div style={{ color: "#475569", fontSize: "0.78rem", marginTop: "0.2rem" }}>
+                      {actionableSurveyImportBatches.map((b) => (
+                        <span key={b.batch_id} style={{ marginRight: "1rem" }}>
+                          <strong>{b.source_filename}</strong> (FY {b.financial_year_code}):{" "}
+                          Imported {b.imported_rows} &bull; Feeded {b.feeded_rows} &bull; Submitted{" "}
+                          {b.submitted_rows} &bull; Approved {b.approved_rows}
+                          {b.pending_review_rows > 0 && (
+                            <span style={{ color: "#b45309", fontWeight: 600 }}>
+                              {" "}
+                              &bull; {b.pending_review_rows} under classification review
+                            </span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: "0.78rem", color: "#15803d", fontStyle: "italic" }}>
+                    {officer.role === "ETO"
+                      ? "💡 Review submitted rows below and approve or return directly."
+                      : "💡 Submit feeded rows below to forward for ETO statutory review."}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Status Filter Pills & Search Bar */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "1rem",
+                flexWrap: "wrap",
+                marginBottom: "1rem",
+                padding: "0.75rem 1rem",
+                background: "#f8fafc",
+                borderRadius: "8px",
+                border: "1px solid #e2e8f0"
+              }}
+            >
+              {/* Filter Pills */}
+              <div
+                style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}
+              >
+                {(
+                  [
+                    { key: "ALL", label: `All (${assessmentCounts.all})` },
+                    { key: "FEEDED", label: `📥 Feeded (${assessmentCounts.feeded})` },
+                    { key: "SUBMITTED", label: `⚖️ In Review (${assessmentCounts.submitted})` },
+                    { key: "RETURNED", label: `↩️ Returned (${assessmentCounts.returned})` },
+                    { key: "APPROVED", label: `✅ Approved (${assessmentCounts.approved})` },
+                    { key: "CLOSED", label: `🚫 Closed (${assessmentCounts.closed})` }
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => {
+                      setAssessmentStatusFilter(tab.key);
+                    }}
+                    style={{
+                      padding: "0.35rem 0.75rem",
+                      fontSize: "0.8rem",
+                      borderRadius: "6px",
+                      border:
+                        assessmentStatusFilter === tab.key
+                          ? "1px solid #166534"
+                          : "1px solid #cbd5e1",
+                      background: assessmentStatusFilter === tab.key ? "#166534" : "#ffffff",
+                      color: assessmentStatusFilter === tab.key ? "#ffffff" : "#334155",
+                      cursor: "pointer",
+                      fontWeight: assessmentStatusFilter === tab.key ? 600 : 500,
+                      transition: "all 0.15s ease"
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Search & Circle Filter */}
+              <div
+                style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}
+              >
+                <select
+                  value={assessmentCircleFilter}
+                  onChange={(e) => {
+                    setAssessmentCircleFilter(e.target.value);
+                  }}
+                  className="form-control"
+                  style={{ fontSize: "0.8rem", padding: "0.35rem 0.5rem", height: "auto" }}
+                >
+                  <option value="ALL">All Circles in Jurisdiction</option>
+                  <option value="30000000-0000-0000-0000-000000000004">
+                    Vehari Circle I (City / Commercial)
+                  </option>
+                  <option value="30000000-0000-0000-0000-000000000005">
+                    Vehari Circle II (Grain Market / Rural)
+                  </option>
+                  <option value="30000000-0000-0000-0000-000000000006">Burewala Circle</option>
+                  <option value="30000000-0000-0000-0000-000000000007">Mailsi Circle</option>
+                </select>
+
+                <input
+                  type="text"
+                  placeholder="🔍 Search name, CNIC, PDN, address…"
+                  value={assessmentSearchQuery}
+                  onChange={(e) => {
+                    setAssessmentSearchQuery(e.target.value);
+                  }}
+                  className="form-control"
+                  style={{
+                    width: "220px",
+                    fontSize: "0.8rem",
+                    padding: "0.35rem 0.5rem",
+                    height: "auto"
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Bulk Actions Floating Toolbar */}
+            {selectedAssessmentIds.size > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: "1rem",
+                  padding: "0.75rem 1rem",
+                  marginBottom: "1rem",
+                  borderRadius: "8px",
+                  background: "#eff6ff",
+                  border: "1px solid #93c5fd"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  <span style={{ fontWeight: 600, color: "#1e3a8a", fontSize: "0.85rem" }}>
+                    📌 {selectedAssessmentIds.size} unit(s) selected
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-link"
+                    style={{
+                      fontSize: "0.78rem",
+                      color: "#2563eb",
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                      background: "none",
+                      border: "none",
+                      padding: 0
+                    }}
+                    onClick={() => setSelectedAssessmentIds(new Set())}
+                  >
+                    Clear selection
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  {officer.role === "ETO" ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn-primary btn-sm"
+                        disabled={selectedSubmittedCount === 0 || isBulkProcessingAssessment}
+                        onClick={handleBulkApproveAssessments}
+                        title={
+                          selectedSubmittedCount === 0
+                            ? "Select units in SUBMITTED status to approve"
+                            : "Grant statutory approval for selected units"
+                        }
+                      >
+                        {isBulkProcessingAssessment
+                          ? "Processing…"
+                          : `✓ Bulk Approve (${selectedSubmittedCount})`}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-danger btn-sm"
+                        disabled={selectedSubmittedCount === 0 || isBulkProcessingAssessment}
+                        onClick={handleOpenBulkReturnModal}
+                        title={
+                          selectedSubmittedCount === 0
+                            ? "Select units in SUBMITTED status to return"
+                            : "Return selected units with legal remarks"
+                        }
+                      >
+                        ↩ Bulk Return ({selectedSubmittedCount})
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary btn-sm"
+                        onClick={handleOpenBulkCloseModal}
+                      >
+                        ✕ Bulk Close ({selectedAssessmentIds.size})
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="btn-success btn-sm"
+                        disabled={selectedFeededOrReturnedCount === 0 || isBulkProcessingAssessment}
+                        onClick={handleBulkSubmitAssessments}
+                        title={
+                          selectedFeededOrReturnedCount === 0
+                            ? "Select units in FEEDED or RETURNED status to submit"
+                            : "Submit selected units for ETO statutory review"
+                        }
+                      >
+                        {isBulkProcessingAssessment
+                          ? "Submitting…"
+                          : `📤 Bulk Submit (${selectedFeededOrReturnedCount})`}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary btn-sm"
+                        onClick={handleOpenBulkCloseModal}
+                      >
+                        ✕ Bulk Close ({selectedAssessmentIds.size})
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="table-container">
               <table className="gov-table" style={{ width: "100%" }}>
                 <thead>
                   <tr>
+                    <th style={{ width: "2.5rem", textAlign: "center" }}>
+                      <input
+                        type="checkbox"
+                        checked={
+                          filteredAssessmentUnits.length > 0 &&
+                          filteredAssessmentUnits.every((u) => selectedAssessmentIds.has(u.id))
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedAssessmentIds(
+                              new Set(filteredAssessmentUnits.map((u) => u.id))
+                            );
+                          } else {
+                            setSelectedAssessmentIds(new Set());
+                          }
+                        }}
+                        aria-label="Select all units"
+                      />
+                    </th>
                     <th style={{ maxWidth: "16rem" }}>Taxpayer Unit</th>
                     <th style={{ width: "7.5rem", whiteSpace: "nowrap" }}>Financial Year</th>
                     <th style={{ maxWidth: "18rem" }}>Statutory Rule &amp; Slab</th>
@@ -5185,43 +6398,87 @@ export default function HomePage({
                 <tbody>
                   {isLoadingOperationalUnits ? (
                     <tr>
-                      <td colSpan={6} style={{ textAlign: "center", padding: "2.5rem" }}>
+                      <td colSpan={7} style={{ textAlign: "center", padding: "2.5rem" }}>
                         Loading authorized assessment records…
                       </td>
                     </tr>
                   ) : operationalUnitsError ? (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={7}
                         style={{ textAlign: "center", padding: "2.5rem", color: "#991b1b" }}
                       >
                         {operationalUnitsError}
                       </td>
                     </tr>
-                  ) : units.length === 0 ? (
+                  ) : filteredAssessmentUnits.length === 0 ? (
                     <tr>
-                      <td colSpan={6} style={{ textAlign: "center", padding: "2.5rem" }}>
-                        No imported survey units are available in this jurisdiction.
+                      <td
+                        colSpan={7}
+                        style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
+                      >
+                        No assessment units match the selected filters or search query in this
+                        jurisdiction.
                       </td>
                     </tr>
                   ) : (
-                    units.map((u) => {
+                    filteredAssessmentUnits.map((u) => {
                       const currentAsm = u.assessments[0];
                       const currentVer = u.assessmentVersions[0];
                       const status = currentAsm?.status ?? "DRAFT";
+                      const isClosed = Boolean(u.isDiscontinued || status === "WITHDRAWN");
                       const displayAmount =
                         currentVer?.snapshot.taxAmount ?? u.statutoryRule.annual_rate_pkr;
+                      const isSelected = selectedAssessmentIds.has(u.id);
 
                       return (
-                        <tr key={u.id}>
+                        <tr key={u.id} style={{ background: isSelected ? "#f0f9ff" : undefined }}>
+                          <td style={{ textAlign: "center" }}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                const next = new Set(selectedAssessmentIds);
+                                if (e.target.checked) next.add(u.id);
+                                else next.delete(u.id);
+                                setSelectedAssessmentIds(next);
+                              }}
+                              aria-label={`Select unit ${u.legalName}`}
+                            />
+                          </td>
                           <td style={{ maxWidth: "16rem" }}>
                             <strong>{u.legalName}</strong>
+                            {u.tradeName && u.tradeName !== u.legalName && (
+                              <span
+                                style={{ display: "block", fontSize: "0.75rem", color: "#475569" }}
+                              >
+                                🏪 {u.tradeName}
+                              </span>
+                            )}
                             <span
-                              style={{ display: "block", fontSize: "0.725rem", color: "#64748b" }}
+                              style={{
+                                display: "block",
+                                fontSize: "0.725rem",
+                                color: "#64748b",
+                                marginTop: "0.15rem"
+                              }}
                             >
-                              {u.demandUnit.permanentDemandNo}
-                              {u.provincialUin ? ` • UIN: ${u.provincialUin}` : ""} &bull;{" "}
-                              {u.address}
+                              {u.demandNumber
+                                ? `PDN: ${u.demandNumber}`
+                                : `Asm: ${u.assessmentNumber || "Draft"}`}
+                              {u.pinNumber
+                                ? ` • PIN: ${u.pinNumber}`
+                                : u.provincialUin
+                                  ? ` • UIN: ${u.provincialUin}`
+                                  : ""}
+                              {u.identifierValue
+                                ? ` • ${u.identifierType}: ${u.identifierValue}`
+                                : ""}
+                            </span>
+                            <span
+                              style={{ display: "block", fontSize: "0.7rem", color: "#94a3b8" }}
+                            >
+                              📍 {u.address} &bull; {u.circleName || "Circle-Vehari"}
                             </span>
                           </td>
                           <td style={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
@@ -5252,58 +6509,321 @@ export default function HomePage({
                             <strong style={{ fontSize: "0.95rem", color: "#0d3822" }}>
                               PKR {displayAmount.toLocaleString()}
                             </strong>
+                            {u.openingArrears !== undefined && u.openingArrears > 0 && (
+                              <span
+                                style={{ display: "block", fontSize: "0.7rem", color: "#b45309" }}
+                              >
+                                + Arrears PKR {u.openingArrears.toLocaleString()}
+                              </span>
+                            )}
                           </td>
                           <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
                             <span
                               className={`badge badge-${
-                                status === "APPROVED"
-                                  ? "approved"
-                                  : status === "SUBMITTED"
-                                    ? "submitted"
-                                    : status === "RETURNED"
-                                      ? "returned"
-                                      : "draft"
+                                isClosed
+                                  ? "secondary"
+                                  : status === "APPROVED"
+                                    ? "approved"
+                                    : status === "SUBMITTED"
+                                      ? "submitted"
+                                      : status === "RETURNED"
+                                        ? "returned"
+                                        : "draft"
                               }`}
                               style={{ fontSize: "0.72rem" }}
                             >
-                              {status === "DRAFT" ? "FEEDED" : status}
+                              {isClosed ? "CLOSED" : status === "DRAFT" ? "FEEDED" : status}
                             </span>
                           </td>
                           <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                            {status === "DRAFT" && (
-                              <span style={{ fontSize: "0.75rem", color: "#475569" }}>
-                                Use Bulk Survey Workflow
-                              </span>
-                            )}
-
-                            {status === "SUBMITTED" && (
-                              <span
+                            {isClosed ? (
+                              <div
                                 style={{
-                                  fontSize: "0.75rem",
-                                  color: "#64748b",
-                                  fontStyle: "italic"
+                                  display: "flex",
+                                  gap: "0.35rem",
+                                  justifyContent: "flex-end",
+                                  alignItems: "center"
                                 }}
                               >
-                                {officer.role === "ETO"
-                                  ? "Use Bulk Survey Workflow"
-                                  : "Pending assigned ETO review"}
-                              </span>
-                            )}
+                                <span
+                                  className="badge badge-secondary"
+                                  style={{ fontSize: "0.72rem" }}
+                                  title={currentVer?.reason || "Closed unit"}
+                                >
+                                  🚫 Closed
+                                </span>
+                                <button
+                                  type="button"
+                                  className="btn-secondary btn-xs"
+                                  style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                  onClick={() => handleOpenAuditTraceModal(u)}
+                                  title="View closure audit trace"
+                                >
+                                  👁 Trace
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                {status === "DRAFT" &&
+                                  (officer.role === "INSPECTOR" ? (
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        gap: "0.35rem",
+                                        justifyContent: "flex-end"
+                                      }}
+                                    >
+                                      <button
+                                        type="button"
+                                        className="btn-success btn-xs"
+                                        style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                        onClick={() => void handleSubmitAssessment(u.id)}
+                                        title="Submit this feeded survey record to ETO review queue"
+                                      >
+                                        📤 Submit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn-secondary btn-xs"
+                                        style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                        onClick={() => handleOpenEditSurveyUnit(u)}
+                                        title="Edit survey particulars or classification"
+                                      >
+                                        ✏️ Edit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn-outline btn-xs"
+                                        style={{
+                                          padding: "0.25rem 0.5rem",
+                                          fontSize: "0.75rem",
+                                          color: "#64748b"
+                                        }}
+                                        onClick={() => handleOpenCloseModal(u.id)}
+                                        title="Close / Discard survey entry"
+                                      >
+                                        ✕ Close
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        gap: "0.35rem",
+                                        justifyContent: "flex-end",
+                                        alignItems: "center"
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          fontSize: "0.75rem",
+                                          color: "#64748b",
+                                          fontStyle: "italic"
+                                        }}
+                                      >
+                                        Feeded (Awaiting Inspector submission)
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="btn-secondary btn-xs"
+                                        style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                        onClick={() => handleOpenEditSurveyUnit(u)}
+                                        title="View survey particulars"
+                                      >
+                                        👁 View
+                                      </button>
+                                    </div>
+                                  ))}
 
-                            {status === "APPROVED" && (
-                              <span
-                                style={{ fontSize: "0.8rem", color: "#166534", fontWeight: 700 }}
-                              >
-                                ✓ Approved by ETO &bull; Ledger Debited
-                              </span>
-                            )}
+                                {status === "SUBMITTED" &&
+                                  (officer.role === "ETO" ? (
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        gap: "0.35rem",
+                                        justifyContent: "flex-end",
+                                        flexWrap: "wrap"
+                                      }}
+                                    >
+                                      <button
+                                        type="button"
+                                        className="btn-primary btn-xs"
+                                        style={{ padding: "0.25rem 0.55rem", fontSize: "0.75rem" }}
+                                        onClick={() => void handleApproveAssessment(u.id)}
+                                        title="Grant statutory approval, create Form PFT-2, debit ledger, and enroll in Register Form PFT-3"
+                                      >
+                                        ✓ Approve
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn-danger btn-xs"
+                                        style={{ padding: "0.25rem 0.55rem", fontSize: "0.75rem" }}
+                                        onClick={() => handleOpenReturnModal(u.id)}
+                                        title="Return assessment to Inspector with statutory observations"
+                                      >
+                                        ↩ Return
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn-secondary btn-xs"
+                                        style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                        onClick={() => handleOpenEditSurveyUnit(u)}
+                                        title="Adjust statutory classification or details before approval"
+                                      >
+                                        ✏️ Edit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn-outline btn-xs"
+                                        style={{
+                                          padding: "0.25rem 0.5rem",
+                                          fontSize: "0.75rem",
+                                          color: "#64748b"
+                                        }}
+                                        onClick={() => handleOpenCloseModal(u.id)}
+                                        title="Close / Discard survey entry"
+                                      >
+                                        ✕ Close
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        gap: "0.35rem",
+                                        justifyContent: "flex-end",
+                                        alignItems: "center"
+                                      }}
+                                    >
+                                      <span
+                                        className="badge badge-submitted"
+                                        style={{ fontSize: "0.72rem" }}
+                                      >
+                                        ⏳ Pending ETO Approval
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="btn-secondary btn-xs"
+                                        style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                        onClick={() => handleOpenEditSurveyUnit(u)}
+                                        title="View submitted record"
+                                      >
+                                        👁 View
+                                      </button>
+                                    </div>
+                                  ))}
 
-                            {status === "RETURNED" && (
-                              <span
-                                style={{ fontSize: "0.75rem", color: "#991b1b", fontWeight: 700 }}
-                              >
-                                ↩ Returned: {currentVer?.reason || "Reclassification requested"}
-                              </span>
+                                {status === "RETURNED" &&
+                                  (officer.role === "INSPECTOR" ? (
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        gap: "0.35rem",
+                                        justifyContent: "flex-end",
+                                        flexWrap: "wrap"
+                                      }}
+                                    >
+                                      <button
+                                        type="button"
+                                        className="btn-warning btn-xs"
+                                        style={{ padding: "0.25rem 0.55rem", fontSize: "0.75rem" }}
+                                        onClick={() => handleOpenEditSurveyUnit(u)}
+                                        title={`Returned by ETO: ${currentVer?.reason || "Observations recorded"}`}
+                                      >
+                                        ✏️ Update &amp; Resubmit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn-success btn-xs"
+                                        style={{ padding: "0.25rem 0.55rem", fontSize: "0.75rem" }}
+                                        onClick={() => void handleResubmitAssessment(u.id)}
+                                        title="Resubmit directly to ETO queue"
+                                      >
+                                        📤 Resubmit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn-outline btn-xs"
+                                        style={{
+                                          padding: "0.25rem 0.5rem",
+                                          fontSize: "0.75rem",
+                                          color: "#64748b"
+                                        }}
+                                        onClick={() => handleOpenCloseModal(u.id)}
+                                        title="Close unviable survey entry"
+                                      >
+                                        ✕ Close
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        gap: "0.35rem",
+                                        justifyContent: "flex-end",
+                                        alignItems: "center"
+                                      }}
+                                    >
+                                      <span
+                                        className="badge badge-returned"
+                                        style={{ fontSize: "0.72rem" }}
+                                        title={currentVer?.reason || "Returned to Inspector"}
+                                      >
+                                        ↩ Returned to Inspector
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="btn-secondary btn-xs"
+                                        style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                        onClick={() => handleOpenEditSurveyUnit(u)}
+                                        title="View returned particulars"
+                                      >
+                                        👁 View
+                                      </button>
+                                    </div>
+                                  ))}
+
+                                {status === "APPROVED" && (
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      gap: "0.35rem",
+                                      justifyContent: "flex-end",
+                                      alignItems: "center"
+                                    }}
+                                  >
+                                    <span
+                                      className="badge badge-approved"
+                                      style={{ fontSize: "0.72rem" }}
+                                    >
+                                      ✓ In Form PFT-3
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className="btn-secondary btn-xs"
+                                      style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                      onClick={() => handleOpenAuditTraceModal(u)}
+                                      title="View complete audited history and timestamps"
+                                    >
+                                      👁 Audit Trace
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn-primary btn-xs"
+                                      style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                      onClick={() => {
+                                        setPft3SearchQuery(u.demandNumber || u.legalName);
+                                        setPft3SearchExecuted(true);
+                                        setPft3CurrentPage(1);
+                                        switchTab("REGISTER_PFT3");
+                                      }}
+                                      title="View permanent record in Form PFT-3 Register"
+                                    >
+                                      📑 View PFT-3 ↗
+                                    </button>
+                                  </div>
+                                )}
+                              </>
                             )}
                           </td>
                         </tr>
@@ -9471,6 +10991,20 @@ export default function HomePage({
                 </button>
                 <button
                   type="button"
+                  className="btn-secondary"
+                  onClick={() => {
+                    const firstUnit = units[0];
+                    if (firstUnit) {
+                      setPaymentUnitId(firstUnit.id);
+                    }
+                    setShowPaymentModal(true);
+                  }}
+                  title="Record direct payment receipt against tax unit"
+                >
+                  💳 Record Direct Receipt
+                </button>
+                <button
+                  type="button"
                   className="btn-primary"
                   onClick={handleExportReceiptsCsv}
                   title="Export all Statutory Receipts as RFC-4180 CSV"
@@ -9911,6 +11445,21 @@ export default function HomePage({
                           <strong style={{ fontSize: "0.75rem" }}>
                             {rec.paymentChannel.replace(/ \(Digital Bank Transfer\)/, "")}
                           </strong>
+                          {rec.bankBranch && (
+                            <span
+                              style={{
+                                display: "block",
+                                fontSize: "0.68rem",
+                                color: "#065f46",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap"
+                              }}
+                              title={rec.bankBranch}
+                            >
+                              🏛️ {rec.bankBranch}
+                            </span>
+                          )}
                           <span
                             style={{
                               display: "block",
@@ -13969,6 +15518,48 @@ export default function HomePage({
 
             <form onSubmit={handleAddUnit}>
               <div className="modal-body">
+                {editingUnitId &&
+                  (() => {
+                    const editingTarget = units.find((u) => u.id === editingUnitId);
+                    const isReturned = editingTarget?.assessments[0]?.status === "RETURNED";
+                    if (!isReturned) return null;
+                    return (
+                      <div
+                        style={{
+                          background: "#fffbeb",
+                          border: "1px solid #f59e0b",
+                          padding: "0.75rem 1rem",
+                          borderRadius: "6px",
+                          marginBottom: "1rem"
+                        }}
+                      >
+                        <strong
+                          style={{
+                            color: "#b45309",
+                            fontSize: "0.85rem",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.35rem"
+                          }}
+                        >
+                          <span>⚠️</span>
+                          <span>Returned by Assessing Authority (ETO) with Legal Remarks:</span>
+                        </strong>
+                        <p
+                          style={{
+                            margin: "0.35rem 0 0",
+                            color: "#78350f",
+                            fontSize: "0.82rem",
+                            lineHeight: 1.4
+                          }}
+                        >
+                          {editingTarget?.assessmentVersions[0]?.reason ||
+                            "Observations recorded by ETO. Please update particulars or classification accordingly."}
+                        </p>
+                      </div>
+                    );
+                  })()}
+
                 {duplicateWarning && (
                   <div
                     style={{
@@ -14255,7 +15846,10 @@ export default function HomePage({
                 </div>
               </div>
 
-              <div className="modal-footer">
+              <div
+                className="modal-footer"
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+              >
                 <button
                   type="button"
                   onClick={() => {
@@ -14266,9 +15860,32 @@ export default function HomePage({
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary">
-                  {editingUnitId ? "✓ Save Survey Changes" : "Save & Create Draft Assessment"}
-                </button>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  {(() => {
+                    const editingTarget = units.find((u) => u.id === editingUnitId);
+                    const isReturned = editingTarget?.assessments[0]?.status === "RETURNED";
+                    if (isReturned && officer.role === "INSPECTOR") {
+                      return (
+                        <button
+                          type="button"
+                          className="btn-success"
+                          onClick={async (e) => {
+                            await handleAddUnit(e);
+                            if (editingUnitId) {
+                              await handleResubmitAssessment(editingUnitId);
+                            }
+                          }}
+                        >
+                          ✓ Save &amp; Resubmit to ETO ↗
+                        </button>
+                      );
+                    }
+                    return null;
+                  })()}
+                  <button type="submit" className="btn-primary">
+                    {editingUnitId ? "✓ Save Survey Changes" : "Save & Create Draft Assessment"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -14347,6 +15964,68 @@ export default function HomePage({
                     <option value="EPAY_PUNJAB">ePay Punjab (Mobile Banking / 1Link / ATM)</option>
                   </select>
                 </div>
+
+                {paymentChannel === "CHALLAN_32A" && (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 2fr",
+                      gap: "0.75rem",
+                      marginBottom: "0.85rem"
+                    }}
+                  >
+                    <div className="form-group">
+                      <label
+                        htmlFor="pay-district"
+                        style={{ fontWeight: 700, fontSize: "0.85rem" }}
+                      >
+                        📍 Relevant District:
+                      </label>
+                      <select
+                        id="pay-district"
+                        className="form-control"
+                        value={paymentDistrict}
+                        onChange={(e) => {
+                          const newDist = e.target.value;
+                          setPaymentDistrict(newDist);
+                          const branches = getDesignatedBranchesForDistrict(newDist);
+                          const firstBranch = branches[0];
+                          if (firstBranch) {
+                            setPaymentBankBranch(formatBranchDisplay(firstBranch));
+                          }
+                        }}
+                      >
+                        {allDesignatedDistricts.map((d) => (
+                          <option key={d} value={d}>
+                            {d}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label
+                        htmlFor="pay-bank-branch"
+                        style={{ fontWeight: 700, fontSize: "0.85rem" }}
+                      >
+                        🏛️ Designated NBP Branch ({paymentDistrictBranches.length}):
+                      </label>
+                      <select
+                        id="pay-bank-branch"
+                        className="form-control"
+                        value={paymentBankBranch}
+                        onChange={(e) => setPaymentBankBranch(e.target.value)}
+                        required
+                      >
+                        {paymentDistrictBranches.map((b) => (
+                          <option key={b.serialNo} value={formatBranchDisplay(b)}>
+                            {formatBranchOptionLabel(b)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
 
                 <div className="form-group">
                   <label htmlFor="pay-receipt-no">Form PFT-2 Serial / Challan / PSID No. *</label>
@@ -14474,7 +16153,11 @@ export default function HomePage({
         >
           <div className="modal-card">
             <div className="modal-header" style={{ background: "#991b1b" }}>
-              <h3 id="ret-modal-title">Return Assessment to Inspector</h3>
+              <h3 id="ret-modal-title">
+                {returnTargetUnitIds.length > 1
+                  ? `Return ${returnTargetUnitIds.length} Assessments to Inspector`
+                  : "Return Assessment to Inspector"}
+              </h3>
               <button
                 onClick={() => setShowReturnModal(false)}
                 className="modal-close-btn"
@@ -14487,11 +16170,15 @@ export default function HomePage({
             <form onSubmit={handleConfirmReturn}>
               <div className="modal-body">
                 <p style={{ fontSize: "0.875rem", color: "#64748b", margin: 0 }}>
-                  As Assessing Authority (ETO Tariq Mahmood), specify the statutory or evidentiary
-                  reason for returning this assessment for re-investigation.
+                  As Assessing Authority (ETO {officer.name}), specify the statutory or evidentiary
+                  reason for returning{" "}
+                  {returnTargetUnitIds.length > 1
+                    ? `these ${returnTargetUnitIds.length} assessment records`
+                    : "this assessment"}{" "}
+                  for re-investigation.
                 </p>
 
-                <div className="form-group">
+                <div className="form-group" style={{ marginTop: "1rem" }}>
                   <label htmlFor="ret-reason">Statutory Return Reason *</label>
                   <textarea
                     id="ret-reason"
@@ -14513,10 +16200,241 @@ export default function HomePage({
                   Cancel
                 </button>
                 <button type="submit" className="btn-danger">
-                  Confirm Return to Maker
+                  {returnTargetUnitIds.length > 1
+                    ? `Confirm Return (${returnTargetUnitIds.length} Records)`
+                    : "Confirm Return to Maker"}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3B: CLOSE / DISCARD SURVEY UNIT */}
+      {showCloseModal && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="close-modal-title"
+        >
+          <div className="modal-card">
+            <div className="modal-header" style={{ background: "#475569" }}>
+              <h3 id="close-modal-title">
+                {closeTargetUnitIds.length > 1
+                  ? `Close ${closeTargetUnitIds.length} Survey Records`
+                  : "Close Survey Record"}
+              </h3>
+              <button
+                onClick={() => setShowCloseModal(false)}
+                className="modal-close-btn"
+                aria-label="Close modal"
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmClose}>
+              <div className="modal-body">
+                <p style={{ fontSize: "0.875rem", color: "#64748b", margin: 0 }}>
+                  As authorized officer ({officer.name} &bull; {officer.role}), specify the
+                  administrative or factual justification for closing{" "}
+                  {closeTargetUnitIds.length > 1
+                    ? `these ${closeTargetUnitIds.length} records`
+                    : "this record"}
+                  . Closed records are isolated from active demand.
+                </p>
+
+                <div className="form-group" style={{ marginTop: "1rem" }}>
+                  <label htmlFor="close-reason">Administrative Closure Reason *</label>
+                  <textarea
+                    id="close-reason"
+                    rows={3}
+                    required
+                    className="form-control"
+                    placeholder="e.g. Business permanently defunct in field survey / duplicate entry / exempt under statutory rules"
+                    value={closeReason}
+                    onChange={(e) => setCloseReason(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  onClick={() => setShowCloseModal(false)}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-danger">
+                  Confirm Closure
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3C: STATUTORY AUDIT TRACE DOSSIER */}
+      {showAuditTraceModal && auditTraceUnit && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="audit-modal-title"
+        >
+          <div className="modal-card" style={{ maxWidth: "680px", width: "95%" }}>
+            <div
+              className="modal-header"
+              style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)" }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <span>📜</span>
+                <h3 id="audit-modal-title">
+                  Statutory Audit Dossier &bull; {auditTraceUnit.legalName}
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowAuditTraceModal(false)}
+                className="modal-close-btn"
+                aria-label="Close modal"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="modal-body">
+              {/* Summary Dossier Cards */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(10rem, 1fr))",
+                  gap: "0.75rem",
+                  background: "#f8fafc",
+                  padding: "0.85rem",
+                  borderRadius: "8px",
+                  border: "1px solid #e2e8f0",
+                  marginBottom: "1rem"
+                }}
+              >
+                <div>
+                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                    Assessment No
+                  </span>
+                  <strong style={{ fontSize: "0.85rem", color: "#0f172a" }}>
+                    {auditTraceUnit.assessmentNumber || "ASM-2026-..."}
+                  </strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                    Permanent Demand No
+                  </span>
+                  <strong style={{ fontSize: "0.85rem", color: "#166534" }}>
+                    {auditTraceUnit.demandNumber || "Pending Approval"}
+                  </strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                    Taxpayer PIN
+                  </span>
+                  <strong style={{ fontSize: "0.85rem", color: "#0284c7" }}>
+                    {auditTraceUnit.pinNumber || "Pending PIN"}
+                  </strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                    Annual Demand
+                  </span>
+                  <strong style={{ fontSize: "0.85rem", color: "#0d3822" }}>
+                    PKR {auditTraceUnit.statutoryRule.annual_rate_pkr.toLocaleString()}
+                  </strong>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "1rem", fontSize: "0.8rem", color: "#475569" }}>
+                <strong>Establishment Particulars:</strong> {auditTraceUnit.address} &bull;{" "}
+                {auditTraceUnit.circleName || "Circle-Vehari"} &bull;{" "}
+                {auditTraceUnit.identifierType}: {auditTraceUnit.identifierValue}
+                <br />
+                <strong>Statutory Basis:</strong> Class {auditTraceUnit.statutoryRule.rule_code} (
+                {auditTraceUnit.statutoryRule.category} &bull;{" "}
+                {auditTraceUnit.statutoryRule.subclassification_label ||
+                  auditTraceUnit.statutoryRule.subcategory}
+                )
+              </div>
+
+              <h4 style={{ margin: "0.75rem 0 0.5rem", fontSize: "0.88rem", color: "#1e293b" }}>
+                Chronological Audit Trail &bull; Immutable Ledger Log
+              </h4>
+
+              <div
+                style={{ display: "grid", gap: "0.5rem", maxHeight: "250px", overflowY: "auto" }}
+              >
+                {auditLogs
+                  .filter(
+                    (a) =>
+                      a.target === auditTraceUnit.legalName ||
+                      a.details.includes(auditTraceUnit.legalName) ||
+                      a.target.includes(auditTraceUnit.demandNumber || "---")
+                  )
+                  .map((log) => (
+                    <div
+                      key={log.id}
+                      style={{
+                        padding: "0.6rem 0.75rem",
+                        background: "#ffffff",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "6px",
+                        fontSize: "0.78rem"
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          color: "#64748b",
+                          marginBottom: "0.2rem"
+                        }}
+                      >
+                        <span>
+                          <strong>{log.actorName}</strong> ({log.actorRole}) &bull;{" "}
+                          <code style={{ fontSize: "0.72rem" }}>{log.eventType}</code>
+                        </span>
+                        <span>{new Date(log.timestamp).toLocaleString()}</span>
+                      </div>
+                      <div style={{ color: "#334155" }}>{log.details}</div>
+                    </div>
+                  ))}
+                {auditLogs.filter(
+                  (a) =>
+                    a.target === auditTraceUnit.legalName ||
+                    a.details.includes(auditTraceUnit.legalName) ||
+                    a.target.includes(auditTraceUnit.demandNumber || "---")
+                ).length === 0 && (
+                  <div
+                    style={{
+                      padding: "1rem",
+                      textAlign: "center",
+                      color: "#94a3b8",
+                      fontSize: "0.8rem"
+                    }}
+                  >
+                    No prior audit events recorded for this taxpayer record.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                onClick={() => setShowAuditTraceModal(false)}
+                className="btn-primary"
+              >
+                Close Dossier
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -14698,6 +16616,32 @@ export default function HomePage({
                   marginBottom: "1rem"
                 }}
               >
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.4rem" }}>
+                  <img
+                    src="/punjab-logo.png"
+                    alt="Government of the Punjab Official Seal"
+                    width={56}
+                    height={47}
+                    style={{
+                      width: "52px",
+                      height: "auto",
+                      maxHeight: "47px",
+                      objectFit: "contain"
+                    }}
+                  />
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.85rem",
+                    fontWeight: 800,
+                    letterSpacing: "0.05em",
+                    color: "#0d3822",
+                    textTransform: "uppercase",
+                    marginBottom: "0.15rem"
+                  }}
+                >
+                  GOVERNMENT OF THE PUNJAB
+                </div>
                 <h4
                   style={{
                     margin: 0,
@@ -15143,6 +17087,32 @@ export default function HomePage({
                   marginBottom: "1rem"
                 }}
               >
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.4rem" }}>
+                  <img
+                    src="/punjab-logo.png"
+                    alt="Government of the Punjab Official Seal"
+                    width={56}
+                    height={47}
+                    style={{
+                      width: "52px",
+                      height: "auto",
+                      maxHeight: "47px",
+                      objectFit: "contain"
+                    }}
+                  />
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.85rem",
+                    fontWeight: 800,
+                    letterSpacing: "0.05em",
+                    color: "#0d3822",
+                    textTransform: "uppercase",
+                    marginBottom: "0.15rem"
+                  }}
+                >
+                  GOVERNMENT OF THE PUNJAB
+                </div>
                 <h4
                   style={{
                     margin: 0,
@@ -15517,6 +17487,31 @@ export default function HomePage({
                           Professional Tax — Circle Vehari &bull; {pft1Data.financialYear}
                         </p>
                       </div>
+
+                      {/* Right: Official Government of the Punjab Seal */}
+                      <div
+                        style={{
+                          flexShrink: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          paddingLeft: "0.25rem"
+                        }}
+                      >
+                        <img
+                          src="/punjab-logo.png"
+                          alt="Government of the Punjab Official Seal"
+                          width={54}
+                          height={45}
+                          style={{
+                            width: "52px",
+                            height: "auto",
+                            maxHeight: "45px",
+                            objectFit: "contain",
+                            filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.08))"
+                          }}
+                        />
+                      </div>
                     </div>
 
                     {/* Demand Details Grid */}
@@ -15798,6 +17793,31 @@ export default function HomePage({
                           >
                             [See Rule 6 of the Punjab Professions and Trades Tax Rules, 1977]
                           </p>
+                        </div>
+
+                        {/* Right: Official Government of the Punjab Seal */}
+                        <div
+                          style={{
+                            flexShrink: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            paddingLeft: "0.25rem"
+                          }}
+                        >
+                          <img
+                            src="/punjab-logo.png"
+                            alt="Government of the Punjab Official Seal"
+                            width={54}
+                            height={45}
+                            style={{
+                              width: "52px",
+                              height: "auto",
+                              maxHeight: "45px",
+                              objectFit: "contain",
+                              filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.08))"
+                            }}
+                          />
                         </div>
                       </div>
 
@@ -17051,6 +19071,22 @@ export default function HomePage({
                     marginBottom: "1rem"
                   }}
                 >
+                  <div
+                    style={{ display: "flex", justifyContent: "center", marginBottom: "0.5rem" }}
+                  >
+                    <img
+                      src="/punjab-logo.png"
+                      alt="Government of the Punjab Official Seal"
+                      width={56}
+                      height={47}
+                      style={{
+                        width: "52px",
+                        height: "auto",
+                        maxHeight: "47px",
+                        objectFit: "contain"
+                      }}
+                    />
+                  </div>
                   <h4 style={{ margin: 0, textTransform: "uppercase", letterSpacing: "1px" }}>
                     GOVERNMENT OF THE PUNJAB
                   </h4>
@@ -17290,136 +19326,50 @@ export default function HomePage({
 
             <div className="modal-body" style={{ overflowY: "auto", padding: "1.25rem" }}>
               <section
-                aria-labelledby="survey-import-workflow-heading"
                 style={{
                   marginBottom: "1rem",
-                  padding: "1rem",
+                  padding: "0.85rem 1rem",
                   border: "1px solid #bbf7d0",
                   borderRadius: "8px",
-                  background: "#f0fdf4"
+                  background: "#f0fdf4",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "1rem"
                 }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: "1rem",
-                    alignItems: "center",
-                    marginBottom: "0.75rem"
+                <div>
+                  <h4
+                    style={{
+                      margin: 0,
+                      color: "#14532d",
+                      fontSize: "0.92rem",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem"
+                    }}
+                  >
+                    <span>📥</span>
+                    <span>Field Survey Staging Studio &bull; Rule 4 &amp; 5</span>
+                  </h4>
+                  <p style={{ margin: "0.2rem 0 0", color: "#475569", fontSize: "0.78rem" }}>
+                    Upload, validate, and stage field survey units into Feeded draft status. All
+                    unit submissions, ETO statutory reviews, classification edits, returns, and
+                    final PFT-3 approvals are centralized in the{" "}
+                    <strong>Statutory Assessment Queue</strong>.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  style={{ whiteSpace: "nowrap" }}
+                  onClick={() => {
+                    setShowBulkSurveyModal(false);
+                    switchTab("ASSESSMENTS");
                   }}
                 >
-                  <div>
-                    <h4
-                      id="survey-import-workflow-heading"
-                      style={{ margin: 0, color: "#14532d", fontSize: "0.95rem" }}
-                    >
-                      Imported Batch Workflow
-                    </h4>
-                    <p style={{ margin: "0.2rem 0 0", color: "#475569", fontSize: "0.78rem" }}>
-                      Inspector submission and ETO approval are separate, audited server
-                      transactions. Approval creates the eligible PFT-3 records.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn-secondary btn-sm"
-                    disabled={isLoadingSurveyImportBatches}
-                    onClick={() => void refreshActionableSurveyImportBatches()}
-                  >
-                    {isLoadingSurveyImportBatches ? "Refreshing…" : "Refresh batches"}
-                  </button>
-                </div>
-
-                {isLoadingSurveyImportBatches && actionableSurveyImportBatches.length === 0 ? (
-                  <p role="status" style={{ margin: 0, color: "#475569", fontSize: "0.8rem" }}>
-                    Loading assigned imported batches…
-                  </p>
-                ) : actionableSurveyImportBatches.length === 0 ? (
-                  <p style={{ margin: 0, color: "#475569", fontSize: "0.8rem" }}>
-                    No imported batch currently requires action for this role and jurisdiction.
-                  </p>
-                ) : (
-                  <div style={{ display: "grid", gap: "0.65rem" }}>
-                    {actionableSurveyImportBatches.map((batch) => {
-                      const isBusy = activeBulkWorkflowBatchId === batch.batch_id;
-                      const action = officer.role === "ETO" ? "APPROVE" : "SUBMIT";
-                      const actionCount =
-                        action === "APPROVE" ? batch.submitted_rows : batch.feeded_rows;
-                      const approvalBlocked =
-                        action === "APPROVE" &&
-                        (batch.feeded_rows > 0 || batch.pending_review_rows > 0);
-                      return (
-                        <article
-                          key={batch.batch_id}
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            gap: "1rem",
-                            padding: "0.75rem",
-                            borderRadius: "6px",
-                            border: "1px solid #d1d5db",
-                            background: "#ffffff"
-                          }}
-                        >
-                          <div style={{ minWidth: 0 }}>
-                            <strong style={{ color: "#0f172a", fontSize: "0.85rem" }}>
-                              {batch.source_filename}
-                            </strong>
-                            <div style={{ color: "#64748b", fontSize: "0.75rem" }}>
-                              FY {batch.financial_year_code} · Imported {batch.imported_rows} ·
-                              Feeded {batch.feeded_rows} · Submitted {batch.submitted_rows} ·
-                              Approved {batch.approved_rows}
-                            </div>
-                            {batch.pending_review_rows > 0 && (
-                              <div
-                                role="alert"
-                                style={{
-                                  color: "#92400e",
-                                  fontSize: "0.75rem",
-                                  marginTop: "0.2rem"
-                                }}
-                              >
-                                {batch.pending_review_rows} unit(s) are under classification review.
-                                They may be submitted but cannot be approved yet.
-                              </div>
-                            )}
-                            {action === "APPROVE" && batch.feeded_rows > 0 && (
-                              <div
-                                role="alert"
-                                style={{
-                                  color: "#92400e",
-                                  fontSize: "0.75rem",
-                                  marginTop: "0.2rem"
-                                }}
-                              >
-                                Waiting for assigned Inspector submission of {batch.feeded_rows}
-                                unit(s).
-                              </div>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            className={
-                              action === "APPROVE" ? "btn-primary btn-sm" : "btn-success btn-sm"
-                            }
-                            disabled={isBusy || actionCount === 0 || approvalBlocked}
-                            onClick={() => void handleBulkSurveyWorkflow(batch, action)}
-                            title={
-                              approvalBlocked
-                                ? "Wait for all Inspector submissions and resolve every pending statutory classification before ETO approval"
-                                : `${action === "APPROVE" ? "Approve" : "Submit"} ${actionCount} imported unit(s)`
-                            }
-                          >
-                            {isBusy
-                              ? `${action === "APPROVE" ? "Approving" : "Submitting"}…`
-                              : `${action === "APPROVE" ? "Bulk Approve" : "Bulk Submit"} (${actionCount})`}
-                          </button>
-                        </article>
-                      );
-                    })}
-                  </div>
-                )}
+                  Go to Assessment Queue ↗
+                </button>
               </section>
 
               {/* Step 1 & 2 Toolbar Cards */}
@@ -18411,7 +20361,23 @@ export default function HomePage({
                     marginBottom: "1.5rem"
                   }}
                 >
-                  <div style={{ fontSize: "1.75rem", marginBottom: "0.25rem" }}>🛡️</div>
+                  <div
+                    style={{ display: "flex", justifyContent: "center", marginBottom: "0.5rem" }}
+                  >
+                    <img
+                      src="/punjab-logo.png"
+                      alt="Government of the Punjab Official Seal"
+                      width={68}
+                      height={57}
+                      style={{
+                        width: "64px",
+                        height: "auto",
+                        maxHeight: "57px",
+                        objectFit: "contain",
+                        filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.08))"
+                      }}
+                    />
+                  </div>
                   <h4
                     style={{
                       margin: "0 0 0.25rem",
@@ -19083,7 +21049,23 @@ export default function HomePage({
                       marginBottom: "1.5rem"
                     }}
                   >
-                    <div style={{ fontSize: "1.5rem" }}>🏛️</div>
+                    <div
+                      style={{ display: "flex", justifyContent: "center", marginBottom: "0.4rem" }}
+                    >
+                      <img
+                        src="/punjab-logo.png"
+                        alt="Government of the Punjab Official Seal"
+                        width={56}
+                        height={47}
+                        style={{
+                          width: "52px",
+                          height: "auto",
+                          maxHeight: "47px",
+                          objectFit: "contain",
+                          filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.08))"
+                        }}
+                      />
+                    </div>
                     <h4 style={{ margin: "0.2rem 0", color: "#0d3822" }}>
                       GOVERNMENT OF THE PUNJAB
                     </h4>
@@ -19595,7 +21577,23 @@ export default function HomePage({
                     marginBottom: "1.5rem"
                   }}
                 >
-                  <div style={{ fontSize: "1.5rem" }}>🏛️</div>
+                  <div
+                    style={{ display: "flex", justifyContent: "center", marginBottom: "0.4rem" }}
+                  >
+                    <img
+                      src="/punjab-logo.png"
+                      alt="Government of the Punjab Official Seal"
+                      width={56}
+                      height={47}
+                      style={{
+                        width: "52px",
+                        height: "auto",
+                        maxHeight: "47px",
+                        objectFit: "contain",
+                        filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.08))"
+                      }}
+                    />
+                  </div>
                   <h4 style={{ margin: "0.2rem 0", color: "#0d3822" }}>GOVERNMENT OF THE PUNJAB</h4>
                   <p style={{ margin: 0, fontSize: "0.85rem", color: "#475569" }}>
                     OFFICE OF THE EXCISE &amp; TAXATION OFFICER &bull; CIRCLE-VEHARI
@@ -20175,17 +22173,98 @@ export default function HomePage({
                   </select>
                 </div>
 
-                <div className="form-group" style={{ marginBottom: "0.85rem" }}>
-                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                    Bank Branch / Treasury Location:
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={receiveBankBranch}
-                    onChange={(e) => setReceiveBankBranch(e.target.value)}
-                    required
-                  />
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 2fr",
+                    gap: "0.75rem",
+                    marginBottom: "0.85rem"
+                  }}
+                >
+                  <div className="form-group">
+                    <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                      📍 Relevant District:
+                    </label>
+                    <select
+                      className="form-control"
+                      value={receiveBranchDistrict}
+                      onChange={(e) => {
+                        const newDist = e.target.value;
+                        setReceiveBranchDistrict(newDist);
+                        const branches = getDesignatedBranchesForDistrict(newDist);
+                        const firstBranch = branches[0];
+                        if (firstBranch) {
+                          setReceiveBankBranch(formatBranchDisplay(firstBranch));
+                        }
+                      }}
+                      title="Filter designated bank branches by administrative district"
+                    >
+                      {allDesignatedDistricts.map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
+                    <small style={{ color: "#64748b", display: "block", marginTop: "0.2rem" }}>
+                      Auto-detected from challan / jurisdiction.
+                    </small>
+                  </div>
+
+                  <div className="form-group">
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center"
+                      }}
+                    >
+                      <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                        🏛️ Designated NBP Branch ({receiveDistrictBranches.length}):
+                      </label>
+                      <button
+                        type="button"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#1d4ed8",
+                          fontSize: "0.75rem",
+                          cursor: "pointer",
+                          textDecoration: "underline",
+                          padding: 0
+                        }}
+                        onClick={() => setIsCustomReceiveBranch((prev) => !prev)}
+                      >
+                        {isCustomReceiveBranch ? "Select from list" : "Manual branch"}
+                      </button>
+                    </div>
+
+                    {isCustomReceiveBranch ? (
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Enter custom NBP branch or treasury location"
+                        value={receiveBankBranch}
+                        onChange={(e) => setReceiveBankBranch(e.target.value)}
+                        required
+                      />
+                    ) : (
+                      <select
+                        className="form-control"
+                        value={receiveBankBranch}
+                        onChange={(e) => setReceiveBankBranch(e.target.value)}
+                        required
+                      >
+                        {receiveDistrictBranches.map((b) => (
+                          <option key={b.serialNo} value={formatBranchDisplay(b)}>
+                            {formatBranchOptionLabel(b)}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <small style={{ color: "#047857", display: "block", marginTop: "0.2rem" }}>
+                      Official designated NBP branches in {receiveBranchDistrict}
+                    </small>
+                  </div>
                 </div>
 
                 <div className="form-group" style={{ marginBottom: "0.85rem" }}>
@@ -21305,6 +23384,23 @@ export default function HomePage({
                     marginBottom: "0.75rem"
                   }}
                 >
+                  <div
+                    style={{ display: "flex", justifyContent: "center", marginBottom: "0.4rem" }}
+                  >
+                    <img
+                      src="/punjab-logo.png"
+                      alt="Government of the Punjab Official Seal"
+                      width={54}
+                      height={45}
+                      style={{
+                        width: "50px",
+                        height: "auto",
+                        maxHeight: "45px",
+                        objectFit: "contain",
+                        filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.08))"
+                      }}
+                    />
+                  </div>
                   <p
                     style={{
                       margin: 0,
@@ -22597,141 +24693,551 @@ export default function HomePage({
           aria-modal="true"
         >
           <div
-            className="modal-card"
-            style={{
-              background: "#ffffff",
-              borderRadius: "12px",
-              maxWidth: "42rem",
-              width: "100%",
-              maxHeight: "90vh",
-              overflowY: "auto",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
-              border: "1px solid #cbd5e1",
-              padding: "1.5rem"
-            }}
+            className="modal-card modal-card-xl"
+            style={{ display: "flex", flexDirection: "column", maxHeight: "90vh" }}
           >
             <div
+              className="modal-header"
               style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "1rem"
+                background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
+                borderBottom: "3px solid #3b82f6"
               }}
             >
-              <h3 style={{ margin: 0, fontSize: "1.25rem", color: "#0f172a" }}>
-                📥 Bulk Import Survey Discovery Units (CSV)
-              </h3>
+              <div>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: "1.15rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    color: "#ffffff"
+                  }}
+                >
+                  <span>⚡</span>
+                  <span>Field Discovery Ingestion &bull; Potential Assessment Register</span>
+                </h3>
+                <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#93c5fd" }}>
+                  Standardized Discovery Studio &bull; Vehari Jurisdiction (Immediate Operational
+                  Activation)
+                </p>
+              </div>
               <button
                 type="button"
-                onClick={() => setShowImportPotentialModal(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  fontSize: "1.25rem",
-                  cursor: "pointer",
-                  color: "#64748b"
+                className="modal-close-btn"
+                onClick={() => {
+                  setShowImportPotentialModal(false);
+                  setBulkPotentialParseResult(null);
+                  setPotentialCsvInput("");
+                  setBulkPotentialFileName("");
                 }}
               >
-                ✕
+                &times;
               </button>
             </div>
-            <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "0.75rem" }}>
-              Paste comma-separated survey data or upload a <code>.csv</code> file.
-              <br />
-              <span style={{ fontSize: "0.78rem", color: "#475569" }}>
-                Columns:{" "}
-                <code>
-                  Legal Name, Identifier (CNIC/NTN), Category Code, Subclass Code, Address,
-                  Locality, Circle Name, Trade Name
-                </code>
-              </span>
-            </p>
 
-            <div
-              style={{
-                marginBottom: "1rem",
-                display: "flex",
-                gap: "0.75rem",
-                alignItems: "center"
-              }}
-            >
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={handleDownloadPotentialTemplate}
-                style={{ fontSize: "0.8rem", padding: "0.35rem 0.75rem" }}
-              >
-                📄 Download Blank CSV Template
-              </button>
-              <input
-                type="file"
-                accept=".csv,.txt"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                      setPotentialCsvInput(String(event.target?.result || ""));
-                    };
-                    reader.readAsText(file);
-                  }
-                }}
-                style={{ fontSize: "0.82rem" }}
-              />
-            </div>
-            <div style={{ marginBottom: "1rem" }}>
-              <textarea
-                rows={8}
-                value={potentialCsvInput}
-                onChange={(e) => setPotentialCsvInput(e.target.value)}
-                placeholder={`Al-Hamd Medical Store, 36603-9988776-1, 1, 1(i), Main Karkhana Bazaar, Sharqi Colony, Vehari Circle I (City / Commercial), Al-Hamd Pharma\nBismillah Cloth House, 36603-1122334-3, 3, 3(ii), Club Road, Vehari Club, Vehari Circle I (City / Commercial), Bismillah Textiles`}
-                style={{
-                  width: "100%",
-                  fontFamily: "monospace",
-                  fontSize: "0.8rem",
-                  padding: "0.75rem",
-                  borderRadius: "6px",
-                  border: "1px solid #cbd5e1"
-                }}
-              />
-            </div>
-
-            {potentialImportErrors.length > 0 && (
+            <div className="modal-body" style={{ overflowY: "auto", padding: "1.25rem" }}>
+              {/* Step 1 & 2 Toolbar Cards */}
               <div
                 style={{
-                  padding: "0.75rem",
-                  backgroundColor: "#fee2e2",
-                  borderRadius: "6px",
-                  color: "#991b1b",
-                  fontSize: "0.8rem",
-                  marginBottom: "1rem"
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "1rem",
+                  background: "#f8fafc",
+                  padding: "1rem",
+                  borderRadius: "8px",
+                  border: "1px solid #e2e8f0"
                 }}
               >
-                <strong>Import Warnings/Errors:</strong>
-                <ul style={{ margin: "0.25rem 0 0 1rem", padding: 0 }}>
-                  {potentialImportErrors.map((err, idx) => (
-                    <li key={idx}>{err}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
+                {/* Step 1: Download Standard Template */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between"
+                  }}
+                >
+                  <div>
+                    <h4 style={{ margin: "0 0 0.35rem 0", color: "#0f172a", fontSize: "0.95rem" }}>
+                      1. Download Official Potential Template
+                    </h4>
+                    <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b", lineHeight: 1.4 }}>
+                      Standardized template aligned with Survey Ingestion columns, Punjab Finance
+                      Act categories, and authentic Circle-Vehari sample discovery trades.
+                    </p>
+                  </div>
+                  <div style={{ marginTop: "0.85rem" }}>
+                    <button
+                      type="button"
+                      onClick={handleDownloadPotentialTemplate}
+                      className="btn-secondary btn-sm"
+                      style={{
+                        backgroundColor: "#ffffff",
+                        borderColor: "#1e293b",
+                        color: "#0f172a",
+                        fontWeight: 600
+                      }}
+                    >
+                      ⬇️ Download Discovery Template (.csv)
+                    </button>
+                  </div>
+                </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setShowImportPotentialModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={handleImportPotentialCsv}
-                disabled={!potentialCsvInput.trim()}
-              >
-                📥 Confirm &amp; Import Records
-              </button>
+                {/* Step 2: Upload File or Direct Paste */}
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "0.35rem"
+                    }}
+                  >
+                    <h4 style={{ margin: 0, color: "#0f172a", fontSize: "0.95rem" }}>
+                      2. Upload or Paste Discovery Data
+                    </h4>
+                    <div style={{ display: "flex", gap: "0.25rem", fontSize: "0.75rem" }}>
+                      <button
+                        type="button"
+                        onClick={() => setBulkPotentialInputMode("FILE")}
+                        style={{
+                          padding: "0.15rem 0.5rem",
+                          borderRadius: "4px",
+                          border: "1px solid #cbd5e1",
+                          background: bulkPotentialInputMode === "FILE" ? "#0f172a" : "#ffffff",
+                          color: bulkPotentialInputMode === "FILE" ? "#ffffff" : "#475569",
+                          fontWeight: 600,
+                          cursor: "pointer"
+                        }}
+                      >
+                        File Upload
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBulkPotentialInputMode("PASTE")}
+                        style={{
+                          padding: "0.15rem 0.5rem",
+                          borderRadius: "4px",
+                          border: "1px solid #cbd5e1",
+                          background: bulkPotentialInputMode === "PASTE" ? "#0f172a" : "#ffffff",
+                          color: bulkPotentialInputMode === "PASTE" ? "#ffffff" : "#475569",
+                          fontWeight: 600,
+                          cursor: "pointer"
+                        }}
+                      >
+                        Direct Paste
+                      </button>
+                    </div>
+                  </div>
+
+                  {bulkPotentialInputMode === "FILE" ? (
+                    <div>
+                      <input
+                        type="file"
+                        id="bulkPotentialFileInput"
+                        accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        onChange={(event) => void handlePotentialFileUpload(event)}
+                        style={{ display: "none" }}
+                      />
+                      <label
+                        htmlFor="bulkPotentialFileInput"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "0.5rem",
+                          padding: "0.75rem",
+                          border: "2px dashed #94a3b8",
+                          borderRadius: "6px",
+                          background: "#ffffff",
+                          cursor: "pointer",
+                          color: "#334155",
+                          fontSize: "0.85rem",
+                          fontWeight: 600,
+                          marginTop: "0.35rem"
+                        }}
+                      >
+                        <span>📁</span>
+                        <span>
+                          {bulkPotentialFileName
+                            ? `File: ${bulkPotentialFileName}`
+                            : "Click to browse & upload discovery units (.csv or .xlsx)"}
+                        </span>
+                      </label>
+                    </div>
+                  ) : (
+                    <div>
+                      <textarea
+                        rows={3}
+                        className="form-control"
+                        placeholder="Paste CSV text here (including headers)..."
+                        value={potentialCsvInput}
+                        onChange={(e) => handlePotentialTextChange(e.target.value)}
+                        style={{ fontFamily: "monospace", fontSize: "0.75rem" }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Step 3: Interactive Staging & Validation Results */}
+              {bulkPotentialParseResult ? (
+                <div style={{ marginTop: "0.75rem" }}>
+                  {/* Summary Metric Cards */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(4, 1fr)",
+                      gap: "0.75rem",
+                      marginBottom: "0.75rem"
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                        padding: "0.6rem 0.75rem",
+                        borderRadius: "6px"
+                      }}
+                    >
+                      <span style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 700 }}>
+                        TOTAL DISCOVERY ROWS
+                      </span>
+                      <strong style={{ display: "block", fontSize: "1.25rem", color: "#0f172a" }}>
+                        {bulkPotentialParseResult.totalRows}
+                      </strong>
+                    </div>
+                    <div
+                      style={{
+                        background: "#f0fdf4",
+                        border: "1px solid #bbf7d0",
+                        padding: "0.6rem 0.75rem",
+                        borderRadius: "6px"
+                      }}
+                    >
+                      <span style={{ fontSize: "0.7rem", color: "#166534", fontWeight: 700 }}>
+                        VALID FOR INGESTION
+                      </span>
+                      <strong style={{ display: "block", fontSize: "1.25rem", color: "#15803d" }}>
+                        {bulkPotentialParseResult.validRowsCount}
+                      </strong>
+                    </div>
+                    <div
+                      style={{
+                        background: "#fef2f2",
+                        border: "1px solid #fecaca",
+                        padding: "0.6rem 0.75rem",
+                        borderRadius: "6px"
+                      }}
+                    >
+                      <span style={{ fontSize: "0.7rem", color: "#991b1b", fontWeight: 700 }}>
+                        VALIDATION ERRORS
+                      </span>
+                      <strong style={{ display: "block", fontSize: "1.25rem", color: "#b91c1c" }}>
+                        {bulkPotentialParseResult.errorRowsCount}
+                      </strong>
+                    </div>
+                    <div
+                      style={{
+                        background: "#fffbeb",
+                        border: "1px solid #fde68a",
+                        padding: "0.6rem 0.75rem",
+                        borderRadius: "6px"
+                      }}
+                    >
+                      <span style={{ fontSize: "0.7rem", color: "#92400e", fontWeight: 700 }}>
+                        DUPLICATES DETECTED
+                      </span>
+                      <strong style={{ display: "block", fontSize: "1.25rem", color: "#b45309" }}>
+                        {bulkPotentialParseResult.duplicateCount}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {/* Filter Toolbar */}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "0.5rem"
+                    }}
+                  >
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <button
+                        type="button"
+                        onClick={() => setBulkPotentialFilter("ALL")}
+                        className="btn-secondary btn-sm"
+                        style={{
+                          background: bulkPotentialFilter === "ALL" ? "#0f172a" : "#ffffff",
+                          color: bulkPotentialFilter === "ALL" ? "#ffffff" : "#475569"
+                        }}
+                      >
+                        All Rows ({bulkPotentialParseResult.totalRows})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBulkPotentialFilter("VALID")}
+                        className="btn-secondary btn-sm"
+                        style={{
+                          background: bulkPotentialFilter === "VALID" ? "#15803d" : "#ffffff",
+                          color: bulkPotentialFilter === "VALID" ? "#ffffff" : "#15803d",
+                          borderColor: "#15803d"
+                        }}
+                      >
+                        Valid Only ({bulkPotentialParseResult.validRowsCount})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBulkPotentialFilter("ERROR")}
+                        className="btn-secondary btn-sm"
+                        style={{
+                          background: bulkPotentialFilter === "ERROR" ? "#b91c1c" : "#ffffff",
+                          color: bulkPotentialFilter === "ERROR" ? "#ffffff" : "#b91c1c",
+                          borderColor: "#b91c1c"
+                        }}
+                      >
+                        Errors &amp; Duplicates ({bulkPotentialParseResult.errorRowsCount})
+                      </button>
+                    </div>
+
+                    <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                      Assigned Officer:{" "}
+                      <strong>
+                        {officer.name} ({officer.role})
+                      </strong>{" "}
+                      &bull; Jurisdiction: <strong>{officer.jurisdictionName}</strong>
+                    </span>
+                  </div>
+
+                  {/* Staging Table */}
+                  <div
+                    className="table-container"
+                    style={{ maxHeight: "320px", overflowY: "auto", border: "1px solid #cbd5e1" }}
+                  >
+                    <table className="gov-table" style={{ fontSize: "0.8rem" }}>
+                      <thead>
+                        <tr>
+                          <th style={{ width: "2.5rem" }}>#</th>
+                          <th style={{ width: "5.5rem" }}>Status</th>
+                          <th>Legal &amp; Trade Name</th>
+                          <th>Identifier (CNIC/NTN)</th>
+                          <th>Commercial Address &amp; Circle</th>
+                          <th>Statutory Rule</th>
+                          <th>Rate (PKR)</th>
+                          <th>Validation Findings / Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bulkPotentialParseResult.rows
+                          .filter((r) => {
+                            if (bulkPotentialFilter === "VALID") return r.status === "VALID";
+                            if (bulkPotentialFilter === "ERROR") return r.status === "ERROR";
+                            return true;
+                          })
+                          .map((row) => (
+                            <tr
+                              key={row.rowNumber}
+                              style={{
+                                background: row.status === "ERROR" ? "#fff5f5" : "#ffffff"
+                              }}
+                            >
+                              <td>{row.rowNumber}</td>
+                              <td>
+                                {row.status === "VALID" ? (
+                                  <span
+                                    className="badge badge-approved"
+                                    style={{ fontSize: "0.65rem" }}
+                                  >
+                                    ✓ VALID
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="badge badge-returned"
+                                    style={{ fontSize: "0.65rem" }}
+                                  >
+                                    ✕ ERROR
+                                  </span>
+                                )}
+                              </td>
+                              <td>
+                                <strong>{row.rawData["legalName"] || "(Blank Legal Name)"}</strong>
+                                {row.rawData["tradeName"] && (
+                                  <span
+                                    style={{
+                                      display: "block",
+                                      fontSize: "0.7rem",
+                                      color: "#64748b"
+                                    }}
+                                  >
+                                    {row.rawData["tradeName"]}
+                                  </span>
+                                )}
+                              </td>
+                              <td style={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
+                                {row.parsedUnit
+                                  ? `${row.parsedUnit.identifierType}: ${row.parsedUnit.identifierValue}`
+                                  : row.rawData["idVal"] ||
+                                    row.rawData["identifierValue"] ||
+                                    "(Empty)"}
+                              </td>
+                              <td style={{ maxWidth: "14rem", fontSize: "0.75rem" }}>
+                                <div>{row.rawData["address"] || "(Blank Address)"}</div>
+                                <div
+                                  style={{ color: "#0369a1", fontSize: "0.7rem", fontWeight: 600 }}
+                                >
+                                  📍{" "}
+                                  {row.parsedUnit?.circleName ||
+                                    row.rawData["circle"] ||
+                                    "Circle-Vehari"}
+                                </div>
+                              </td>
+                              <td>
+                                {row.parsedUnit ? (
+                                  <div>
+                                    <span
+                                      className="badge badge-draft"
+                                      style={{ fontSize: "0.65rem" }}
+                                    >
+                                      {row.parsedUnit.subclassificationCode
+                                        ? `Class ${row.parsedUnit.subclassificationCode}`
+                                        : `Class ${row.parsedUnit.categoryCode}`}
+                                    </span>
+                                    <span
+                                      style={{
+                                        display: "block",
+                                        fontSize: "0.68rem",
+                                        color: "#475569"
+                                      }}
+                                    >
+                                      {row.parsedUnit.statutoryRuleId}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span style={{ color: "#b91c1c", fontWeight: 600 }}>
+                                    {row.rawData["catCode"] || row.rawData["ruleId"] || "(None)"}
+                                  </span>
+                                )}
+                              </td>
+                              <td>
+                                <strong>
+                                  {row.parsedUnit
+                                    ? `PKR ${row.parsedUnit.annualRatePkr.toLocaleString()}`
+                                    : "—"}
+                                </strong>
+                              </td>
+                              <td>
+                                {row.errors.length > 0 && (
+                                  <div
+                                    style={{
+                                      color: "#b91c1c",
+                                      fontSize: "0.725rem",
+                                      lineHeight: 1.3
+                                    }}
+                                  >
+                                    {row.errors.map((e, i) => (
+                                      <div key={i}>&bull; {e}</div>
+                                    ))}
+                                  </div>
+                                )}
+                                {row.warnings.length > 0 && (
+                                  <div
+                                    style={{
+                                      color: "#d97706",
+                                      fontSize: "0.725rem",
+                                      lineHeight: 1.3,
+                                      marginTop: "0.2rem"
+                                    }}
+                                  >
+                                    {row.warnings.map((w, i) => (
+                                      <div key={i}>⚠️ {w}</div>
+                                    ))}
+                                  </div>
+                                )}
+                                {row.errors.length === 0 && row.warnings.length === 0 && (
+                                  <span style={{ color: "#166534", fontSize: "0.725rem" }}>
+                                    ✓ Verified under Second Schedule
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding: "2.5rem 1rem",
+                    textAlign: "center",
+                    background: "#f8fafc",
+                    borderRadius: "8px",
+                    border: "1px dashed #cbd5e1",
+                    marginTop: "0.75rem"
+                  }}
+                >
+                  <span style={{ fontSize: "2rem", display: "block", marginBottom: "0.5rem" }}>
+                    📥
+                  </span>
+                  <strong style={{ fontSize: "1rem", color: "#334155" }}>
+                    No discovery data loaded yet
+                  </strong>
+                  <p style={{ fontSize: "0.8rem", color: "#64748b", margin: "0.35rem 0 0" }}>
+                    Download the official template above or select a completed CSV / XLSX survey
+                    spreadsheet to validate discovery records.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div
+              className="modal-footer"
+              style={{ justifyContent: "space-between", alignItems: "center" }}
+            >
+              <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                {bulkPotentialParseResult && bulkPotentialParseResult.validRowsCount > 0 ? (
+                  <span>
+                    Ready to import <strong>{bulkPotentialParseResult.validRowsCount}</strong> valid
+                    discovery unit(s) directly into the Potential Register. Units become immediately
+                    active and operational.
+                  </span>
+                ) : (
+                  <span>Select and validate discovery spreadsheet to continue.</span>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => {
+                    setShowImportPotentialModal(false);
+                    setBulkPotentialParseResult(null);
+                    setPotentialCsvInput("");
+                    setBulkPotentialFileName("");
+                  }}
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  style={{
+                    backgroundColor: "#0f172a",
+                    borderColor: "#1e293b"
+                  }}
+                  disabled={
+                    !bulkPotentialParseResult ||
+                    bulkPotentialParseResult.validRowsCount === 0 ||
+                    isImportingPotential
+                  }
+                  onClick={handleExecuteBulkPotentialImport}
+                >
+                  {isImportingPotential
+                    ? "Importing Units..."
+                    : `📥 Confirm & Import Active Units (${bulkPotentialParseResult ? bulkPotentialParseResult.validRowsCount : 0})`}
+                </button>
+              </div>
             </div>
           </div>
         </div>

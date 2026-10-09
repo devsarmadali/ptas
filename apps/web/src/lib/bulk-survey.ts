@@ -26,12 +26,18 @@ import {
 } from "@ptas/domain";
 import {
   CIRCLE_VEHARI_ID,
+  DISTRICT_VEHARI_CIRCLES,
   FINANCIAL_YEAR_2026_27,
   type MockOfficer,
   type PilotAuditItem,
   type StoredUnit,
   type StoredUnitSnapshot
 } from "./pilot-store";
+import {
+  MAX_BULK_IMPORT_ROWS,
+  normalizeEntityLegalName,
+  validateOfficerImportJurisdiction
+} from "./bulk-import-standards";
 
 export interface ValidSurveyUnit {
   readonly legalName: string;
@@ -46,6 +52,9 @@ export interface ValidSurveyUnit {
   readonly taxAmount: number;
   readonly openingArrears?: number | undefined;
   readonly phone?: string | undefined;
+  readonly circleId?: string | undefined;
+  readonly circleName?: string | undefined;
+  readonly districtName?: string | undefined;
 }
 
 export interface BulkSurveyValidationRow {
@@ -251,7 +260,8 @@ function normalizeHeaderName(header: string): string {
  */
 export function parseBulkSurveyCsv(
   csvText: string,
-  existingUnits: readonly StoredUnit[]
+  existingUnits: readonly StoredUnit[],
+  officer?: MockOfficer | undefined
 ): BulkSurveyParseResult {
   const rawRows = parseCsvContent(csvText);
   if (rawRows.length === 0) {
@@ -269,14 +279,43 @@ export function parseBulkSurveyCsv(
   const normalizedHeaders = rawHeaders.map(normalizeHeaderName);
   const dataRows = rawRows.slice(1);
 
+  if (dataRows.length > MAX_BULK_IMPORT_ROWS) {
+    return {
+      totalRows: dataRows.length,
+      validRowsCount: 0,
+      errorRowsCount: dataRows.length,
+      duplicateCount: 0,
+      rows: [
+        {
+          rowNumber: 1,
+          rawData: {},
+          status: "ERROR",
+          errors: [
+            `Upload exceeds maximum statutory batch limit of ${MAX_BULK_IMPORT_ROWS.toLocaleString()} records (found ${dataRows.length}).`
+          ],
+          warnings: []
+        }
+      ],
+      validUnits: []
+    };
+  }
+
   // Build existing normalized identifier index
   const existingIdIndex = new Map<string, StoredUnit>();
+  // Build existing circle-scoped legal name index
+  const existingCircleLegalNameIndex = new Map<string, StoredUnit>();
+
   for (const u of existingUnits) {
     try {
       const norm = normalizeIdentifier(u.identifierType, u.identifierValue);
       existingIdIndex.set(norm, u);
     } catch {
       existingIdIndex.set(u.identifierValue.trim(), u);
+    }
+
+    if (u.legalName && u.circleId) {
+      const normName = normalizeEntityLegalName(u.legalName);
+      existingCircleLegalNameIndex.set(`${u.circleId}:${normName}`, u);
     }
   }
 
@@ -312,6 +351,8 @@ export function parseBulkSurveyCsv(
 
   // Track in-file normalized identifiers to catch intra-batch duplicates
   const inBatchIdIndex = new Map<string, number>();
+  // Track in-file circle-scoped legal names to catch intra-batch duplicate legal names
+  const inBatchCircleLegalNameIndex = new Map<string, number>();
 
   const validatedRows: BulkSurveyValidationRow[] = [];
   const validUnits: ValidSurveyUnit[] = [];
@@ -385,7 +426,20 @@ export function parseBulkSurveyCsv(
       errors.push("Missing required field: Commercial Address");
     }
 
-    // 4. Validate Statutory Rule ID / Schedule Code
+    // 4. Role & Jurisdiction Boundary Enforcement
+    const jurisResult = validateOfficerImportJurisdiction(
+      officer,
+      rowMap["circle"],
+      rowMap["district"] || rowMap["zone"],
+      rowMap["division"] || rowMap["region"]
+    );
+    if (!jurisResult.allowed && jurisResult.error) {
+      errors.push(jurisResult.error);
+    }
+    const resolvedCircle = jurisResult.resolvedCircle ?? DISTRICT_VEHARI_CIRCLES[0]!;
+    const resolvedDistrict = jurisResult.resolvedDistrict;
+
+    // 5. Validate Statutory Rule ID / Schedule Code
     let resolvedRule: StatutoryRuleDefinition | undefined;
     if (statutoryRuleIdRaw) {
       // Try direct rule ID lookup (e.g. "PFT-6.x", "PFT-3.i.b", "PFT-10")
@@ -426,7 +480,7 @@ export function parseBulkSurveyCsv(
       );
     }
 
-    // 5. Duplicate Identification Checks
+    // 6. Duplicate Identification Checks
     if (normalizedId) {
       // Check in-file duplicate
       const seenRow = inBatchIdIndex.get(normalizedId);
@@ -449,17 +503,42 @@ export function parseBulkSurveyCsv(
       }
     }
 
-    // 6. Name Similarity Candidate Check (Warning only)
+    // 7. Circle-scoped Legal Name Duplication Check
+    // Duplication rules: already existing legal names in that circle must be discarded by flagging them
+    if (legalName && resolvedCircle) {
+      const normLegal = normalizeEntityLegalName(legalName);
+      const circleKey = `${resolvedCircle.id}:${normLegal}`;
+
+      const seenCircleRow = inBatchCircleLegalNameIndex.get(circleKey);
+      if (seenCircleRow !== undefined) {
+        errors.push(
+          `Duplicate legal name in upload file: Legal name "${legalName}" already appeared on row ${seenCircleRow} for circle "${resolvedCircle.name}". Discarded per circle duplication rules.`
+        );
+        duplicateCount++;
+      } else {
+        inBatchCircleLegalNameIndex.set(circleKey, rowNumber);
+      }
+
+      const existingInCircle = existingCircleLegalNameIndex.get(circleKey);
+      if (existingInCircle) {
+        errors.push(
+          `Duplicate legal name: Legal name "${legalName}" already exists in circle "${resolvedCircle.name}" (Record: ${existingInCircle.demandUnit?.permanentDemandNo || existingInCircle.assessmentNumber || existingInCircle.id}). Discarded per circle duplication rules.`
+        );
+        duplicateCount++;
+      }
+    }
+
+    // 8. Name Similarity Candidate Check (Warning only for cross-circle or approximate matches)
     if (legalName) {
       const candidates = findDuplicateCandidates(
         {
           displayName: legalName,
-          currentCircleId: CIRCLE_VEHARI_ID
+          currentCircleId: resolvedCircle.id
         },
         existingTaxpayers
       );
       const highMatch = candidates.find((c) => c.confidence === "EXACT" || c.confidence === "HIGH");
-      if (highMatch) {
+      if (highMatch && !errors.some((e) => e.includes("Duplicate legal name"))) {
         warnings.push(
           `Similar business name found in system: "${highMatch.existingDisplayName}" (${highMatch.matchReason})`
         );
@@ -484,7 +563,10 @@ export function parseBulkSurveyCsv(
         categoryCode: resolvedRule.category_code,
         taxAmount: resolvedRule.annual_rate_pkr,
         openingArrears,
-        phone
+        phone,
+        circleId: resolvedCircle.id,
+        circleName: resolvedCircle.name,
+        districtName: resolvedDistrict
       };
       validUnits.push(parsedUnit);
     }
@@ -570,6 +652,11 @@ export function convertValidSurveyUnitsToStoredUnits(
       baseTimestamp
     );
 
+    const unitCircleId = item.circleId || CIRCLE_VEHARI_ID;
+    const unitCircleName =
+      item.circleName || officer.jurisdictionName || "Vehari Circle I (City / Commercial)";
+    const unitDistrictName = item.districtName || "Vehari";
+
     const unit: StoredUnit = {
       id: unitId,
       assessmentNumber: `ASM-${FINANCIAL_YEAR_2026_27.split("-")[1] ?? "2026"}-${String(sequenceNumber).padStart(4, "0")}`,
@@ -581,7 +668,9 @@ export function convertValidSurveyUnitsToStoredUnits(
       identifierType: item.identifierType,
       identifierValue: item.identifierValue,
       address: item.address,
-      circleId: CIRCLE_VEHARI_ID,
+      circleId: unitCircleId,
+      circleName: unitCircleName,
+      districtName: unitDistrictName,
       provincialUin,
       categoryCode: item.categoryCode,
       subclassificationCode: item.statutoryRule.subclassification_code,

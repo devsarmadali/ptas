@@ -239,6 +239,32 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
             Head: {copy.headOfAccount.replace(/\s*-\s*Provincial|\s*\(Provincial\)/gi, "").trim()}
           </div>
         </div>
+
+        {/* Right: Official Government of the Punjab Seal (Opposite QR code) */}
+        <div
+          style={{
+            flexShrink: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingLeft: "0.2rem"
+          }}
+        >
+          <img
+            src="/punjab-logo.png"
+            alt="Government of the Punjab Official Seal"
+            width={48}
+            height={40}
+            style={{
+              width: "48px",
+              height: "auto",
+              maxHeight: "44px",
+              objectFit: "contain",
+              filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.08))"
+            }}
+          />
+        </div>
       </div>
 
       {/* ── SECTION 2: IDENTIFICATION GRID (2-COLUMN) ────────────────── */}

@@ -350,6 +350,32 @@ function FormPft1NoticeContent() {
               &bull; {pft1Data.financialYear}
             </p>
           </div>
+
+          {/* Right: Official Government of the Punjab Seal */}
+          <div
+            style={{
+              flexShrink: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              paddingLeft: "0.5rem"
+            }}
+          >
+            <img
+              src="/punjab-logo.png"
+              alt="Government of the Punjab Official Seal"
+              width={72}
+              height={60}
+              style={{
+                width: "68px",
+                height: "auto",
+                maxHeight: "60px",
+                objectFit: "contain",
+                filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.08))"
+              }}
+            />
+          </div>
         </div>
 
         {/* Demand Details Identification Grid */}

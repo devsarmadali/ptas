@@ -16,9 +16,24 @@ export function normalizeDistrictName(district: string): string {
     .toLowerCase()
     .replace(/^district\s+/i, "")
     .replace(/\s+circle.*$/i, "")
+    .replace(/^circle[- ]+/i, "")
+    .replace(/[-_]/g, " ")
     .replace(/\./g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * Return all distinct district names present in the designated branches schedule, sorted alphabetically.
+ */
+export function getUniqueDistricts(): readonly string[] {
+  const set = new Set<string>();
+  for (const b of DESIGNATED_NBP_BRANCHES) {
+    if (b.district && b.district.trim()) {
+      set.add(b.district.trim());
+    }
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
 }
 
 /**
@@ -48,6 +63,13 @@ export function getDesignatedBranchesForDistrict(
  */
 export function formatBranchDisplay(branch: DesignatedBankBranch): string {
   return `${branch.bankName} — ${branch.branchName} (Branch Code: ${branch.branchCode}, ${branch.district})`;
+}
+
+/**
+ * Format branch for compact option labels in select dropdowns.
+ */
+export function formatBranchOptionLabel(branch: DesignatedBankBranch): string {
+  return `${branch.branchName} (Code: ${branch.branchCode}) — ${branch.district}`;
 }
 
 /**

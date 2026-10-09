@@ -2,15 +2,26 @@ import { describe, it, expect } from "vitest";
 import {
   getDesignatedBranchesForDistrict,
   normalizeDistrictName,
-  formatBranchDisplay
+  formatBranchDisplay,
+  formatBranchOptionLabel,
+  getUniqueDistricts
 } from "../src/lib/bank-branches";
 
 describe("Designated Bank Branches Jurisdiction-Wise Service", () => {
   it("normalizes district names correctly", () => {
     expect(normalizeDistrictName("District Vehari")).toBe("vehari");
     expect(normalizeDistrictName("Vehari Circle-I")).toBe("vehari");
+    expect(normalizeDistrictName("Circle-Vehari")).toBe("vehari");
     expect(normalizeDistrictName("VEHARI")).toBe("vehari");
     expect(normalizeDistrictName("D.G. Khan")).toBe("d g khan");
+  });
+
+  it("extracts all unique districts from designated branches schedule", () => {
+    const districts = getUniqueDistricts();
+    expect(districts.length).toBeGreaterThan(50);
+    expect(districts).toContain("VEHARI");
+    expect(districts).toContain("Lahore");
+    expect(districts).toContain("Multan");
   });
 
   it("filters branches strictly for Vehari district", () => {
@@ -45,5 +56,10 @@ describe("Designated Bank Branches Jurisdiction-Wise Service", () => {
     expect(formatted).toContain("National Bank of Pakistan");
     expect(formatted).toContain("Main Branch, Vehari");
     expect(formatted).toContain("414");
+
+    const optionLabel = formatBranchOptionLabel(mainVehari);
+    expect(optionLabel).toContain("Main Branch, Vehari");
+    expect(optionLabel).toContain("414");
+    expect(optionLabel).toContain("VEHARI");
   });
 });

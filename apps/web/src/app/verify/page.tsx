@@ -132,6 +132,21 @@ export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: str
         >
           Official Public Verification Portal
         </div>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.75rem" }}>
+          <img
+            src="/punjab-logo.png"
+            alt="Government of the Punjab Official Seal"
+            width={72}
+            height={60}
+            style={{
+              width: "68px",
+              height: "auto",
+              maxHeight: "60px",
+              objectFit: "contain",
+              filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.08))"
+            }}
+          />
+        </div>
         <h1
           style={{ color: "#0d3822", fontSize: "1.75rem", fontWeight: 800, margin: "0 0 0.5rem" }}
         >

@@ -105,9 +105,44 @@ export default function SignInPage() {
             borderBottom: "3px solid #b45309"
           }}
         >
-          <p style={{ margin: "0 0 0.35rem", fontSize: "0.75rem", fontWeight: 700 }}>
-            GOVERNMENT OF THE PUNJAB
-          </p>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              marginBottom: "0.75rem"
+            }}
+          >
+            <img
+              src="/punjab-logo.png"
+              alt="Government of the Punjab Official Seal"
+              width={54}
+              height={45}
+              style={{
+                width: "48px",
+                height: "auto",
+                maxHeight: "44px",
+                objectFit: "contain",
+                filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.25))"
+              }}
+            />
+            <div>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.05em",
+                  color: "#bbf7d0"
+                }}
+              >
+                GOVERNMENT OF THE PUNJAB
+              </p>
+              <p style={{ margin: 0, fontSize: "0.7rem", color: "#d1fae5" }}>
+                Excise, Taxation &amp; Narcotics Control Department
+              </p>
+            </div>
+          </div>
           <h1 id="sign-in-heading" style={{ margin: 0, fontSize: "1.4rem" }}>
             PTAS Officer Sign In
           </h1>

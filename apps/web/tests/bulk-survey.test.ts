@@ -222,4 +222,76 @@ describe("Phase 4: Bulk Survey Import & PFT-3 Register Ingestion", () => {
       expect(unit.ledgerEntries).toHaveLength(0); // Ledger begins on approval
     }
   });
+
+  it("enforces circle jurisdiction boundary for Inspector (denies non-matching circles)", () => {
+    const inspector = MOCK_OFFICERS[0]; // Tax Inspector (Vehari Circle I)
+    const csv =
+      "Legal Name,Identifier Type,Identifier Value,Commercial Address,Statutory Rule ID,Circle\n" +
+      "Shop in Circle 1,CNIC,36601-1111111-1,Main Bazar Vehari,PFT-6.x,Vehari Circle I (City / Commercial)\n" +
+      "Shop in Burewala,CNIC,36601-2222222-2,Main Bazar Burewala,PFT-6.x,Burewala Circle";
+
+    const result = parseBulkSurveyCsv(csv, [], inspector);
+    expect(result.totalRows).toBe(2);
+    expect(result.validRowsCount).toBe(1);
+    expect(result.errorRowsCount).toBe(1);
+    expect(result.rows[0]?.status).toBe("VALID");
+    expect(result.rows[1]?.status).toBe("ERROR");
+    expect(result.rows[1]?.errors[0]).toContain("Jurisdiction mismatch: Inspector");
+    expect(result.rows[1]?.errors[0]).toContain("Cannot import record for Circle");
+  });
+
+  it("allows ETO to import rows across all District Vehari sub-jurisdiction circles but denies other districts", () => {
+    const eto = MOCK_OFFICERS[1]; // ETO Vehari
+    const csv =
+      "Legal Name,Identifier Type,Identifier Value,Commercial Address,Statutory Rule ID,District,Circle\n" +
+      "Burewala Traders,CNIC,36601-3333333-3,Grain Market Burewala,PFT-6.x,Vehari,Burewala Circle\n" +
+      "Mailsi Cotton Shop,CNIC,36601-4444444-4,Colony Road Mailsi,PFT-6.x,Vehari,Mailsi Circle\n" +
+      "Multan Mall Shop,CNIC,36601-5555555-5,Cantonment Multan,PFT-6.x,Multan,Multan Circle 1";
+
+    const result = parseBulkSurveyCsv(csv, [], eto);
+    expect(result.totalRows).toBe(3);
+    expect(result.validRowsCount).toBe(2);
+    expect(result.errorRowsCount).toBe(1);
+    expect(result.rows[0]?.status).toBe("VALID");
+    expect(result.rows[1]?.status).toBe("VALID");
+    expect(result.rows[2]?.status).toBe("ERROR");
+    expect(result.rows[2]?.errors[0]).toContain("Jurisdiction mismatch");
+  });
+
+  it("discards rows with already existing legal names in the same circle", () => {
+    const existingUnits = createInitialPilotUnits();
+    const existingName = existingUnits[0]!.legalName;
+    const csv =
+      "Legal Name,Identifier Type,Identifier Value,Commercial Address,Statutory Rule ID,Circle\n" +
+      `${existingName.toLowerCase()},CNIC,36601-9988112-9,New Branch Club Road,PFT-1.i,Vehari Circle I (City / Commercial)\n` +
+      `${existingName},CNIC,36601-9988113-8,Chichawatni Road,PFT-1.i,Burewala Circle`;
+
+    const result = parseBulkSurveyCsv(csv, existingUnits);
+    expect(result.totalRows).toBe(2);
+    // Row 1 should be discarded as duplicate legal name in Circle I
+    expect(result.rows[0]?.status).toBe("ERROR");
+    expect(result.rows[0]?.errors[0]).toContain("Duplicate legal name: Legal name");
+    expect(result.rows[0]?.errors[0]).toContain("already exists in circle");
+    expect(result.rows[0]?.errors[0]).toContain("Discarded per circle duplication rules");
+    // Row 2 should be valid because it belongs to a different circle (Burewala Circle)
+    expect(result.rows[1]?.status).toBe("VALID");
+    expect(result.duplicateCount).toBe(1);
+    expect(result.validRowsCount).toBe(1);
+  });
+
+  it("discards intra-batch duplicate legal names within the same circle", () => {
+    const csv =
+      "Legal Name,Identifier Type,Identifier Value,Commercial Address,Statutory Rule ID,Circle\n" +
+      "Bismillah Cloth House,CNIC,36601-1122112-1,Shop 1 Main Bazar,PFT-3.i.b,Vehari Circle I (City / Commercial)\n" +
+      "bismillah cloth house,CNIC,36601-1122113-2,Shop 2 Main Bazar,PFT-3.i.b,Vehari Circle I (City / Commercial)";
+
+    const result = parseBulkSurveyCsv(csv, []);
+    expect(result.totalRows).toBe(2);
+    expect(result.validRowsCount).toBe(1);
+    expect(result.errorRowsCount).toBe(1);
+    expect(result.duplicateCount).toBe(1);
+    expect(result.rows[0]?.status).toBe("VALID");
+    expect(result.rows[1]?.status).toBe("ERROR");
+    expect(result.rows[1]?.errors[0]).toContain("Duplicate legal name in upload file");
+  });
 });

@@ -20,6 +20,7 @@
 
 import { jsPDF } from "jspdf";
 import { createBasePdf, generateQrDataUrl } from "../base-document";
+import { PUNJAB_LOGO_DATA_URL, PUNJAB_LOGO_ASPECT_RATIO } from "../punjab-logo";
 import type { FormPFT2Model } from "../../statutory-forms";
 import type { DocumentGenerationOptions } from "../types";
 import {
@@ -98,9 +99,9 @@ export async function generatePft2ChallanPdf(
     const innerBottom = cardBottom - 1.8;
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SECTION 1 — TOP HEADER ROW, QR CODE & SECURITY CODE (BELOW QR)
+    // SECTION 1 — TOP HEADER ROW, QR CODE & SECURITY CODE (BELOW QR) & PUNJAB SEAL
     // ══════════════════════════════════════════════════════════════════════════
-    const QR_SIZE = 22.0;
+    const QR_SIZE = 20.0;
     const qrX = innerX + 0.5;
     const qrY = curY + 1.2;
 
@@ -108,9 +109,9 @@ export async function generatePft2ChallanPdf(
     doc.addImage(qrDataUrl, "PNG", qrX, qrY, QR_SIZE, QR_SIZE);
 
     // Security PIN Box Elegantly Positioned Below QR Code (Number Only)
-    const secBoxY = qrY + QR_SIZE + 1.0;
+    const secBoxY = qrY + QR_SIZE + 0.8;
     const secBoxW = QR_SIZE;
-    const secBoxH = 6.2;
+    const secBoxH = 5.8;
     doc.setFillColor(...C.blueBadgeBg);
     doc.setDrawColor(...C.blueBadgeBorder);
     doc.setLineWidth(0.2);
@@ -129,51 +130,58 @@ export async function generatePft2ChallanPdf(
                 copy.qrPayload
             );
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10.0);
+    doc.setFontSize(9.5);
     doc.setTextColor(...C.blueDeep);
-    doc.text(secCode, qrX + secBoxW / 2, secBoxY + 4.3, { align: "center" });
+    doc.text(secCode, qrX + secBoxW / 2, secBoxY + 4.1, { align: "center" });
 
-    // Right region: Centered authority header
-    const deptX = innerX + QR_SIZE + 2.5;
-    const deptW = innerW - QR_SIZE - 3.0;
+    // Official Government of the Punjab Seal (Opposite QR code on the right side)
+    const LOGO_W = 15.5;
+    const LOGO_H = LOGO_W / PUNJAB_LOGO_ASPECT_RATIO; // 15.5 / 1.1976 = ~12.94mm
+    const logoX = innerX + innerW - LOGO_W - 0.5;
+    const logoY = curY + 6.0; // Perfectly parallel to GOVERNMENT OF THE PUNJAB & EXCISE DEPARTMENT lines
+    doc.addImage(PUNJAB_LOGO_DATA_URL, "PNG", logoX, logoY, LOGO_W, LOGO_H);
+
+    // Center region: Authority header between QR code (left) and Punjab Logo (right)
+    const deptX = qrX + QR_SIZE + 1.5;
+    const deptW = logoX - deptX - 1.5; // ~ 50.0mm centered area
     const deptCX = deptX + deptW / 2;
 
     // 1. Copy Title Badge (Pill)
     const badgeText = copy.copyTitle;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.4);
-    const badgeW = Math.min(deptW - 1, doc.getTextWidth(badgeText) + 8);
+    doc.setFontSize(8.0);
+    const badgeW = Math.min(deptW - 1, doc.getTextWidth(badgeText) + 6);
     const badgeX = deptCX - badgeW / 2;
     doc.setFillColor(...C.primaryBg);
     doc.setDrawColor(...C.primaryLight);
     doc.setLineWidth(0.2);
-    doc.roundedRect(badgeX, curY + 0.8, badgeW, 4.4, 0.6, 0.6, "FD");
+    doc.roundedRect(badgeX, curY + 0.8, badgeW, 4.2, 0.6, 0.6, "FD");
     doc.setTextColor(...C.primaryLight);
-    doc.text(badgeText, deptCX, curY + 4.1, { align: "center" });
+    doc.text(badgeText, deptCX, curY + 3.9, { align: "center" });
 
     // 2. GOVERNMENT OF THE PUNJAB
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.0);
+    doc.setFontSize(8.6);
     doc.setTextColor(...C.primary);
-    doc.text("GOVERNMENT OF THE PUNJAB", deptCX, curY + 9.0, { align: "center" });
+    doc.text("GOVERNMENT OF THE PUNJAB", deptCX, curY + 8.8, { align: "center" });
 
     // 3. EXCISE & TAXATION DEPARTMENT
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.2);
+    doc.setFontSize(7.8);
     doc.setTextColor(...C.textDark);
-    doc.text("EXCISE & TAXATION DEPARTMENT", deptCX, curY + 12.6, { align: "center" });
+    doc.text("EXCISE & TAXATION DEPARTMENT", deptCX, curY + 12.2, { align: "center" });
 
     // 4. PUNJAB PROFESSIONS & TRADES TAX
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.8);
+    doc.setFontSize(7.4);
     doc.setTextColor(...C.textDark);
-    doc.text("PUNJAB PROFESSIONS & TRADES TAX", deptCX, curY + 16.0, { align: "center" });
+    doc.text("PUNJAB PROFESSIONS & TRADES TAX", deptCX, curY + 15.6, { align: "center" });
 
     // 5. PFT2 • PAYMENT CHALLAN
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.0);
+    doc.setFontSize(8.6);
     doc.setTextColor(...C.primary);
-    doc.text("PFT2 \u2022 PAYMENT CHALLAN", deptCX, curY + 19.8, { align: "center" });
+    doc.text("PFT2 \u2022 PAYMENT CHALLAN", deptCX, curY + 19.4, { align: "center" });
 
     const isProvisional = Boolean(
       copy.isProvisional ||
@@ -201,17 +209,17 @@ export async function generatePft2ChallanPdf(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.2);
     doc.setTextColor(...scopeColor);
-    doc.text(`Rule 9 \u2022 [${cleanScope}]`, deptCX, curY + 23.4, { align: "center" });
+    doc.text(`Rule 9 \u2022 [${cleanScope}]`, deptCX, curY + 23.0, { align: "center" });
 
-    // 7. Head of Account (Prominent 8.2pt bold)
+    // 7. Head of Account (Prominent 7.8pt bold)
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.2);
+    doc.setFontSize(7.8);
     doc.setTextColor(...C.amber);
     const rawHead = copy.headOfAccount || "B01601 (Punjab Professional Tax)";
     const cleanHead = rawHead.replace(/\s*-\s*Provincial|\s*\(Provincial\)/gi, "").trim();
     const headText = `Head: ${cleanHead}`;
     const headLines = doc.splitTextToSize(headText, deptW - 1);
-    doc.text(headLines[0] ?? headText, deptCX, curY + 26.8, { align: "center" });
+    doc.text(headLines[0] ?? headText, deptCX, curY + 26.6, { align: "center" });
 
     curY += 32.5;
 

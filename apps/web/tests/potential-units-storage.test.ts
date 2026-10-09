@@ -12,10 +12,11 @@ import {
   migrateVDemandUnitsToPotentialRegister,
   V_UNITS_MIGRATION_FLAG_KEY,
   importPotentialUnitsCsv,
+  parseBulkPotentialUnits,
   generatePotentialCsvTemplate,
   POTENTIAL_UNITS_STORAGE_KEY
 } from "../src/lib/potential-units-storage";
-import type { StoredUnit } from "../src/lib/pilot-store";
+import { type StoredUnit, MOCK_OFFICERS } from "../src/lib/pilot-store";
 
 class MockStorage {
   private store = new Map<string, string>();
@@ -108,6 +109,77 @@ describe("Potential Assessment Register Persistence & Migration Layer", () => {
     expect(result.importedUnits[0]?.potentialNumber).toMatch(/^POT-/);
     expect(result.importedUnits[0]?.createdBy).toBe("Inspector Ahmad");
     expect(result.importedUnits[0]?.openingArrears).toBe(0);
+  });
+
+  it("enforces circle jurisdiction boundary for Inspector on potential units import", () => {
+    const inspector = MOCK_OFFICERS[0]; // Inspector Aslam (Vehari Circle I)
+    const initialUnits = createInitialPotentialUnits();
+    const csv = `Legal Name,Identifier,Category Code,Subclass Code,Address,Locality,Circle
+"Madina Book Depot","36603-1111222-1","1","1(i)","Club Road","Vehari City Commercial Zone","Vehari Circle I (City / Commercial)"
+"Farooq Cloth Shop","36603-2222333-2","3","3(i)","Main Bazar","Burewala Commercial Hub","Burewala Circle"`;
+
+    const result = parseBulkPotentialUnits(csv, initialUnits, inspector);
+    expect(result.totalRows).toBe(2);
+    expect(result.validRowsCount).toBe(1);
+    expect(result.errorRowsCount).toBe(1);
+    expect(result.rows[0]?.status).toBe("VALID");
+    expect(result.rows[0]?.parsedUnit?.status).toBe("ACTIVE");
+    expect(result.rows[1]?.status).toBe("ERROR");
+    expect(result.rows[1]?.errors[0]).toContain("Jurisdiction mismatch: Inspector");
+  });
+
+  it("enforces district and sub-jurisdiction boundaries for ETO on potential units import", () => {
+    const eto = MOCK_OFFICERS[1]; // ETO Vehari
+    const initialUnits = createInitialPotentialUnits();
+    const csv = `District,Circle,Tehsil,Locality,Commercial Address,Legal Name,Trade Name,Identifier Type,Identifier Value,Category Code,Subclass Code
+Vehari,Vehari Circle I (City / Commercial),Vehari,Commercial Zone,"Club Road",Al-Rehman Traders,Al-Rehman,CNIC,36603-5555666-1,1,1(i)
+Vehari,Burewala Circle,Burewala,Commercial Strip,"Chichawatni Road",Kisan Seed Corp,Kisan Seeds,NTN,4455667-1,4,4(ii)
+Multan,Multan Circle 1,Multan,Cantt,"Mall Road",Nishat Fabrics,Nishat,NTN,8899001-1,1,1(i)`;
+
+    const result = parseBulkPotentialUnits(csv, initialUnits, eto);
+    expect(result.totalRows).toBe(3);
+    expect(result.validRowsCount).toBe(2);
+    expect(result.errorRowsCount).toBe(1);
+    expect(result.rows[0]?.status).toBe("VALID");
+    expect(result.rows[1]?.status).toBe("VALID");
+    expect(result.rows[2]?.status).toBe("ERROR");
+    expect(result.rows[2]?.errors[0]).toContain("Jurisdiction mismatch");
+  });
+
+  it("discards potential units with duplicate legal names in the same circle", () => {
+    const initialUnits = createInitialPotentialUnits();
+    const existingName = initialUnits[0]!.legalName; // Already in Vehari Circle I
+    const csv = `Legal Name,Identifier,Category Code,Subclass Code,Address,Locality,Circle
+"${existingName.toLowerCase()}","36603-7777888-1","1","1(i)","Karkhana Bazar","Vehari City Commercial Zone","Vehari Circle I (City / Commercial)"
+"${existingName}","36603-7777889-2","1","1(i)","Colony Road","Mailsi Main Bazaar","Mailsi Circle"`;
+
+    const result = parseBulkPotentialUnits(csv, initialUnits);
+    expect(result.totalRows).toBe(2);
+    // Row 1 discarded due to existing legal name in Circle I
+    expect(result.rows[0]?.status).toBe("ERROR");
+    expect(result.rows[0]?.errors[0]).toContain("Duplicate legal name: Legal name");
+    expect(result.rows[0]?.errors[0]).toContain("already exists in circle");
+    // Row 2 is valid because it belongs to Mailsi Circle
+    expect(result.rows[1]?.status).toBe("VALID");
+    expect(result.duplicateCount).toBe(1);
+    expect(result.validRowsCount).toBe(1);
+    expect(result.validUnits[0]?.status).toBe("ACTIVE");
+  });
+
+  it("discards intra-batch duplicate legal names in the same circle", () => {
+    const initialUnits = createInitialPotentialUnits();
+    const csv = `Legal Name,Identifier,Category Code,Subclass Code,Address,Locality,Circle
+"New Punjab Bakery","36603-1212121-1","10","","Main Bazar","Vehari Commercial Zone","Vehari Circle I (City / Commercial)"
+"new punjab bakery","36603-1212122-2","10","","Shop 2 Main Bazar","Vehari Commercial Zone","Vehari Circle I (City / Commercial)"`;
+
+    const result = parseBulkPotentialUnits(csv, initialUnits);
+    expect(result.totalRows).toBe(2);
+    expect(result.validRowsCount).toBe(1);
+    expect(result.errorRowsCount).toBe(1);
+    expect(result.duplicateCount).toBe(1);
+    expect(result.rows[0]?.status).toBe("VALID");
+    expect(result.rows[1]?.status).toBe("ERROR");
+    expect(result.rows[1]?.errors[0]).toContain("Duplicate legal name in upload file");
   });
 
   it("generates authentic CSV template with Vehari jurisdiction headers and no arrears", () => {
