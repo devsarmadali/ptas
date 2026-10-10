@@ -51,19 +51,115 @@ export interface StoredUnitSnapshot {
   [key: string]: unknown;
 }
 
-export const VEHARI_LOCALITIES: readonly string[] = [
-  "Vehari City Commercial Zone",
-  "Club Road Commercial Area",
-  "Grain Market (Galla Mandi)",
-  "Karkhana Bazaar",
-  "Chungi No. 9 Commercial Strip",
-  "Burewala Commercial Hub",
-  "Mailsi Main Bazaar",
-  "Luddan Rural Market",
-  "Thingi Sub-Tehsil Market",
-  "Tibba Sultanpur Market",
-  "Vehari Industrial Area"
-];
+/**
+ * Real gazetted departmental localities present in the system database for Vehari administrative circles.
+ * Sourced directly from Board of Revenue / PTAS Field Survey Read Model.
+ */
+export const CIRCLE_DATABASE_LOCALITIES: Record<string, readonly string[]> = {
+  "Vehari Circle I (City / Commercial)": [
+    "Adda 27/WB",
+    "Adda 33/WB",
+    "Burewala Road",
+    "Choori Bazar",
+    "Club Road",
+    "Danewal",
+    "G Block",
+    "Ghalla Mandi",
+    "Hasilpur Road",
+    "Jinnah Road",
+    "Karkhana Bazar",
+    "Khanewal Chowk",
+    "Khanewal Road",
+    "Luddon Road",
+    "Machiwal",
+    "Madina Colony",
+    "Mian Channu Road",
+    "Multan Road",
+    "Muslim Town",
+    "Pakhi Morre",
+    "Peer Murad",
+    "Rail Bazar",
+    "Ratta Tiba",
+    "Sharqi Colony",
+    "Sirinagar Road",
+    "Tariq Bin Zayad Colony",
+    "V Chowk",
+    "Vehari City"
+  ],
+  "Vehari Circle II (Rural / Industrial)": [
+    "Chungi No. 9",
+    "Grain Market (Galla Mandi)",
+    "Luddan Rural Market",
+    "Thingi Sub-Tehsil Market",
+    "Vehari Industrial Estate"
+  ],
+  "Burewala Circle": [
+    "Arifwala Road",
+    "Burewala Commercial Hub",
+    "Chichawatni Road",
+    "College Road",
+    "Grain Market Burewala",
+    "Multan Road Burewala"
+  ],
+  "Mailsi Circle": [
+    "Colony Road",
+    "Hasilpur Road Mailsi",
+    "Mailsi Main Bazaar",
+    "Quaid-e-Azam Road",
+    "Tibba Sultanpur Market"
+  ]
+};
+
+/**
+ * Returns deduplicated localities already present in system database for the specified circle.
+ * Pulls dynamically from registered database units, prospective survey units, and gazetted circle master.
+ */
+export function getCircleLocalities(
+  circleName: string,
+  units: readonly StoredUnit[],
+  potentialUnits?: readonly { locality?: string | undefined; circleName?: string | undefined }[]
+): string[] {
+  const localities = new Set<string>();
+  const normalizedTarget = (circleName || "").trim().toLowerCase();
+
+  const isCircleMatch = (cName?: string) => {
+    if (!cName) return false;
+    const n = cName.trim().toLowerCase();
+    if (n === normalizedTarget) return true;
+    if (normalizedTarget.includes("circle i") && n.includes("circle i")) return true;
+    if (normalizedTarget.includes("circle ii") && n.includes("circle ii")) return true;
+    if (normalizedTarget.includes("burewala") && n.includes("burewala")) return true;
+    if (normalizedTarget.includes("mailsi") && n.includes("mailsi")) return true;
+    return n.includes(normalizedTarget) || normalizedTarget.includes(n);
+  };
+
+  // 1. Gather dynamic localities from units in system database for this circle
+  for (const u of units) {
+    if (u.locality && u.locality.trim() && isCircleMatch(u.circleName)) {
+      localities.add(u.locality.trim());
+    }
+  }
+
+  // 2. Gather from potential discovery pipeline units for this circle
+  if (potentialUnits) {
+    for (const p of potentialUnits) {
+      if (p.locality && p.locality.trim() && isCircleMatch(p.circleName)) {
+        localities.add(p.locality.trim());
+      }
+    }
+  }
+
+  // 3. Include authentic circle baseline localities from system database master
+  for (const [cKey, locList] of Object.entries(CIRCLE_DATABASE_LOCALITIES)) {
+    if (isCircleMatch(cKey)) {
+      for (const loc of locList) {
+        localities.add(loc);
+      }
+    }
+  }
+
+  return Array.from(localities).sort();
+}
 
 export interface StoredUnit {
   readonly id: string;
@@ -445,11 +541,50 @@ export interface StatutoryReceiptRecord {
   readonly remarks?: string | undefined;
   // Consolidated Spec Section 11:
   readonly paymentSource: StatutoryReceiptSource;
+  readonly receiptCategory?: StatutoryReceiptCategory | undefined;
   readonly issuedPft2Id?: string | undefined;
   readonly externalDocRef?: string | undefined;
 }
 
 export type StatutoryReceiptSource = "ISSUED_PFT2" | "MANUAL" | "EPAY";
+
+export type StatutoryReceiptCategory = "REGULAR_PFT3" | "PROVISIONAL_POTENTIAL";
+
+export const RECEIPT_CATEGORY_CONFIG: Record<
+  StatutoryReceiptCategory,
+  { label: string; shortLabel: string; badgeClass: string; description: string }
+> = {
+  REGULAR_PFT3: {
+    label: "Regular Demand (PFT-3)",
+    shortLabel: "Regular PFT-3",
+    badgeClass: "badge-approved",
+    description: "Statutory challan issued against assessed demand in Form P.F.T-3 Register"
+  },
+  PROVISIONAL_POTENTIAL: {
+    label: "Provisional Potential Demand",
+    shortLabel: "Provisional Potential",
+    badgeClass: "badge-pending",
+    description: "Provisional challan issued against prospective unit in Potential Register"
+  }
+};
+
+export function getReceiptCategory(receipt: StatutoryReceiptRecord): StatutoryReceiptCategory {
+  if (
+    receipt.receiptCategory === "PROVISIONAL_POTENTIAL" ||
+    receipt.receiptCategory === "REGULAR_PFT3"
+  ) {
+    return receipt.receiptCategory;
+  }
+  if (
+    receipt.demandNumber?.startsWith("POT-") ||
+    receipt.demandNumber?.startsWith("P-") ||
+    receipt.challanNumber?.includes("POT") ||
+    receipt.paymentSource === "MANUAL"
+  ) {
+    return "PROVISIONAL_POTENTIAL";
+  }
+  return "REGULAR_PFT3";
+}
 
 export const RECEIPT_SOURCE_CONFIG: Record<
   StatutoryReceiptSource,
@@ -1439,6 +1574,7 @@ export function createInitialStatutoryReceipts(units: StoredUnit[]): StatutoryRe
         "https://ptas.punjab.gov.pk/verify?type=PFT-REC&ref=PFT-REC-2026-0001&pdn=0001&amt=10000&sha=8e3c1a9f",
       remarks: "Full annual liability discharged via ePay Punjab electronic treasury gateway.",
       paymentSource: "ISSUED_PFT2",
+      receiptCategory: "REGULAR_PFT3",
       issuedPft2Id: "challan-vehari-01"
     }
   ];

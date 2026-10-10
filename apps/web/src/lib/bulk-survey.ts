@@ -93,7 +93,7 @@ export async function convertSurveyWorkbookToCsv(file: File): Promise<string> {
   await workbook.xlsx.load(source as Parameters<typeof workbook.xlsx.load>[0]);
 
   const expectedHeaders = SURVEY_IMPORT_COLUMNS.map((column) => column.header);
-  const worksheet = workbook.worksheets.find((candidate) =>
+  const matchingWorksheets = workbook.worksheets.filter((candidate) =>
     expectedHeaders.every(
       (header, index) =>
         candidate
@@ -102,19 +102,52 @@ export async function convertSurveyWorkbookToCsv(file: File): Promise<string> {
           .text.trim() === header
     )
   );
-  if (!worksheet) {
+  if (matchingWorksheets.length === 0) {
     throw new Error("No worksheet matches the approved Survey_Import_Filled column contract.");
+  }
+
+  // Prioritize worksheet with 'filled' in name, or with highest populated data rows
+  let worksheet = matchingWorksheets.find((candidate) =>
+    candidate.name.toLowerCase().includes("filled")
+  );
+  if (!worksheet) {
+    let maxPopulated = -1;
+    for (const candidate of matchingWorksheets) {
+      let count = 0;
+      for (let r = 2; r <= Math.min(candidate.actualRowCount, 25); r++) {
+        const legalName = candidate.getRow(r).getCell(10).text?.trim();
+        if (legalName) count++;
+      }
+      if (count > maxPopulated) {
+        maxPopulated = count;
+        worksheet = candidate;
+      }
+    }
+  }
+  if (!worksheet) {
+    worksheet = matchingWorksheets[0]!;
   }
 
   const rows: string[][] = [expectedHeaders];
   for (let rowNumber = 2; rowNumber <= worksheet.actualRowCount; rowNumber += 1) {
     const row = worksheet.getRow(rowNumber);
+    // Skip empty template placeholder rows
+    const legalNameCell = row.getCell(10);
+    const legalName = (legalNameCell.text || "").trim();
+    if (!legalName) continue;
+
     const values = expectedHeaders.map((header, index) => {
       const cell = row.getCell(index + 1);
       if (header === "Survey Date (Auto)" && cell.value instanceof Date) {
         return cell.value.toISOString().slice(0, 10);
       }
-      return cell.text.trim();
+      // Handle Excel formula results safely
+      if (cell.value && typeof cell.value === "object" && "result" in cell.value) {
+        const res = (cell.value as { result: unknown }).result;
+        if (res instanceof Date) return res.toISOString().slice(0, 10);
+        return res !== null && res !== undefined ? String(res).trim() : "";
+      }
+      return cell.text ? cell.text.trim() : "";
     });
     if (values.some((value) => value.length > 0)) rows.push(values);
   }
@@ -133,6 +166,14 @@ export function parseSurveyImportPayloadRows(csvText: string): SurveyImportPaylo
     for (let index = 0; index < headers.length; index++) {
       const key = keyByHeader.get(headers[index] ?? "");
       if (key) result[key] = (row[index] ?? "").trim();
+    }
+    // If tax_assessment_option is empty and row is under review, standardize remarks to "Under review" for postgres RPC compatibility
+    if (
+      !result.tax_assessment_option &&
+      result.remarks &&
+      result.remarks.toLowerCase() !== "under review"
+    ) {
+      result.remarks = "Under review";
     }
     return result;
   });
@@ -238,6 +279,12 @@ function normalizeHeaderName(header: string): string {
   }
   if (h.includes("address") || h === "location" || h === "shopaddress") {
     return "address";
+  }
+  if (h.includes("schedulesubclass") || h.includes("subclasscode")) {
+    return "scheduleSubclassCode";
+  }
+  if (h.includes("taxsubclass")) {
+    return "taxSubclass";
   }
   if (
     h.includes("statutoryrule") ||
@@ -379,10 +426,17 @@ export function parseBulkSurveyCsv(
     const identifierValueRaw = rowMap["identifierValue"] ?? "";
     const address = rowMap["address"] ?? "";
     const statutoryRuleIdRaw = rowMap["statutoryRuleId"] ?? "";
+    const scheduleSubclassRaw = rowMap["scheduleSubclassCode"] ?? "";
+    const taxAssessmentOptionRaw = rowMap["taxAssessmentOption"] ?? "";
+    const taxSubclassRaw = rowMap["taxSubclass"] ?? "";
     const phone = rowMap["phone"] || undefined;
+    const remarksRaw = (rowMap["remarks"] ?? "").trim();
     const isPendingClassificationReview =
-      !rowMap["taxAssessmentOption"] &&
-      (rowMap["remarks"] ?? "").trim().toLowerCase() === "under review";
+      !taxAssessmentOptionRaw ||
+      remarksRaw.toLowerCase().includes("review") ||
+      remarksRaw.toLowerCase().includes("demolished") ||
+      remarksRaw.toLowerCase().includes("mapping") ||
+      remarksRaw.toLowerCase().includes("anomal");
 
     // 1. Validate Legal Name
     if (!legalName) {
@@ -440,18 +494,77 @@ export function parseBulkSurveyCsv(
     const resolvedDistrict = jurisResult.resolvedDistrict;
 
     // 5. Validate Statutory Rule ID / Schedule Code
-    let resolvedRule: StatutoryRuleDefinition | undefined;
-    if (statutoryRuleIdRaw) {
-      // Try direct rule ID lookup (e.g. "PFT-6.x", "PFT-3.i.b", "PFT-10")
-      resolvedRule = getStatutoryRuleById(statutoryRuleIdRaw);
-      // Fallback: try subclassification code (e.g. "6(x)", "3(i)(b)", "10")
-      if (!resolvedRule) {
-        resolvedRule = getStatutoryRuleBySubclassification(statutoryRuleIdRaw);
+
+    // Multi-candidate statutory rule resolution
+    const allRules = getAllStatutoryRules();
+    function resolveStatutoryRuleCandidate(
+      rawRuleId: string,
+      subclassCode: string,
+      assessmentOption: string,
+      subclassLabel: string
+    ): StatutoryRuleDefinition | undefined {
+      if (rawRuleId) {
+        let rule = getStatutoryRuleById(rawRuleId);
+        if (rule) return rule;
+        rule = getStatutoryRuleBySubclassification(rawRuleId);
+        if (rule) return rule;
+
+        // Extract code from full statutory citation like "Punjab Finance Act, 1977 - Section 3 / Second Schedule 1(iii)"
+        const match = rawRuleId.match(/Second Schedule\s+([0-9]+(?:\([a-z0-9]+\))*)/i);
+        if (match && match[1]) {
+          rule = getStatutoryRuleBySubclassification(match[1]);
+          if (rule) return rule;
+          rule = getStatutoryRuleById(match[1]);
+          if (rule) return rule;
+          rule = getStatutoryRuleById(`PFT-${match[1]}`);
+          if (rule) return rule;
+        }
       }
-      if (!resolvedRule) {
+
+      if (subclassCode) {
+        let rule = getStatutoryRuleBySubclassification(subclassCode);
+        if (rule) return rule;
+        rule = getStatutoryRuleById(subclassCode);
+        if (rule) return rule;
+        rule = getStatutoryRuleById(`PFT-${subclassCode}`);
+        if (rule) return rule;
+      }
+
+      if (assessmentOption) {
+        const optionNorm = assessmentOption.split("|")[0]?.trim().toLowerCase();
+        if (optionNorm) {
+          const rule = allRules.find(
+            (r) =>
+              r.subclassification_label?.toLowerCase() === optionNorm ||
+              r.official_text?.toLowerCase().includes(optionNorm)
+          );
+          if (rule) return rule;
+        }
+      }
+
+      if (subclassLabel) {
+        const labelNorm = subclassLabel.trim().toLowerCase();
+        const rule = allRules.find((r) => r.subclassification_label?.toLowerCase() === labelNorm);
+        if (rule) return rule;
+      }
+
+      return undefined;
+    }
+
+    const resolvedRule = resolveStatutoryRuleCandidate(
+      statutoryRuleIdRaw,
+      scheduleSubclassRaw,
+      taxAssessmentOptionRaw,
+      taxSubclassRaw
+    );
+
+    if (!resolvedRule) {
+      if (statutoryRuleIdRaw || scheduleSubclassRaw) {
         errors.push(
-          `Unrecognized Statutory Rule "${statutoryRuleIdRaw}". Must match Second Schedule (e.g., "PFT-6.x", "PFT-3.i.b", "PFT-10", "PFT-8", etc.)`
+          `Unrecognized Statutory Rule "${statutoryRuleIdRaw || scheduleSubclassRaw}". Must match Second Schedule (e.g., "PFT-6.x", "PFT-3.i.b", "PFT-10", "PFT-8", etc.)`
         );
+      } else if (!isPendingClassificationReview) {
+        errors.push("Missing required field: Statutory Rule / Tax Assessment Option");
       }
     }
 

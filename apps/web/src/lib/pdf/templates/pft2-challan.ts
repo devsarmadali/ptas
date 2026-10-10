@@ -211,15 +211,23 @@ export async function generatePft2ChallanPdf(
     doc.setTextColor(...scopeColor);
     doc.text(`Rule 9 \u2022 [${cleanScope}]`, deptCX, curY + 23.0, { align: "center" });
 
-    // 7. Head of Account (Prominent 7.8pt bold)
+    // 7. Head of Account (Prominent 6.9pt bold with multi-line wrap support)
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.8);
+    doc.setFontSize(6.9);
     doc.setTextColor(...C.amber);
     const rawHead = copy.headOfAccount || "B01601 (Punjab Professional Tax)";
     const cleanHead = rawHead.replace(/\s*-\s*Provincial|\s*\(Provincial\)/gi, "").trim();
     const headText = `Head: ${cleanHead}`;
-    const headLines = doc.splitTextToSize(headText, deptW - 1);
-    doc.text(headLines[0] ?? headText, deptCX, curY + 26.6, { align: "center" });
+    const headLines = doc.splitTextToSize(headText, deptW);
+    if (headLines.length <= 1) {
+      doc.text(headLines[0] ?? headText, deptCX, curY + 26.6, { align: "center" });
+    } else {
+      const headLineH = 2.9;
+      const startHeadY = curY + 26.6 - ((headLines.length - 1) * headLineH) / 2;
+      headLines.forEach((hl: string, hIdx: number) => {
+        doc.text(hl, deptCX, startHeadY + hIdx * headLineH, { align: "center" });
+      });
+    }
 
     curY += 32.5;
 
@@ -393,7 +401,7 @@ export async function generatePft2ChallanPdf(
     // ══════════════════════════════════════════════════════════════════════════
     // SECTION 3 — TAXPAYER DETAILS (PROMINENT, LARGE TYPOGRAPHY, ZERO CLIPPING)
     // ══════════════════════════════════════════════════════════════════════════
-    const labelColW = 34.0;
+    const labelColW = 32.0;
     const valColX = innerX + labelColW + 1.5;
     const valColW = innerW - (labelColW + 2.5);
 
@@ -408,16 +416,16 @@ export async function generatePft2ChallanPdf(
     doc.setTextColor(...C.textDark);
     const legalNameLines = doc.splitTextToSize(copy.taxpayerInfo.legalName, valColW);
     doc.text(legalNameLines[0] ?? "", valColX, curY + 3.4);
-    if (legalNameLines.length > 1) {
+    for (let lIdx = 1; lIdx < legalNameLines.length; lIdx++) {
       curY += 4.0;
-      doc.text(legalNameLines[1] ?? "", valColX, curY + 3.4);
+      doc.text(legalNameLines[lIdx] ?? "", valColX, curY + 3.4);
     }
     curY += 5.0;
 
     // Row 2: TAXPAYER / PROPRIETOR (Bold 8.8pt)
     const tradeVal = copy.taxpayerInfo.tradeName || copy.taxpayerInfo.legalName;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.2);
+    doc.setFontSize(7.0);
     doc.setTextColor(...C.textDark);
     doc.text("TAXPAYER / PROPRIETOR:", innerX + 1.0, curY + 3.2);
 
@@ -426,9 +434,9 @@ export async function generatePft2ChallanPdf(
     doc.setTextColor(...C.blueDeep);
     const tradeLines = doc.splitTextToSize(tradeVal, valColW);
     doc.text(tradeLines[0] ?? "", valColX, curY + 3.2);
-    if (tradeLines.length > 1) {
+    for (let tIdx = 1; tIdx < tradeLines.length; tIdx++) {
       curY += 3.8;
-      doc.text(tradeLines[1] ?? "", valColX, curY + 3.2);
+      doc.text(tradeLines[tIdx] ?? "", valColX, curY + 3.2);
     }
     curY += 4.8;
 
@@ -445,13 +453,9 @@ export async function generatePft2ChallanPdf(
       "Class 1 - Companies";
     const classLines = doc.splitTextToSize(classVal, valColW);
     doc.text(classLines[0] ?? classVal, valColX, curY + 3.2);
-    if (classLines.length > 1) {
-      curY += 3.8;
-      doc.text(classLines[1] ?? "", valColX, curY + 3.2);
-      if (classLines.length > 2) {
-        curY += 3.6;
-        doc.text(classLines[2] ?? "", valColX, curY + 3.2);
-      }
+    for (let cIdx = 1; cIdx < classLines.length; cIdx++) {
+      curY += 3.6;
+      doc.text(classLines[cIdx] ?? "", valColX, curY + 3.2);
     }
     curY += 4.6;
 
@@ -487,13 +491,13 @@ export async function generatePft2ChallanPdf(
     doc.text("SUB-CLASS:", innerX + 1.0, curY + 3.2);
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.8);
+    doc.setFontSize(7.4);
     doc.setTextColor(...C.primaryLight);
     const subLines = doc.splitTextToSize(subClassText, valColW);
     doc.text(subLines[0] ?? subClassText, valColX, curY + 3.2);
-    if (subLines.length > 1) {
-      curY += 3.6;
-      doc.text(subLines[1] ?? "", valColX, curY + 3.2);
+    for (let sIdx = 1; sIdx < subLines.length; sIdx++) {
+      curY += 3.4;
+      doc.text(subLines[sIdx] ?? "", valColX, curY + 3.2);
     }
     curY += 4.8;
 
@@ -508,9 +512,9 @@ export async function generatePft2ChallanPdf(
     doc.setTextColor(...C.textMid);
     const addrLines = doc.splitTextToSize(copy.taxpayerInfo.address, valColW);
     doc.text(addrLines[0] ?? "", valColX, curY + 3.2);
-    if (addrLines.length > 1) {
+    for (let aIdx = 1; aIdx < addrLines.length; aIdx++) {
       curY += 3.8;
-      doc.text(addrLines[1] ?? "", valColX, curY + 3.2);
+      doc.text(addrLines[aIdx] ?? "", valColX, curY + 3.2);
     }
     curY += 5.6;
 

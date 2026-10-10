@@ -288,6 +288,7 @@ export function ensureChallansAndReceiptsForUnits(units?: readonly StoredUnit[])
         qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-REC&ref=${c.receiptNumber}&pdn=${c.demandNumber}&amt=${c.amountPayable}`,
         remarks: "Discharged under Rule 10.",
         paymentSource: "ISSUED_PFT2",
+        receiptCategory: c.isProvisional ? "PROVISIONAL_POTENTIAL" : "REGULAR_PFT3",
         issuedPft2Id: c.id
       });
       existingReceiptNumbers.add(c.receiptNumber);

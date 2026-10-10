@@ -136,7 +136,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
         </div>
 
         {/* Right: Authority Header & Copy Pill */}
-        <div style={{ flex: 1, textAlign: "center" }}>
+        <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
           {/* Copy Designation Pill */}
           <div style={{ marginBottom: "0.15rem" }}>
             <span
@@ -230,10 +230,14 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           </div>
           <div
             style={{
-              fontSize: "0.68rem",
+              fontSize: "0.64rem",
               fontWeight: 800,
               color: "#b45309",
-              marginTop: "0.08rem"
+              marginTop: "0.08rem",
+              lineHeight: 1.2,
+              wordBreak: "break-word",
+              overflowWrap: "anywhere",
+              whiteSpace: "normal"
             }}
           >
             Head: {copy.headOfAccount.replace(/\s*-\s*Provincial|\s*\(Provincial\)/gi, "").trim()}
@@ -462,7 +466,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
         <div style={{ display: "flex", alignItems: "baseline" }}>
           <span
             style={{
-              width: "8.2rem",
+              width: "6.8rem",
               flexShrink: 0,
               fontWeight: 700,
               color: "#334155"
@@ -476,7 +480,11 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
               minWidth: 0,
               fontWeight: 800,
               fontSize: "0.78rem",
-              color: "#0f172a"
+              color: "#0f172a",
+              lineHeight: 1.3,
+              wordBreak: "break-word",
+              overflowWrap: "anywhere",
+              whiteSpace: "normal"
             }}
           >
             {copy.taxpayerInfo.legalName}
@@ -487,10 +495,12 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
         <div style={{ display: "flex", alignItems: "baseline" }}>
           <span
             style={{
-              width: "8.2rem",
+              width: "6.8rem",
               flexShrink: 0,
               fontWeight: 700,
-              color: "#334155"
+              color: "#334155",
+              fontSize: "0.68rem",
+              lineHeight: 1.2
             }}
           >
             TAXPAYER / PROPRIETOR:
@@ -501,7 +511,11 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
               minWidth: 0,
               fontWeight: 700,
               color: "#1e3a8a",
-              fontSize: "0.74rem"
+              fontSize: "0.74rem",
+              lineHeight: 1.3,
+              wordBreak: "break-word",
+              overflowWrap: "anywhere",
+              whiteSpace: "normal"
             }}
           >
             {copy.taxpayerInfo.tradeName || copy.taxpayerInfo.legalName}
@@ -512,7 +526,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
         <div style={{ display: "flex", alignItems: "baseline" }}>
           <span
             style={{
-              width: "8.2rem",
+              width: "6.8rem",
               flexShrink: 0,
               fontWeight: 700,
               color: "#334155"
@@ -526,7 +540,10 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
               minWidth: 0,
               color: "#1e293b",
               fontSize: "0.72rem",
-              lineHeight: 1.3
+              lineHeight: 1.3,
+              wordBreak: "break-word",
+              overflowWrap: "anywhere",
+              whiteSpace: "normal"
             }}
           >
             {copy.taxpayerInfo.classification?.replace(/Class undefined/gi, "Class 1") ||
@@ -538,7 +555,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
         <div style={{ display: "flex", alignItems: "baseline" }}>
           <span
             style={{
-              width: "8.2rem",
+              width: "6.8rem",
               flexShrink: 0,
               fontWeight: 700,
               color: "#334155"
@@ -553,7 +570,10 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
               color: "#166534",
               fontWeight: 700,
               fontSize: "0.72rem",
-              lineHeight: 1.3
+              lineHeight: 1.35,
+              wordBreak: "break-word",
+              overflowWrap: "anywhere",
+              whiteSpace: "normal"
             }}
           >
             {(() => {
@@ -585,7 +605,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
         <div style={{ display: "flex", alignItems: "baseline" }}>
           <span
             style={{
-              width: "8.2rem",
+              width: "6.8rem",
               flexShrink: 0,
               fontWeight: 700,
               color: "#334155"
@@ -599,7 +619,10 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
               minWidth: 0,
               color: "#475569",
               fontSize: "0.7rem",
-              lineHeight: 1.3
+              lineHeight: 1.3,
+              wordBreak: "break-word",
+              overflowWrap: "anywhere",
+              whiteSpace: "normal"
             }}
           >
             {copy.taxpayerInfo.address}

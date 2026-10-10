@@ -264,6 +264,31 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
       }
     });
 
+    it("renders multi-line Head of Account and long Sub-Class code without paper-cutting text", async () => {
+      const challan = generateFormPFT2(alMadina);
+      (challan as any).challanStatus = "ISSUED";
+      challan.copies.forEach((copy) => {
+        (copy as any).headOfAccount = "B01601 (Punjab Professional Tax)";
+        (copy.taxpayerInfo as any).subclassificationCode = "3(ii)";
+        (copy.taxpayerInfo as any).subclassificationLabel =
+          "All other commercial establishments other than wholesalers and retailers";
+      });
+
+      const pdf = await generatePft2ChallanPdf(challan);
+      expect(pdf).toBeDefined();
+      expect(pdf.getNumberOfPages()).toBe(1);
+
+      const pdfBytes = Buffer.from(pdf.output("arraybuffer"));
+      expect(pdfBytes.length).toBeGreaterThan(5000);
+
+      const fs = await import("node:fs");
+      const artifactDir =
+        "C:\\Users\\ETIVE\\.gemini\\antigravity-ide\\brain\\151e483d-f09b-4f35-9064-321821a38353";
+      if (fs.existsSync(artifactDir)) {
+        fs.writeFileSync(`${artifactDir}\\pft2_test_sample.pdf`, pdfBytes);
+      }
+    });
+
     it("verifies date and tax year formatters for compact statutory display", async () => {
       const { formatChallanDisplayDate, formatChallanTaxYear, cleanChallanScope } =
         await import("../src/lib/pft2-formatters.js");
@@ -371,6 +396,8 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
     it("generates Rule 10 receipt with CPR voucher", async () => {
       const receiptData: StatutoryReceiptDocument = {
         receiptNumber: "REC-2026-00042",
+        receiptCategory: "REGULAR_PFT3",
+        receiptCategoryLabel: "Regular Demand (PFT-3)",
         pin: "654321",
         provincialUin: alMadina.provincialUin,
         challanNumber: "PFT2-0003",

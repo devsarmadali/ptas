@@ -69,7 +69,7 @@ export async function generateStatutoryReceiptPdf(
   doc.setFillColor(...PDF_COLORS.bgHeader);
   doc.setDrawColor(...PDF_COLORS.borderDark);
   doc.setLineWidth(0.25);
-  doc.rect(left, curY, contentWidth, 16, "FD");
+  doc.rect(left, curY, contentWidth, 21, "FD");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
@@ -96,8 +96,20 @@ export async function generateStatutoryReceiptPdf(
   doc.setFont("helvetica", "normal");
   doc.text(`${dateStr} ${timeStr}`, left + 120, curY + 11);
 
+  doc.setFont("helvetica", "bold");
+  doc.text("Receipt Category:", left + 4, curY + 17);
+  doc.setFont("helvetica", "bold");
+  const isProvisionalDemand = receipt.receiptCategory === "PROVISIONAL_POTENTIAL";
+  if (isProvisionalDemand) {
+    doc.setTextColor(180, 83, 9); // Amber
+    doc.text("PROVISIONAL POTENTIAL DEMAND (SURVEY PROSPECT)", left + 30, curY + 17);
+  } else {
+    doc.setTextColor(21, 128, 61); // Emerald
+    doc.text("REGULAR DEMAND (FORM P.F.T-3 REGISTER)", left + 30, curY + 17);
+  }
+
   // Success Deposit Banner
-  curY += 20;
+  curY += 25;
   doc.setFillColor(240, 253, 244);
   doc.setDrawColor(...PDF_COLORS.primary);
   doc.setLineWidth(0.35);

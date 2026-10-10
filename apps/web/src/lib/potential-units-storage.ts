@@ -685,6 +685,202 @@ export function migratePotentialUnitToPft3(
   return { migratedUnit, assignedDemandNo, cleanPin };
 }
 
+/**
+ * Migrate a prospective unit from the Potential Register into the Form P.F.T-3 Assessment Register
+ * prior to payment, landing with statutory status "SUBMITTED" awaiting ETO review and approval.
+ */
+export function submitPotentialUnitToPft3(
+  potentialUnit: PotentialUnitRecord,
+  existingUnits: readonly StoredUnit[],
+  actorName: string = "Tax Inspector"
+): {
+  migratedUnit: StoredUnit;
+  assignedDemandNo: string;
+  cleanPin: string;
+} {
+  // Convert Potential Number to Demand Number, e.g. POT-0001 -> D-0001
+  const rawNum = potentialUnit.potentialNumber.replace(/^POT-/i, "").replace(/^P-/i, "").trim();
+  const candidateDemandNo = `D-${rawNum}`;
+  const assignedDemandNo = resolveDemandNumberCollision(candidateDemandNo, existingUnits);
+
+  // Clean the PIN by stripping the "Potential-" prefix
+  const cleanPin = cleanPotentialPin(potentialUnit.pinNumber);
+
+  const unitId = `migrated-${Date.now()}-${assignedDemandNo.replace(/[^a-zA-Z0-9]/g, "")}`;
+  const nowIso = new Date().toISOString();
+
+  const demandLedgerEntries: DemandLedgerEntry[] = [
+    {
+      id: `led-asm-${Date.now()}`,
+      demandUnitId: `dem-${unitId}`,
+      financialYearId: "FY-2026-27",
+      entryType: "ASSESSMENT_DEMAND",
+      amount: potentialUnit.annualRatePkr,
+      sourceType: "ASSESSMENT",
+      sourceId: `asm-${unitId}`,
+      idempotencyKey: `idem-asm-${unitId}`,
+      correlationId: `corr-asm-${unitId}`,
+      postedBy: `System (${actorName} - Migrated from Potential Register)`,
+      postedAt: nowIso,
+      metadata: {
+        potentialNumber: potentialUnit.potentialNumber,
+        originalPin: potentialUnit.pinNumber,
+        migratedAt: nowIso,
+        status: "SUBMITTED"
+      }
+    }
+  ];
+
+  if ((potentialUnit.openingArrears ?? 0) > 0) {
+    demandLedgerEntries.push({
+      id: `led-arr-${Date.now()}`,
+      demandUnitId: `dem-${unitId}`,
+      financialYearId: "FY-2026-27",
+      entryType: "MANUAL_ADJUSTMENT",
+      amount: potentialUnit.openingArrears ?? 0,
+      sourceType: "MANUAL_ADJUSTMENT",
+      sourceId: `arr-${unitId}`,
+      idempotencyKey: `idem-arr-${unitId}`,
+      correlationId: `corr-arr-${unitId}`,
+      postedBy: `System (${actorName} - Opening Arrears)`,
+      postedAt: nowIso,
+      metadata: { note: "Brought forward arrears balance" }
+    });
+  }
+
+  // NOTE: Zero payment credit here, because unit is only SUBMITTED for ETO review, not yet discharged!
+
+  const migratedUnit: StoredUnit = {
+    id: unitId,
+    legalName: potentialUnit.legalName,
+    tradeName: potentialUnit.tradeName,
+    identifierType: potentialUnit.identifierType,
+    identifierValue: potentialUnit.identifierValue,
+    address: potentialUnit.address,
+    locality: potentialUnit.locality || "Vehari City Commercial Zone",
+    circleId: potentialUnit.circleId || "00000000-0000-4000-8000-000000000004",
+    circleName:
+      potentialUnit.circleName && potentialUnit.circleName !== "Circle-Vehari"
+        ? potentialUnit.circleName
+        : "Vehari Circle I (City / Commercial)",
+    districtName: potentialUnit.districtName || "Vehari",
+    categoryCode: potentialUnit.categoryCode,
+    subclassificationCode: potentialUnit.subclassificationCode,
+    statutoryTertiaryCode: potentialUnit.statutoryTertiaryCode,
+    statutoryRuleId: potentialUnit.statutoryRuleId,
+    statutoryRule: potentialUnit.statutoryRule,
+    assessmentNumber: `ASM-${assignedDemandNo}`,
+    demandNumber: assignedDemandNo,
+    pinNumber: cleanPin,
+    provincialUin: cleanPin,
+    pft3Registered: true,
+    demandUnit: {
+      id: `dem-${unitId}`,
+      taxpayerId: `tax-${unitId}`,
+      permanentDemandNo: assignedDemandNo,
+      createdAt: nowIso
+    },
+    assessments: [
+      {
+        id: `asm-${unitId}`,
+        taxpayerId: `tax-${unitId}`,
+        financialYearId: "FY-2026-27",
+        status: "SUBMITTED",
+        currentVersionNo: 1,
+        createdBy: actorName,
+        createdAt: nowIso
+      }
+    ],
+    assessmentVersions: [
+      {
+        id: `av-${unitId}`,
+        assessmentId: `asm-${unitId}`,
+        versionNo: 1,
+        status: "SUBMITTED",
+        reason: `Migrated from Potential Register (${potentialUnit.potentialNumber}) for statutory ETO assessment & approval.`,
+        createdBy: actorName,
+        createdAt: nowIso,
+        snapshot: {
+          taxAmount: potentialUnit.annualRatePkr,
+          statutoryCategory: potentialUnit.categoryName,
+          legalBasis: "Punjab Finance Act, 1977 (Second Schedule)",
+          ruleId: potentialUnit.statutoryRuleId,
+          subclassificationCode: potentialUnit.subclassificationCode ?? null,
+          ruleCode: potentialUnit.categoryCode
+        }
+      }
+    ],
+    ledgerEntries: demandLedgerEntries,
+    openingArrears: potentialUnit.openingArrears ?? 0,
+    createdAt: nowIso
+  };
+
+  savePersistedMigratedUnit(migratedUnit);
+
+  return { migratedUnit, assignedDemandNo, cleanPin };
+}
+
+/**
+ * Update opening arrears balance on an existing potential assessment unit in storage.
+ */
+export function updatePotentialUnitArrears(
+  potentialId: string,
+  newArrears: number
+): PotentialUnitRecord | null {
+  const currentUnits = loadPersistedPotentialUnits();
+  const idx = currentUnits.findIndex(
+    (u) => u.id === potentialId || u.potentialNumber === potentialId
+  );
+  if (idx === -1) return null;
+
+  const unit = currentUnits[idx]!;
+  const openingArrears = Math.max(0, Math.round(newArrears));
+
+  const updated: PotentialUnitRecord = {
+    ...unit,
+    openingArrears
+  };
+
+  const nextUnits = [...currentUnits];
+  nextUnits[idx] = updated;
+  savePersistedPotentialUnits(nextUnits);
+  return updated;
+}
+
+/**
+ * Updates full particulars of a prospective unit in the potential register.
+ * Strictly prohibited if the unit has already been migrated to Form P.F.T-3 Register.
+ */
+export function updatePotentialUnitParticulars(
+  potentialId: string,
+  updates: Partial<PotentialUnitRecord>
+): PotentialUnitRecord | null {
+  const currentUnits = loadPersistedPotentialUnits();
+  const idx = currentUnits.findIndex(
+    (u) => u.id === potentialId || u.potentialNumber === potentialId
+  );
+  if (idx === -1) return null;
+
+  const unit = currentUnits[idx]!;
+  if (unit.status === "MIGRATED") {
+    throw new Error(
+      `Cannot modify potential unit '${unit.legalName}': already migrated to Form P.F.T-3 Register as Demand No. ${unit.migratedToDemandNo ?? ""}`
+    );
+  }
+
+  const updated: PotentialUnitRecord = {
+    ...unit,
+    ...updates,
+    id: unit.id, // Immutable ID
+    potentialNumber: unit.potentialNumber // Immutable reference
+  };
+
+  const nextUnits = [...currentUnits];
+  nextUnits[idx] = updated;
+  savePersistedPotentialUnits(nextUnits);
+  return updated;
+}
+
 export const MIGRATED_UNITS_STORAGE_KEY = "ptas_migrated_units_v1";
 export const MIGRATED_UNITS_UPDATED_EVENT = "ptas-migrated-units-updated";
 

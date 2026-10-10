@@ -5,7 +5,12 @@
  */
 
 import { computeContentSha256, generateDocumentPin } from "@ptas/domain";
-import type { Pft2ChallanRecord, StatutoryReceiptRecord } from "./pilot-store";
+import type {
+  Pft2ChallanRecord,
+  StatutoryReceiptRecord,
+  StatutoryReceiptCategory
+} from "./pilot-store";
+import { getReceiptCategory } from "./pilot-store";
 import { numberToWordsPkr, formatStandardDocNumber, formatDemandNumber } from "./statutory-forms";
 
 export function generateStandardReceiptNumber(sequence: number | string): string {
@@ -43,6 +48,8 @@ export interface StatutoryReceiptDocument {
   readonly qrPayload: string;
   readonly circle?: string | undefined;
   readonly district?: string | undefined;
+  readonly receiptCategory: StatutoryReceiptCategory;
+  readonly receiptCategoryLabel: string;
 }
 
 /**
@@ -62,6 +69,12 @@ export function buildStatutoryReceiptDocument(
     : `Class ${record.statutoryCategory}`;
   const tertiaryLabel = record.tertiarySlab ? ` (Slab: ${record.tertiarySlab})` : "";
 
+  const categoryType = getReceiptCategory(record);
+  const categoryLabel =
+    categoryType === "PROVISIONAL_POTENTIAL"
+      ? "Provisional Potential Demand (Survey Phase)"
+      : "Regular Demand (Form P.F.T-3 Register)";
+
   const canonicalReceiptText = [
     "GOVERNMENT OF THE PUNJAB - EXCISE, TAXATION & NARCOTICS CONTROL DEPARTMENT",
     "OFFICE OF THE EXCISE & TAXATION OFFICER (ASSESSING AUTHORITY), VEHARI",
@@ -69,6 +82,7 @@ export function buildStatutoryReceiptDocument(
     `(Issued under Rule 10 of the Punjab Professions & Trades Tax Rules, 1977)`,
     `Receipt Number: ${record.receiptNumber} | Security PIN: ${pin} | Date: ${record.dateOfReceipt} ${record.timeOfReceipt}`,
     `Associated Challan Form P.F.T-2: ${record.challanNumber} | Permanent Demand No: ${demandClean}`,
+    `Demand Category: ${categoryLabel}`,
     `Assessee Legal Name: ${record.assesseeLegalName}`,
     `Trade / Business Name: ${record.assesseeTradeName ?? record.assesseeLegalName}`,
     `Registration / Tax Identifier: ${identifier}`,
@@ -109,7 +123,9 @@ export function buildStatutoryReceiptDocument(
     receivingOfficerTitle: record.receivingOfficerTitle,
     canonicalReceiptText,
     officialSha256,
-    qrPayload
+    qrPayload,
+    receiptCategory: categoryType,
+    receiptCategoryLabel: categoryLabel
   };
 }
 
@@ -180,6 +196,7 @@ export function exportPft2ChallansCsv(challans: readonly Pft2ChallanRecord[]): s
 export function exportStatutoryReceiptsCsv(receipts: readonly StatutoryReceiptRecord[]): string {
   const headers = [
     "Receipt Number",
+    "Receipt Category",
     "Date of Receipt",
     "Time of Receipt",
     "Challan Number",
@@ -204,6 +221,11 @@ export function exportStatutoryReceiptsCsv(receipts: readonly StatutoryReceiptRe
 
   const rows = receipts.map((r) => [
     escapeCsv(r.receiptNumber),
+    escapeCsv(
+      getReceiptCategory(r) === "PROVISIONAL_POTENTIAL"
+        ? "Provisional Potential"
+        : "Regular Demand (PFT-3)"
+    ),
     escapeCsv(r.dateOfReceipt),
     escapeCsv(r.timeOfReceipt),
     escapeCsv(r.challanNumber),
@@ -288,11 +310,32 @@ export function calculateReceiptsExecutiveSummary(receipts: readonly StatutoryRe
     categoryBreakdown[cat]!.totalPkr += r.amountPaidPkr;
   }
 
+  // Statutory Demand Category Breakdown (Regular PFT-3 vs Provisional Potential)
+  let regularPft3Count = 0;
+  let regularPft3Revenue = 0;
+  let provisionalPotentialCount = 0;
+  let provisionalPotentialRevenue = 0;
+
+  for (const r of receipts) {
+    const cat = getReceiptCategory(r);
+    if (cat === "PROVISIONAL_POTENTIAL") {
+      provisionalPotentialCount += 1;
+      provisionalPotentialRevenue += r.amountPaidPkr;
+    } else {
+      regularPft3Count += 1;
+      regularPft3Revenue += r.amountPaidPkr;
+    }
+  }
+
   return {
     totalReceipts,
     totalRevenuePkr,
     averageReceiptPkr,
     channelBreakdown,
-    categoryBreakdown
+    categoryBreakdown,
+    regularPft3Count,
+    regularPft3Revenue,
+    provisionalPotentialCount,
+    provisionalPotentialRevenue
   };
 }

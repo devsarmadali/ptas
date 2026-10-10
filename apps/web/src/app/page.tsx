@@ -37,7 +37,7 @@ import {
 import {
   CIRCLE_VEHARI_ID,
   FINANCIAL_YEAR_2026_27,
-  VEHARI_LOCALITIES,
+  getCircleLocalities,
   type AppealRecord,
   type ClearanceCertificateRecord,
   type DiscontinuanceRecord,
@@ -49,8 +49,10 @@ import {
   type StoredUnitSnapshot,
   type Pft2ChallanRecord,
   type StatutoryReceiptRecord,
+  type StatutoryReceiptCategory,
   type Pft2Status,
-  RECEIPT_SOURCE_CONFIG
+  RECEIPT_SOURCE_CONFIG,
+  getReceiptCategory
 } from "../lib/pilot-store";
 import { computeFileSha256, uploadReceiptScan } from "../lib/storage";
 import {
@@ -133,7 +135,12 @@ import {
   parseBulkPotentialUnits,
   type BulkPotentialParseResult,
   generatePotentialCsvTemplate,
-  formatPotentialPin
+  formatPotentialPin,
+  submitPotentialUnitToPft3,
+  migratePotentialUnitToPft3,
+  updatePotentialUnitArrears,
+  updatePotentialUnitParticulars,
+  recordPotentialUnitMigrationInDatabase
 } from "../lib/potential-units-storage";
 import {
   type CitizenPaymentSimulationResult,
@@ -528,6 +535,7 @@ export default function HomePage({
 
   // Potential Register Modals
   const [showAddPotentialModal, setShowAddPotentialModal] = useState(false);
+  const [editingPotentialUnitId, setEditingPotentialUnitId] = useState<string | null>(null);
   const [showImportPotentialModal, setShowImportPotentialModal] = useState(false);
   const [potentialCsvInput, setPotentialCsvInput] = useState("");
   const [bulkPotentialInputMode, setBulkPotentialInputMode] = useState<"FILE" | "PASTE">("FILE");
@@ -551,6 +559,17 @@ export default function HomePage({
   const [potNewRuleId, setPotNewRuleId] = useState("PFT-1-01");
   const [potNewCircleName, setPotNewCircleName] = useState("Vehari Circle I (City / Commercial)");
   const [potNewTehsil, setPotNewTehsil] = useState("Vehari");
+
+  // Potential Register Unit Action Modals
+  const [showMigratePotentialModal, setShowMigratePotentialModal] = useState(false);
+  const [targetMigratePotential, setTargetMigratePotential] = useState<PotentialUnitRecord | null>(
+    null
+  );
+  const [showEditPotentialArrearsModal, setShowEditPotentialArrearsModal] = useState(false);
+  const [targetEditArrearsUnit, setTargetEditArrearsUnit] = useState<PotentialUnitRecord | null>(
+    null
+  );
+  const [editArrearsAmount, setEditArrearsAmount] = useState<number>(0);
 
   // Supabase Real Auth & Session State (Phase 5)
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -580,6 +599,9 @@ export default function HomePage({
   const [newSubclassCode, setNewSubclassCode] = useState("3(i)");
   const [newTertiaryCode, setNewTertiaryCode] = useState("3(i)(b)");
   const [newRuleId, setNewRuleId] = useState("PFT-3.i.b"); // Default: Commercial Establishment (Others - Vehari) -> PKR 4,000
+  const [newCircleName, setNewCircleName] = useState("Vehari Circle I (City / Commercial)");
+  const [newTehsil, setNewTehsil] = useState("Vehari");
+  const [newOpeningArrears, setNewOpeningArrears] = useState<number>(0);
 
   // Payment Form State
   const [paymentUnitId, setPaymentUnitId] = useState("");
@@ -740,6 +762,7 @@ export default function HomePage({
   const [receiptSubclassFilter, setReceiptSubclassFilter] = useState("ALL");
   const [receiptChannelFilter, setReceiptChannelFilter] = useState("ALL");
   const [receiptSourceFilter, setReceiptSourceFilter] = useState<string>("ALL");
+  const [receiptDemandCategoryFilter, setReceiptDemandCategoryFilter] = useState<string>("ALL");
   const [showReceiptDocumentModal, setShowReceiptDocumentModal] = useState(false);
   const [activeReceiptRecord, setActiveReceiptRecord] = useState<StatutoryReceiptRecord | null>(
     null
@@ -1150,6 +1173,15 @@ export default function HomePage({
     }
   }, [potSelectedStatutoryRule, potentialUnits.length]);
 
+  // Circle Localities dynamically extracted from system database for each circle
+  const circleLocalities = useMemo(() => {
+    return getCircleLocalities(newCircleName, units, potentialUnits);
+  }, [newCircleName, units, potentialUnits]);
+
+  const potCircleLocalities = useMemo(() => {
+    return getCircleLocalities(potNewCircleName, units, potentialUnits);
+  }, [potNewCircleName, units, potentialUnits]);
+
   // Real-time Duplicate Detection using domain's findDuplicateCandidates
   const duplicateWarning = useMemo((): DuplicateMatch | null => {
     if (!newIdentifierValue.trim() && !newLegalName.trim()) return null;
@@ -1268,6 +1300,17 @@ export default function HomePage({
     if (editingUnitId) {
       const target = units.find((u) => u.id === editingUnitId);
       if (!target) return;
+
+      // Statutory Rule 4 Governance: Editing strictly forbidden once submitted for approval
+      const currentStatus = target.assessments[0]?.status ?? "DRAFT";
+      if (currentStatus !== "DRAFT" && currentStatus !== "RETURNED") {
+        showToast(
+          "error",
+          `Editing is prohibited under Statutory Governance: Unit '${target.legalName}' is currently in '${currentStatus}' status. Only units in FEEDED (DRAFT) status or RETURNED by ETO for review can be modified.`
+        );
+        return;
+      }
+
       const updatedVersion: AssessmentVersion<StoredUnitSnapshot> = target.assessmentVersions[0]
         ? {
             ...target.assessmentVersions[0],
@@ -1295,6 +1338,42 @@ export default function HomePage({
             createdAt: new Date().toISOString()
           };
 
+      // Update or add opening arrears adjustment entry in ledger if opening arrears changed
+      const nextLedger = [...target.ledgerEntries];
+      const sanitizedArrears = Math.max(0, Math.round(Number(newOpeningArrears) || 0));
+      const adjIdx = nextLedger.findIndex((e) => e.entryType === "MANUAL_ADJUSTMENT");
+      if (sanitizedArrears > 0) {
+        if (adjIdx >= 0) {
+          nextLedger[adjIdx] = {
+            ...nextLedger[adjIdx]!,
+            amount: sanitizedArrears,
+            metadata: {
+              note: `Opening unrecovered professional tax arrears liability: PKR ${sanitizedArrears.toLocaleString()}`
+            }
+          };
+        } else {
+          nextLedger.push({
+            id: `adj-arr-${Date.now()}`,
+            demandUnitId: target.demandUnit?.id ?? `dem-${target.id}`,
+            financialYearId: FINANCIAL_YEAR_2026_27,
+            entryType: "MANUAL_ADJUSTMENT",
+            amount: sanitizedArrears,
+            sourceType: "MANUAL_ADJUSTMENT",
+            sourceId: `arr-${target.id}`,
+            postedAt: new Date().toISOString(),
+            postedBy: officer.name,
+            correlationId: `corr-arr-${Date.now()}`,
+            idempotencyKey: `idem-arr-${Date.now()}`,
+            metadata: {
+              note: `Opening unrecovered professional tax arrears liability: PKR ${sanitizedArrears.toLocaleString()}`
+            }
+          });
+        }
+      } else if (adjIdx >= 0) {
+        // Remove if set to zero
+        nextLedger.splice(adjIdx, 1);
+      }
+
       const updatedUnit: StoredUnit = {
         ...target,
         legalName: newLegalName.trim(),
@@ -1303,12 +1382,14 @@ export default function HomePage({
         identifierValue: newIdentifierValue.trim(),
         address: newAddress.trim(),
         locality: newLocality.trim() || undefined,
+        circleName: newCircleName,
         statutoryRuleId: rule.rule_id,
         statutoryRule: rule,
         categoryCode: rule.category_code,
         subclassificationCode: rule.subclassification_code,
         statutoryTertiaryCode: rule.statutory_tertiary_code,
-        assessmentVersions: [updatedVersion, ...target.assessmentVersions.slice(1)]
+        assessmentVersions: [updatedVersion, ...target.assessmentVersions.slice(1)],
+        ledgerEntries: nextLedger
       };
       const auditItem: PilotAuditItem = {
         id: `audit-${Date.now()}`,
@@ -1318,7 +1399,7 @@ export default function HomePage({
         target: updatedUnit.legalName,
         timestamp: new Date().toISOString(),
         correlationId: `corr-edit-${Date.now()}`,
-        details: `Updated draft survey data for unit under Class ${rule.rule_code} (${rule.category})`
+        details: `Updated survey data for unit under Class ${rule.rule_code} (${rule.category})${sanitizedArrears > 0 ? ` with opening arrears PKR ${sanitizedArrears.toLocaleString()}` : ""}.`
       };
       syncState(
         units.map((u) => (u.id === editingUnitId ? updatedUnit : u)),
@@ -1326,11 +1407,12 @@ export default function HomePage({
       );
       setEditingUnitId(null);
       setShowAddUnitModal(false);
-      showToast("success", `Draft survey data for '${updatedUnit.legalName}' updated.`);
+      showToast("success", `✓ Survey data for '${updatedUnit.legalName}' updated.`);
       return;
     }
 
     const requestId = crypto.randomUUID();
+    const sanitizedArrears = Math.max(0, Math.round(Number(newOpeningArrears) || 0));
     const { data, error } = await getSupabaseAuthClient().rpc("create_individual_survey_unit", {
       p_unit: {
         legal_name: newLegalName.trim(),
@@ -1339,8 +1421,9 @@ export default function HomePage({
         identifier_value: newIdentifierValue.trim(),
         address: newAddress.trim(),
         locality: newLocality.trim(),
+        circle_name: newCircleName,
         statutory_rule_id: rule.rule_id,
-        opening_arrears: 0
+        opening_arrears: sanitizedArrears
       },
       p_idempotency_key: `survey-individual:${officer.id}:${requestId}`,
       p_correlation_id: `survey-individual:${requestId}`
@@ -1358,6 +1441,7 @@ export default function HomePage({
     setNewIdentifierValue("");
     setNewAddress("");
     setNewLocality("");
+    setNewOpeningArrears(0);
     setNewCategoryCode("3");
     setNewSubclassCode("3(i)");
     setNewTertiaryCode("3(i)(b)");
@@ -1366,7 +1450,7 @@ export default function HomePage({
     if (created?.id) setSelectedUnitId(created.id);
     showToast(
       "success",
-      `Unit '${newLegalName.trim()}' permanently added to the survey pipeline under Class ${rule.rule_code}.`
+      `Unit '${newLegalName.trim()}' permanently added to the survey pipeline under Class ${rule.rule_code}${sanitizedArrears > 0 ? ` (Opening arrears: PKR ${sanitizedArrears.toLocaleString()})` : ""}.`
     );
   };
 
@@ -4086,6 +4170,76 @@ export default function HomePage({
     }
   };
 
+  const handleOpenAddSurveyUnit = (defaultCircle?: string) => {
+    setEditingUnitId(null);
+    setNewLegalName("");
+    setNewTradeName("");
+    setNewIdentifierType("CNIC");
+    setNewIdentifierValue("");
+    setNewAddress("");
+    setNewLocality("");
+    const circle = defaultCircle || "Vehari Circle I (City / Commercial)";
+    setNewCircleName(circle);
+    if (circle.includes("Burewala")) setNewTehsil("Burewala");
+    else if (circle.includes("Mailsi")) setNewTehsil("Mailsi");
+    else setNewTehsil("Vehari");
+    setNewCategoryCode("1");
+    setNewSubclassCode("1(i)");
+    setNewTertiaryCode("");
+    setNewRuleId("PFT-1-01");
+    setNewOpeningArrears(0);
+    setShowAddUnitModal(true);
+  };
+
+  const handleOpenAddPotentialUnit = () => {
+    setEditingPotentialUnitId(null);
+    setPotNewLegalName("");
+    setPotNewTradeName("");
+    setPotNewIdType("CNIC");
+    setPotNewIdValue("");
+    setPotNewAddress("");
+    setPotNewLocality("");
+    setPotNewCircleName("Vehari Circle I (City / Commercial)");
+    setPotNewTehsil("Vehari");
+    setPotNewCategoryCode("1");
+    setPotNewSubclassCode("1(i)");
+    setPotNewTertiaryCode("");
+    setPotNewRuleId("PFT-1-01");
+    setPotNewOpeningArrears(0);
+    setShowAddPotentialModal(true);
+  };
+
+  const handleOpenEditPotentialUnit = (pot: PotentialUnitRecord) => {
+    if (pot.status === "MIGRATED") {
+      showToast(
+        "error",
+        `Editing is strictly prohibited: Potential Unit '${pot.potentialNumber}' has already been migrated to Form P.F.T-3 Assessment Register and is under formal statutory lifecycle governance.`
+      );
+      return;
+    }
+
+    setEditingPotentialUnitId(pot.id);
+    setPotNewLegalName(pot.legalName);
+    setPotNewTradeName(pot.tradeName || "");
+    setPotNewIdType((pot.identifierType as "CNIC" | "NTN") || "CNIC");
+    setPotNewIdValue(pot.identifierValue);
+    setPotNewAddress(pot.address);
+    setPotNewLocality(pot.locality || "");
+    const circleName = pot.circleName || "Vehari Circle I (City / Commercial)";
+    setPotNewCircleName(circleName);
+    if (circleName.includes("Burewala")) setPotNewTehsil("Burewala");
+    else if (circleName.includes("Mailsi")) setPotNewTehsil("Mailsi");
+    else setPotNewTehsil("Vehari");
+
+    setPotNewCategoryCode(pot.categoryCode);
+    setPotNewSubclassCode(pot.subclassificationCode || "");
+    setPotNewTertiaryCode(pot.statutoryTertiaryCode || "");
+    setPotNewRuleId(pot.statutoryRuleId);
+    setPotNewOpeningArrears(pot.openingArrears || 0);
+
+    setShowAddPotentialModal(true);
+  };
+
   const handleAddPotentialUnit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!potNewLegalName.trim() || !potNewIdValue.trim()) {
@@ -4113,6 +4267,55 @@ export default function HomePage({
       circleId = "00000000-0000-4000-8000-000000000002";
     } else if (potNewCircleName.includes("Circle II")) {
       circleId = "00000000-0000-4000-8000-000000000005";
+    }
+
+    if (editingPotentialUnitId) {
+      const existing = potentialUnits.find((p) => p.id === editingPotentialUnitId);
+      if (!existing) {
+        showToast("error", "Target potential unit not found.");
+        return;
+      }
+      if (existing.status === "MIGRATED") {
+        showToast("error", "Editing is prohibited: record is already migrated to Form P.F.T-3.");
+        return;
+      }
+
+      try {
+        const updated = updatePotentialUnitParticulars(editingPotentialUnitId, {
+          legalName: potNewLegalName.trim(),
+          tradeName: potNewTradeName.trim() || undefined,
+          identifierType: potNewIdType,
+          identifierValue: potNewIdValue.trim(),
+          address: potNewAddress.trim() || "Vehari Commercial Area",
+          locality: potNewLocality.trim() || "Vehari City Commercial Zone",
+          circleId,
+          circleName: potNewCircleName,
+          districtName: "Vehari",
+          categoryCode: rule.category_code,
+          categoryName: rule.category,
+          subclassificationCode: rule.subclassification_code,
+          subclassificationName: rule.subcategory,
+          statutoryTertiaryCode: rule.statutory_tertiary_code,
+          statutoryTertiaryClassification: rule.statutory_tertiary_classification,
+          statutoryRuleId: rule.rule_id,
+          statutoryRule: rule,
+          annualRatePkr: rule.annual_rate_pkr ?? 4000,
+          openingArrears: potNewOpeningArrears
+        });
+
+        if (updated) {
+          setPotentialUnits((current) =>
+            current.map((u) => (u.id === editingPotentialUnitId ? updated : u))
+          );
+          setShowAddPotentialModal(false);
+          setEditingPotentialUnitId(null);
+          showToast("success", `✓ Potential Unit ${updated.potentialNumber} particulars updated.`);
+        }
+        return;
+      } catch (err) {
+        showToast("error", `Failed to update potential unit: ${(err as Error).message}`);
+        return;
+      }
     }
 
     const newPotUnit: PotentialUnitRecord = {
@@ -4154,6 +4357,7 @@ export default function HomePage({
     }
     setPotentialUnits((current) => [created, ...current.filter((unit) => unit.id !== created.id)]);
     setShowAddPotentialModal(false);
+    setEditingPotentialUnitId(null);
 
     // Reset inputs
     setPotNewLegalName("");
@@ -4294,40 +4498,279 @@ export default function HomePage({
     }
   };
 
+  const handleOpenMigratePotential = (target: PotentialUnitRecord) => {
+    setTargetMigratePotential(target);
+    setShowMigratePotentialModal(true);
+  };
+
+  const handleConfirmMigratePotential = async () => {
+    if (!targetMigratePotential) return;
+    if (targetMigratePotential.status === "MIGRATED") {
+      showToast(
+        "error",
+        "This prospective unit has already been migrated to Form P.F.T-3 Register."
+      );
+      return;
+    }
+
+    try {
+      const { migratedUnit, assignedDemandNo } = submitPotentialUnitToPft3(
+        targetMigratePotential,
+        units,
+        officer.name || "Tax Inspector"
+      );
+
+      const nowIso = new Date().toISOString();
+      const updatedPotentialUnits = potentialUnits.map((p) =>
+        p.id === targetMigratePotential.id
+          ? {
+              ...p,
+              status: "MIGRATED" as const,
+              migratedToDemandNo: assignedDemandNo,
+              migratedAt: nowIso
+            }
+          : p
+      );
+      setPotentialUnits(updatedPotentialUnits);
+      savePersistedPotentialUnits(updatedPotentialUnits);
+
+      // Async record migration in database
+      void recordPotentialUnitMigrationInDatabase(targetMigratePotential.id, assignedDemandNo);
+
+      // Add to active units state (lands with SUBMITTED status for ETO review)
+      const existingIdx = units.findIndex(
+        (u) =>
+          u.id === migratedUnit.id ||
+          u.demandNumber === assignedDemandNo ||
+          u.demandUnit?.permanentDemandNo === assignedDemandNo
+      );
+      let nextUnits: StoredUnit[];
+      if (existingIdx >= 0) {
+        nextUnits = units.map((u, idx) => (idx === existingIdx ? migratedUnit : u));
+      } else {
+        nextUnits = [migratedUnit, ...units];
+      }
+      setUnits(nextUnits);
+
+      // Audit Log
+      const auditItem: PilotAuditItem = {
+        id: `audit-${Date.now()}`,
+        eventType: "POTENTIAL_UNIT_MIGRATED_TO_PFT3",
+        actorName: officer.name,
+        actorRole: officer.role,
+        target: targetMigratePotential.legalName,
+        timestamp: nowIso,
+        correlationId: `corr-mig-${migratedUnit.id}`,
+        details: `Potential Unit ${targetMigratePotential.potentialNumber} (${targetMigratePotential.legalName}) migrated to Form P.F.T-3 Assessment Register as Demand No. ${assignedDemandNo} with SUBMITTED status pending ETO approval. Annual Demand: PKR ${targetMigratePotential.annualRatePkr.toLocaleString()}${targetMigratePotential.openingArrears ? ` + Arrears PKR ${targetMigratePotential.openingArrears.toLocaleString()}` : ""}.`
+      };
+      setAuditLogs([auditItem, ...auditLogs]);
+
+      setShowMigratePotentialModal(false);
+      setTargetMigratePotential(null);
+
+      showToast(
+        "success",
+        `✓ Unit ${targetMigratePotential.potentialNumber} successfully migrated to Form P.F.T-3 Register as Demand No. ${assignedDemandNo} (Status: SUBMITTED for ETO review & approval).`
+      );
+    } catch (err) {
+      showToast(
+        "error",
+        err instanceof Error ? err.message : "Failed to migrate potential unit to Form P.F.T-3."
+      );
+    }
+  };
+
+  const handleOpenEditPotentialArrears = (target: PotentialUnitRecord) => {
+    setTargetEditArrearsUnit(target);
+    setEditArrearsAmount(target.openingArrears ?? 0);
+    setShowEditPotentialArrearsModal(true);
+  };
+
+  const handleConfirmSavePotentialArrears = async () => {
+    if (!targetEditArrearsUnit) return;
+    const sanitizedArrears = Math.max(0, Math.round(Number(editArrearsAmount) || 0));
+
+    try {
+      const updated = updatePotentialUnitArrears(targetEditArrearsUnit.id, sanitizedArrears);
+      if (updated) {
+        setPotentialUnits((prev) =>
+          prev.map((p) => (p.id === targetEditArrearsUnit.id ? updated : p))
+        );
+      } else {
+        const nextUnits = potentialUnits.map((p) =>
+          p.id === targetEditArrearsUnit.id ? { ...p, openingArrears: sanitizedArrears } : p
+        );
+        setPotentialUnits(nextUnits);
+        savePersistedPotentialUnits(nextUnits);
+      }
+
+      // Audit Log
+      const auditItem: PilotAuditItem = {
+        id: `audit-${Date.now()}`,
+        eventType: "POTENTIAL_UNIT_ARREARS_UPDATED",
+        actorName: officer.name,
+        actorRole: officer.role,
+        target: targetEditArrearsUnit.legalName,
+        timestamp: new Date().toISOString(),
+        correlationId: `corr-arr-${targetEditArrearsUnit.id}`,
+        details: `Opening arrears for Potential Unit ${targetEditArrearsUnit.potentialNumber} (${targetEditArrearsUnit.legalName}) updated from PKR ${(targetEditArrearsUnit.openingArrears ?? 0).toLocaleString()} to PKR ${sanitizedArrears.toLocaleString()}. Total Demand: PKR ${(targetEditArrearsUnit.annualRatePkr + sanitizedArrears).toLocaleString()}.`
+      };
+      setAuditLogs([auditItem, ...auditLogs]);
+
+      setShowEditPotentialArrearsModal(false);
+      setTargetEditArrearsUnit(null);
+
+      showToast(
+        "success",
+        `✓ Opening arrears for ${targetEditArrearsUnit.potentialNumber} updated to PKR ${sanitizedArrears.toLocaleString()}. Total Demand: PKR ${(targetEditArrearsUnit.annualRatePkr + sanitizedArrears).toLocaleString()}.`
+      );
+    } catch (err) {
+      showToast(
+        "error",
+        err instanceof Error ? err.message : "Failed to update potential unit arrears."
+      );
+    }
+  };
+
   const renderPotentialUnitActions = (target: PotentialUnitRecord) => {
+    const isMigrated = target.status === "MIGRATED";
     return (
-      <RowActionMenu
-        align="right"
-        actions={[
-          {
-            id: "issue-provisional-pft2",
-            label: "Instant Issue Provisional PFT-2",
-            icon: "⚡",
-            onClick: () => handleIssueProvisionalPft2(target)
-          },
-          {
-            id: "issue-pft2-tab",
-            label: "Issue Form PFT-2 (New Tab ↗)",
-            icon: "📜",
-            href: `/documents/pf2/new?pin=${encodeURIComponent(target.pinNumber)}`,
-            target: "_blank"
-          },
-          {
-            id: "view-details",
-            label: "View Assessee Dossier",
-            icon: "📋",
-            href: `/units/${target.pinNumber}/details`,
-            target: "_blank"
-          },
-          {
-            id: "view-pft1",
-            label: "Issue Form P.F.T-1 (Assessment Notice ↗)",
-            icon: "📄",
-            href: `/documents/pft1?pin=${target.pinNumber}`,
-            target: "_blank"
-          }
-        ]}
-      />
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          gap: "0.35rem",
+          whiteSpace: "nowrap"
+        }}
+      >
+        {/* Action Button 1: Migrate to PFT-3 (Lands with SUBMITTED status for ETO approval) */}
+        {isMigrated ? (
+          <button
+            type="button"
+            disabled
+            className="btn-secondary"
+            style={{
+              fontSize: "0.72rem",
+              padding: "0.22rem 0.5rem",
+              opacity: 0.65,
+              cursor: "not-allowed",
+              background: "#f1f5f9",
+              borderColor: "#cbd5e1"
+            }}
+            title={`Already migrated to Form P.F.T-3 Register as Demand No. ${target.migratedToDemandNo ?? ""}`}
+          >
+            ✓ Migrated
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn-primary"
+            style={{
+              fontSize: "0.72rem",
+              padding: "0.22rem 0.55rem",
+              background: "#065f46",
+              borderColor: "#047857",
+              whiteSpace: "nowrap"
+            }}
+            onClick={() => handleOpenMigratePotential(target)}
+            title="Migrate unit to Form P.F.T-3 Assessment Register with SUBMITTED status for ETO review & approval"
+          >
+            📥 Migrate to PFT-3
+          </button>
+        )}
+
+        {/* Action Button: Edit unmigrated potential unit particulars */}
+        {!isMigrated && (
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{
+              fontSize: "0.72rem",
+              padding: "0.22rem 0.5rem",
+              whiteSpace: "nowrap"
+            }}
+            onClick={() => handleOpenEditPotentialUnit(target)}
+            title="Edit potential assessee particulars, circle, locality, and classification"
+          >
+            ✏️ Edit
+          </button>
+        )}
+
+        {/* Action Button 2: Add / Edit Arrears directly on potential units */}
+        <button
+          type="button"
+          className="btn-secondary"
+          style={{
+            fontSize: "0.72rem",
+            padding: "0.22rem 0.5rem",
+            whiteSpace: "nowrap",
+            borderColor: (target.openingArrears ?? 0) > 0 ? "#b45309" : undefined,
+            color: (target.openingArrears ?? 0) > 0 ? "#92400e" : undefined
+          }}
+          onClick={() => handleOpenEditPotentialArrears(target)}
+          title="Add or edit opening arrears liability for this prospective unit"
+        >
+          💰 {(target.openingArrears ?? 0) > 0 ? "Edit Arrears" : "Add Arrears"}
+        </button>
+
+        {/* Universal Floating Dropdown Menu for secondary statutory actions */}
+        <RowActionMenu
+          align="right"
+          actions={[
+            {
+              id: "edit-potential-unit",
+              label: "Edit Potential Assessee Particulars",
+              icon: "✏️",
+              disabled: isMigrated,
+              onClick: () => handleOpenEditPotentialUnit(target)
+            },
+            {
+              id: "migrate-to-pft3-menu",
+              label: isMigrated
+                ? `Migrated to PFT-3 (${target.migratedToDemandNo})`
+                : "Migrate to PFT-3 (Submit for ETO Approval)",
+              icon: "📥",
+              disabled: isMigrated,
+              onClick: () => handleOpenMigratePotential(target)
+            },
+            {
+              id: "add-edit-arrears-menu",
+              label:
+                (target.openingArrears ?? 0) > 0 ? "Edit Arrears Balance" : "Add Arrears Balance",
+              icon: "💰",
+              onClick: () => handleOpenEditPotentialArrears(target)
+            },
+            {
+              id: "issue-provisional-pft2",
+              label: "Instant Issue Provisional PFT-2",
+              icon: "⚡",
+              onClick: () => handleIssueProvisionalPft2(target)
+            },
+            {
+              id: "issue-pft2-tab",
+              label: "Issue Form PFT-2 (New Tab ↗)",
+              icon: "📜",
+              href: `/documents/pf2/new?pin=${encodeURIComponent(target.pinNumber)}`,
+              target: "_blank"
+            },
+            {
+              id: "view-details",
+              label: "View Assessee Dossier",
+              icon: "📋",
+              href: `/units/${target.pinNumber}/details`,
+              target: "_blank"
+            },
+            {
+              id: "view-pft1",
+              label: "Issue Form P.F.T-1 (Assessment Notice ↗)",
+              icon: "📄",
+              href: `/documents/pft1?pin=${target.pinNumber}`,
+              target: "_blank"
+            }
+          ]}
+        />
+      </div>
     );
   };
 
@@ -4454,14 +4897,16 @@ export default function HomePage({
     );
     let updatedUnits = units;
 
-    // Receiving payment is durable, but it does not itself authorize a PFT-3
-    // assessment. Potential-unit promotion remains a separate ETO action.
+    // 2. Create Receipt Record with mandatory statutory receiptCategory
+    const receiptCategory: StatutoryReceiptCategory = isPotentialMigration
+      ? "PROVISIONAL_POTENTIAL"
+      : "REGULAR_PFT3";
 
-    // 2. Create Receipt Record with locked statutory amount and validated date
     const newReceipt: StatutoryReceiptRecord = {
       id: `rec-${Date.now()}`,
       receiptNumber,
       paymentSource: isPotentialMigration ? "MANUAL" : "ISSUED_PFT2",
+      receiptCategory,
       challanNumber: receivingChallan.challanNumber,
       demandNumber: assignedDemandNo,
       unitId: targetUnit?.id || receivingChallan.unitId,
@@ -4531,8 +4976,46 @@ export default function HomePage({
         : c
     );
 
-    // 4. Post PAYMENT_CREDIT to Unit's Demand Ledger if already in PFT-3
-    if (!isPotentialMigration && targetUnit) {
+    // 4. Handle Migration & Ledger Posting upon payment realization:
+    // If challan is for a prospective potential unit, promote directly into Form P.F.T-3 Assessment Register as FINAL APPROVED
+    if (isPotentialMigration && matchingPotential) {
+      const { migratedUnit, assignedDemandNo: promDemandNo } = migratePotentialUnitToPft3(
+        matchingPotential,
+        units,
+        payableAmount
+      );
+
+      const nowIso = new Date().toISOString();
+      const updatedPotentialUnits = potentialUnits.map((p) =>
+        p.id === matchingPotential.id
+          ? {
+              ...p,
+              status: "MIGRATED" as const,
+              migratedToDemandNo: promDemandNo,
+              migratedAt: nowIso
+            }
+          : p
+      );
+      setPotentialUnits(updatedPotentialUnits);
+      savePersistedPotentialUnits(updatedPotentialUnits);
+
+      // Async record migration in database
+      void recordPotentialUnitMigrationInDatabase(matchingPotential.id, promDemandNo);
+
+      // Merge into active units (replace if already present, otherwise prepend)
+      const existingIdx = units.findIndex(
+        (u) =>
+          u.id === migratedUnit.id ||
+          u.demandNumber === promDemandNo ||
+          u.demandUnit?.permanentDemandNo === promDemandNo
+      );
+      if (existingIdx >= 0) {
+        updatedUnits = units.map((u, idx) => (idx === existingIdx ? migratedUnit : u));
+      } else {
+        updatedUnits = [migratedUnit, ...units];
+      }
+    } else if (!isPotentialMigration && targetUnit) {
+      // Regular unit already in Form P.F.T-3: Post PAYMENT_CREDIT to Unit's Demand Ledger
       const paymentEntry = createPaymentReceiptEntry({
         demandUnitId: targetUnit.demandUnit?.id ?? `dem-${targetUnit.id}`,
         amount: payableAmount,
@@ -4555,7 +5038,7 @@ export default function HomePage({
     const auditItem: PilotAuditItem = {
       id: `audit-${Date.now()}`,
       eventType: isPotentialMigration
-        ? "POTENTIAL_CHALLAN_PAYMENT_RECEIVED"
+        ? "POTENTIAL_CHALLAN_PAYMENT_RECEIVED_AND_MIGRATED"
         : "CHALLAN_RECEIVED_CONVERTED_TO_RECEIPT",
       actorName: officer.name,
       actorRole: officer.role,
@@ -4563,8 +5046,8 @@ export default function HomePage({
       timestamp: new Date().toISOString(),
       correlationId: `corr-${receiptNumber}`,
       details: isPotentialMigration
-        ? `Potential Unit ${matchingPotential?.potentialNumber ?? receivingChallan.demandNumber} realized statutory payment (PKR ${payableAmount.toLocaleString()}) via ${receivePaymentChannel} [Branch: ${receiveBankBranch}, CPR: ${receiveBankScrollRef.trim()}]. Receipt ${receiptNumber} recorded; P.F.T-3 promotion remains subject to ETO approval.`
-        : `Form P.F.T-2 ${receivingChallan.challanNumber} received and credited (PKR ${payableAmount.toLocaleString()}) via ${receivePaymentChannel} [Branch: ${receiveBankBranch}, CPR: ${receiveBankScrollRef.trim()}]. Generated Statutory Receipt ${receiptNumber}.`
+        ? `Provisional Potential Challan ${receivingChallan.challanNumber} (Unit: ${matchingPotential?.potentialNumber ?? receivingChallan.demandNumber}) realized statutory payment of PKR ${payableAmount.toLocaleString()} via ${receivePaymentChannel} [Branch: ${receiveBankBranch}, CPR: ${receiveBankScrollRef.trim()}]. Statutory Receipt ${receiptNumber} generated (Category: PROVISIONAL_POTENTIAL); unit automatically migrated to Form P.F.T-3 Assessment Register as final APPROVED with PAYMENT_CREDIT posted.`
+        : `Form P.F.T-2 ${receivingChallan.challanNumber} received and credited (PKR ${payableAmount.toLocaleString()} via ${receivePaymentChannel} [Branch: ${receiveBankBranch}, CPR: ${receiveBankScrollRef.trim()}]. Generated Statutory Receipt ${receiptNumber} (Category: REGULAR_PFT3).`
     };
 
     const updatedReceipts = [durableReceipt, ...statutoryReceipts];
@@ -4581,7 +5064,7 @@ export default function HomePage({
     if (isPotentialMigration) {
       showToast(
         "success",
-        `✓ Payment received and Statutory Receipt ${receiptNumber} recorded. P.F.T-3 promotion remains pending ETO approval.`
+        `✓ Statutory payment of PKR ${payableAmount.toLocaleString()} received against Provisional Potential Challan ${receivingChallan.challanNumber}! Receipt ${receiptNumber} issued, and unit automatically migrated into Form P.F.T-3 Demand Register as final APPROVED.`
       );
     } else {
       showToast(
@@ -4847,15 +5330,38 @@ export default function HomePage({
   };
 
   const handleOpenEditSurveyUnit = (u: StoredUnit) => {
+    // Statutory Rule 4: Editing is strictly permitted only in FEEDED (DRAFT) status or when RETURNED by ETO for review
+    const status = u.assessments[0]?.status ?? "DRAFT";
+    if (status !== "DRAFT" && status !== "RETURNED") {
+      showToast(
+        "error",
+        `Editing is strictly prohibited: Unit '${u.legalName}' is currently in '${status}' status. Assessees may only be modified while in FEEDED (DRAFT) status or when explicitly RETURNED by ETO for review.`
+      );
+      return;
+    }
+
+    setEditingUnitId(u.id);
     setNewLegalName(u.legalName);
     setNewTradeName(u.tradeName || "");
+    setNewIdentifierType((u.identifierType as "CNIC" | "NTN") || "CNIC");
     setNewIdentifierValue(u.identifierValue);
     setNewAddress(u.address);
+    setNewLocality(u.locality || "");
+    const circleName = u.circleName || "Vehari Circle I (City / Commercial)";
+    setNewCircleName(circleName);
+    if (circleName.includes("Burewala")) setNewTehsil("Burewala");
+    else if (circleName.includes("Mailsi")) setNewTehsil("Mailsi");
+    else setNewTehsil("Vehari");
+
     setNewCategoryCode(u.statutoryRule.category_code);
     setNewSubclassCode(u.statutoryRule.subclassification_code || "");
     setNewTertiaryCode(u.statutoryRule.statutory_tertiary_code || "");
     setNewRuleId(u.statutoryRule.rule_id);
-    setEditingUnitId(u.id);
+
+    // Compute opening arrears from ledger if any
+    const manualAdjustment = u.ledgerEntries.find((e) => e.entryType === "MANUAL_ADJUSTMENT");
+    setNewOpeningArrears(manualAdjustment ? manualAdjustment.amount : 0);
+
     setShowAddUnitModal(true);
   };
 
@@ -4948,12 +5454,6 @@ export default function HomePage({
             onClick: () => handleOpenReturnModal(targetUnit.id)
           },
           {
-            id: "edit-classify",
-            label: "Adjust Statutory Classification",
-            icon: "✏️",
-            onClick: () => handleOpenEditSurveyUnit(targetUnit)
-          },
-          {
             id: "close-unit",
             label: "Close Unit",
             icon: "✕",
@@ -4963,9 +5463,14 @@ export default function HomePage({
       } else {
         actions.push({
           id: "view-submitted",
-          label: "Pending ETO Review (View)",
-          icon: "⏳",
-          onClick: () => handleOpenEditSurveyUnit(targetUnit)
+          label: "Pending ETO Review (Locked)",
+          icon: "🔒",
+          onClick: () => {
+            showToast(
+              "info",
+              `Unit '${targetUnit.legalName}' is currently SUBMITTED for statutory ETO review. Editing is restricted until ETO grants approval or returns for review.`
+            );
+          }
         });
       }
     } else if (status === "RETURNED") {
@@ -5032,10 +5537,19 @@ export default function HomePage({
 
   // Row actions strictly for Form P.F.T-3 Assessment & Demand Register (REGISTER_PFT3)
   const renderPft3UnitActions = (targetUnit: StoredUnit) => {
+    const pft3Status = targetUnit.assessments[0]?.status ?? "DRAFT";
+    const canEditPft3 = pft3Status === "DRAFT" || pft3Status === "RETURNED";
     return (
       <RowActionMenu
         align="right"
         actions={[
+          {
+            id: "edit-pft3-unit",
+            label: canEditPft3 ? "Edit Unit Particulars" : "Edit Particulars (Locked)",
+            icon: canEditPft3 ? "✏️" : "🔒",
+            disabled: !canEditPft3,
+            onClick: () => handleOpenEditSurveyUnit(targetUnit)
+          },
           {
             id: "issue-pft2-tab",
             label: "Issue Form PFT-2 (New Tab ↗)",
@@ -5682,10 +6196,7 @@ export default function HomePage({
                     {officer.role === "INSPECTOR" && (
                       <button
                         type="button"
-                        onClick={() => {
-                          setEditingUnitId(null);
-                          setShowAddUnitModal(true);
-                        }}
+                        onClick={() => handleOpenAddSurveyUnit()}
                         className="btn-primary"
                         title="Add one field-survey unit to the database"
                       >
@@ -6080,14 +6591,7 @@ export default function HomePage({
                   <button
                     type="button"
                     className="btn-success btn-sm"
-                    onClick={() => {
-                      setEditingUnitId(null);
-                      setNewLegalName("");
-                      setNewTradeName("");
-                      setNewIdentifierValue("");
-                      setNewAddress("");
-                      setShowAddUnitModal(true);
-                    }}
+                    onClick={() => handleOpenAddSurveyUnit()}
                   >
                     ➕ Add Survey Unit
                   </button>
@@ -6665,15 +7169,6 @@ export default function HomePage({
                                       </button>
                                       <button
                                         type="button"
-                                        className="btn-secondary btn-xs"
-                                        style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                                        onClick={() => handleOpenEditSurveyUnit(u)}
-                                        title="Adjust statutory classification or details before approval"
-                                      >
-                                        ✏️ Edit
-                                      </button>
-                                      <button
-                                        type="button"
                                         className="btn-outline btn-xs"
                                         style={{
                                           padding: "0.25rem 0.5rem",
@@ -6858,7 +7353,7 @@ export default function HomePage({
                 <button
                   type="button"
                   className="btn-success"
-                  onClick={() => setShowAddPotentialModal(true)}
+                  onClick={() => handleOpenAddPotentialUnit()}
                   title="Register new prospective assessee in Potential Register"
                 >
                   ➕ Add Potential Unit
@@ -7436,7 +7931,26 @@ export default function HomePage({
                 </p>
               </div>
 
-              <div className="panel-actions" style={{ display: "flex", gap: "0.5rem" }}>
+              <div
+                className="panel-actions"
+                style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}
+              >
+                <button
+                  type="button"
+                  className="btn-primary"
+                  style={{
+                    background: "#065f46",
+                    borderColor: "#047857"
+                  }}
+                  onClick={() =>
+                    handleOpenAddSurveyUnit(
+                      pft3CircleFilter !== "ALL" ? pft3CircleFilter : undefined
+                    )
+                  }
+                  title="Register a new taxable unit directly into assessment intake"
+                >
+                  ➕ Add Tax Unit
+                </button>
                 <button
                   type="button"
                   className="btn-primary"
@@ -11267,13 +11781,39 @@ export default function HomePage({
                 </select>
               </div>
 
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    color: "#475569",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  Demand Category / Type:
+                </label>
+                <select
+                  aria-label="Filter by Demand Category"
+                  className="form-control"
+                  style={{ width: "100%", fontSize: "0.85rem" }}
+                  value={receiptDemandCategoryFilter}
+                  onChange={(e) => setReceiptDemandCategoryFilter(e.target.value)}
+                >
+                  <option value="ALL">All Demand Types</option>
+                  <option value="REGULAR_PFT3">🟢 Regular Demand (PFT-3)</option>
+                  <option value="PROVISIONAL_POTENTIAL">⚡ Provisional Potential Demand</option>
+                </select>
+              </div>
+
               {(receiptSearchQuery ||
                 receiptDateFrom ||
                 receiptDateTo ||
                 receiptCategoryFilter !== "ALL" ||
                 receiptSubclassFilter !== "ALL" ||
                 receiptChannelFilter !== "ALL" ||
-                receiptSourceFilter !== "ALL") && (
+                receiptSourceFilter !== "ALL" ||
+                receiptDemandCategoryFilter !== "ALL") && (
                 <div>
                   <button
                     type="button"
@@ -11287,6 +11827,7 @@ export default function HomePage({
                       setReceiptSubclassFilter("ALL");
                       setReceiptChannelFilter("ALL");
                       setReceiptSourceFilter("ALL");
+                      setReceiptDemandCategoryFilter("ALL");
                     }}
                   >
                     Reset Filters
@@ -11306,6 +11847,7 @@ export default function HomePage({
                     <th style={{ maxWidth: "12rem" }}>Classification &amp; Slab</th>
                     <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Amount Discharged</th>
                     <th style={{ maxWidth: "11rem" }}>Treasury Channel &amp; CPR</th>
+                    <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Demand Type</th>
                     <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Payment Source</th>
                     <th style={{ maxWidth: "10rem" }}>Receiving Officer</th>
                     <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Actions</th>
@@ -11314,6 +11856,11 @@ export default function HomePage({
                 <tbody>
                   {(() => {
                     const filtered = statutoryReceipts.filter((r) => {
+                      if (
+                        receiptDemandCategoryFilter !== "ALL" &&
+                        getReceiptCategory(r) !== receiptDemandCategoryFilter
+                      )
+                        return false;
                       if (
                         receiptSourceFilter !== "ALL" &&
                         (r.paymentSource ?? "ISSUED_PFT2") !== receiptSourceFilter
@@ -11357,7 +11904,7 @@ export default function HomePage({
                       return (
                         <tr>
                           <td
-                            colSpan={9}
+                            colSpan={10}
                             style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
                           >
                             No statutory payment receipts match the active query.
@@ -11474,6 +12021,47 @@ export default function HomePage({
                           >
                             Ref: {rec.bankScrollRef}
                           </span>
+                        </td>
+                        <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                          {(() => {
+                            const cat = getReceiptCategory(rec);
+                            const isProvisional = cat === "PROVISIONAL_POTENTIAL";
+                            return isProvisional ? (
+                              <span
+                                style={{
+                                  display: "inline-block",
+                                  padding: "0.18rem 0.5rem",
+                                  borderRadius: "9999px",
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  background: "#fef3c7",
+                                  color: "#92400e",
+                                  border: "1px solid #fde68a",
+                                  whiteSpace: "nowrap"
+                                }}
+                                title="Paid against provisional challan issued during potential survey registration"
+                              >
+                                ⚡ Provisional Potential
+                              </span>
+                            ) : (
+                              <span
+                                style={{
+                                  display: "inline-block",
+                                  padding: "0.18rem 0.5rem",
+                                  borderRadius: "9999px",
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  background: "#dcfce7",
+                                  color: "#166534",
+                                  border: "1px solid #bbf7d0",
+                                  whiteSpace: "nowrap"
+                                }}
+                                title="Paid against regular assessed demand in Form P.F.T-3 Register"
+                              >
+                                🟢 Regular PFT-3
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
                           {(() => {
@@ -15489,260 +16077,501 @@ export default function HomePage({
         )}
       </main>
 
-      {/* MODAL 1: ADD A NEW UNIT */}
-      {showAddUnitModal && (
-        <div
-          className="modal-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="add-unit-title"
-        >
-          <div className="modal-card">
-            <div className="modal-header">
-              <h3 id="add-unit-title">
-                {editingUnitId
-                  ? "Edit Survey Unit Data — Circle-Vehari"
-                  : "Register New Tax Unit — Circle-Vehari"}
-              </h3>
-              <button
-                onClick={() => {
-                  setShowAddUnitModal(false);
-                  setEditingUnitId(null);
-                }}
-                className="modal-close-btn"
-                aria-label="Close modal"
-              >
-                &times;
-              </button>
-            </div>
+      {/* MODAL 1: ADD A NEW UNIT OR EDIT EXISTING FEEDED/RETURNED UNIT */}
+      {showAddUnitModal &&
+        (() => {
+          const editingTarget = editingUnitId ? units.find((u) => u.id === editingUnitId) : null;
+          const currentStatus = editingTarget?.assessments[0]?.status ?? "DRAFT";
+          const isReturned = currentStatus === "RETURNED";
+          const isDraft = currentStatus === "DRAFT";
+          const isEditable = !editingTarget || isDraft || isReturned;
 
-            <form onSubmit={handleAddUnit}>
-              <div className="modal-body">
-                {editingUnitId &&
-                  (() => {
-                    const editingTarget = units.find((u) => u.id === editingUnitId);
-                    const isReturned = editingTarget?.assessments[0]?.status === "RETURNED";
-                    if (!isReturned) return null;
-                    return (
+          return (
+            <div
+              className="modal-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="add-unit-title"
+            >
+              <div
+                className="modal-card"
+                style={{ maxWidth: "42rem", width: "100%", maxHeight: "90vh", overflowY: "auto" }}
+              >
+                <div className="modal-header">
+                  <h3 id="add-unit-title">
+                    {editingUnitId
+                      ? `✏️ Edit Survey Particulars — ${editingTarget?.legalName || newCircleName}`
+                      : `➕ Register New Tax Unit — ${newCircleName}`}
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setShowAddUnitModal(false);
+                      setEditingUnitId(null);
+                    }}
+                    className="modal-close-btn"
+                    aria-label="Close modal"
+                  >
+                    &times;
+                  </button>
+                </div>
+
+                <form onSubmit={handleAddUnit}>
+                  <div className="modal-body">
+                    {/* Status Governance Banner when Editing */}
+                    {editingTarget && (
+                      <>
+                        {isReturned && (
+                          <div
+                            style={{
+                              background: "#fffbeb",
+                              border: "1px solid #f59e0b",
+                              padding: "0.75rem 1rem",
+                              borderRadius: "6px",
+                              marginBottom: "1rem"
+                            }}
+                          >
+                            <strong
+                              style={{
+                                color: "#b45309",
+                                fontSize: "0.85rem",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.35rem"
+                              }}
+                            >
+                              <span>⚠️</span>
+                              <span>
+                                Returned by Assessing Authority (ETO) for Review / Revision:
+                              </span>
+                            </strong>
+                            <p
+                              style={{
+                                margin: "0.35rem 0 0",
+                                color: "#78350f",
+                                fontSize: "0.82rem",
+                                lineHeight: 1.4
+                              }}
+                            >
+                              {editingTarget?.assessmentVersions[0]?.reason ||
+                                "Observations recorded by ETO. Please update particulars or classification accordingly."}
+                            </p>
+                          </div>
+                        )}
+
+                        {!isEditable && (
+                          <div
+                            style={{
+                              background: "#fef2f2",
+                              border: "1px solid #fca5a5",
+                              padding: "0.75rem 1rem",
+                              borderRadius: "6px",
+                              marginBottom: "1rem",
+                              color: "#991b1b"
+                            }}
+                          >
+                            <strong
+                              style={{
+                                fontSize: "0.85rem",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.35rem"
+                              }}
+                            >
+                              <span>🔒</span>
+                              <span>
+                                Statutory Lock: Record is currently in ${currentStatus} status
+                              </span>
+                            </strong>
+                            <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem" }}>
+                              Editing is strictly prohibited under Rule 4 governance once submitted
+                              for approval. Only units in FEEDED (DRAFT) status or explicitly
+                              RETURNED by ETO for review may be modified.
+                            </p>
+                          </div>
+                        )}
+
+                        {isDraft && (
+                          <div
+                            style={{
+                              background: "#f0fdf4",
+                              border: "1px solid #bbf7d0",
+                              padding: "0.6rem 0.85rem",
+                              borderRadius: "6px",
+                              marginBottom: "1rem",
+                              color: "#166534",
+                              fontSize: "0.8rem",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.35rem"
+                            }}
+                          >
+                            <span>📝</span>
+                            <span>
+                              <strong>Feeded Survey Draft:</strong> Particulars are editable prior
+                              to formal submission to ETO.
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {duplicateWarning && (
                       <div
                         style={{
                           background: "#fffbeb",
                           border: "1px solid #f59e0b",
-                          padding: "0.75rem 1rem",
+                          padding: "0.75rem",
                           borderRadius: "6px",
+                          color: "#92400e",
+                          fontSize: "0.85rem",
                           marginBottom: "1rem"
                         }}
                       >
-                        <strong
-                          style={{
-                            color: "#b45309",
-                            fontSize: "0.85rem",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.35rem"
-                          }}
-                        >
-                          <span>⚠️</span>
-                          <span>Returned by Assessing Authority (ETO) with Legal Remarks:</span>
-                        </strong>
-                        <p
-                          style={{
-                            margin: "0.35rem 0 0",
-                            color: "#78350f",
-                            fontSize: "0.82rem",
-                            lineHeight: 1.4
-                          }}
-                        >
-                          {editingTarget?.assessmentVersions[0]?.reason ||
-                            "Observations recorded by ETO. Please update particulars or classification accordingly."}
-                        </p>
+                        ⚠️ <strong>Duplicate Candidate Warning:</strong> Matches existing unit
+                        &apos;
+                        {duplicateWarning.existingDisplayName}&apos; with confidence{" "}
+                        {duplicateWarning.confidence} ({duplicateWarning.matchReason}).
                       </div>
-                    );
-                  })()}
+                    )}
 
-                {duplicateWarning && (
-                  <div
-                    style={{
-                      background: "#fffbeb",
-                      border: "1px solid #f59e0b",
-                      padding: "0.75rem",
-                      borderRadius: "6px",
-                      color: "#92400e",
-                      fontSize: "0.85rem"
-                    }}
-                  >
-                    ⚠️ <strong>Duplicate Candidate Warning:</strong> Matches existing unit &apos;
-                    {duplicateWarning.existingDisplayName}&apos; with confidence{" "}
-                    {duplicateWarning.confidence} ({duplicateWarning.matchReason}).
-                  </div>
-                )}
+                    {/* Assessee Names */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                      <div className="form-group">
+                        <label htmlFor="new-legal-name">Legal Assessee Name *</label>
+                        <input
+                          id="new-legal-name"
+                          type="text"
+                          required
+                          disabled={!isEditable}
+                          className="form-control"
+                          placeholder="e.g. Al-Madina Medical & Surgical Store"
+                          value={newLegalName}
+                          onChange={(e) => setNewLegalName(e.target.value)}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor="new-trade-name">Trade / Business Name (if different)</label>
+                        <input
+                          id="new-trade-name"
+                          type="text"
+                          disabled={!isEditable}
+                          className="form-control"
+                          placeholder="e.g. Al-Madina Pharmacy"
+                          value={newTradeName}
+                          onChange={(e) => setNewTradeName(e.target.value)}
+                        />
+                      </div>
+                    </div>
 
-                <div className="form-group">
-                  <label htmlFor="new-legal-name">Legal Taxpayer Name *</label>
-                  <input
-                    id="new-legal-name"
-                    type="text"
-                    required
-                    className="form-control"
-                    placeholder="e.g. Al-Madina Medical & Surgical Store"
-                    value={newLegalName}
-                    onChange={(e) => setNewLegalName(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="new-trade-name">Trade / Business Name (if different)</label>
-                  <input
-                    id="new-trade-name"
-                    type="text"
-                    className="form-control"
-                    placeholder="e.g. Al-Madina Pharmacy"
-                    value={newTradeName}
-                    onChange={(e) => setNewTradeName(e.target.value)}
-                  />
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "1rem" }}>
-                  <div className="form-group">
-                    <label htmlFor="new-id-type">Identifier</label>
-                    <select
-                      id="new-id-type"
-                      className="form-control"
-                      value={newIdentifierType}
-                      onChange={(e) => setNewIdentifierType(e.target.value as "CNIC" | "NTN")}
-                    >
-                      <option value="CNIC">CNIC</option>
-                      <option value="NTN">NTN</option>
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="new-id-val">Number *</label>
-                    <input
-                      id="new-id-val"
-                      type="text"
-                      required
-                      className="form-control"
-                      placeholder={
-                        newIdentifierType === "CNIC" ? "36601-1234567-1" : "NTN-1234567-8"
-                      }
-                      value={newIdentifierValue}
-                      onChange={(e) => setNewIdentifierValue(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="new-category" style={{ fontWeight: 600 }}>
-                    1. Second Schedule Category (Class) *
-                  </label>
-                  <select
-                    id="new-category"
-                    className="form-control"
-                    value={newCategoryCode}
-                    onChange={(e) => handleCategoryChange(e.target.value)}
-                  >
-                    {allCategories.map((cat) => (
-                      <option key={cat.category_code} value={cat.category_code}>
-                        Class {cat.category_code}: {cat.category_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {availableSubclasses.length > 0 && (
-                  <div className="form-group">
-                    <label htmlFor="new-subclass" style={{ fontWeight: 600 }}>
-                      2. Sub-classification (Schedule Split) *
-                    </label>
-                    <select
-                      id="new-subclass"
-                      className="form-control"
-                      value={newSubclassCode}
-                      onChange={(e) => handleSubclassChange(e.target.value)}
-                    >
-                      {availableSubclasses.map((sub) => (
-                        <option key={sub.code} value={sub.code}>
-                          Code [{sub.code}] — {sub.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {availableTertiaryRules.length > 0 && (
-                  <div className="form-group">
-                    <label htmlFor="new-tertiary" style={{ fontWeight: 600 }}>
-                      3. Tertiary Tier / Geographic &amp; Operational Scope *
-                    </label>
-                    <select
-                      id="new-tertiary"
-                      className="form-control"
-                      value={newTertiaryCode}
-                      onChange={(e) => handleTertiaryChange(e.target.value)}
-                    >
-                      {availableTertiaryRules.map((rule) => (
-                        <option
-                          key={rule.statutory_tertiary_code}
-                          value={rule.statutory_tertiary_code ?? ""}
+                    {/* Tax Identifier Type & Value */}
+                    <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: "1rem" }}>
+                      <div className="form-group">
+                        <label htmlFor="new-id-type">Tax ID Type *</label>
+                        <select
+                          id="new-id-type"
+                          disabled={!isEditable}
+                          className="form-control"
+                          value={newIdentifierType}
+                          onChange={(e) => setNewIdentifierType(e.target.value as "CNIC" | "NTN")}
                         >
-                          [{rule.statutory_tertiary_code}]{" "}
-                          {rule.statutory_tertiary_classification ?? rule.subcategory} • PKR{" "}
-                          {rule.annual_rate_pkr.toLocaleString()}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                          <option value="CNIC">CNIC</option>
+                          <option value="NTN">NTN</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor="new-id-val">Tax Identifier Number *</label>
+                        <input
+                          id="new-id-val"
+                          type="text"
+                          required
+                          disabled={!isEditable}
+                          className="form-control"
+                          placeholder={
+                            newIdentifierType === "CNIC" ? "36601-1234567-1" : "NTN-1234567-8"
+                          }
+                          value={newIdentifierValue}
+                          onChange={(e) => setNewIdentifierValue(e.target.value)}
+                        />
+                      </div>
+                    </div>
 
-                {selectedStatutoryRule && (
-                  <div
-                    style={{
-                      background: "#f0fdf4",
-                      border: "1px solid #bbf7d0",
-                      borderRadius: "6px",
-                      padding: "0.85rem",
-                      fontSize: "0.85rem"
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        flexWrap: "wrap",
-                        gap: "0.5rem"
-                      }}
-                    >
-                      <span style={{ fontWeight: 700, color: "#166534", fontSize: "0.95rem" }}>
-                        Statutory Assessment Rate: PKR{" "}
-                        {selectedStatutoryRule.annual_rate_pkr.toLocaleString()} / year
-                      </span>
-                      <span
+                    {/* Administrative Circle & Tehsil */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                      <div className="form-group">
+                        <label htmlFor="new-circle-name" style={{ fontWeight: 600 }}>
+                          Administrative Circle *
+                        </label>
+                        <select
+                          id="new-circle-name"
+                          disabled={!isEditable}
+                          className="form-control"
+                          value={newCircleName}
+                          onChange={(e) => {
+                            const c = e.target.value;
+                            setNewCircleName(c);
+                            if (c.includes("Burewala")) setNewTehsil("Burewala");
+                            else if (c.includes("Mailsi")) setNewTehsil("Mailsi");
+                            else setNewTehsil("Vehari");
+                          }}
+                        >
+                          <option value="Vehari Circle I (City / Commercial)">
+                            Vehari Circle I (City / Commercial)
+                          </option>
+                          <option value="Vehari Circle II (Rural / Industrial)">
+                            Vehari Circle II (Rural / Industrial)
+                          </option>
+                          <option value="Burewala Circle">Burewala Circle</option>
+                          <option value="Mailsi Circle">Mailsi Circle</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor="new-tehsil" style={{ fontWeight: 600 }}>
+                          Administrative Tehsil
+                        </label>
+                        <input
+                          id="new-tehsil"
+                          type="text"
+                          disabled
+                          className="form-control"
+                          value={newTehsil}
+                          style={{ background: "#f1f5f9", cursor: "not-allowed", color: "#475569" }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Assigned Locality from Database for this Circle */}
+                    <div className="form-group" style={{ marginBottom: "1rem" }}>
+                      <label
+                        htmlFor="new-locality"
                         style={{
-                          fontFamily: "monospace",
-                          background: "#dcfce7",
-                          color: "#15803d",
-                          padding: "0.15rem 0.5rem",
-                          borderRadius: "4px",
-                          fontSize: "0.75rem",
-                          fontWeight: 700,
-                          border: "1px solid #86efac"
+                          fontWeight: 600,
+                          display: "flex",
+                          justifyContent: "space-between"
                         }}
                       >
-                        Class Code: {selectedStatutoryRule.rule_code}
+                        <span>Assigned Locality / Commercial Zone *</span>
+                        <span style={{ fontSize: "0.75rem", color: "#059669", fontWeight: 700 }}>
+                          {circleLocalities.length} Localities in {newCircleName}
+                        </span>
+                      </label>
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <select
+                          id="new-locality-select"
+                          disabled={!isEditable}
+                          className="form-control"
+                          value={
+                            circleLocalities.includes(newLocality)
+                              ? newLocality
+                              : newLocality
+                                ? "__CUSTOM__"
+                                : ""
+                          }
+                          onChange={(e) => {
+                            if (e.target.value !== "__CUSTOM__") {
+                              setNewLocality(e.target.value);
+                            }
+                          }}
+                          style={{ flex: 1 }}
+                        >
+                          <option value="">
+                            -- Select Locality from Database ({newCircleName}) --
+                          </option>
+                          {circleLocalities.map((loc) => (
+                            <option key={loc} value={loc}>
+                              📍 {loc}
+                            </option>
+                          ))}
+                          <option value="__CUSTOM__">➕ Other / Enter New Locality</option>
+                        </select>
+                        <input
+                          id="new-locality"
+                          type="text"
+                          required
+                          disabled={!isEditable}
+                          className="form-control"
+                          style={{ flex: 1 }}
+                          placeholder="e.g. Club Road Commercial Area"
+                          value={newLocality}
+                          onChange={(e) => setNewLocality(e.target.value)}
+                        />
+                      </div>
+                      <span
+                        style={{
+                          fontSize: "0.725rem",
+                          color: "#64748b",
+                          display: "block",
+                          marginTop: "0.25rem"
+                        }}
+                      >
+                        ⚡ Localities dynamically populated from system database for {newCircleName}
+                        . Select an existing circle locality or type a custom locality.
                       </span>
                     </div>
 
-                    {/* PIN Preview Card */}
-                    {previewUin && (
+                    {/* Physical Address */}
+                    <div className="form-group">
+                      <label htmlFor="new-address">Physical Business Address *</label>
+                      <input
+                        id="new-address"
+                        type="text"
+                        required
+                        disabled={!isEditable}
+                        className="form-control"
+                        placeholder="e.g. Shop # 12, Club Road Commercial Market, Vehari"
+                        value={newAddress}
+                        onChange={(e) => setNewAddress(e.target.value)}
+                      />
+                    </div>
+
+                    {/* 1. Category (Class) */}
+                    <div className="form-group">
+                      <label htmlFor="new-category" style={{ fontWeight: 600 }}>
+                        1. Second Schedule Category (Class) *
+                      </label>
+                      <select
+                        id="new-category"
+                        disabled={!isEditable}
+                        className="form-control"
+                        value={newCategoryCode}
+                        onChange={(e) => handleCategoryChange(e.target.value)}
+                      >
+                        {allCategories.map((cat) => (
+                          <option key={cat.category_code} value={cat.category_code}>
+                            Class {cat.category_code}: {cat.category_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* 2. Sub-classification (Schedule Split) */}
+                    {availableSubclasses.length > 0 ? (
+                      <div className="form-group">
+                        <label htmlFor="new-subclass" style={{ fontWeight: 600 }}>
+                          2. Sub-classification (Schedule Split) *
+                        </label>
+                        <select
+                          id="new-subclass"
+                          disabled={!isEditable}
+                          className="form-control"
+                          value={newSubclassCode}
+                          onChange={(e) => handleSubclassChange(e.target.value)}
+                        >
+                          {availableSubclasses.map((sub) => (
+                            <option key={sub.code} value={sub.code}>
+                              Code [{sub.code}] — {sub.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <div className="form-group">
+                        <label htmlFor="new-subclass" style={{ fontWeight: 600 }}>
+                          2. Sub-classification (Schedule Split)
+                        </label>
+                        <div
+                          style={{
+                            padding: "0.55rem 0.75rem",
+                            background: "#f8fafc",
+                            border: "1px solid #cbd5e1",
+                            borderRadius: "6px",
+                            fontSize: "0.8rem",
+                            color: "#334155",
+                            fontWeight: 500
+                          }}
+                        >
+                          ✓ Direct Schedule Category: Second Schedule specifies flat statutory rate
+                          without sub-classification splits.
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 3. Tertiary Tier / Slabs */}
+                    {availableTertiaryRules.length > 0 ? (
+                      <div className="form-group">
+                        <label htmlFor="new-tertiary" style={{ fontWeight: 600 }}>
+                          3. Tertiary Tier / Operational Scope &amp; Slabs *
+                        </label>
+                        <select
+                          id="new-tertiary"
+                          disabled={!isEditable}
+                          className="form-control"
+                          value={newTertiaryCode}
+                          onChange={(e) => handleTertiaryChange(e.target.value)}
+                        >
+                          {availableTertiaryRules.map((rule) => (
+                            <option
+                              key={rule.statutory_tertiary_code}
+                              value={rule.statutory_tertiary_code ?? ""}
+                            >
+                              [{rule.statutory_tertiary_code}]{" "}
+                              {rule.statutory_tertiary_classification ?? rule.subcategory} • PKR{" "}
+                              {rule.annual_rate_pkr.toLocaleString()}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <div className="form-group">
+                        <label htmlFor="new-tertiary" style={{ fontWeight: 600 }}>
+                          3. Tertiary Tier / Operational Scope &amp; Slabs
+                        </label>
+                        <div
+                          style={{
+                            padding: "0.55rem 0.75rem",
+                            background: "#f8fafc",
+                            border: "1px solid #cbd5e1",
+                            borderRadius: "6px",
+                            fontSize: "0.8rem",
+                            color: "#334155",
+                            fontWeight: 500
+                          }}
+                        >
+                          ✓ Direct Sub-Class Rate: Statutory rate applies directly at
+                          sub-classification level without further tertiary splits.
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Opening Arrears Input */}
+                    <div className="form-group" style={{ marginBottom: "1rem" }}>
+                      <label htmlFor="new-opening-arrears" style={{ fontWeight: 600 }}>
+                        Opening Arrears Balance (PKR)
+                      </label>
+                      <input
+                        id="new-opening-arrears"
+                        type="number"
+                        min="0"
+                        step="1"
+                        disabled={!isEditable}
+                        className="form-control"
+                        placeholder="0"
+                        value={newOpeningArrears}
+                        onChange={(e) =>
+                          setNewOpeningArrears(Math.max(0, Number(e.target.value) || 0))
+                        }
+                      />
+                      <span
+                        style={{
+                          fontSize: "0.725rem",
+                          color: "#64748b",
+                          display: "block",
+                          marginTop: "0.25rem"
+                        }}
+                      >
+                        Specify any prior-year unrecovered professional tax arrears brought forward.
+                      </span>
+                    </div>
+
+                    {/* Assessment Summary & Rate Card */}
+                    {selectedStatutoryRule && (
                       <div
                         style={{
-                          marginTop: "0.65rem",
-                          padding: "0.5rem 0.75rem",
-                          background: "#ffffff",
-                          borderRadius: "5px",
-                          border: "1px solid #cbd5e1"
+                          background: "#f0fdf4",
+                          border: "1px solid #bbf7d0",
+                          borderRadius: "6px",
+                          padding: "0.85rem",
+                          fontSize: "0.85rem",
+                          marginBottom: "1rem"
                         }}
                       >
                         <div
@@ -15750,122 +16579,150 @@ export default function HomePage({
                             display: "flex",
                             justifyContent: "space-between",
                             alignItems: "center",
-                            marginBottom: "0.25rem"
+                            flexWrap: "wrap",
+                            gap: "0.5rem"
                           }}
                         >
-                          <span style={{ fontSize: "0.725rem", color: "#64748b", fontWeight: 600 }}>
-                            PROFESSIONAL IDENTIFICATION NUMBER (PIN):
+                          <span style={{ fontWeight: 700, color: "#166534", fontSize: "0.95rem" }}>
+                            Statutory Rate: PKR{" "}
+                            {selectedStatutoryRule.annual_rate_pkr.toLocaleString()} / year
                           </span>
-                          <span style={{ fontSize: "0.68rem", color: "#0284c7", fontWeight: 600 }}>
-                            PBS District 237 (Vehari)
+                          <span
+                            style={{
+                              fontFamily: "monospace",
+                              background: "#dcfce7",
+                              color: "#15803d",
+                              padding: "0.15rem 0.5rem",
+                              borderRadius: "4px",
+                              fontSize: "0.75rem",
+                              fontWeight: 700,
+                              border: "1px solid #86efac"
+                            }}
+                          >
+                            Class Code: {selectedStatutoryRule.rule_code}
                           </span>
                         </div>
+
+                        {newOpeningArrears > 0 && (
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              fontSize: "0.82rem",
+                              marginTop: "0.4rem",
+                              color: "#b45309"
+                            }}
+                          >
+                            <span>Opening Arrears Liability:</span>
+                            <strong>PKR {newOpeningArrears.toLocaleString()}</strong>
+                          </div>
+                        )}
+
                         <div
                           style={{
-                            fontFamily: "monospace",
+                            display: "flex",
+                            justifyContent: "space-between",
                             fontSize: "0.95rem",
-                            fontWeight: 700,
-                            color: "#1e40af",
-                            letterSpacing: "0.5px"
+                            fontWeight: 800,
+                            borderTop: "1px dashed #86efac",
+                            paddingTop: "0.45rem",
+                            marginTop: "0.45rem",
+                            color: "#065f46"
                           }}
                         >
-                          {previewUin}
+                          <span>Total Initial Assessed Demand:</span>
+                          <span>
+                            PKR{" "}
+                            {(
+                              selectedStatutoryRule.annual_rate_pkr + newOpeningArrears
+                            ).toLocaleString()}
+                          </span>
                         </div>
-                        <div style={{ fontSize: "0.68rem", color: "#94a3b8", marginTop: "0.2rem" }}>
-                          Format: [District]-[Tehsil+Circle+Classification+Sequence]-[Version]
-                          (Permanent)
-                        </div>
+
+                        {/* PIN Preview Card */}
+                        {previewUin && (
+                          <div
+                            style={{
+                              marginTop: "0.65rem",
+                              padding: "0.5rem 0.75rem",
+                              background: "#ffffff",
+                              borderRadius: "5px",
+                              border: "1px solid #cbd5e1"
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                marginBottom: "0.25rem"
+                              }}
+                            >
+                              <span
+                                style={{ fontSize: "0.725rem", color: "#64748b", fontWeight: 600 }}
+                              >
+                                PROFESSIONAL IDENTIFICATION NUMBER (PIN):
+                              </span>
+                              <span
+                                style={{ fontSize: "0.68rem", color: "#0284c7", fontWeight: 600 }}
+                              >
+                                PBS District 237 (Vehari) &bull; {newCircleName}
+                              </span>
+                            </div>
+                            <div
+                              style={{
+                                fontFamily: "monospace",
+                                fontSize: "0.95rem",
+                                fontWeight: 700,
+                                color: "#1e40af",
+                                letterSpacing: "0.5px"
+                              }}
+                            >
+                              {previewUin}
+                            </div>
+                            <div
+                              style={{ fontSize: "0.68rem", color: "#94a3b8", marginTop: "0.2rem" }}
+                            >
+                              Format: [District]-[Tehsil+Circle+Classification+Sequence]-[Version]
+                              (Permanent)
+                            </div>
+                          </div>
+                        )}
+
+                        <span
+                          style={{
+                            color: "#4b5563",
+                            fontSize: "0.75rem",
+                            display: "block",
+                            marginTop: "0.5rem"
+                          }}
+                        >
+                          Statutory Legal Basis: {selectedStatutoryRule.official_text}
+                        </span>
                       </div>
                     )}
-
-                    <span
-                      style={{
-                        color: "#4b5563",
-                        fontSize: "0.75rem",
-                        display: "block",
-                        marginTop: "0.5rem"
-                      }}
-                    >
-                      Statutory Legal Basis: {selectedStatutoryRule.official_text}
-                    </span>
                   </div>
-                )}
 
-                <div className="form-group" style={{ marginBottom: "1rem" }}>
-                  <label
-                    htmlFor="new-locality"
+                  <div
+                    className="modal-footer"
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center"
                     }}
                   >
-                    <span style={{ fontWeight: 600 }}>Assigned Locality / Commercial Zone</span>
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: "normal" }}>
-                      Optional
-                    </span>
-                  </label>
-                  <select
-                    id="new-locality"
-                    className="form-control"
-                    value={newLocality}
-                    onChange={(e) => setNewLocality(e.target.value)}
-                    style={{ width: "100%", padding: "0.5rem" }}
-                  >
-                    <option value="">-- Select Predefined Locality (Optional) --</option>
-                    {VEHARI_LOCALITIES.map((loc) => (
-                      <option key={loc} value={loc}>
-                        {loc}
-                      </option>
-                    ))}
-                  </select>
-                  <span
-                    style={{
-                      fontSize: "0.725rem",
-                      color: "#64748b",
-                      display: "block",
-                      marginTop: "0.25rem"
-                    }}
-                  >
-                    Stored independently from street address to enable locality-wise assessment,
-                    compliance &amp; revenue analysis.
-                  </span>
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="new-address">Physical Business Address in Vehari *</label>
-                  <input
-                    id="new-address"
-                    type="text"
-                    required
-                    className="form-control"
-                    placeholder="e.g. Club Road, Tehsil Vehari"
-                    value={newAddress}
-                    onChange={(e) => setNewAddress(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div
-                className="modal-footer"
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAddUnitModal(false);
-                    setEditingUnitId(null);
-                  }}
-                  className="btn-secondary"
-                >
-                  Cancel
-                </button>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  {(() => {
-                    const editingTarget = units.find((u) => u.id === editingUnitId);
-                    const isReturned = editingTarget?.assessments[0]?.status === "RETURNED";
-                    if (isReturned && officer.role === "INSPECTOR") {
-                      return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddUnitModal(false);
+                        setEditingUnitId(null);
+                      }}
+                      className="btn-secondary"
+                    >
+                      Cancel
+                    </button>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      {isReturned && officer.role === "INSPECTOR" && (
                         <button
                           type="button"
                           className="btn-success"
@@ -15878,19 +16735,29 @@ export default function HomePage({
                         >
                           ✓ Save &amp; Resubmit to ETO ↗
                         </button>
-                      );
-                    }
-                    return null;
-                  })()}
-                  <button type="submit" className="btn-primary">
-                    {editingUnitId ? "✓ Save Survey Changes" : "Save & Create Draft Assessment"}
-                  </button>
-                </div>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={!isEditable}
+                        className="btn-primary"
+                        style={{
+                          opacity: isEditable ? 1 : 0.6,
+                          cursor: isEditable ? "pointer" : "not-allowed"
+                        }}
+                      >
+                        {isEditable
+                          ? editingUnitId
+                            ? "✓ Save Survey Changes"
+                            : "Save & Create Draft Assessment"
+                          : "🔒 Editing Prohibited (Locked)"}
+                      </button>
+                    </div>
+                  </div>
+                </form>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </div>
+          );
+        })()}
 
       {/* MODAL 2: ADD A PAYMENT RECEIPT */}
       {showPaymentModal && (
@@ -24119,6 +24986,68 @@ export default function HomePage({
                   </div>
 
                   <h4 style={{ margin: "1rem 0 0.5rem", fontSize: "0.95rem", color: "#0f172a" }}>
+                    Collections by Demand Scope / Challan Type
+                  </h4>
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      fontSize: "0.85rem",
+                      marginBottom: "1.25rem"
+                    }}
+                  >
+                    <thead>
+                      <tr style={{ background: "#f8fafc", borderBottom: "1px solid #cbd5e1" }}>
+                        <th style={{ padding: "0.5rem", textAlign: "left" }}>
+                          Demand / Challan Type
+                        </th>
+                        <th style={{ padding: "0.5rem", textAlign: "center" }}>Receipts Issued</th>
+                        <th style={{ padding: "0.5rem", textAlign: "right" }}>
+                          Total Revenue Realized
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
+                        <td style={{ padding: "0.5rem", fontWeight: 600 }}>
+                          🟢 Regular Demand (Form P.F.T-3 Register)
+                        </td>
+                        <td style={{ padding: "0.5rem", textAlign: "center" }}>
+                          {summary.regularPft3Count}
+                        </td>
+                        <td
+                          style={{
+                            padding: "0.5rem",
+                            textAlign: "right",
+                            color: "#166534",
+                            fontWeight: 700
+                          }}
+                        >
+                          PKR {summary.regularPft3Revenue.toLocaleString()}
+                        </td>
+                      </tr>
+                      <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
+                        <td style={{ padding: "0.5rem", fontWeight: 600 }}>
+                          ⚡ Provisional Potential Demand (Survey Prospects)
+                        </td>
+                        <td style={{ padding: "0.5rem", textAlign: "center" }}>
+                          {summary.provisionalPotentialCount}
+                        </td>
+                        <td
+                          style={{
+                            padding: "0.5rem",
+                            textAlign: "right",
+                            color: "#92400e",
+                            fontWeight: 700
+                          }}
+                        >
+                          PKR {summary.provisionalPotentialRevenue.toLocaleString()}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  <h4 style={{ margin: "1rem 0 0.5rem", fontSize: "0.95rem", color: "#0f172a" }}>
                     Collections by Treasury Channel
                   </h4>
                   <table
@@ -24182,494 +25111,822 @@ export default function HomePage({
         </div>
       )}
 
-      {/* MODAL: ADD POTENTIAL TAXABLE UNIT */}
-      {showAddPotentialModal && (
-        <div
-          className="modal-overlay"
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(15, 23, 42, 0.75)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-            padding: "1rem"
-          }}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="modal-card"
-            style={{
-              background: "#ffffff",
-              borderRadius: "12px",
-              maxWidth: "40rem",
-              width: "100%",
-              maxHeight: "90vh",
-              overflowY: "auto",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
-              border: "1px solid #cbd5e1",
-              padding: "1.5rem"
-            }}
-          >
+      {/* MODAL: ADD / EDIT POTENTIAL TAXABLE UNIT (STANDARDIZED DISCOVERY INTAKE) */}
+      {showAddPotentialModal &&
+        (() => {
+          const editingPotTarget = editingPotentialUnitId
+            ? potentialUnits.find((p) => p.id === editingPotentialUnitId)
+            : null;
+          const isPotMigrated = editingPotTarget?.status === "MIGRATED";
+          const isPotEditable = !editingPotTarget || !isPotMigrated;
+
+          return (
             <div
+              className="modal-overlay"
               style={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: "rgba(15, 23, 42, 0.75)",
+                backdropFilter: "blur(4px)",
                 display: "flex",
-                justifyContent: "space-between",
                 alignItems: "center",
-                marginBottom: "1rem"
+                justifyContent: "center",
+                zIndex: 9999,
+                padding: "1rem"
               }}
+              role="dialog"
+              aria-modal="true"
             >
-              <h3 style={{ margin: 0, fontSize: "1.25rem", color: "#0f172a" }}>
-                ➕ Register Potential Taxable Unit (Survey Intake)
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowAddPotentialModal(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  fontSize: "1.25rem",
-                  cursor: "pointer",
-                  color: "#64748b"
-                }}
-              >
-                ✕
-              </button>
-            </div>
-            <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "1.25rem" }}>
-              Enrolls an unassessed commercial unit into the discovery pipeline. It receives a
-              provisional PIN (e.g. <code>Potential-237-...</code>) and is isolated from Form
-              P.F.T-3 until its first challan is realized.
-            </p>
-            <form onSubmit={handleAddPotentialUnit}>
               <div
+                className="modal-card"
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "1rem",
-                  marginBottom: "1rem"
-                }}
-              >
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: "#334155",
-                      marginBottom: "0.25rem"
-                    }}
-                  >
-                    Legal / Assessee Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={potNewLegalName}
-                    onChange={(e) => setPotNewLegalName(e.target.value)}
-                    placeholder="e.g. Al-Madina Traders"
-                    style={{
-                      width: "100%",
-                      padding: "0.5rem",
-                      borderRadius: "6px",
-                      border: "1px solid #cbd5e1"
-                    }}
-                  />
-                </div>
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: "#334155",
-                      marginBottom: "0.25rem"
-                    }}
-                  >
-                    Trade / Business Name
-                  </label>
-                  <input
-                    type="text"
-                    value={potNewTradeName}
-                    onChange={(e) => setPotNewTradeName(e.target.value)}
-                    placeholder="e.g. Al-Madina Super Store"
-                    style={{
-                      width: "100%",
-                      padding: "0.5rem",
-                      borderRadius: "6px",
-                      border: "1px solid #cbd5e1"
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "120px 1fr",
-                  gap: "1rem",
-                  marginBottom: "1rem"
-                }}
-              >
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: "#334155",
-                      marginBottom: "0.25rem"
-                    }}
-                  >
-                    ID Type
-                  </label>
-                  <select
-                    value={potNewIdType}
-                    onChange={(e) => setPotNewIdType(e.target.value as "CNIC" | "NTN")}
-                    style={{
-                      width: "100%",
-                      padding: "0.5rem",
-                      borderRadius: "6px",
-                      border: "1px solid #cbd5e1"
-                    }}
-                  >
-                    <option value="CNIC">CNIC</option>
-                    <option value="NTN">NTN</option>
-                  </select>
-                </div>
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: "#334155",
-                      marginBottom: "0.25rem"
-                    }}
-                  >
-                    Identifier Value *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={potNewIdValue}
-                    onChange={(e) => setPotNewIdValue(e.target.value)}
-                    placeholder="e.g. 36603-1234567-1 or NTN-1234567"
-                    style={{
-                      width: "100%",
-                      padding: "0.5rem",
-                      borderRadius: "6px",
-                      border: "1px solid #cbd5e1"
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "1rem",
-                  marginBottom: "1rem"
-                }}
-              >
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: "#334155",
-                      marginBottom: "0.25rem"
-                    }}
-                  >
-                    Locality / Zone *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={potNewLocality}
-                    onChange={(e) => setPotNewLocality(e.target.value)}
-                    placeholder="e.g. Club Road / Sharqi Colony"
-                    style={{
-                      width: "100%",
-                      padding: "0.5rem",
-                      borderRadius: "6px",
-                      border: "1px solid #cbd5e1"
-                    }}
-                  />
-                </div>
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: "#334155",
-                      marginBottom: "0.25rem"
-                    }}
-                  >
-                    Administrative Circle *
-                  </label>
-                  <select
-                    value={potNewCircleName}
-                    onChange={(e) => {
-                      const circle = e.target.value;
-                      setPotNewCircleName(circle);
-                      if (circle.includes("Burewala")) setPotNewTehsil("Burewala");
-                      else if (circle.includes("Mailsi")) setPotNewTehsil("Mailsi");
-                      else setPotNewTehsil("Vehari");
-                    }}
-                    style={{
-                      width: "100%",
-                      padding: "0.5rem",
-                      borderRadius: "6px",
-                      border: "1px solid #cbd5e1"
-                    }}
-                  >
-                    <option value="Vehari Circle I (City / Commercial)">
-                      Vehari Circle I (City / Commercial)
-                    </option>
-                    <option value="Vehari Circle II (Rural / Industrial)">
-                      Vehari Circle II (Rural / Industrial)
-                    </option>
-                    <option value="Burewala Circle">Burewala Circle</option>
-                    <option value="Mailsi Circle">Mailsi Circle</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: "1rem" }}>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    fontWeight: 600,
-                    color: "#334155",
-                    marginBottom: "0.25rem"
-                  }}
-                >
-                  Physical Address
-                </label>
-                <input
-                  type="text"
-                  value={potNewAddress}
-                  onChange={(e) => setPotNewAddress(e.target.value)}
-                  placeholder="e.g. Shop # 12, Main Commercial Market, Vehari"
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    borderRadius: "6px",
-                    border: "1px solid #cbd5e1"
-                  }}
-                />
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "1rem",
-                  marginBottom: "1rem"
-                }}
-              >
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: "#334155",
-                      marginBottom: "0.25rem"
-                    }}
-                  >
-                    Statutory Schedule Category *
-                  </label>
-                  <select
-                    value={potNewCategoryCode}
-                    onChange={(e) => handlePotCategoryChange(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "0.5rem",
-                      borderRadius: "6px",
-                      border: "1px solid #cbd5e1"
-                    }}
-                  >
-                    {allCategories.map((c) => (
-                      <option key={c.category_code} value={c.category_code}>
-                        Category {c.category_code}: {c.category_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: "#334155",
-                      marginBottom: "0.25rem"
-                    }}
-                  >
-                    Sub-Classification *
-                  </label>
-                  <select
-                    value={potNewSubclassCode}
-                    onChange={(e) => handlePotSubclassChange(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "0.5rem",
-                      borderRadius: "6px",
-                      border: "1px solid #cbd5e1"
-                    }}
-                  >
-                    {potAvailableSubclasses.map((s) => (
-                      <option key={s.code} value={s.code}>
-                        {s.code}: {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {potAvailableTertiaryRules.length > 0 && (
-                <div style={{ marginBottom: "1rem" }}>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: "#334155",
-                      marginBottom: "0.25rem"
-                    }}
-                  >
-                    Tertiary Classification / Slabs
-                  </label>
-                  <select
-                    value={potNewTertiaryCode}
-                    onChange={(e) => handlePotTertiaryChange(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "0.5rem",
-                      borderRadius: "6px",
-                      border: "1px solid #cbd5e1"
-                    }}
-                  >
-                    {potAvailableTertiaryRules.map((r) => (
-                      <option key={r.rule_id} value={r.statutory_tertiary_code!}>
-                        {r.statutory_tertiary_code}: {r.statutory_tertiary_classification} (PKR{" "}
-                        {r.annual_rate_pkr.toLocaleString()})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div style={{ marginBottom: "1rem" }}>
-                <label
-                  htmlFor="potential-opening-arrears"
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    fontWeight: 600,
-                    color: "#334155",
-                    marginBottom: "0.25rem"
-                  }}
-                >
-                  Opening arrears / credit (PKR)
-                </label>
-                <input
-                  id="potential-opening-arrears"
-                  type="number"
-                  step="0.01"
-                  value={potNewOpeningArrears}
-                  onChange={(event) => setPotNewOpeningArrears(Number(event.target.value) || 0)}
-                  style={{
-                    width: "100%",
-                    padding: "0.5rem",
-                    borderRadius: "6px",
-                    border: "1px solid #cbd5e1"
-                  }}
-                />
-                <span
-                  style={{
-                    display: "block",
-                    marginTop: "0.25rem",
-                    fontSize: "0.72rem",
-                    color: "#64748b"
-                  }}
-                >
-                  Use a positive amount for payable arrears and a negative amount for carried
-                  credit.
-                </span>
-              </div>
-
-              {/* Provisional PIN Preview and Rate Card */}
-              <div
-                style={{
-                  marginBottom: "1.5rem",
-                  padding: "0.75rem",
-                  borderRadius: "6px",
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  fontSize: "0.78rem",
-                  color: "#475569"
+                  background: "#ffffff",
+                  borderRadius: "12px",
+                  maxWidth: "42rem",
+                  width: "100%",
+                  maxHeight: "90vh",
+                  overflowY: "auto",
+                  boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
+                  border: "1px solid #cbd5e1",
+                  padding: "1.5rem"
                 }}
               >
                 <div
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
-                    marginBottom: "0.25rem"
+                    alignItems: "center",
+                    marginBottom: "0.75rem",
+                    borderBottom: "1px solid #e2e8f0",
+                    paddingBottom: "0.75rem"
                   }}
                 >
-                  <span>
-                    <strong>Provisional PIN:</strong>{" "}
-                    <code style={{ color: "#1e40af" }}>{potPreviewPin}</code>
-                  </span>
-                  <span>
-                    <strong>Opening balance:</strong> PKR {potNewOpeningArrears.toLocaleString()}
-                  </span>
-                </div>
-                <div>
-                  <strong>Administrative Tehsil:</strong> {potNewTehsil} &bull;{" "}
-                  <strong>Circle:</strong> {potNewCircleName}
-                </div>
-                {potSelectedStatutoryRule && (
-                  <div style={{ color: "#166534", fontWeight: 700, marginTop: "0.35rem" }}>
-                    Statutory Annual Tax Rate: PKR{" "}
-                    {potSelectedStatutoryRule.annual_rate_pkr.toLocaleString()}
-                    {" • Total potential demand: PKR "}
-                    {(
-                      potSelectedStatutoryRule.annual_rate_pkr + potNewOpeningArrears
-                    ).toLocaleString()}
+                  <div>
+                    <h3
+                      style={{ margin: 0, fontSize: "1.25rem", color: "#0f172a", fontWeight: 800 }}
+                    >
+                      {editingPotentialUnitId
+                        ? `✏️ Edit Potential Assessee Particulars — ${potNewLegalName || potNewCircleName}`
+                        : `➕ Register Potential Taxable Unit — ${potNewCircleName}`}
+                    </h3>
+                    <p style={{ margin: "0.25rem 0 0", fontSize: "0.78rem", color: "#64748b" }}>
+                      {editingPotentialUnitId
+                        ? "Update unmigrated prospective survey unit particulars and classification."
+                        : "Enrolls an unassessed commercial unit into the discovery pipeline with a provisional PIN."}
+                    </p>
                   </div>
-                )}
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddPotentialModal(false);
+                      setEditingPotentialUnitId(null);
+                    }}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      fontSize: "1.25rem",
+                      cursor: "pointer",
+                      color: "#64748b"
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowAddPotentialModal(false)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn-success">
-                  💾 Save Potential Unit
-                </button>
+                <form onSubmit={handleAddPotentialUnit}>
+                  {/* Status Governance Banner when Editing Potential Unit */}
+                  {editingPotTarget && (
+                    <>
+                      {isPotMigrated ? (
+                        <div
+                          style={{
+                            background: "#fef2f2",
+                            border: "1px solid #fca5a5",
+                            padding: "0.75rem 1rem",
+                            borderRadius: "6px",
+                            marginBottom: "1rem",
+                            color: "#991b1b"
+                          }}
+                        >
+                          <strong
+                            style={{
+                              fontSize: "0.85rem",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.35rem"
+                            }}
+                          >
+                            <span>🔒</span>
+                            <span>
+                              Statutory Lock: Migrated to Form P.F.T-3 Register ($
+                              {editingPotTarget.migratedToDemandNo ?? ""})
+                            </span>
+                          </strong>
+                          <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem" }}>
+                            Editing is strictly prohibited under Rule 4 governance once enrolled in
+                            PFT-3 or submitted for approval.
+                          </p>
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            background: "#f0fdf4",
+                            border: "1px solid #bbf7d0",
+                            padding: "0.6rem 0.85rem",
+                            borderRadius: "6px",
+                            marginBottom: "1rem",
+                            color: "#166534",
+                            fontSize: "0.8rem",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.35rem"
+                          }}
+                        >
+                          <span>📝</span>
+                          <span>
+                            <strong>Unmigrated Prospective Unit:</strong> Particulars and
+                            classification can be updated before statutory migration to Form
+                            P.F.T-3.
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Assessee Names */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "1rem",
+                      marginBottom: "1rem"
+                    }}
+                  >
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          color: "#334155",
+                          marginBottom: "0.25rem"
+                        }}
+                      >
+                        Legal / Assessee Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        disabled={!isPotEditable}
+                        value={potNewLegalName}
+                        onChange={(e) => setPotNewLegalName(e.target.value)}
+                        placeholder="e.g. Al-Madina Traders"
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem",
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1"
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          color: "#334155",
+                          marginBottom: "0.25rem"
+                        }}
+                      >
+                        Trade / Business Name
+                      </label>
+                      <input
+                        type="text"
+                        disabled={!isPotEditable}
+                        value={potNewTradeName}
+                        onChange={(e) => setPotNewTradeName(e.target.value)}
+                        placeholder="e.g. Al-Madina Super Store"
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem",
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1"
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Tax Identifier */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "130px 1fr",
+                      gap: "1rem",
+                      marginBottom: "1rem"
+                    }}
+                  >
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          color: "#334155",
+                          marginBottom: "0.25rem"
+                        }}
+                      >
+                        Tax ID Type *
+                      </label>
+                      <select
+                        disabled={!isPotEditable}
+                        value={potNewIdType}
+                        onChange={(e) => setPotNewIdType(e.target.value as "CNIC" | "NTN")}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem",
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1"
+                        }}
+                      >
+                        <option value="CNIC">CNIC</option>
+                        <option value="NTN">NTN</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          color: "#334155",
+                          marginBottom: "0.25rem"
+                        }}
+                      >
+                        Tax Identifier Value *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        disabled={!isPotEditable}
+                        value={potNewIdValue}
+                        onChange={(e) => setPotNewIdValue(e.target.value)}
+                        placeholder={potNewIdType === "CNIC" ? "36601-1234567-1" : "NTN-1234567-8"}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem",
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1"
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Administrative Circle & Tehsil */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "1rem",
+                      marginBottom: "1rem"
+                    }}
+                  >
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          color: "#334155",
+                          marginBottom: "0.25rem"
+                        }}
+                      >
+                        Administrative Circle *
+                      </label>
+                      <select
+                        disabled={!isPotEditable}
+                        value={potNewCircleName}
+                        onChange={(e) => {
+                          const circle = e.target.value;
+                          setPotNewCircleName(circle);
+                          if (circle.includes("Burewala")) setPotNewTehsil("Burewala");
+                          else if (circle.includes("Mailsi")) setPotNewTehsil("Mailsi");
+                          else setPotNewTehsil("Vehari");
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem",
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1"
+                        }}
+                      >
+                        <option value="Vehari Circle I (City / Commercial)">
+                          Vehari Circle I (City / Commercial)
+                        </option>
+                        <option value="Vehari Circle II (Rural / Industrial)">
+                          Vehari Circle II (Rural / Industrial)
+                        </option>
+                        <option value="Burewala Circle">Burewala Circle</option>
+                        <option value="Mailsi Circle">Mailsi Circle</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          color: "#334155",
+                          marginBottom: "0.25rem"
+                        }}
+                      >
+                        Administrative Tehsil
+                      </label>
+                      <input
+                        type="text"
+                        disabled
+                        value={potNewTehsil}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem",
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1",
+                          background: "#f1f5f9",
+                          color: "#475569"
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Assigned Locality from System Database for this Circle */}
+                  <div style={{ marginBottom: "1rem" }}>
+                    <label
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        color: "#334155",
+                        marginBottom: "0.25rem"
+                      }}
+                    >
+                      <span>Assigned Locality / Commercial Zone *</span>
+                      <span style={{ fontSize: "0.75rem", color: "#059669", fontWeight: 700 }}>
+                        {potCircleLocalities.length} Localities in {potNewCircleName}
+                      </span>
+                    </label>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <select
+                        disabled={!isPotEditable}
+                        value={
+                          potCircleLocalities.includes(potNewLocality)
+                            ? potNewLocality
+                            : potNewLocality
+                              ? "__CUSTOM__"
+                              : ""
+                        }
+                        onChange={(e) => {
+                          if (e.target.value !== "__CUSTOM__") {
+                            setPotNewLocality(e.target.value);
+                          }
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: "0.5rem",
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1"
+                        }}
+                      >
+                        <option value="">
+                          -- Select Locality from Database ({potNewCircleName}) --
+                        </option>
+                        {potCircleLocalities.map((loc) => (
+                          <option key={loc} value={loc}>
+                            📍 {loc}
+                          </option>
+                        ))}
+                        <option value="__CUSTOM__">➕ Other / Enter New Locality</option>
+                      </select>
+                      <input
+                        type="text"
+                        required
+                        disabled={!isPotEditable}
+                        value={potNewLocality}
+                        onChange={(e) => setPotNewLocality(e.target.value)}
+                        placeholder="e.g. Club Road Commercial Area"
+                        style={{
+                          flex: 1,
+                          padding: "0.5rem",
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1"
+                        }}
+                      />
+                    </div>
+                    <span
+                      style={{
+                        fontSize: "0.72rem",
+                        color: "#64748b",
+                        display: "block",
+                        marginTop: "0.25rem"
+                      }}
+                    >
+                      ⚡ Localities dynamically populated from system database for{" "}
+                      {potNewCircleName}. Select an existing circle locality or type a custom
+                      locality.
+                    </span>
+                  </div>
+
+                  {/* Physical Address */}
+                  <div style={{ marginBottom: "1rem" }}>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        color: "#334155",
+                        marginBottom: "0.25rem"
+                      }}
+                    >
+                      Physical Business Address *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      disabled={!isPotEditable}
+                      value={potNewAddress}
+                      onChange={(e) => setPotNewAddress(e.target.value)}
+                      placeholder="e.g. Shop # 12, Main Commercial Market, Vehari"
+                      style={{
+                        width: "100%",
+                        padding: "0.5rem",
+                        borderRadius: "6px",
+                        border: "1px solid #cbd5e1"
+                      }}
+                    />
+                  </div>
+
+                  {/* 1. Category (Class) */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "1rem",
+                      marginBottom: "1rem"
+                    }}
+                  >
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          color: "#334155",
+                          marginBottom: "0.25rem"
+                        }}
+                      >
+                        1. Statutory Schedule Category *
+                      </label>
+                      <select
+                        disabled={!isPotEditable}
+                        value={potNewCategoryCode}
+                        onChange={(e) => handlePotCategoryChange(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem",
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1"
+                        }}
+                      >
+                        {allCategories.map((c) => (
+                          <option key={c.category_code} value={c.category_code}>
+                            Class {c.category_code}: {c.category_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          color: "#334155",
+                          marginBottom: "0.25rem"
+                        }}
+                      >
+                        2. Sub-Classification *
+                      </label>
+                      {potAvailableSubclasses.length > 0 ? (
+                        <select
+                          disabled={!isPotEditable}
+                          value={potNewSubclassCode}
+                          onChange={(e) => handlePotSubclassChange(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "0.5rem",
+                            borderRadius: "6px",
+                            border: "1px solid #cbd5e1"
+                          }}
+                        >
+                          {potAvailableSubclasses.map((s) => (
+                            <option key={s.code} value={s.code}>
+                              Code [{s.code}] — {s.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div
+                          style={{
+                            padding: "0.55rem 0.75rem",
+                            background: "#f8fafc",
+                            border: "1px solid #cbd5e1",
+                            borderRadius: "6px",
+                            fontSize: "0.8rem",
+                            color: "#334155",
+                            fontWeight: 500
+                          }}
+                        >
+                          ✓ Direct Schedule Category: Second Schedule specifies flat statutory rate
+                          without sub-classification splits.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 3. Tertiary Classification / Slabs */}
+                  {potAvailableTertiaryRules.length > 0 ? (
+                    <div style={{ marginBottom: "1rem" }}>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          color: "#334155",
+                          marginBottom: "0.25rem"
+                        }}
+                      >
+                        3. Tertiary Tier / Operational Scope &amp; Slabs *
+                      </label>
+                      <select
+                        disabled={!isPotEditable}
+                        value={potNewTertiaryCode}
+                        onChange={(e) => handlePotTertiaryChange(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "0.5rem",
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1"
+                        }}
+                      >
+                        {potAvailableTertiaryRules.map((r) => (
+                          <option key={r.rule_id} value={r.statutory_tertiary_code!}>
+                            [{r.statutory_tertiary_code}]{" "}
+                            {r.statutory_tertiary_classification ?? r.subcategory} • PKR{" "}
+                            {r.annual_rate_pkr.toLocaleString()}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div style={{ marginBottom: "1rem" }}>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          color: "#334155",
+                          marginBottom: "0.25rem"
+                        }}
+                      >
+                        3. Tertiary Tier / Operational Scope &amp; Slabs
+                      </label>
+                      <div
+                        style={{
+                          padding: "0.55rem 0.75rem",
+                          background: "#f8fafc",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "6px",
+                          fontSize: "0.8rem",
+                          color: "#334155",
+                          fontWeight: 500
+                        }}
+                      >
+                        ✓ Direct Sub-Class Rate: Statutory rate applies directly at
+                        sub-classification level without further tertiary splits.
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Opening Arrears Input */}
+                  <div style={{ marginBottom: "1rem" }}>
+                    <label
+                      htmlFor="potential-opening-arrears"
+                      style={{
+                        display: "block",
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        color: "#334155",
+                        marginBottom: "0.25rem"
+                      }}
+                    >
+                      Opening Arrears Balance (PKR)
+                    </label>
+                    <input
+                      id="potential-opening-arrears"
+                      type="number"
+                      min="0"
+                      step="1"
+                      disabled={!isPotEditable}
+                      value={potNewOpeningArrears}
+                      onChange={(event) =>
+                        setPotNewOpeningArrears(Math.max(0, Number(event.target.value) || 0))
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "0.5rem",
+                        borderRadius: "6px",
+                        border: "1px solid #cbd5e1"
+                      }}
+                    />
+                    <span
+                      style={{
+                        display: "block",
+                        marginTop: "0.25rem",
+                        fontSize: "0.72rem",
+                        color: "#64748b"
+                      }}
+                    >
+                      Specify any prior-year unrecovered professional tax arrears brought forward.
+                    </span>
+                  </div>
+
+                  {/* Provisional PIN Preview and Rate Card */}
+                  {potSelectedStatutoryRule && (
+                    <div
+                      style={{
+                        marginBottom: "1.25rem",
+                        padding: "0.85rem",
+                        borderRadius: "6px",
+                        background: "#f0fdf4",
+                        border: "1px solid #bbf7d0",
+                        fontSize: "0.85rem"
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: "0.4rem"
+                        }}
+                      >
+                        <span style={{ fontWeight: 700, color: "#166534" }}>
+                          Statutory Rate: PKR{" "}
+                          {potSelectedStatutoryRule.annual_rate_pkr.toLocaleString()} / year
+                        </span>
+                        <span
+                          style={{
+                            fontFamily: "monospace",
+                            background: "#dcfce7",
+                            color: "#15803d",
+                            padding: "0.15rem 0.5rem",
+                            borderRadius: "4px",
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            border: "1px solid #86efac"
+                          }}
+                        >
+                          Class Code: {potSelectedStatutoryRule.rule_code}
+                        </span>
+                      </div>
+
+                      {potNewOpeningArrears > 0 && (
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: "0.82rem",
+                            color: "#b45309",
+                            marginTop: "0.25rem"
+                          }}
+                        >
+                          <span>Opening Arrears Liability:</span>
+                          <strong>PKR {potNewOpeningArrears.toLocaleString()}</strong>
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          fontSize: "0.95rem",
+                          fontWeight: 800,
+                          borderTop: "1px dashed #86efac",
+                          paddingTop: "0.45rem",
+                          marginTop: "0.45rem",
+                          color: "#065f46"
+                        }}
+                      >
+                        <span>Total Assessed Demand:</span>
+                        <span>
+                          PKR{" "}
+                          {(
+                            potSelectedStatutoryRule.annual_rate_pkr + potNewOpeningArrears
+                          ).toLocaleString()}
+                        </span>
+                      </div>
+
+                      {potPreviewPin && (
+                        <div
+                          style={{
+                            marginTop: "0.65rem",
+                            padding: "0.5rem 0.75rem",
+                            background: "#ffffff",
+                            borderRadius: "5px",
+                            border: "1px solid #cbd5e1"
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              marginBottom: "0.25rem"
+                            }}
+                          >
+                            <span
+                              style={{ fontSize: "0.725rem", color: "#64748b", fontWeight: 600 }}
+                            >
+                              PROVISIONAL PIN (POTENTIAL PIPELINE):
+                            </span>
+                            <span
+                              style={{ fontSize: "0.68rem", color: "#0284c7", fontWeight: 600 }}
+                            >
+                              {potNewCircleName} &bull; Tehsil {potNewTehsil}
+                            </span>
+                          </div>
+                          <div
+                            style={{
+                              fontFamily: "monospace",
+                              fontSize: "0.95rem",
+                              fontWeight: 700,
+                              color: "#1e40af",
+                              letterSpacing: "0.5px"
+                            }}
+                          >
+                            {potPreviewPin}
+                          </div>
+                        </div>
+                      )}
+
+                      <span
+                        style={{
+                          color: "#4b5563",
+                          fontSize: "0.75rem",
+                          display: "block",
+                          marginTop: "0.5rem"
+                        }}
+                      >
+                        Statutory Legal Basis: {potSelectedStatutoryRule.official_text}
+                      </span>
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => {
+                        setShowAddPotentialModal(false);
+                        setEditingPotentialUnitId(null);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!isPotEditable}
+                      className="btn-success"
+                      style={{
+                        opacity: isPotEditable ? 1 : 0.6,
+                        cursor: isPotEditable ? "pointer" : "not-allowed"
+                      }}
+                    >
+                      {isPotEditable
+                        ? editingPotentialUnitId
+                          ? "✓ Save Potential Unit Changes"
+                          : "✓ Register Potential Unit"
+                        : "🔒 Editing Prohibited (Locked)"}
+                    </button>
+                  </div>
+                </form>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </div>
+          );
+        })()}
 
       {/* MODAL: IMPORT POTENTIAL UNITS CSV */}
       {showImportPotentialModal && (
@@ -25236,6 +26493,449 @@ export default function HomePage({
                   {isImportingPotential
                     ? "Importing Units..."
                     : `📥 Confirm & Import Active Units (${bulkPotentialParseResult ? bulkPotentialParseResult.validRowsCount : 0})`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: MIGRATE PROSPECTIVE UNIT TO FORM P.F.T-3 ASSESSMENT REGISTER */}
+      {showMigratePotentialModal && targetMigratePotential && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(15, 23, 42, 0.75)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "1rem"
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowMigratePotentialModal(false);
+          }}
+        >
+          <div
+            className="modal-container"
+            style={{
+              backgroundColor: "#ffffff",
+              borderRadius: "10px",
+              width: "100%",
+              maxWidth: "38rem",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+              border: "1px solid #cbd5e1",
+              padding: "1.5rem"
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "1rem",
+                borderBottom: "1px solid #e2e8f0",
+                paddingBottom: "0.75rem"
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, color: "#065f46", fontSize: "1.2rem", fontWeight: 800 }}>
+                  📥 Migrate to Form P.F.T-3 Assessment Register
+                </h3>
+                <p style={{ margin: "0.25rem 0 0", fontSize: "0.78rem", color: "#64748b" }}>
+                  Promote prospective unit from Potential Register to statutory Form P.F.T-3
+                  Register
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMigratePotentialModal(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  fontSize: "1.25rem",
+                  cursor: "pointer",
+                  color: "#64748b"
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+              <div
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "6px",
+                  padding: "0.85rem",
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "0.6rem",
+                  fontSize: "0.82rem"
+                }}
+              >
+                <div>
+                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                    Prospective Identifier
+                  </span>
+                  <strong style={{ color: "#0f172a", fontFamily: "monospace" }}>
+                    {targetMigratePotential.potentialNumber}
+                  </strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                    Statutory PIN
+                  </span>
+                  <strong style={{ color: "#0f172a", fontFamily: "monospace" }}>
+                    {targetMigratePotential.pinNumber}
+                  </strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                    Assessee Legal Name
+                  </span>
+                  <strong style={{ color: "#0f172a" }}>{targetMigratePotential.legalName}</strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                    Trade / Business Name
+                  </span>
+                  <strong style={{ color: "#0f172a" }}>
+                    {targetMigratePotential.tradeName || "—"}
+                  </strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                    Tax Identifier ({targetMigratePotential.identifierType})
+                  </span>
+                  <strong style={{ color: "#0f172a", fontFamily: "monospace" }}>
+                    {targetMigratePotential.identifierValue}
+                  </strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                    Commercial Location
+                  </span>
+                  <span style={{ color: "#334155" }}>
+                    {targetMigratePotential.address},{" "}
+                    {targetMigratePotential.locality || "Vehari City Commercial Zone"}
+                  </span>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: "#ecfdf5",
+                  border: "1px solid #a7f3d0",
+                  borderRadius: "6px",
+                  padding: "0.85rem"
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: "0.82rem",
+                    marginBottom: "0.35rem"
+                  }}
+                >
+                  <span style={{ color: "#065f46" }}>Statutory Rate (Annual Assessment):</span>
+                  <strong style={{ color: "#065f46" }}>
+                    PKR {targetMigratePotential.annualRatePkr.toLocaleString()}
+                  </strong>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: "0.82rem",
+                    marginBottom: "0.35rem"
+                  }}
+                >
+                  <span style={{ color: "#b45309" }}>Opening Arrears Balance:</span>
+                  <strong style={{ color: "#b45309" }}>
+                    PKR {(targetMigratePotential.openingArrears ?? 0).toLocaleString()}
+                  </strong>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: "0.95rem",
+                    fontWeight: 800,
+                    borderTop: "1px dashed #6ee7b7",
+                    paddingTop: "0.45rem",
+                    color: "#047857"
+                  }}
+                >
+                  <span>Total Initial Assessed Demand:</span>
+                  <span>
+                    PKR{" "}
+                    {(
+                      targetMigratePotential.annualRatePkr +
+                      (targetMigratePotential.openingArrears ?? 0)
+                    ).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: "#fffbeb",
+                  border: "1px solid #fde68a",
+                  borderRadius: "6px",
+                  padding: "0.75rem",
+                  fontSize: "0.78rem",
+                  color: "#92400e"
+                }}
+              >
+                <strong>⚖️ Statutory Rule 4 Governance Notice:</strong>
+                <p style={{ margin: "0.25rem 0 0" }}>
+                  This unit will land in the <strong>Form P.F.T-3 Assessment Register</strong> with
+                  status <strong>SUBMITTED</strong>, exactly as other surveyed units awaiting
+                  statutory review and approval by the{" "}
+                  <strong>Excise &amp; Taxation Officer (Assessing Authority)</strong>. Zero payment
+                  credit is posted at this stage until payment is formally realized.
+                </p>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "0.5rem",
+                  marginTop: "0.5rem"
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowMigratePotentialModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  style={{ background: "#065f46", borderColor: "#047857" }}
+                  onClick={handleConfirmMigratePotential}
+                >
+                  Confirm Migration to PFT-3 (Submit for ETO Approval)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADD / EDIT OPENING ARREARS FOR POTENTIAL REGISTER UNIT */}
+      {showEditPotentialArrearsModal && targetEditArrearsUnit && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(15, 23, 42, 0.75)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "1rem"
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowEditPotentialArrearsModal(false);
+          }}
+        >
+          <div
+            className="modal-container"
+            style={{
+              backgroundColor: "#ffffff",
+              borderRadius: "10px",
+              width: "100%",
+              maxWidth: "34rem",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+              border: "1px solid #cbd5e1",
+              padding: "1.5rem"
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "1rem",
+                borderBottom: "1px solid #e2e8f0",
+                paddingBottom: "0.75rem"
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, color: "#0f172a", fontSize: "1.2rem", fontWeight: 800 }}>
+                  💰 Add / Edit Opening Arrears
+                </h3>
+                <p style={{ margin: "0.25rem 0 0", fontSize: "0.78rem", color: "#64748b" }}>
+                  Record or update brought-forward tax arrears for prospective unit{" "}
+                  {targetEditArrearsUnit.potentialNumber}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditPotentialArrearsModal(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  fontSize: "1.25rem",
+                  cursor: "pointer",
+                  color: "#64748b"
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+              <div
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "6px",
+                  padding: "0.75rem",
+                  fontSize: "0.82rem"
+                }}
+              >
+                <div style={{ fontWeight: 700, color: "#0f172a" }}>
+                  {targetEditArrearsUnit.legalName}
+                  {targetEditArrearsUnit.tradeName ? ` (${targetEditArrearsUnit.tradeName})` : ""}
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "0.15rem" }}>
+                  {targetEditArrearsUnit.categoryName} &bull; PIN: {targetEditArrearsUnit.pinNumber}
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "#166534",
+                    marginTop: "0.15rem",
+                    fontWeight: 600
+                  }}
+                >
+                  Annual Statutory Rate: PKR {targetEditArrearsUnit.annualRatePkr.toLocaleString()}
+                </div>
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.8rem",
+                    fontWeight: 700,
+                    color: "#1e293b",
+                    marginBottom: "0.35rem"
+                  }}
+                >
+                  Opening Arrears Balance (PKR):
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  className="form-control"
+                  style={{ width: "100%", fontSize: "0.95rem", fontWeight: 700 }}
+                  value={editArrearsAmount}
+                  onChange={(e) => setEditArrearsAmount(Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="0"
+                  autoFocus
+                />
+                <span
+                  style={{
+                    fontSize: "0.72rem",
+                    color: "#64748b",
+                    display: "block",
+                    marginTop: "0.25rem"
+                  }}
+                >
+                  Specify any prior-year unrecovered professional tax arrears brought forward.
+                </span>
+              </div>
+
+              <div
+                style={{
+                  background: "#f0fdf4",
+                  border: "1px solid #bbf7d0",
+                  borderRadius: "6px",
+                  padding: "0.75rem",
+                  fontSize: "0.85rem"
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  <span style={{ color: "#166534" }}>Current Annual Tax:</span>
+                  <span>PKR {targetEditArrearsUnit.annualRatePkr.toLocaleString()}</span>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: "0.25rem"
+                  }}
+                >
+                  <span style={{ color: "#b45309" }}>Opening Arrears:</span>
+                  <span>PKR {editArrearsAmount.toLocaleString()}</span>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontWeight: 800,
+                    borderTop: "1px dashed #86efac",
+                    paddingTop: "0.35rem",
+                    color: "#065f46"
+                  }}
+                >
+                  <span>Total Assessed Demand:</span>
+                  <span>
+                    PKR {(targetEditArrearsUnit.annualRatePkr + editArrearsAmount).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "0.5rem",
+                  marginTop: "0.5rem"
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowEditPotentialArrearsModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={handleConfirmSavePotentialArrears}
+                >
+                  Save Arrears Balance
                 </button>
               </div>
             </div>
