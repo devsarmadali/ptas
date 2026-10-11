@@ -27,15 +27,15 @@ function LandRevenueRecoveryContent() {
       .then((available) => {
         if (cancelled) return;
 
-        const found =
-          available.find(
-            (u) =>
-              u.pinNumber === unitParam ||
-              u.id === unitParam ||
-              u.demandUnit?.permanentDemandNo === unitParam
-          ) ??
-          available.find((u) => u.assessments[0]?.status === "APPROVED") ??
-          null;
+        const found = unitParam
+          ? (available.find(
+              (u) =>
+                u.pinNumber === unitParam ||
+                u.id === unitParam ||
+                u.demandUnit?.permanentDemandNo === unitParam ||
+                u.provincialUin === unitParam
+            ) ?? null)
+          : null;
 
         setUnit(found);
       })

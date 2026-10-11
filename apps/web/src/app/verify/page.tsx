@@ -2,14 +2,10 @@
 
 import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { StoredUnit } from "../../lib/pilot-store";
-import { loadOperationalSurveyUnits } from "../../lib/operational-survey";
 import {
-  loadDurableChallanRegistry,
-  type Pft2ChallanRecord,
-  type StatutoryReceiptRecord
-} from "../../lib/challan-storage";
-import { verifyStatutoryDocument, type DocumentVerificationResult } from "../../lib/public-portal";
+  verifyStatutoryDocumentOnline,
+  type DocumentVerificationResult
+} from "../../lib/public-portal";
 
 export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: string }) {
   const searchParams = useSearchParams();
@@ -23,68 +19,56 @@ export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: str
   const [searchQuery, setSearchQuery] = useState(refParam);
   const [result, setResult] = useState<DocumentVerificationResult | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
-
-  const [operationalUnits, setOperationalUnits] = useState<StoredUnit[]>([]);
-  const [liveChallans, setLiveChallans] = useState<Pft2ChallanRecord[]>([]);
-  const [liveReceipts, setLiveReceipts] = useState<StatutoryReceiptRecord[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void Promise.all([
-      loadOperationalSurveyUnits().catch(() => []),
-      loadDurableChallanRegistry().catch(() => ({ challans: [], receipts: [] }))
-    ]).then(([units, durable]) => {
-      if (!cancelled) {
-        if (units) setOperationalUnits(units);
-        if (durable.challans) setLiveChallans(durable.challans);
-        if (durable.receipts) setLiveReceipts(durable.receipts);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   useEffect(() => {
     if (refParam) {
       setSearchQuery(refParam);
-      executeVerification(refParam, operationalUnits, liveChallans, liveReceipts);
+      void executeVerification(refParam);
     }
-  }, [refParam, operationalUnits, liveChallans, liveReceipts]);
+  }, [refParam]);
 
-  const executeVerification = (
-    query: string,
-    currentUnits?: StoredUnit[],
-    currentChallans?: Pft2ChallanRecord[],
-    currentReceipts?: StatutoryReceiptRecord[]
-  ) => {
+  const executeVerification = async (query: string) => {
     if (!query.trim()) return;
 
-    const effectiveUnits =
-      currentUnits && currentUnits.length > 0 ? currentUnits : operationalUnits;
-    const effectiveChallans = currentChallans ?? liveChallans;
-    const effectiveReceipts = currentReceipts ?? liveReceipts;
-
-    const verificationResult = verifyStatutoryDocument(
-      query.trim(),
-      effectiveUnits,
-      [],
-      effectiveReceipts,
-      effectiveChallans
-    );
-
-    setResult(verificationResult);
+    setIsVerifying(true);
     setHasSearched(true);
+    try {
+      const verificationResult = await verifyStatutoryDocumentOnline(query.trim());
+      setResult(verificationResult);
+    } catch {
+      setResult({
+        isValid: false,
+        documentType: "UNKNOWN",
+        verificationStatus: "INVALID_NOT_FOUND",
+        title: "Verification Error",
+        message: "An unexpected error occurred while verifying the document. Please try again.",
+        documentReference: query.trim(),
+        unitName: "N/A",
+        identifier: "N/A",
+        address: "N/A",
+        categoryName: "N/A",
+        scheduleEntry: "N/A",
+        assessedAmount: 0,
+        outstandingBalance: 0,
+        officialSha256: "",
+        qrPayload: "",
+        verifiedAt: new Date().toISOString(),
+        issuingAuthority: "Excise & Taxation Department, Punjab"
+      });
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    executeVerification(searchQuery);
+    void executeVerification(searchQuery);
   };
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#f8fafc", padding: "1.5rem 1rem" }}>
-      {/* Return to Dashboard and Related Portals Link Bar */}
+      {/* Return to Dashboard Link Bar */}
       <div
         style={{
           maxWidth: "48rem",
@@ -110,21 +94,6 @@ export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: str
         >
           ← Return to Main PTAS System
         </a>
-        <div style={{ display: "flex", gap: "0.75rem" }}>
-          <a
-            href="/admin/user-management"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              fontSize: "0.82rem",
-              color: "#475569",
-              textDecoration: "none",
-              fontWeight: 600
-            }}
-          >
-            👥 User Desk ↗
-          </a>
-        </div>
       </div>
 
       {/* Clean Public Citizen Header (No staff navigation or editing controls) */}
@@ -207,15 +176,27 @@ export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: str
             />
             <button
               type="submit"
+              disabled={isVerifying}
               className="btn-primary"
-              style={{ padding: "0.65rem 1.25rem", fontWeight: 700, whiteSpace: "nowrap" }}
+              style={{
+                padding: "0.65rem 1.25rem",
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+                opacity: isVerifying ? 0.7 : 1
+              }}
             >
-              Verify Now
+              {isVerifying ? "Verifying..." : "Verify Now"}
             </button>
           </div>
         </form>
 
-        {hasSearched && result && (
+        {isVerifying && (
+          <div style={{ padding: "2rem", textAlign: "center", color: "#475569" }}>
+            Verifying statutory document with the official Punjab register...
+          </div>
+        )}
+
+        {!isVerifying && hasSearched && result && (
           <div
             style={{
               borderRadius: "8px",

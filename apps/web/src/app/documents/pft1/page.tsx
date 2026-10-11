@@ -32,14 +32,15 @@ function FormPft1NoticeContent() {
       .then((available) => {
         if (cancelled) return;
 
-        let found =
-          available.find(
-            (u) =>
-              u.pinNumber === unitParam ||
-              u.provincialUin === unitParam ||
-              u.demandUnit?.permanentDemandNo === unitParam ||
-              u.id === unitParam
-          ) ?? null;
+        let found = unitParam
+          ? (available.find(
+              (u) =>
+                u.pinNumber === unitParam ||
+                u.provincialUin === unitParam ||
+                u.demandUnit?.permanentDemandNo === unitParam ||
+                u.id === unitParam
+            ) ?? null)
+          : null;
 
         if (!found && unitParam) {
           const potList = loadPersistedPotentialUnits();
@@ -54,10 +55,6 @@ function FormPft1NoticeContent() {
           if (pot) {
             found = convertPotentialUnitToStoredUnit(pot);
           }
-        }
-
-        if (!found) {
-          found = available.find((u) => u.assessments[0]?.status === "APPROVED") ?? null;
         }
 
         setUnit(found);

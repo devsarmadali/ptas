@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { LegalConfigurationVersion } from "./legal-configuration.js";
 
 export interface FormTemplatePayload {
@@ -49,7 +49,9 @@ export function verifyDocumentIntegrity(content: string, expectedSha256: string)
     return false;
   }
   const computed = computeContentSha256(content);
-  return computed.toLowerCase() === expectedSha256.toLowerCase();
+  const bufA = Buffer.from(computed.toLowerCase(), "utf8");
+  const bufB = Buffer.from(expectedSha256.toLowerCase(), "utf8");
+  return bufA.length === bufB.length && timingSafeEqual(bufA, bufB);
 }
 
 function interpolatePlaceholders(templateBody: string, snapshot: Record<string, unknown>): string {

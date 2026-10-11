@@ -34,6 +34,7 @@ import {
   generateFormPFT2,
   generateTaxClearanceCertificate
 } from "./statutory-forms";
+import { getSupabaseAuthClient } from "./supabase-auth";
 
 export type DocumentVerificationType =
   "FORM_PFT1_NOTICE" | "FORM_PFT2_CHALLAN" | "FORM_PFT5_CLEARANCE" | "FORM_PFT_RECEIPT";
@@ -1001,4 +1002,177 @@ export function simulateCitizenPayment(
     updatedAudits,
     updatedClearanceCerts: clearanceCerts
   };
+}
+
+/**
+ * Authoritative Public Statutory Document Verification Engine:
+ * Queries the dedicated, rate-limited PostgreSQL public verification endpoint.
+ * Ensures that neither unauthenticated citizens nor network observers receive
+ * whole-database dumps, and prevents parameter tampering.
+ */
+export async function verifyStatutoryDocumentOnline(
+  query: string,
+  pin?: string
+): Promise<DocumentVerificationResult> {
+  const trimmed = query.trim();
+  let effectiveRef = trimmed;
+  let effectivePin = pin?.trim() || "";
+
+  // Extract reference from scanned QR code or URL parameters
+  if (
+    trimmed.includes("?") &&
+    (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.includes("/verify"))
+  ) {
+    try {
+      const url = new URL(
+        trimmed.startsWith("http") ? trimmed : `https://ptas.punjab.gov.pk/${trimmed}`
+      );
+      effectiveRef =
+        url.searchParams.get("ref") ||
+        url.searchParams.get("pdn") ||
+        url.searchParams.get("doc") ||
+        url.searchParams.get("notice") ||
+        effectiveRef;
+      if (!effectivePin && url.searchParams.get("pin")) {
+        effectivePin = url.searchParams.get("pin")!;
+      }
+    } catch {
+      // Ignore parse failure and fall back to raw input
+    }
+  }
+
+  // If input matches candidate 6-digit PIN, classify as PIN
+  const cleanPinCandidate = normalizeDocumentPin(effectiveRef);
+  if (validateDocumentPin(cleanPinCandidate) && !effectivePin) {
+    effectivePin = cleanPinCandidate;
+  }
+
+  try {
+    const supabase = getSupabaseAuthClient();
+    const { data, error } = await supabase.rpc(
+      "verify_statutory_document_public" as never,
+      {
+        p_document_ref: effectiveRef,
+        p_pin: effectivePin || null
+      } as never
+    );
+
+    if (error) {
+      console.warn("Public document verification RPC error:", error.message);
+      return {
+        isValid: false,
+        documentType: "UNKNOWN",
+        verificationStatus: "INVALID_NOT_FOUND",
+        title: "Verification Service Unavailable",
+        message:
+          "The statutory document verification service encountered a temporary error. Please retry.",
+        documentReference: effectiveRef,
+        unitName: "N/A",
+        identifier: "N/A",
+        address: "N/A",
+        categoryName: "N/A",
+        scheduleEntry: "N/A",
+        assessedAmount: 0,
+        outstandingBalance: 0,
+        officialSha256: "",
+        qrPayload: "",
+        verifiedAt: new Date().toISOString(),
+        issuingAuthority: "Excise & Taxation Department, Punjab"
+      };
+    }
+
+    const row = data as Record<string, unknown>;
+    if (!row || !row.is_valid) {
+      return {
+        isValid: false,
+        documentType: "UNKNOWN",
+        verificationStatus: "INVALID_NOT_FOUND",
+        title: "Document Not Found",
+        message: String(
+          row?.message ??
+            "No authentic statutory record was found matching the provided identifier or Security Code."
+        ),
+        documentReference: effectiveRef,
+        unitName: "Unknown",
+        identifier: "N/A",
+        address: "N/A",
+        categoryName: "N/A",
+        scheduleEntry: "N/A",
+        assessedAmount: 0,
+        outstandingBalance: 0,
+        officialSha256: "",
+        qrPayload: "",
+        verifiedAt: new Date().toISOString(),
+        issuingAuthority: "Excise & Taxation Department, Punjab"
+      };
+    }
+
+    const docType = String(row.document_type) as DocumentVerificationType;
+    const isChallan = docType === "FORM_PFT2_CHALLAN";
+    const isReceipt = docType === "FORM_PFT_RECEIPT";
+    const isNotice = docType === "FORM_PFT1_NOTICE";
+
+    const title = isChallan
+      ? "Authentic PFT-2 Payment Challan"
+      : isReceipt
+        ? "Authentic Statutory Payment Receipt"
+        : isNotice
+          ? "Authentic Form P.F.T-1 Notice of Demand"
+          : "Authentic Statutory Record";
+
+    const assessedAmt = Number(row.amount_payable ?? row.amount_paid ?? 0);
+    const balance = Number(row.remaining_balance ?? 0);
+    const refNum = String(row.reference_number ?? effectiveRef);
+
+    const message = isChallan
+      ? `✓ Official PFT-2 Challan verified under Punjab Professions & Trades Tax Rules 1977. Demand Number: ${refNum} | Assessed Demand: PKR ${assessedAmt.toLocaleString()} (Due: ${String(row.due_date ?? "N/A")}). Status: ${String(row.status ?? "AUTHENTIC_VALID")}.`
+      : isReceipt
+        ? `✓ Official Payment Receipt verified under Rule 10. Amount: PKR ${assessedAmt.toLocaleString()} credited to Punjab Professional Tax Account (Bank Scroll/CPR: ${String(row.bank_scroll_ref ?? "NBP")}).`
+        : `✓ Official Notice of Demand verified under Punjab Finance Act 1977. Demand Number: ${refNum}.`;
+
+    return {
+      isValid: true,
+      documentType: docType,
+      verificationStatus: (row.status as VerificationStatus) ?? "AUTHENTIC_VALID",
+      title,
+      message,
+      documentReference: refNum,
+      unitName: String(row.legal_name ?? "Taxpayer Entity"),
+      tradeName: row.trade_name ? String(row.trade_name) : undefined,
+      identifier: String(row.challan_number ?? refNum),
+      address: `${String(row.circle ?? "")}, ${String(row.district ?? "Punjab")}`,
+      categoryName: String(row.category_name ?? "Statutory Assessment"),
+      scheduleEntry: String(row.classification ?? "Punjab Finance Act 1977"),
+      assessedAmount: assessedAmt,
+      outstandingBalance: balance,
+      officialSha256: String(row.official_sha256 ?? ""),
+      qrPayload: `PTAS-PUNJAB:${docType}:${refNum}`,
+      verifiedAt: String(row.verified_at ?? new Date().toISOString()),
+      issuingAuthority: String(
+        row.issuing_authority ?? "Excise & Taxation Department, Government of the Punjab"
+      ),
+      pin: row.pin ? String(row.pin) : effectivePin || undefined
+    };
+  } catch (err) {
+    console.warn("Online verification encountered an exception:", err);
+    return {
+      isValid: false,
+      documentType: "UNKNOWN",
+      verificationStatus: "INVALID_NOT_FOUND",
+      title: "Verification Error",
+      message: err instanceof Error ? err.message : "Network error during statutory verification.",
+      documentReference: effectiveRef,
+      unitName: "N/A",
+      identifier: "N/A",
+      address: "N/A",
+      categoryName: "N/A",
+      scheduleEntry: "N/A",
+      assessedAmount: 0,
+      outstandingBalance: 0,
+      officialSha256: "",
+      qrPayload: "",
+      verifiedAt: new Date().toISOString(),
+      issuingAuthority: "Excise & Taxation Department, Punjab"
+    };
+  }
 }

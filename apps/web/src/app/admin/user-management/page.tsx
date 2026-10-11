@@ -8,7 +8,6 @@ import {
   DISTRICT_VEHARI_CIRCLES,
   DISTRICT_VEHARI_TEHSILS,
   getDefaultTehsilForCircle,
-  ADMIN_OFFICER,
   loadPersistedUserAccounts,
   savePersistedUserAccounts,
   loadPersistedUserAuditLogs,
@@ -54,10 +53,10 @@ export default function UserManagementPage() {
           const authOfficer = await resolveAuthenticatedOfficer(authData.user);
           setCurrentOfficer(authOfficer);
         } else {
-          setCurrentOfficer(ADMIN_OFFICER);
+          setCurrentOfficer(null);
         }
       } catch {
-        setCurrentOfficer(ADMIN_OFFICER);
+        setCurrentOfficer(null);
       }
 
       setUsers(loadPersistedUserAccounts());

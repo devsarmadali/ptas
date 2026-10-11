@@ -47,8 +47,7 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
               u.provincialUin === unitId ||
               u.pinNumber === unitId ||
               u.demandUnit?.permanentDemandNo === unitId ||
-              u.id === unitId ||
-              (unitId && u.legalName.toLowerCase().includes(unitId.toLowerCase()))
+              u.id === unitId
           ) ?? null;
 
         if (!found) {
@@ -62,8 +61,7 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
               p.pinNumber === decodedId ||
               p.provincialUin === unitId ||
               p.provincialUin === decodedId ||
-              p.identifierValue === unitId ||
-              (unitId && p.legalName.toLowerCase().includes(unitId.toLowerCase()))
+              p.identifierValue === unitId
           );
           if (pot) {
             found = convertPotentialUnitToStoredUnit(pot);

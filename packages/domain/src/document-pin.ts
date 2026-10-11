@@ -4,22 +4,31 @@
  * embedded on all issued notices, challans, and certificates for citizen verification.
  */
 
+import { createHash } from "node:crypto";
+
+function getRandomSixDigitNumber(): number {
+  if (typeof globalThis.crypto?.getRandomValues === "function") {
+    const array = new Uint32Array(1);
+    globalThis.crypto.getRandomValues(array);
+    const val = array[0] ?? 0;
+    return 100000 + (val % 900000);
+  }
+  return Math.floor(100000 + Math.random() * 900000);
+}
+
 /**
  * Generates a deterministic or cryptographically pseudo-random 6-digit Document Security Code (100000 - 999999).
- * If a seed string or number is provided, generates a reproducible code for that document ID / hash.
+ * If a seed string or number is provided, generates a reproducible code using SHA-256 digest.
  */
-export function generateDocumentPin(seed?: string | number): string {
+export function generateDocumentPin(seed?: string | number, secretKey?: string): string {
   if (seed !== undefined && seed !== null && seed !== "") {
-    let hash = 0;
-    const str = String(seed);
-    for (let i = 0; i < str.length; i++) {
-      hash = (hash * 31 + str.charCodeAt(i)) | 0;
-    }
-    const num = (Math.abs(hash) % 900000) + 100000;
+    const hash = createHash("sha256")
+      .update(secretKey ? `${secretKey}:${String(seed)}` : String(seed), "utf8")
+      .digest();
+    const num = 100000 + (hash.readUInt32BE(0) % 900000);
     return String(num);
   }
-  const randomNum = Math.floor(100000 + Math.random() * 900000);
-  return String(randomNum);
+  return String(getRandomSixDigitNumber());
 }
 
 /**

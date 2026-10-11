@@ -72,15 +72,15 @@ function DocumentIssuanceContent() {
             !u.demandNumber?.startsWith("V-")
         );
 
-        let found =
-          available.find(
-            (u) =>
-              u.provincialUin === unitParam ||
-              u.pinNumber === unitParam ||
-              u.demandUnit?.permanentDemandNo === unitParam ||
-              u.id === unitParam ||
-              (unitParam && u.legalName.toLowerCase().includes(unitParam.toLowerCase()))
-          ) ?? null;
+        let found = unitParam
+          ? (available.find(
+              (u) =>
+                u.provincialUin === unitParam ||
+                u.pinNumber === unitParam ||
+                u.demandUnit?.permanentDemandNo === unitParam ||
+                u.id === unitParam
+            ) ?? null)
+          : null;
 
         if (!found && unitParam) {
           const potList = await fetchPotentialAssessmentUnitsFromDatabase();
@@ -97,20 +97,6 @@ function DocumentIssuanceContent() {
             found = convertPotentialUnitToStoredUnit(pot);
             available.push(found);
           }
-        }
-
-        if (!found) {
-          found =
-            available.find((u) => {
-              const assessed = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
-              let paid = 0;
-              for (const e of u.ledgerEntries) {
-                if (e.entryType === "PAYMENT_CREDIT") paid += Math.abs(e.amount);
-              }
-              return assessed - paid > 0;
-            }) ??
-            available[0] ??
-            null;
         }
 
         setAllUnits(available);
@@ -204,19 +190,45 @@ function DocumentIssuanceContent() {
         }}
       >
         <h2 style={{ color: "#991b1b", margin: "0 0 0.5rem" }}>
-          {fetchError ? "Unable to Load Taxpayer Units" : "No Registered Taxpayer Units Found"}
+          {fetchError
+            ? "Unable to Load Taxpayer Units"
+            : !unitParam
+              ? "No Taxpayer Unit Specified"
+              : "Taxpayer Unit Not Found"}
         </h2>
         <p style={{ color: "#475569" }}>
           {fetchError ||
-            "Please initialize pilot data or verify that the requested unit has been approved in the PTAS assessment register."}
+            (!unitParam
+              ? "Please select a registered or provisional taxpayer unit from the PFT-3 Assessment Register or Potential Register to prepare an official Form PFT-2 Challan."
+              : `Unable to locate an approved unit matching "${unitParam}" in your assigned jurisdiction.`)}
         </p>
-        <a
-          href="/"
-          className="btn-primary"
-          style={{ display: "inline-block", marginTop: "1rem", textDecoration: "none" }}
+        <div
+          style={{ display: "flex", gap: "0.75rem", justifyContent: "center", marginTop: "1rem" }}
         >
-          Return to Dashboard
-        </a>
+          <a
+            href="/assessment/pft3"
+            className="btn-primary"
+            style={{ display: "inline-block", textDecoration: "none", backgroundColor: "#0d3822" }}
+          >
+            ← Open Assessment Register (PFT-3)
+          </a>
+          <a
+            href="/"
+            style={{
+              display: "inline-block",
+              padding: "0.5rem 1rem",
+              borderRadius: "6px",
+              border: "1px solid #cbd5e1",
+              background: "#ffffff",
+              color: "#334155",
+              textDecoration: "none",
+              fontSize: "0.875rem",
+              fontWeight: 600
+            }}
+          >
+            Dashboard
+          </a>
+        </div>
       </div>
     );
   }
