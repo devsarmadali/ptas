@@ -1326,40 +1326,78 @@ export default function HomePage({
       const target = units.find((u) => u.id === editingUnitId);
       if (!target) return;
 
-      // Statutory Rule 4 Governance: Editing strictly forbidden once submitted for approval
       const currentStatus = target.assessments[0]?.status ?? "DRAFT";
-      if (currentStatus !== "DRAFT" && currentStatus !== "RETURNED") {
-        showToast(
-          "error",
-          `Editing is prohibited under Statutory Governance: Unit '${target.legalName}' is currently in '${currentStatus}' status. Only units in FEEDED (DRAFT) status or RETURNED by ETO for review can be modified.`
-        );
-        return;
-      }
+      const isApprovedUnit = currentStatus === "APPROVED";
+      const nextStatus =
+        isApprovedUnit || currentStatus === "RETURNED" || currentStatus === "SUBMITTED"
+          ? "SUBMITTED"
+          : "DRAFT";
 
-      const updatedVersion: AssessmentVersion<StoredUnitSnapshot> = target.assessmentVersions[0]
+      const prevVer = target.assessmentVersions[0];
+      const nextVersionNo = isApprovedUnit
+        ? (prevVer?.versionNo ?? 1) + 1
+        : (prevVer?.versionNo ?? 1);
+
+      const updatedVersion: AssessmentVersion<StoredUnitSnapshot> = isApprovedUnit
         ? {
-            ...target.assessmentVersions[0],
-            snapshot: {
-              ...target.assessmentVersions[0].snapshot,
-              taxAmount: rule.annual_rate_pkr,
-              statutoryCategory: rule.category,
-              ruleId: rule.rule_id,
-              subclassificationCode: rule.subclassification_code
-            }
-          }
-        : {
             id: `ver-${Date.now()}`,
             assessmentId: target.assessments[0]?.id || `asm-${Date.now()}`,
-            versionNo: 1,
+            versionNo: nextVersionNo,
             snapshot: {
+              ...(prevVer?.snapshot ?? {}),
               taxAmount: rule.annual_rate_pkr,
               statutoryCategory: rule.category,
               legalBasis: rule.rule_code,
               ruleId: rule.rule_id,
               subclassificationCode: rule.subclassification_code
             },
-            status: target.assessments[0]?.status ?? "DRAFT",
+            status: "SUBMITTED",
             createdBy: officer.name,
+            createdAt: new Date().toISOString(),
+            reason: `Particulars modified by ${officer.name} (${officer.role}); submitted for ETO statutory re-approval`
+          }
+        : target.assessmentVersions[0]
+          ? {
+              ...target.assessmentVersions[0],
+              snapshot: {
+                ...target.assessmentVersions[0].snapshot,
+                taxAmount: rule.annual_rate_pkr,
+                statutoryCategory: rule.category,
+                ruleId: rule.rule_id,
+                subclassificationCode: rule.subclassification_code
+              },
+              status: nextStatus
+            }
+          : {
+              id: `ver-${Date.now()}`,
+              assessmentId: target.assessments[0]?.id || `asm-${Date.now()}`,
+              versionNo: 1,
+              snapshot: {
+                taxAmount: rule.annual_rate_pkr,
+                statutoryCategory: rule.category,
+                legalBasis: rule.rule_code,
+                ruleId: rule.rule_id,
+                subclassificationCode: rule.subclassification_code
+              },
+              status: nextStatus,
+              createdBy: officer.name,
+              createdAt: new Date().toISOString()
+            };
+
+      const existingAssessment = target.assessments[0];
+      const updatedAssessment: Assessment = existingAssessment
+        ? {
+            ...existingAssessment,
+            status: nextStatus,
+            currentVersionNo: nextVersionNo
+          }
+        : {
+            id: `asm-${Date.now()}`,
+            taxpayerId: target.demandUnit?.taxpayerId || target.id,
+            financialYearId: FINANCIAL_YEAR_2026_27,
+            status: nextStatus,
+            currentVersionNo: nextVersionNo,
+            createdBy: officer.id,
             createdAt: new Date().toISOString()
           };
 
@@ -1403,7 +1441,7 @@ export default function HomePage({
         (c) => c.name === normalizeCircleName(newCircleName) || c.id === newCircleName
       );
 
-      // Backend Server RPC: Persist survey unit modifications with server-side jurisdiction & Rule 4 validation
+      // Backend Server RPC: Persist survey unit modifications with server-side jurisdiction & re-approval lifecycle
       const serverUpdate = await updateIndividualSurveyUnit(
         editingUnitId,
         {
@@ -1418,7 +1456,9 @@ export default function HomePage({
           tehsil: newTehsil,
           statutory_rule_id: rule.rule_id,
           opening_arrears: sanitizedArrears,
-          edit_reason: `Particulars modified by ${officer.name} (${officer.role}) under statutory governance`
+          edit_reason: isApprovedUnit
+            ? `Assessee particulars modified by ${officer.name} (${officer.role}); submitted for ETO statutory re-approval`
+            : `Particulars modified by ${officer.name} (${officer.role}) under statutory governance`
         },
         officer.id
       );
@@ -1445,18 +1485,23 @@ export default function HomePage({
         categoryCode: rule.category_code,
         subclassificationCode: rule.subclassification_code,
         statutoryTertiaryCode: rule.statutory_tertiary_code,
-        assessmentVersions: [updatedVersion, ...target.assessmentVersions.slice(1)],
+        assessments: [updatedAssessment, ...target.assessments.slice(1)],
+        assessmentVersions: isApprovedUnit
+          ? [updatedVersion, ...target.assessmentVersions]
+          : [updatedVersion, ...target.assessmentVersions.slice(1)],
         ledgerEntries: nextLedger
       };
       const auditItem: PilotAuditItem = {
         id: `audit-${Date.now()}`,
-        eventType: "TAX_UNIT_REGISTERED",
+        eventType: isApprovedUnit ? "ASSESSMENT_REVISED" : "TAX_UNIT_REGISTERED",
         actorName: officer.name,
         actorRole: officer.role,
         target: updatedUnit.legalName,
         timestamp: new Date().toISOString(),
         correlationId: `corr-edit-${Date.now()}`,
-        details: `Updated survey data for unit under Class ${rule.rule_code} (${rule.category})${sanitizedArrears > 0 ? ` with opening arrears PKR ${sanitizedArrears.toLocaleString()}` : ""}.`
+        details: isApprovedUnit
+          ? `Assessee particulars updated under Class ${rule.rule_code} (${rule.category}). Unit placed into SUBMITTED status pending ETO re-approval.`
+          : `Updated survey data for unit under Class ${rule.rule_code} (${rule.category})${sanitizedArrears > 0 ? ` with opening arrears PKR ${sanitizedArrears.toLocaleString()}` : ""}.`
       };
       syncState(
         units.map((u) => (u.id === editingUnitId ? updatedUnit : u)),
@@ -1464,7 +1509,14 @@ export default function HomePage({
       );
       setEditingUnitId(null);
       setShowAddUnitModal(false);
-      showToast("success", `✓ Survey data for '${updatedUnit.legalName}' updated.`);
+      if (isApprovedUnit) {
+        showToast(
+          "success",
+          `✓ Particulars for '${updatedUnit.legalName}' updated. Record placed into 'SUBMITTED' status pending ETO statutory re-approval.`
+        );
+      } else {
+        showToast("success", `✓ Survey data for '${updatedUnit.legalName}' updated.`);
+      }
       return;
     }
 
@@ -1663,6 +1715,7 @@ export default function HomePage({
       locality: targetUnit.locality,
       circleId: targetUnit.circleId,
       circleName: targetUnit.circleName,
+      tehsil: targetUnit.tehsil,
       districtName: targetUnit.districtName,
       categoryCode: targetUnit.categoryCode,
       subclassificationCode: targetUnit.subclassificationCode,
@@ -5377,16 +5430,6 @@ export default function HomePage({
   };
 
   const handleOpenEditSurveyUnit = (u: StoredUnit) => {
-    // Statutory Rule 4: Editing is strictly permitted only in FEEDED (DRAFT) status or when RETURNED by ETO for review
-    const status = u.assessments[0]?.status ?? "DRAFT";
-    if (status !== "DRAFT" && status !== "RETURNED") {
-      showToast(
-        "error",
-        `Editing is strictly prohibited: Unit '${u.legalName}' is currently in '${status}' status. Assessees may only be modified while in FEEDED (DRAFT) status or when explicitly RETURNED by ETO for review.`
-      );
-      return;
-    }
-
     if (officer.role === "INSPECTOR") {
       const assignedCircle = normalizeCircleName(officer.jurisdictionName || "Circle 1");
       const unitCircle = normalizeCircleName(u.circleName || "Circle 1");
@@ -5397,6 +5440,14 @@ export default function HomePage({
         );
         return;
       }
+    }
+
+    const status = u.assessments[0]?.status ?? "DRAFT";
+    if (status === "APPROVED") {
+      showToast(
+        "info",
+        `Editing registered assessee '${u.legalName}': Saving updates will transition this record to SUBMITTED status for ETO statutory re-approval.`
+      );
     }
 
     setEditingUnitId(u.id);
@@ -5564,6 +5615,12 @@ export default function HomePage({
     } else if (status === "APPROVED") {
       actions.push(
         {
+          id: "edit-survey-approved",
+          label: "Edit Unit Particulars",
+          icon: "✏️",
+          onClick: () => handleOpenEditSurveyUnit(targetUnit)
+        },
+        {
           id: "audit-trace",
           label: "View Audit Dossier",
           icon: "👁️",
@@ -5595,17 +5652,14 @@ export default function HomePage({
 
   // Row actions strictly for Form P.F.T-3 Assessment & Demand Register (REGISTER_PFT3)
   const renderPft3UnitActions = (targetUnit: StoredUnit) => {
-    const pft3Status = targetUnit.assessments[0]?.status ?? "DRAFT";
-    const canEditPft3 = pft3Status === "DRAFT" || pft3Status === "RETURNED";
     return (
       <RowActionMenu
         align="right"
         actions={[
           {
             id: "edit-pft3-unit",
-            label: canEditPft3 ? "Edit Unit Particulars" : "Edit Particulars (Locked)",
-            icon: canEditPft3 ? "✏️" : "🔒",
-            disabled: !canEditPft3,
+            label: "Edit Unit Particulars",
+            icon: "✏️",
             onClick: () => handleOpenEditSurveyUnit(targetUnit)
           },
           {
@@ -7351,6 +7405,15 @@ export default function HomePage({
                                     >
                                       ✓ In Form PFT-3
                                     </span>
+                                    <button
+                                      type="button"
+                                      className="btn-warning btn-xs"
+                                      style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                      onClick={() => handleOpenEditSurveyUnit(u)}
+                                      title="Edit assessee particulars (will place into SUBMITTED status for ETO re-approval)"
+                                    >
+                                      ✏️ Edit
+                                    </button>
                                     <button
                                       type="button"
                                       className="btn-secondary btn-xs"
@@ -16165,7 +16228,9 @@ export default function HomePage({
           const currentStatus = editingTarget?.assessments[0]?.status ?? "DRAFT";
           const isReturned = currentStatus === "RETURNED";
           const isDraft = currentStatus === "DRAFT";
-          const isEditable = !editingTarget || isDraft || isReturned;
+          const isApproved = currentStatus === "APPROVED";
+          const isSubmitted = currentStatus === "SUBMITTED";
+          const isEditable = !editingTarget || isDraft || isReturned || isApproved;
 
           return (
             <div
@@ -16201,6 +16266,42 @@ export default function HomePage({
                     {/* Status Governance Banner when Editing */}
                     {editingTarget && (
                       <>
+                        {isApproved && (
+                          <div
+                            style={{
+                              background: "#eff6ff",
+                              border: "1px solid #bfdbfe",
+                              padding: "0.75rem 1rem",
+                              borderRadius: "6px",
+                              marginBottom: "1rem",
+                              color: "#1e40af"
+                            }}
+                          >
+                            <strong
+                              style={{
+                                fontSize: "0.85rem",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.35rem"
+                              }}
+                            >
+                              <span>✏️</span>
+                              <span>Revision of Registered Assessee Particulars:</span>
+                            </strong>
+                            <p
+                              style={{
+                                margin: "0.25rem 0 0",
+                                fontSize: "0.8rem",
+                                color: "#1e3a8a"
+                              }}
+                            >
+                              Editing this registered unit will generate an immutable revised
+                              statutory assessment version and place it into{" "}
+                              <strong>SUBMITTED</strong> status for ETO statutory re-approval.
+                            </p>
+                          </div>
+                        )}
+
                         {isReturned && (
                           <div
                             style={{
@@ -16239,7 +16340,7 @@ export default function HomePage({
                           </div>
                         )}
 
-                        {!isEditable && (
+                        {isSubmitted && (
                           <div
                             style={{
                               background: "#fef2f2",
@@ -16259,14 +16360,11 @@ export default function HomePage({
                               }}
                             >
                               <span>🔒</span>
-                              <span>
-                                Statutory Lock: Record is currently in ${currentStatus} status
-                              </span>
+                              <span>Record is currently SUBMITTED for ETO Statutory Review</span>
                             </strong>
                             <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem" }}>
-                              Editing is strictly prohibited under Rule 4 governance once submitted
-                              for approval. Only units in FEEDED (DRAFT) status or explicitly
-                              RETURNED by ETO for review may be modified.
+                              This unit is currently pending approval in the ETO queue. Editing is
+                              locked until ETO approves or returns it with observations.
                             </p>
                           </div>
                         )}
@@ -16847,7 +16945,9 @@ export default function HomePage({
                       >
                         {isEditable
                           ? editingUnitId
-                            ? "✓ Save Survey Changes"
+                            ? isApproved
+                              ? "✓ Save Changes & Submit for ETO Re-approval"
+                              : "✓ Save Survey Changes"
                             : "Save & Create Draft Assessment"
                           : "🔒 Editing Prohibited (Locked)"}
                       </button>
