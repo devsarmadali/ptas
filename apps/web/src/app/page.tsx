@@ -36,6 +36,12 @@ import {
 } from "@ptas/domain";
 import {
   CIRCLE_VEHARI_ID,
+  DISTRICT_VEHARI_CIRCLES,
+  DISTRICT_VEHARI_TEHSILS,
+  normalizeCircleName,
+  getCircleCode,
+  getTehsilCode,
+  getDefaultTehsilForCircle,
   FINANCIAL_YEAR_2026_27,
   getCircleLocalities,
   type AppealRecord,
@@ -557,7 +563,7 @@ export default function HomePage({
   const [potNewSubclassCode, setPotNewSubclassCode] = useState("1(i)");
   const [potNewTertiaryCode, setPotNewTertiaryCode] = useState("");
   const [potNewRuleId, setPotNewRuleId] = useState("PFT-1-01");
-  const [potNewCircleName, setPotNewCircleName] = useState("Vehari Circle I (City / Commercial)");
+  const [potNewCircleName, setPotNewCircleName] = useState("Circle 1");
   const [potNewTehsil, setPotNewTehsil] = useState("Vehari");
 
   // Potential Register Unit Action Modals
@@ -599,7 +605,7 @@ export default function HomePage({
   const [newSubclassCode, setNewSubclassCode] = useState("3(i)");
   const [newTertiaryCode, setNewTertiaryCode] = useState("3(i)(b)");
   const [newRuleId, setNewRuleId] = useState("PFT-3.i.b"); // Default: Commercial Establishment (Others - Vehari) -> PKR 4,000
-  const [newCircleName, setNewCircleName] = useState("Vehari Circle I (City / Commercial)");
+  const [newCircleName, setNewCircleName] = useState("Circle 1");
   const [newTehsil, setNewTehsil] = useState("Vehari");
   const [newOpeningArrears, setNewOpeningArrears] = useState<number>(0);
 
@@ -824,6 +830,16 @@ export default function HomePage({
 
     try {
       localStorage.removeItem("ptas_pilot_vehari_v3");
+      localStorage.removeItem("ptas_pilot_vehari_v2");
+      localStorage.removeItem("ptas_pilot_vehari_v1");
+      localStorage.removeItem("ptas_potential_units_v2");
+      localStorage.removeItem("ptas_potential_units_v1");
+      localStorage.removeItem("ptas_pft2_challans_v3");
+      localStorage.removeItem("ptas_statutory_receipts_v3");
+      localStorage.removeItem("ptas_enforcement_appeals_v1");
+      localStorage.removeItem("ptas_enforcement_discontinuances_v1");
+      localStorage.removeItem("ptas_enforcement_refunds_v1");
+      localStorage.removeItem("ptas_enforcement_clearance_v1");
 
       if (typeof window !== "undefined") {
         window.addEventListener("focus", handleFocus);
@@ -1073,7 +1089,11 @@ export default function HomePage({
     if (!selectedStatutoryRule) return "";
     try {
       return generateUinForUnit({
-        jurisdiction: VEHARI_PILOT_JURISDICTION,
+        jurisdiction: {
+          districtCode: "237",
+          tehsilCode: getTehsilCode(newTehsil),
+          circleCode: getCircleCode(newCircleName)
+        },
         rule: selectedStatutoryRule,
         allRules,
         sequenceNumber: units.length + 1
@@ -1081,7 +1101,7 @@ export default function HomePage({
     } catch {
       return "";
     }
-  }, [selectedStatutoryRule, allRules, units.length]);
+  }, [selectedStatutoryRule, allRules, units.length, newTehsil, newCircleName]);
 
   // Classification Helpers for Potential Units Modal (matches Survey Add Modal)
   const potAvailableRulesForCategory = useMemo(() => {
@@ -1166,12 +1186,14 @@ export default function HomePage({
     if (!potSelectedStatutoryRule) return "";
     try {
       const seq = potentialUnits.length + 1;
-      const basePin = `237-00101061102${seq.toString().padStart(4, "0")}-01`;
+      const tehCode = getTehsilCode(potNewTehsil);
+      const cirCode = getCircleCode(potNewCircleName);
+      const basePin = `237-${tehCode}${cirCode}061102${seq.toString().padStart(4, "0")}-01`;
       return formatPotentialPin(basePin);
     } catch {
       return "";
     }
-  }, [potSelectedStatutoryRule, potentialUnits.length]);
+  }, [potSelectedStatutoryRule, potentialUnits.length, potNewTehsil, potNewCircleName]);
 
   // Circle Localities dynamically extracted from system database for each circle
   const circleLocalities = useMemo(() => {
@@ -1383,6 +1405,7 @@ export default function HomePage({
         address: newAddress.trim(),
         locality: newLocality.trim() || undefined,
         circleName: newCircleName,
+        tehsil: newTehsil,
         statutoryRuleId: rule.rule_id,
         statutoryRule: rule,
         categoryCode: rule.category_code,
@@ -1441,6 +1464,8 @@ export default function HomePage({
     setNewIdentifierValue("");
     setNewAddress("");
     setNewLocality("");
+    setNewCircleName("Circle 1");
+    setNewTehsil("Vehari");
     setNewOpeningArrears(0);
     setNewCategoryCode("3");
     setNewSubclassCode("3(i)");
@@ -4178,11 +4203,10 @@ export default function HomePage({
     setNewIdentifierValue("");
     setNewAddress("");
     setNewLocality("");
-    const circle = defaultCircle || "Vehari Circle I (City / Commercial)";
+    const circle = normalizeCircleName(defaultCircle || officer.jurisdictionName || "Circle 1");
     setNewCircleName(circle);
-    if (circle.includes("Burewala")) setNewTehsil("Burewala");
-    else if (circle.includes("Mailsi")) setNewTehsil("Mailsi");
-    else setNewTehsil("Vehari");
+    const defaultTehsil = getDefaultTehsilForCircle(circle);
+    setNewTehsil(defaultTehsil);
     setNewCategoryCode("1");
     setNewSubclassCode("1(i)");
     setNewTertiaryCode("");
@@ -4199,8 +4223,10 @@ export default function HomePage({
     setPotNewIdValue("");
     setPotNewAddress("");
     setPotNewLocality("");
-    setPotNewCircleName("Vehari Circle I (City / Commercial)");
-    setPotNewTehsil("Vehari");
+    const circle = normalizeCircleName(officer.jurisdictionName || "Circle 1");
+    setPotNewCircleName(circle);
+    const defaultTehsil = getDefaultTehsilForCircle(circle);
+    setPotNewTehsil(defaultTehsil);
     setPotNewCategoryCode("1");
     setPotNewSubclassCode("1(i)");
     setPotNewTertiaryCode("");
@@ -4225,11 +4251,10 @@ export default function HomePage({
     setPotNewIdValue(pot.identifierValue);
     setPotNewAddress(pot.address);
     setPotNewLocality(pot.locality || "");
-    const circleName = pot.circleName || "Vehari Circle I (City / Commercial)";
+    const circleName = normalizeCircleName(pot.circleName || "Circle 1");
     setPotNewCircleName(circleName);
-    if (circleName.includes("Burewala")) setPotNewTehsil("Burewala");
-    else if (circleName.includes("Mailsi")) setPotNewTehsil("Mailsi");
-    else setPotNewTehsil("Vehari");
+    const tehsilName = pot.tehsil || getDefaultTehsilForCircle(circleName) || "Vehari";
+    setPotNewTehsil(tehsilName);
 
     setPotNewCategoryCode(pot.categoryCode);
     setPotNewSubclassCode(pot.subclassificationCode || "");
@@ -4255,19 +4280,17 @@ export default function HomePage({
       }, 0) + 1;
 
     const potNum = `POT-${nextSeq.toString().padStart(4, "0")}`;
-    const basePin = `237-00101061102${nextSeq.toString().padStart(4, "0")}-01`;
+    const tehCode = getTehsilCode(potNewTehsil);
+    const cirCode = getCircleCode(potNewCircleName);
+    const basePin = `237-${tehCode}${cirCode}061102${nextSeq.toString().padStart(4, "0")}-01`;
     const pinNumber = formatPotentialPin(basePin);
 
     const rule = potSelectedStatutoryRule || getAllStatutoryRules()[0]!;
 
-    let circleId = "00000000-0000-4000-8000-000000000004";
-    if (potNewCircleName.includes("Burewala")) {
-      circleId = "00000000-0000-4000-8000-000000000003";
-    } else if (potNewCircleName.includes("Mailsi")) {
-      circleId = "00000000-0000-4000-8000-000000000002";
-    } else if (potNewCircleName.includes("Circle II")) {
-      circleId = "00000000-0000-4000-8000-000000000005";
-    }
+    const matchedCircle = DISTRICT_VEHARI_CIRCLES.find(
+      (c) => c.name === normalizeCircleName(potNewCircleName) || c.id === potNewCircleName
+    );
+    const circleId = matchedCircle?.id || "00000000-0000-4000-8000-000000000004";
 
     if (editingPotentialUnitId) {
       const existing = potentialUnits.find((p) => p.id === editingPotentialUnitId);
@@ -4290,6 +4313,7 @@ export default function HomePage({
           locality: potNewLocality.trim() || "Vehari City Commercial Zone",
           circleId,
           circleName: potNewCircleName,
+          tehsil: potNewTehsil,
           districtName: "Vehari",
           categoryCode: rule.category_code,
           categoryName: rule.category,
@@ -4331,6 +4355,7 @@ export default function HomePage({
       locality: potNewLocality.trim() || "Vehari City Commercial Zone",
       circleId,
       circleName: potNewCircleName,
+      tehsil: potNewTehsil,
       districtName: "Vehari",
       categoryCode: rule.category_code,
       categoryName: rule.category,
@@ -5347,11 +5372,10 @@ export default function HomePage({
     setNewIdentifierValue(u.identifierValue);
     setNewAddress(u.address);
     setNewLocality(u.locality || "");
-    const circleName = u.circleName || "Vehari Circle I (City / Commercial)";
+    const circleName = normalizeCircleName(u.circleName || "Circle 1");
     setNewCircleName(circleName);
-    if (circleName.includes("Burewala")) setNewTehsil("Burewala");
-    else if (circleName.includes("Mailsi")) setNewTehsil("Mailsi");
-    else setNewTehsil("Vehari");
+    const tehsilName = u.tehsil || getDefaultTehsilForCircle(circleName) || "Vehari";
+    setNewTehsil(tehsilName);
 
     setNewCategoryCode(u.statutoryRule.category_code);
     setNewSubclassCode(u.statutoryRule.subclassification_code || "");
@@ -16309,33 +16333,33 @@ export default function HomePage({
                           onChange={(e) => {
                             const c = e.target.value;
                             setNewCircleName(c);
-                            if (c.includes("Burewala")) setNewTehsil("Burewala");
-                            else if (c.includes("Mailsi")) setNewTehsil("Mailsi");
-                            else setNewTehsil("Vehari");
+                            setNewTehsil(getDefaultTehsilForCircle(c));
                           }}
                         >
-                          <option value="Vehari Circle I (City / Commercial)">
-                            Vehari Circle I (City / Commercial)
-                          </option>
-                          <option value="Vehari Circle II (Rural / Industrial)">
-                            Vehari Circle II (Rural / Industrial)
-                          </option>
-                          <option value="Burewala Circle">Burewala Circle</option>
-                          <option value="Mailsi Circle">Mailsi Circle</option>
+                          {DISTRICT_VEHARI_CIRCLES.map((c) => (
+                            <option key={c.id} value={c.name}>
+                              {c.name} ({c.code})
+                            </option>
+                          ))}
                         </select>
                       </div>
                       <div className="form-group">
                         <label htmlFor="new-tehsil" style={{ fontWeight: 600 }}>
-                          Administrative Tehsil
+                          Attached Tehsil *
                         </label>
-                        <input
+                        <select
                           id="new-tehsil"
-                          type="text"
-                          disabled
+                          disabled={!isEditable}
                           className="form-control"
                           value={newTehsil}
-                          style={{ background: "#f1f5f9", cursor: "not-allowed", color: "#475569" }}
-                        />
+                          onChange={(e) => setNewTehsil(e.target.value)}
+                        >
+                          {DISTRICT_VEHARI_TEHSILS.map((t) => (
+                            <option key={t} value={t}>
+                              Tehsil {t}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
 
@@ -25412,9 +25436,7 @@ export default function HomePage({
                         onChange={(e) => {
                           const circle = e.target.value;
                           setPotNewCircleName(circle);
-                          if (circle.includes("Burewala")) setPotNewTehsil("Burewala");
-                          else if (circle.includes("Mailsi")) setPotNewTehsil("Mailsi");
-                          else setPotNewTehsil("Vehari");
+                          setPotNewTehsil(getDefaultTehsilForCircle(circle));
                         }}
                         style={{
                           width: "100%",
@@ -25423,14 +25445,11 @@ export default function HomePage({
                           border: "1px solid #cbd5e1"
                         }}
                       >
-                        <option value="Vehari Circle I (City / Commercial)">
-                          Vehari Circle I (City / Commercial)
-                        </option>
-                        <option value="Vehari Circle II (Rural / Industrial)">
-                          Vehari Circle II (Rural / Industrial)
-                        </option>
-                        <option value="Burewala Circle">Burewala Circle</option>
-                        <option value="Mailsi Circle">Mailsi Circle</option>
+                        {DISTRICT_VEHARI_CIRCLES.map((c) => (
+                          <option key={c.id} value={c.name}>
+                            {c.name} ({c.code})
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -25443,21 +25462,25 @@ export default function HomePage({
                           marginBottom: "0.25rem"
                         }}
                       >
-                        Administrative Tehsil
+                        Attached Tehsil *
                       </label>
-                      <input
-                        type="text"
-                        disabled
+                      <select
+                        disabled={!isPotEditable}
                         value={potNewTehsil}
+                        onChange={(e) => setPotNewTehsil(e.target.value)}
                         style={{
                           width: "100%",
                           padding: "0.5rem",
                           borderRadius: "6px",
-                          border: "1px solid #cbd5e1",
-                          background: "#f1f5f9",
-                          color: "#475569"
+                          border: "1px solid #cbd5e1"
                         }}
-                      />
+                      >
+                        {DISTRICT_VEHARI_TEHSILS.map((t) => (
+                          <option key={t} value={t}>
+                            Tehsil {t}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 

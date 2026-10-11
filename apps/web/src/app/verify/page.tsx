@@ -2,8 +2,13 @@
 
 import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { loadPilotState, type StoredUnit } from "../../lib/pilot-store";
+import type { StoredUnit } from "../../lib/pilot-store";
 import { loadOperationalSurveyUnits } from "../../lib/operational-survey";
+import {
+  loadDurableChallanRegistry,
+  type Pft2ChallanRecord,
+  type StatutoryReceiptRecord
+} from "../../lib/challan-storage";
 import { verifyStatutoryDocument, type DocumentVerificationResult } from "../../lib/public-portal";
 
 export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: string }) {
@@ -20,14 +25,21 @@ export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: str
   const [hasSearched, setHasSearched] = useState(false);
 
   const [operationalUnits, setOperationalUnits] = useState<StoredUnit[]>([]);
+  const [liveChallans, setLiveChallans] = useState<Pft2ChallanRecord[]>([]);
+  const [liveReceipts, setLiveReceipts] = useState<StatutoryReceiptRecord[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    void loadOperationalSurveyUnits()
-      .then((units) => {
-        if (!cancelled && units) setOperationalUnits(units);
-      })
-      .catch(() => {});
+    void Promise.all([
+      loadOperationalSurveyUnits().catch(() => []),
+      loadDurableChallanRegistry().catch(() => ({ challans: [], receipts: [] }))
+    ]).then(([units, durable]) => {
+      if (!cancelled) {
+        if (units) setOperationalUnits(units);
+        if (durable.challans) setLiveChallans(durable.challans);
+        if (durable.receipts) setLiveReceipts(durable.receipts);
+      }
+    });
     return () => {
       cancelled = true;
     };
@@ -36,26 +48,29 @@ export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: str
   useEffect(() => {
     if (refParam) {
       setSearchQuery(refParam);
-      executeVerification(refParam, operationalUnits);
+      executeVerification(refParam, operationalUnits, liveChallans, liveReceipts);
     }
-  }, [refParam, operationalUnits]);
+  }, [refParam, operationalUnits, liveChallans, liveReceipts]);
 
-  const executeVerification = (query: string, currentUnits?: StoredUnit[]) => {
+  const executeVerification = (
+    query: string,
+    currentUnits?: StoredUnit[],
+    currentChallans?: Pft2ChallanRecord[],
+    currentReceipts?: StatutoryReceiptRecord[]
+  ) => {
     if (!query.trim()) return;
 
-    const state = loadPilotState();
     const effectiveUnits =
-      currentUnits && currentUnits.length > 0
-        ? currentUnits
-        : operationalUnits.length > 0
-          ? operationalUnits
-          : state.units;
+      currentUnits && currentUnits.length > 0 ? currentUnits : operationalUnits;
+    const effectiveChallans = currentChallans ?? liveChallans;
+    const effectiveReceipts = currentReceipts ?? liveReceipts;
+
     const verificationResult = verifyStatutoryDocument(
       query.trim(),
       effectiveUnits,
-      state.clearanceCertificates ?? [],
-      state.statutoryReceipts ?? [],
-      state.pft2Challans ?? []
+      [],
+      effectiveReceipts,
+      effectiveChallans
     );
 
     setResult(verificationResult);

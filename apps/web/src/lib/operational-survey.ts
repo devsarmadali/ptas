@@ -251,6 +251,7 @@ export function mapOperationalUnit(value: unknown): StoredUnit {
     pinNumber,
     provincialUin,
     circleName: asOptionalString(jurisdiction.name),
+    tehsil: asOptionalString(jurisdiction.tehsil) ?? asOptionalString(profile.tehsil) ?? "Vehari",
     districtName:
       asOptionalString(jurisdiction.district_name) ??
       asOptionalString(jurisdiction.parent_name) ??

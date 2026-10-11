@@ -4,6 +4,7 @@ import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { loadPilotState, type PilotState } from "../../../../lib/pilot-store";
 import { loadOperationalContext } from "../../../../lib/operational-survey";
+import { loadDurableChallanRegistry } from "../../../../lib/challan-storage";
 import { computeLedgerBalance } from "@ptas/domain";
 import {
   computeExecutiveMetrics,
@@ -41,9 +42,20 @@ function ReportViewContent() {
 
   useEffect(() => {
     let cancelled = false;
-    void loadOperationalContext()
-      .then(({ officer, units }) => {
-        if (!cancelled) setPilotState({ ...loadPilotState(), currentOfficer: officer, units });
+    void Promise.all([
+      loadOperationalContext(),
+      loadDurableChallanRegistry().catch(() => ({ challans: [], receipts: [] }))
+    ])
+      .then(([{ officer, units }, durable]) => {
+        if (!cancelled) {
+          setPilotState({
+            ...loadPilotState(),
+            currentOfficer: officer,
+            units,
+            pft2Challans: durable.challans ?? [],
+            statutoryReceipts: durable.receipts ?? []
+          });
+        }
       })
       .catch((error: unknown) => {
         if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));

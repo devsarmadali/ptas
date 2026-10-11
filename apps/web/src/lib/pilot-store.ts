@@ -56,6 +56,58 @@ export interface StoredUnitSnapshot {
  * Sourced directly from Board of Revenue / PTAS Field Survey Read Model.
  */
 export const CIRCLE_DATABASE_LOCALITIES: Record<string, readonly string[]> = {
+  "Circle 1": [
+    "Adda 27/WB",
+    "Adda 33/WB",
+    "Burewala Road",
+    "Choori Bazar",
+    "Club Road",
+    "Danewal",
+    "G Block",
+    "Ghalla Mandi",
+    "Hasilpur Road",
+    "Jinnah Road",
+    "Karkhana Bazar",
+    "Khanewal Chowk",
+    "Khanewal Road",
+    "Luddon Road",
+    "Machiwal",
+    "Madina Colony",
+    "Mian Channu Road",
+    "Multan Road",
+    "Muslim Town",
+    "Pakhi Morre",
+    "Peer Murad",
+    "Rail Bazar",
+    "Ratta Tiba",
+    "Sharqi Colony",
+    "Sirinagar Road",
+    "Tariq Bin Zayad Colony",
+    "V Chowk",
+    "Vehari City"
+  ],
+  "Circle 2": [
+    "Chungi No. 9",
+    "Grain Market (Galla Mandi)",
+    "Luddan Rural Market",
+    "Thingi Sub-Tehsil Market",
+    "Vehari Industrial Estate"
+  ],
+  "Circle 3": [
+    "Arifwala Road",
+    "Burewala Commercial Hub",
+    "Chichawatni Road",
+    "College Road",
+    "Grain Market Burewala",
+    "Multan Road Burewala"
+  ],
+  "Circle 4": [
+    "Colony Road",
+    "Hasilpur Road Mailsi",
+    "Mailsi Main Bazaar",
+    "Quaid-e-Azam Road",
+    "Tibba Sultanpur Market"
+  ],
   "Vehari Circle I (City / Commercial)": [
     "Adda 27/WB",
     "Adda 33/WB",
@@ -122,10 +174,14 @@ export function getCircleLocalities(
   const localities = new Set<string>();
   const normalizedTarget = (circleName || "").trim().toLowerCase();
 
+  const targetNorm = normalizeCircleName(circleName).toLowerCase();
+
   const isCircleMatch = (cName?: string) => {
     if (!cName) return false;
     const n = cName.trim().toLowerCase();
     if (n === normalizedTarget) return true;
+    const cNorm = normalizeCircleName(cName).toLowerCase();
+    if (cNorm === targetNorm) return true;
     if (normalizedTarget.includes("circle i") && n.includes("circle i")) return true;
     if (normalizedTarget.includes("circle ii") && n.includes("circle ii")) return true;
     if (normalizedTarget.includes("burewala") && n.includes("burewala")) return true;
@@ -173,6 +229,8 @@ export interface StoredUnit {
   readonly circleId: string;
   /** Human-readable Circle label returned by the jurisdiction-scoped database read model. */
   readonly circleName?: string | undefined;
+  /** Attached Tehsil for this unit's circle assignment. */
+  readonly tehsil?: string | undefined;
   /** Human-readable District label returned by the jurisdiction-scoped database read model. */
   readonly districtName?: string | undefined;
   readonly categoryCode: string;
@@ -247,55 +305,230 @@ export interface CircleMasterRecord {
   readonly id: string;
   readonly code: string;
   readonly name: string;
+  readonly circleNumber: number; // 1 to 10 within district
   readonly districtId: string;
   readonly districtName: string;
-  readonly tehsil: string;
+  readonly tehsil?: string; // Default attached tehsil, if any
   readonly description: string;
+  readonly aliases?: readonly string[];
 }
 
 /**
  * Predefined permanent administrative Circles for District Vehari.
- * Protected administrative master data — fixed by Government of Punjab gazette notification.
- * Cannot be renamed, deleted, or altered through user account operations.
+ * Circles 1 to 10 are numbered at the district level.
+ * Any tehsil of the district can be attached with any circle.
  */
 export const DISTRICT_VEHARI_CIRCLES: readonly CircleMasterRecord[] = [
   {
     id: CIRCLE_VEHARI_ID,
     code: "CIR-VHR-01",
-    name: "Vehari Circle I (City / Commercial)",
+    name: "Circle 1",
+    circleNumber: 1,
     districtId: VEHARI_DISTRICT_ID,
     districtName: "Vehari",
     tehsil: "Vehari",
-    description: "Vehari City Commercial Zone, Club Road Commercial Area, Karkhana Bazaar"
+    description: "Vehari City Commercial Zone, Club Road Commercial Area, Karkhana Bazaar",
+    aliases: ["Vehari Circle I (City / Commercial)", "Vehari Circle I", "Circle I"]
   },
   {
     id: CIRCLE_VEHARI_2_ID,
     code: "CIR-VHR-02",
-    name: "Vehari Circle II (Grain Market / Rural)",
+    name: "Circle 2",
+    circleNumber: 2,
     districtId: VEHARI_DISTRICT_ID,
     districtName: "Vehari",
     tehsil: "Vehari",
-    description: "Grain Market (Galla Mandi), Chungi No. 9, Luddan, Thingi Sub-Tehsil"
+    description: "Grain Market (Galla Mandi), Chungi No. 9, Luddan, Thingi Sub-Tehsil",
+    aliases: [
+      "Vehari Circle II (Grain Market / Rural)",
+      "Vehari Circle II (Rural / Industrial)",
+      "Vehari Circle II",
+      "Circle II"
+    ]
   },
   {
     id: CIRCLE_BUREWALA_ID,
     code: "CIR-BWL-01",
-    name: "Burewala Circle",
+    name: "Circle 3",
+    circleNumber: 3,
     districtId: VEHARI_DISTRICT_ID,
     districtName: "Vehari",
     tehsil: "Burewala",
-    description: "Burewala Commercial Hub, Grain Market, Chichawatni Road"
+    description: "Burewala Commercial Hub, Grain Market, Chichawatni Road",
+    aliases: ["Burewala Circle", "Circle III"]
   },
   {
     id: CIRCLE_MAILSI_ID,
     code: "CIR-MLS-01",
-    name: "Mailsi Circle",
+    name: "Circle 4",
+    circleNumber: 4,
     districtId: VEHARI_DISTRICT_ID,
     districtName: "Vehari",
     tehsil: "Mailsi",
-    description: "Mailsi Main Bazaar, Tibba Sultanpur, Colony Road"
+    description: "Mailsi Main Bazaar, Tibba Sultanpur, Colony Road",
+    aliases: ["Mailsi Circle", "Circle IV"]
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000008",
+    code: "CIR-VHR-05",
+    name: "Circle 5",
+    circleNumber: 5,
+    districtId: VEHARI_DISTRICT_ID,
+    districtName: "Vehari",
+    tehsil: "Vehari",
+    description: "Vehari District Circle 5"
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000009",
+    code: "CIR-VHR-06",
+    name: "Circle 6",
+    circleNumber: 6,
+    districtId: VEHARI_DISTRICT_ID,
+    districtName: "Vehari",
+    tehsil: "Burewala",
+    description: "Vehari District Circle 6"
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000010",
+    code: "CIR-VHR-07",
+    name: "Circle 7",
+    circleNumber: 7,
+    districtId: VEHARI_DISTRICT_ID,
+    districtName: "Vehari",
+    tehsil: "Mailsi",
+    description: "Vehari District Circle 7"
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000011",
+    code: "CIR-VHR-08",
+    name: "Circle 8",
+    circleNumber: 8,
+    districtId: VEHARI_DISTRICT_ID,
+    districtName: "Vehari",
+    tehsil: "Vehari",
+    description: "Vehari District Circle 8"
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000012",
+    code: "CIR-VHR-09",
+    name: "Circle 9",
+    circleNumber: 9,
+    districtId: VEHARI_DISTRICT_ID,
+    districtName: "Vehari",
+    tehsil: "Vehari",
+    description: "Vehari District Circle 9"
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000013",
+    code: "CIR-VHR-10",
+    name: "Circle 10",
+    circleNumber: 10,
+    districtId: VEHARI_DISTRICT_ID,
+    districtName: "Vehari",
+    tehsil: "Vehari",
+    description: "Vehari District Circle 10"
   }
 ];
+
+export const DISTRICT_VEHARI_TEHSILS: readonly string[] = ["Vehari", "Burewala", "Mailsi"];
+
+/**
+ * Normalizes any circle name, alias, or roman numeral to canonical "Circle N" label.
+ */
+export function normalizeCircleName(input?: string): string {
+  if (!input) return "Circle 1";
+  const trimmed = input.trim();
+  const lower = trimmed.toLowerCase();
+
+  if (lower.includes("circle 10") || lower.includes("circle x")) return "Circle 10";
+  if (
+    lower === "circle 1" ||
+    lower.includes("circle 1 ") ||
+    lower.includes("circle 1 (") ||
+    lower.includes("circle i (") ||
+    lower === "circle i" ||
+    lower.includes("circle i ") ||
+    lower.includes("city / commercial")
+  ) {
+    return "Circle 1";
+  }
+  if (
+    lower === "circle 2" ||
+    lower.includes("circle 2 ") ||
+    lower.includes("circle 2 (") ||
+    lower.includes("circle ii") ||
+    lower.includes("grain market / rural") ||
+    lower.includes("rural / industrial")
+  ) {
+    return "Circle 2";
+  }
+  if (
+    lower === "circle 3" ||
+    lower.includes("circle 3 ") ||
+    lower.includes("circle 3 (") ||
+    lower.includes("circle iii") ||
+    lower.includes("burewala")
+  ) {
+    return "Circle 3";
+  }
+  if (
+    lower === "circle 4" ||
+    lower.includes("circle 4 ") ||
+    lower.includes("circle 4 (") ||
+    lower.includes("circle iv") ||
+    lower.includes("mailsi")
+  ) {
+    return "Circle 4";
+  }
+  if (lower.includes("circle 5") || lower.includes("circle v")) return "Circle 5";
+  if (lower.includes("circle 6") || lower.includes("circle vi")) return "Circle 6";
+  if (lower.includes("circle 7") || lower.includes("circle vii")) return "Circle 7";
+  if (lower.includes("circle 8") || lower.includes("circle viii")) return "Circle 8";
+  if (lower.includes("circle 9") || lower.includes("circle ix")) return "Circle 9";
+
+  const numMatch = trimmed.match(/\b(?:circle\s*)?(\d{1,2})\b/i);
+  if (numMatch && numMatch[1]) {
+    const num = parseInt(numMatch[1], 10);
+    if (num >= 1 && num <= 10) return `Circle ${num}`;
+  }
+
+  return trimmed;
+}
+
+/**
+ * Returns the 2-digit zero-padded circle code ("01" to "10") for PIN/UIN generation.
+ */
+export function getCircleCode(circleName?: string): string {
+  const norm = normalizeCircleName(circleName);
+  const match = norm.match(/\d+/);
+  if (match) {
+    return match[0].padStart(2, "0");
+  }
+  return "01";
+}
+
+/**
+ * Returns the 3-digit zero-padded PBS tehsil code ("001"=Vehari, "002"=Burewala, "003"=Mailsi).
+ */
+export function getTehsilCode(tehsilName?: string): string {
+  if (!tehsilName) return "001";
+  const lower = tehsilName.trim().toLowerCase();
+  if (lower.includes("burewala")) return "002";
+  if (lower.includes("mailsi")) return "003";
+  return "001";
+}
+
+/**
+ * Returns the default attached tehsil for a given circle.
+ * Any tehsil within the district can still be attached or overridden.
+ */
+export function getDefaultTehsilForCircle(circleName?: string): string {
+  const norm = normalizeCircleName(circleName);
+  const found = DISTRICT_VEHARI_CIRCLES.find(
+    (c) => c.name === norm || (c.aliases && c.aliases.includes(circleName || ""))
+  );
+  return found?.tehsil || "Vehari";
+}
 
 export const FINANCIAL_YEAR_2026_27 = "FY-2026-2027";
 
@@ -625,6 +858,7 @@ export interface UserAccount {
   readonly officeAddress?: string | undefined;
   readonly assignedCircleId: string;
   readonly assignedCircleName: string;
+  readonly assignedTehsil?: string | undefined;
   readonly status: "ACTIVE" | "SUSPENDED" | "INACTIVE";
   readonly mobileNumber: string;
   readonly phone?: string | undefined;
@@ -1596,7 +1830,8 @@ export function createInitialUserAccounts(): UserAccount[] {
       officeName: "Tehsil Vehari",
       officeAddress: "Office of the Excise & Taxation Officer, District Courts Complex, Vehari",
       assignedCircleId: CIRCLE_VEHARI_ID,
-      assignedCircleName: "Vehari Circle I (City / Commercial)",
+      assignedCircleName: "Circle 1",
+      assignedTehsil: "Vehari",
       status: "ACTIVE",
       mobileNumber: "0300-1234567",
       phone: "067-3360000"
@@ -1607,7 +1842,7 @@ export function createInitialUserAccounts(): UserAccount[] {
       email: "inspector.vehari@punjab.gov.pk",
       role: "INSPECTOR",
       title: "Tax Inspector",
-      designation: "Tax Inspector (Vehari Circle I)",
+      designation: "Tax Inspector (Circle 1)",
       cnic: "36603-1234567-1",
       districtId: VEHARI_DISTRICT_ID,
       districtName: "Vehari",
@@ -1615,7 +1850,8 @@ export function createInitialUserAccounts(): UserAccount[] {
       officeName: "Tehsil Vehari",
       officeAddress: "Office of the Excise & Taxation Officer, District Courts Complex, Vehari",
       assignedCircleId: CIRCLE_VEHARI_ID,
-      assignedCircleName: "Vehari Circle I (City / Commercial)",
+      assignedCircleName: "Circle 1",
+      assignedTehsil: "Vehari",
       status: "ACTIVE",
       mobileNumber: "0301-9876543",
       phone: "0301-9876543"
@@ -1625,8 +1861,8 @@ export function createInitialUserAccounts(): UserAccount[] {
       name: "Tariq Mehmood",
       email: "inspector.vehari2@punjab.gov.pk",
       role: "INSPECTOR",
-      title: "Tax Inspector (Grain Market / Rural)",
-      designation: "Tax Inspector (Vehari Circle II)",
+      title: "Tax Inspector (Circle 2)",
+      designation: "Tax Inspector (Circle 2)",
       cnic: "36603-7654321-3",
       districtId: VEHARI_DISTRICT_ID,
       districtName: "Vehari",
@@ -1634,7 +1870,8 @@ export function createInitialUserAccounts(): UserAccount[] {
       officeName: "Tehsil Vehari",
       officeAddress: "Office of the Excise & Taxation Officer, District Courts Complex, Vehari",
       assignedCircleId: CIRCLE_VEHARI_2_ID,
-      assignedCircleName: "Vehari Circle II (Grain Market / Rural)",
+      assignedCircleName: "Circle 2",
+      assignedTehsil: "Vehari",
       status: "ACTIVE",
       mobileNumber: "0303-1122334",
       phone: "0303-1122334"
@@ -1644,8 +1881,8 @@ export function createInitialUserAccounts(): UserAccount[] {
       name: "Muhammad Rashid",
       email: "inspector.burewala@punjab.gov.pk",
       role: "INSPECTOR",
-      title: "Tax Inspector (Burewala)",
-      designation: "Tax Inspector (Burewala Circle)",
+      title: "Tax Inspector (Circle 3)",
+      designation: "Tax Inspector (Circle 3)",
       cnic: "36601-5544332-5",
       districtId: VEHARI_DISTRICT_ID,
       districtName: "Vehari",
@@ -1654,7 +1891,8 @@ export function createInitialUserAccounts(): UserAccount[] {
       officeAddress:
         "Sub-Divisional Office, Excise & Taxation Department, Tehsil Complex, Burewala",
       assignedCircleId: CIRCLE_BUREWALA_ID,
-      assignedCircleName: "Burewala Circle",
+      assignedCircleName: "Circle 3",
+      assignedTehsil: "Burewala",
       status: "ACTIVE",
       mobileNumber: "0304-5566778",
       phone: "0304-5566778"
@@ -1664,8 +1902,8 @@ export function createInitialUserAccounts(): UserAccount[] {
       name: "Abdul Ghafoor",
       email: "inspector.mailsi@punjab.gov.pk",
       role: "INSPECTOR",
-      title: "Tax Inspector (Mailsi)",
-      designation: "Tax Inspector (Mailsi Circle)",
+      title: "Tax Inspector (Circle 4)",
+      designation: "Tax Inspector (Circle 4)",
       cnic: "36602-8877665-7",
       districtId: VEHARI_DISTRICT_ID,
       districtName: "Vehari",
@@ -1673,7 +1911,8 @@ export function createInitialUserAccounts(): UserAccount[] {
       officeName: "Tehsil Mailsi",
       officeAddress: "Sub-Divisional Office, Excise & Taxation Department, Colony Road, Mailsi",
       assignedCircleId: CIRCLE_MAILSI_ID,
-      assignedCircleName: "Mailsi Circle",
+      assignedCircleName: "Circle 4",
+      assignedTehsil: "Mailsi",
       status: "ACTIVE",
       mobileNumber: "0305-9988776",
       phone: "0305-9988776"
@@ -1693,6 +1932,7 @@ export function createInitialUserAccounts(): UserAccount[] {
       officeAddress: "Regional Directorate of Excise & Taxation, LMQ Road, Multan",
       assignedCircleId: CIRCLE_VEHARI_ID,
       assignedCircleName: "All Circles (Division Multan)",
+      assignedTehsil: "Vehari",
       status: "ACTIVE",
       mobileNumber: "0302-5551234",
       phone: "061-9200000"
@@ -1778,14 +2018,15 @@ export const REFUNDS_STORAGE_KEY = "ptas_enforcement_refunds_v1";
 export const CLEARANCE_STORAGE_KEY = "ptas_enforcement_clearance_v1";
 
 export function loadPersistedAppeals(units?: StoredUnit[]): AppealRecord[] {
-  if (typeof window === "undefined") return createInitialAppeals(units);
+  void units;
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(APPEALS_STORAGE_KEY);
-    if (!raw) return createInitialAppeals(units);
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : createInitialAppeals(units);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [];
   } catch {
-    return createInitialAppeals(units);
+    return [];
   }
 }
 
@@ -1799,16 +2040,15 @@ export function savePersistedAppeals(appeals: AppealRecord[]): void {
 }
 
 export function loadPersistedDiscontinuances(units?: StoredUnit[]): DiscontinuanceRecord[] {
-  if (typeof window === "undefined") return createInitialDiscontinuances(units);
+  void units;
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(DISCONTINUANCES_STORAGE_KEY);
-    if (!raw) return createInitialDiscontinuances(units);
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0
-      ? parsed
-      : createInitialDiscontinuances(units);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [];
   } catch {
-    return createInitialDiscontinuances(units);
+    return [];
   }
 }
 
@@ -1822,16 +2062,15 @@ export function savePersistedDiscontinuances(disc: DiscontinuanceRecord[]): void
 }
 
 export function loadPersistedRefundAdjustments(units?: StoredUnit[]): RefundAdjustmentRecord[] {
-  if (typeof window === "undefined") return createInitialRefundAdjustments(units);
+  void units;
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(REFUNDS_STORAGE_KEY);
-    if (!raw) return createInitialRefundAdjustments(units);
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0
-      ? parsed
-      : createInitialRefundAdjustments(units);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [];
   } catch {
-    return createInitialRefundAdjustments(units);
+    return [];
   }
 }
 
@@ -1847,16 +2086,15 @@ export function savePersistedRefundAdjustments(refunds: RefundAdjustmentRecord[]
 export function loadPersistedClearanceCertificates(
   units?: StoredUnit[]
 ): ClearanceCertificateRecord[] {
-  if (typeof window === "undefined") return createInitialClearanceCertificates(units);
+  void units;
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(CLEARANCE_STORAGE_KEY);
-    if (!raw) return createInitialClearanceCertificates(units);
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0
-      ? parsed
-      : createInitialClearanceCertificates(units);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [];
   } catch {
-    return createInitialClearanceCertificates(units);
+    return [];
   }
 }
 

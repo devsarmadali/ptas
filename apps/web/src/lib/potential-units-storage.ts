@@ -48,6 +48,7 @@ export interface PotentialUnitRecord {
   readonly locality?: string | undefined;
   readonly circleId: string;
   readonly circleName?: string | undefined;
+  readonly tehsil?: string | undefined;
   readonly districtName?: string | undefined;
   readonly categoryCode: string;
   readonly categoryName: string;
@@ -149,7 +150,8 @@ export function convertPotentialUnitToStoredUnit(pot: PotentialUnitRecord): Stor
     address: pot.address,
     locality: pot.locality || "Vehari City Commercial Zone",
     circleId: pot.circleId,
-    circleName: pot.circleName ?? "Vehari Circle I (City / Commercial)",
+    circleName: pot.circleName ?? "Circle 1",
+    tehsil: pot.tehsil ?? "Vehari",
     districtName: pot.districtName ?? "Vehari",
     categoryCode: pot.categoryCode || rule.category_code,
     subclassificationCode,
@@ -424,7 +426,8 @@ export async function fetchPotentialAssessmentUnitsFromDatabase(): Promise<
         address: String(row.address || "Vehari"),
         locality: row.locality ? String(row.locality) : undefined,
         circleId: String(row.circle_id || "00000000-0000-4000-8000-000000000004"),
-        circleName: String(row.circle_name || "Vehari Circle I (City / Commercial)"),
+        circleName: String(row.circle_name || "Circle 1"),
+        tehsil: row.tehsil ? String(row.tehsil) : undefined,
         districtName: String(row.district_name || "Vehari"),
         categoryCode: catCode,
         categoryName: String(row.category_name || rule.category),

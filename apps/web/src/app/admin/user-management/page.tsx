@@ -6,6 +6,8 @@ import {
   type UserAccount,
   type UserManagementAuditRecord,
   DISTRICT_VEHARI_CIRCLES,
+  DISTRICT_VEHARI_TEHSILS,
+  getDefaultTehsilForCircle,
   ADMIN_OFFICER,
   loadPersistedUserAccounts,
   savePersistedUserAccounts,
@@ -29,6 +31,7 @@ export default function UserManagementPage() {
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
   const [newName, setNewName] = useState("");
   const [selectedCircleId, setSelectedCircleId] = useState(DISTRICT_VEHARI_CIRCLES[0]?.id ?? "");
+  const [selectedTehsil, setSelectedTehsil] = useState("Vehari");
   const [newMobile, setNewMobile] = useState("");
   const [newCnic, setNewCnic] = useState("");
   const [newDesignation, setNewDesignation] = useState("");
@@ -146,7 +149,15 @@ export default function UserManagementPage() {
   const handleOpenEditUser = (u: UserAccount) => {
     setEditingUser(u);
     setNewName(u.name);
-    setSelectedCircleId(u.assignedCircleId || DISTRICT_VEHARI_CIRCLES[0]?.id || "");
+    const circleId = u.assignedCircleId || DISTRICT_VEHARI_CIRCLES[0]?.id || "";
+    setSelectedCircleId(circleId);
+    const targetC = DISTRICT_VEHARI_CIRCLES.find((c) => c.id === circleId);
+    setSelectedTehsil(
+      u.assignedTehsil ||
+        targetC?.tehsil ||
+        getDefaultTehsilForCircle(u.assignedCircleName) ||
+        "Vehari"
+    );
     setNewMobile(u.mobileNumber || u.phone || "");
     setNewCnic(u.cnic || "");
     setNewDesignation(u.designation || u.title || "");
@@ -198,6 +209,9 @@ export default function UserManagementPage() {
           name: newName.trim() || u.name,
           assignedCircleId: isInspector ? u.assignedCircleId : targetCircle.id,
           assignedCircleName: isInspector ? u.assignedCircleName : targetCircle.name,
+          assignedTehsil: isInspector
+            ? u.assignedTehsil || targetCircle.tehsil || "Vehari"
+            : selectedTehsil,
           mobileNumber: newMobile.trim() || u.mobileNumber,
           phone: newMobile.trim() || u.phone,
           cnic: newCnic.trim() || u.cnic,
@@ -1008,7 +1022,42 @@ export default function UserManagementPage() {
                 >
                   {isInspector
                     ? "🔒 Circle assignment is a statutory administrative function of the Assessing Authority / ETO."
-                    : "✓ Fixed Administrative Structure: Circle names and boundaries are statutory entities."}
+                    : "✓ Fixed Administrative Structure: Circles 1 to 10 are numbered at the district level."}
+                </span>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: "1rem" }}>
+                <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                  Attached Tehsil (Sub-District Jurisdiction):
+                </label>
+                <select
+                  className="form-control"
+                  value={selectedTehsil}
+                  onChange={(e) => setSelectedTehsil(e.target.value)}
+                  disabled={isInspector}
+                  style={{
+                    fontWeight: 600,
+                    background: isInspector ? "#f1f5f9" : "#ffffff",
+                    cursor: isInspector ? "not-allowed" : "pointer"
+                  }}
+                >
+                  {DISTRICT_VEHARI_TEHSILS.map((t) => (
+                    <option key={t} value={t}>
+                      Tehsil {t}
+                    </option>
+                  ))}
+                </select>
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    color: isInspector ? "#92400e" : "#065f46",
+                    display: "block",
+                    marginTop: "0.3rem"
+                  }}
+                >
+                  {isInspector
+                    ? "🔒 Tehsil attachment is governed by the Assessing Authority / ETO."
+                    : "✓ Tehsil attachment: Any tehsil within the district can be attached to any circle."}
                 </span>
               </div>
 
