@@ -6584,7 +6584,7 @@ export default function HomePage({
                                 )}
                               </td>
                               <td style={{ whiteSpace: "nowrap" }}>
-                                {u.pinNumber ? (
+                                {u.pinNumber || u.provincialUin ? (
                                   <span
                                     style={{
                                       fontFamily: "monospace",
@@ -6593,7 +6593,7 @@ export default function HomePage({
                                       fontWeight: 600
                                     }}
                                   >
-                                    {u.pinNumber}
+                                    {u.pinNumber || u.provincialUin}
                                   </span>
                                 ) : (
                                   <span

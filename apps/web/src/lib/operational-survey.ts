@@ -53,6 +53,10 @@ function asPublicBusinessIdentifier(value: unknown): string | undefined {
   return identifier && !UUID_PATTERN.test(identifier) ? identifier : undefined;
 }
 
+function isUinPattern(val?: string | null): boolean {
+  return typeof val === "string" && /^\d{3}-/.test(val) && val.length >= 15;
+}
+
 function asNumber(value: unknown, fallback = 0): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim() !== "") {
@@ -194,13 +198,6 @@ export function mapOperationalUnit(value: unknown): StoredUnit {
   const rawLegacy = asOptionalString(profile.legacy_demand_no);
   const rawDemandRowPdn = asOptionalString(demandRow.permanent_demand_no);
 
-  const isUinPattern = (val?: string | null): boolean =>
-    typeof val === "string" && /^\d{3}-/.test(val) && val.length >= 15;
-
-  const pinNumber = rawPdn?.startsWith("PIN-")
-    ? rawPdn
-    : (asOptionalString(profile.pin_number) ?? undefined);
-
   const provincialUin =
     (isUinPattern(rawPdn) ? rawPdn : null) ??
     (isUinPattern(rawLegacy) ? rawLegacy : null) ??
@@ -210,6 +207,12 @@ export function mapOperationalUnit(value: unknown): StoredUnit {
       ? asString(profile.provincial_uin)
       : null) ??
     "";
+
+  const pinNumber =
+    (isUinPattern(rawPdn) ? rawPdn : null) ??
+    (rawPdn?.startsWith("PIN-") ? rawPdn : null) ??
+    asOptionalString(profile.pin_number) ??
+    (provincialUin || undefined);
 
   const demandNumber =
     (!isUinPattern(rawLegacy) ? rawLegacy : null) ??
