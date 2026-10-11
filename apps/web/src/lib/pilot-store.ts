@@ -1094,11 +1094,11 @@ const EMPTY_OFFICER: MockOfficer = {
   id: "",
   name: "",
   email: "",
-  role: "ADMIN",
+  role: "INSPECTOR",
   title: "",
   jurisdictionId: "",
   jurisdictionName: "",
-  jurisdictionTier: "REGION",
+  jurisdictionTier: "CIRCLE",
   badgeText: ""
 };
 
@@ -2000,13 +2000,27 @@ export function savePersistedUserAccounts(accounts: UserAccount[]): void {
   }
 }
 
+function isSafePersistedRecord(item: unknown): item is Record<string, unknown> {
+  return (
+    typeof item === "object" &&
+    item !== null &&
+    !Array.isArray(item) &&
+    !Object.prototype.hasOwnProperty.call(item, "__proto__")
+  );
+}
+
 export function loadPersistedUserAuditLogs(): UserManagementAuditRecord[] {
   if (typeof window === "undefined") return createInitialUserAuditLogs();
   try {
     const raw = localStorage.getItem(USER_AUDIT_LOGS_STORAGE_KEY);
     if (!raw) return createInitialUserAuditLogs();
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : createInitialUserAuditLogs();
+    return Array.isArray(parsed) && parsed.length > 0
+      ? (parsed.filter(
+          (item): item is UserManagementAuditRecord =>
+            isSafePersistedRecord(item) && typeof item.id === "string"
+        ) as UserManagementAuditRecord[])
+      : createInitialUserAuditLogs();
   } catch {
     return createInitialUserAuditLogs();
   }
@@ -2033,7 +2047,11 @@ export function loadPersistedAppeals(units?: StoredUnit[]): AppealRecord[] {
     const raw = localStorage.getItem(APPEALS_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [];
+    return Array.isArray(parsed) && parsed.length > 0
+      ? (parsed.filter(
+          (item): item is AppealRecord => isSafePersistedRecord(item) && typeof item.id === "string"
+        ) as AppealRecord[])
+      : [];
   } catch {
     return [];
   }
@@ -2055,7 +2073,12 @@ export function loadPersistedDiscontinuances(units?: StoredUnit[]): Discontinuan
     const raw = localStorage.getItem(DISCONTINUANCES_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [];
+    return Array.isArray(parsed) && parsed.length > 0
+      ? (parsed.filter(
+          (item): item is DiscontinuanceRecord =>
+            isSafePersistedRecord(item) && typeof item.id === "string"
+        ) as DiscontinuanceRecord[])
+      : [];
   } catch {
     return [];
   }
@@ -2077,7 +2100,12 @@ export function loadPersistedRefundAdjustments(units?: StoredUnit[]): RefundAdju
     const raw = localStorage.getItem(REFUNDS_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [];
+    return Array.isArray(parsed) && parsed.length > 0
+      ? (parsed.filter(
+          (item): item is RefundAdjustmentRecord =>
+            isSafePersistedRecord(item) && typeof item.id === "string"
+        ) as RefundAdjustmentRecord[])
+      : [];
   } catch {
     return [];
   }
@@ -2101,7 +2129,12 @@ export function loadPersistedClearanceCertificates(
     const raw = localStorage.getItem(CLEARANCE_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [];
+    return Array.isArray(parsed) && parsed.length > 0
+      ? (parsed.filter(
+          (item): item is ClearanceCertificateRecord =>
+            isSafePersistedRecord(item) && typeof item.id === "string"
+        ) as ClearanceCertificateRecord[])
+      : [];
   } catch {
     return [];
   }

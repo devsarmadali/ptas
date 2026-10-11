@@ -19,7 +19,7 @@ import type {
   DocumentAuthorizationContext,
   DocumentGenerationOptions
 } from "./types";
-import type { MockOfficer } from "../pilot-store";
+import type { MockOfficer, PilotAuditItem } from "../pilot-store";
 
 export interface DownloadPdfParams {
   readonly type: OfficialDocumentType;
@@ -27,6 +27,7 @@ export interface DownloadPdfParams {
   readonly defaultFilename?: string;
   readonly authContext?: DocumentAuthorizationContext;
   readonly options?: DocumentGenerationOptions;
+  readonly onAudit?: ((auditItem: PilotAuditItem) => void) | undefined;
 }
 
 async function resolveBrowserDocumentActor(): Promise<{
@@ -58,6 +59,7 @@ async function resolveBrowserDocumentActor(): Promise<{
 /**
  * Downloads an official statutory document as a vector PDF.
  * Never touches the DOM, never relies on viewport size, scroll position, or zoom.
+ * Emits an official statutory audit record on successful generation and export.
  *
  * On failure: logs the error, re-throws it so callers can display toast/alert feedback.
  * Returns true on success, false on failure.
@@ -85,6 +87,40 @@ export async function downloadOfficialPdf(params: DownloadPdfParams): Promise<bo
       `${params.type.toLowerCase().replace(/_/g, "-")}.pdf`;
 
     const safeFilename = filename.endsWith(".pdf") ? filename : `${filename}.pdf`;
+
+    const targetDesc =
+      typeof params.documentIdOrData === "string"
+        ? params.documentIdOrData
+        : typeof (params.documentIdOrData as { id?: unknown })?.id === "string"
+          ? String((params.documentIdOrData as { id?: unknown }).id)
+          : params.type;
+
+    const auditItem: PilotAuditItem = {
+      id: `audit-pdf-export-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      eventType: "STATUTORY_DOCUMENT_EXPORTED",
+      actorName: browserActor?.officer.name || verifiedAuthContext?.officerRole || "SYSTEM",
+      actorRole: browserActor?.officer.role || verifiedAuthContext?.officerRole || "INSPECTOR",
+      target: `${params.type}: ${targetDesc}`,
+      timestamp: new Date().toISOString(),
+      correlationId: `export-${Date.now()}`,
+      details: `Official statutory vector PDF exported: ${safeFilename}`
+    };
+
+    if (params.onAudit) {
+      try {
+        params.onAudit(auditItem);
+      } catch (auditErr) {
+        console.warn("[downloadOfficialPdf] Audit callback failure:", auditErr);
+      }
+    }
+
+    if (typeof window !== "undefined") {
+      try {
+        window.dispatchEvent(new CustomEvent("ptas:audit-event", { detail: auditItem }));
+      } catch {
+        // Silently continue if custom event dispatch is unsupported
+      }
+    }
 
     if (typeof window !== "undefined") {
       doc.save(safeFilename);

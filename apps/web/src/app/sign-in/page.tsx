@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { Suspense, useState } from "react";
 import type { Route } from "next";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   getPasswordResetRedirectUrl,
   getSupabaseAuthClient,
@@ -12,8 +12,28 @@ import {
 
 const asRoute = (path: string): Route => path as unknown as Route;
 
-export default function SignInPage() {
+function getSafeReturnUrl(target: string | null): string {
+  if (!target) return "/assessment/pft3";
+  const trimmed = target.trim();
+  if (
+    trimmed.startsWith("/") &&
+    !trimmed.startsWith("//") &&
+    !trimmed.startsWith("/\\") &&
+    !trimmed.includes("\\") &&
+    !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)
+  ) {
+    return trimmed;
+  }
+  return "/assessment/pft3";
+}
+
+function SignInForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnParam =
+    searchParams.get("returnUrl") || searchParams.get("redirect") || searchParams.get("next");
+  const destination = getSafeReturnUrl(returnParam);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -36,7 +56,7 @@ export default function SignInPage() {
       setStatusMessage(
         `Authenticated as ${result.officer.name} (${result.officer.role}) for ${result.officer.jurisdictionName}.`
       );
-      router.push(asRoute("/assessment/pft3"));
+      router.push(asRoute(destination));
     } catch {
       setErrorMessage("Authentication failed. Please try again.");
     } finally {
@@ -280,5 +300,26 @@ export default function SignInPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense
+      fallback={
+        <main
+          style={{
+            minHeight: "100vh",
+            display: "grid",
+            placeItems: "center",
+            background: "linear-gradient(180deg, #ecfdf5 0%, #f8fafc 52%, #e2e8f0 100%)"
+          }}
+        >
+          <div style={{ color: "#047857", fontWeight: 600 }}>Loading PTAS Sign In…</div>
+        </main>
+      }
+    >
+      <SignInForm />
+    </Suspense>
   );
 }

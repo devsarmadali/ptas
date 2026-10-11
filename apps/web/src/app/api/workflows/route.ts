@@ -27,6 +27,22 @@ const RPC_BY_COMMAND = {
 } as const;
 
 export async function POST(request: Request): Promise<NextResponse> {
+  const origin = request.headers.get("origin");
+  const host = request.headers.get("host");
+  if (origin && host) {
+    try {
+      const originHost = new URL(origin).host;
+      if (originHost !== host && !originHost.endsWith(".punjab.gov.pk")) {
+        return NextResponse.json(
+          { error: "Cross-origin workflow request rejected" },
+          { status: 403 }
+        );
+      }
+    } catch {
+      return NextResponse.json({ error: "Malformed origin header" }, { status: 400 });
+    }
+  }
+
   const authorization = request.headers.get("authorization");
   if (!authorization?.startsWith("Bearer ")) {
     return NextResponse.json({ error: "Authenticated bearer session required" }, { status: 401 });
@@ -56,10 +72,21 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const { data, error } = await supabase.rpc(rpc, command.payload as never);
   if (error) {
+    console.error(`[PTAS Workflow RPC Error] ${rpc}:`, {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint
+    });
     const conflict = error.code === "40001" || error.code === "23505";
     const forbidden = error.code === "42501";
+    const sanitizedMessage = conflict
+      ? "Conflict: Record has been concurrently updated or duplicate identifier exists."
+      : forbidden
+        ? "Access denied: Insufficient privileges or jurisdiction mismatch for this statutory command."
+        : "The submitted workflow command could not be processed according to statutory validation rules.";
     return NextResponse.json(
-      { error: error.message, code: error.code },
+      { error: sanitizedMessage, code: error.code },
       { status: conflict ? 409 : forbidden ? 403 : 422 }
     );
   }

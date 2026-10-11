@@ -282,11 +282,11 @@ const UNAUTHENTICATED_OFFICER_CONTEXT: MockOfficer = {
   id: "",
   name: "",
   email: "",
-  role: "ADMIN",
+  role: "INSPECTOR",
   title: "",
   jurisdictionId: "",
   jurisdictionName: "",
-  jurisdictionTier: "REGION",
+  jurisdictionTier: "CIRCLE",
   badgeText: ""
 };
 
@@ -830,6 +830,12 @@ export default function HomePage({
     const handleFocus = () => {
       void refreshOperationalSurveyUnits().catch(() => undefined);
     };
+    const handleAuditEvent = (event: Event) => {
+      const customEvent = event as CustomEvent<PilotAuditItem>;
+      if (customEvent.detail) {
+        setAuditLogs((prev) => [customEvent.detail, ...prev]);
+      }
+    };
 
     try {
       localStorage.removeItem("ptas_pilot_vehari_v3");
@@ -865,7 +871,13 @@ export default function HomePage({
         setUnits([]);
         setIsLoadingOperationalUnits(false);
         setAuthStatus("UNAUTHENTICATED");
-        router.replace(asRoute("/sign-in"));
+        const currentPath =
+          pathname ?? (typeof window !== "undefined" ? window.location.pathname : "");
+        const returnQuery =
+          currentPath && currentPath !== "/" && currentPath !== "/sign-in"
+            ? `?returnUrl=${encodeURIComponent(currentPath)}`
+            : "";
+        router.replace(asRoute(`/sign-in${returnQuery}`));
       };
 
       const acceptAuthenticatedUser = async (
@@ -910,17 +922,28 @@ export default function HomePage({
           rejectUnauthenticatedSession();
         }
       });
+
+      if (typeof window !== "undefined") {
+        window.addEventListener("ptas:audit-event", handleAuditEvent);
+      }
     } catch (err) {
       console.error("Critical error in HomePage mount useEffect:", err);
       setOfficer(UNAUTHENTICATED_OFFICER_CONTEXT);
       setAuthStatus("UNAUTHENTICATED");
-      router.replace(asRoute("/sign-in"));
+      const currentPath =
+        pathname ?? (typeof window !== "undefined" ? window.location.pathname : "");
+      const returnQuery =
+        currentPath && currentPath !== "/" && currentPath !== "/sign-in"
+          ? `?returnUrl=${encodeURIComponent(currentPath)}`
+          : "";
+      router.replace(asRoute(`/sign-in${returnQuery}`));
     }
 
     return () => {
       sub?.unsubscribe();
       if (typeof window !== "undefined") {
         window.removeEventListener("focus", handleFocus);
+        window.removeEventListener("ptas:audit-event", handleAuditEvent);
       }
     };
   }, []);

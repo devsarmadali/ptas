@@ -29,7 +29,9 @@ export async function GET(
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,
-        "Cache-Control": "private, no-cache, no-store, must-revalidate"
+        "Cache-Control": "private, no-cache, no-store, must-revalidate",
+        Vary: "Authorization, Accept-Encoding",
+        "X-Content-Type-Options": "nosniff"
       }
     });
   } catch (error) {
