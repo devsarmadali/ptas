@@ -2500,31 +2500,70 @@ export default function HomePage({
     return new Set(
       potentialUnits
         .filter((p) => p.status === "ACTIVE")
-        .flatMap((p) => [p.pinNumber, p.potentialNumber, p.provincialUin].filter(Boolean))
+        .flatMap((p) => [
+          p.pinNumber,
+          p.potentialNumber,
+          p.provincialUin,
+          p.pinNumber ? p.pinNumber.replace(/^Potential-/i, "") : "",
+          p.provincialUin ? p.provincialUin.replace(/^Potential-/i, "") : ""
+        ])
+        .filter(Boolean)
+    );
+  }, [potentialUnits]);
+
+  const activePotentialNames = useMemo(() => {
+    return new Set(
+      potentialUnits
+        .filter((p) => p.status === "ACTIVE")
+        .map((p) => p.legalName.toLowerCase().trim())
+        .filter(Boolean)
     );
   }, [potentialUnits]);
 
   const pft3EnrolledUnits = useMemo(() => {
     return units.filter((unit) => {
-      // If officially registered in Form P.F.T-3 (via database pft3_register_entries or migration flag)
-      if (unit.pft3Registered === true) {
-        return true;
-      }
-
-      // Exclude active unmigrated prospective/potential register units
+      // 1. Strict Statutory Separation: Prospective/potential units belong strictly to Potential Register, never PFT-3
       if (activePotentialIds.has(unit.id)) return false;
       if (unit.pinNumber && activePotentialPins.has(unit.pinNumber)) return false;
       if (unit.demandNumber && activePotentialPins.has(unit.demandNumber)) return false;
       if (unit.provincialUin && activePotentialPins.has(unit.provincialUin)) return false;
+      if (
+        unit.demandUnit?.permanentDemandNo &&
+        activePotentialPins.has(unit.demandUnit.permanentDemandNo)
+      ) {
+        return false;
+      }
+      if (activePotentialNames.has(unit.legalName.toLowerCase().trim())) return false;
 
-      // Must be officially approved to appear in Form P.F.T-3
+      // 2. If officially registered in Form P.F.T-3 (via database pft3_register_entries or migration flag)
+      if (unit.pft3Registered === true) {
+        return true;
+      }
+
+      // 3. Must be officially approved to appear in Form P.F.T-3
       return unit.assessments[0]?.status === "APPROVED" && unit.pft3Registered !== false;
     });
-  }, [units, activePotentialIds, activePotentialPins]);
+  }, [units, activePotentialIds, activePotentialPins, activePotentialNames]);
 
   const pft3EnrolledUnitIds = useMemo(() => {
     return new Set(pft3EnrolledUnits.map((u) => u.id));
   }, [pft3EnrolledUnits]);
+
+  // Clean survey pipeline units excluding both PFT-3 enrolled and active potential register units
+  const surveyPendingUnits = useMemo(() => {
+    return units.filter(
+      (u) =>
+        !pft3EnrolledUnitIds.has(u.id) &&
+        !activePotentialIds.has(u.id) &&
+        !(u.pinNumber && activePotentialPins.has(u.pinNumber)) &&
+        !(u.demandNumber && activePotentialPins.has(u.demandNumber)) &&
+        !(u.provincialUin && activePotentialPins.has(u.provincialUin)) &&
+        !(
+          u.demandUnit?.permanentDemandNo && activePotentialPins.has(u.demandUnit.permanentDemandNo)
+        ) &&
+        !activePotentialNames.has(u.legalName.toLowerCase().trim())
+    );
+  }, [units, pft3EnrolledUnitIds, activePotentialIds, activePotentialPins, activePotentialNames]);
 
   const formPFT3Rows = useMemo(() => {
     return generateFormPFT3Rows(pft3EnrolledUnits);
@@ -4689,6 +4728,9 @@ export default function HomePage({
         officer.name || "Tax Inspector"
       );
 
+      // Record migration in live database first
+      await recordPotentialUnitMigrationInDatabase(targetMigratePotential.id, assignedDemandNo);
+
       const nowIso = new Date().toISOString();
       const updatedPotentialUnits = potentialUnits.map((p) =>
         p.id === targetMigratePotential.id
@@ -4702,9 +4744,6 @@ export default function HomePage({
       );
       setPotentialUnits(updatedPotentialUnits);
       savePersistedPotentialUnits(updatedPotentialUnits);
-
-      // Record migration in database
-      await recordPotentialUnitMigrationInDatabase(targetMigratePotential.id, assignedDemandNo);
 
       // Add to active units state (lands with SUBMITTED status for ETO review)
       const existingIdx = units.findIndex(
@@ -5108,6 +5147,9 @@ export default function HomePage({
         payableAmount
       );
 
+      // Record migration in live database first
+      await recordPotentialUnitMigrationInDatabase(matchingPotential.id, promDemandNo);
+
       const nowIso = new Date().toISOString();
       const updatedPotentialUnits = potentialUnits.map((p) =>
         p.id === matchingPotential.id
@@ -5121,9 +5163,6 @@ export default function HomePage({
       );
       setPotentialUnits(updatedPotentialUnits);
       savePersistedPotentialUnits(updatedPotentialUnits);
-
-      // Record migration in database
-      await recordPotentialUnitMigrationInDatabase(matchingPotential.id, promDemandNo);
 
       // Merge into active units (replace if already present, otherwise prepend)
       const existingIdx = units.findIndex(
@@ -6057,8 +6096,7 @@ export default function HomePage({
                 className={`subtab-btn ${pathname === "/assessment/survey" || activeTab === "UNITS" ? "active" : ""}`}
                 style={{ textDecoration: "none" }}
               >
-                🏢 Tax Units &amp; Survey (
-                {units.filter((u) => !pft3EnrolledUnitIds.has(u.id)).length})
+                🏢 Tax Units &amp; Survey ({surveyPendingUnits.length})
               </Link>
               <Link
                 href={asRoute("/assessment/queue")}
@@ -6252,9 +6290,6 @@ export default function HomePage({
         {/* TAB 1: TAX UNITS & REGISTRATION */}
         {activeTab === "UNITS" &&
           (() => {
-            // Clean up units that have already been enrolled in Form P.F.T-3 Register
-            const surveyPendingUnits = units.filter((u) => !pft3EnrolledUnitIds.has(u.id));
-
             const draftUnitsCount = surveyPendingUnits.filter(
               (u) => (u.assessments[0]?.status ?? "DRAFT") === "DRAFT"
             ).length;
