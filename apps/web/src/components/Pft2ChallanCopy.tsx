@@ -908,7 +908,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
         }}
       >
         <div style={{ fontWeight: 800, color: "#0d3822" }}>
-          Issued by: {copy.issuingInspector?.name || "Inspector Muhammad Aslam"} &bull; Circle:{" "}
+          Issued by: {copy.issuingInspector?.name || "Tax Inspector"} &bull; Circle:{" "}
           {cleanCircleName(copy.assessmentInfo.circleName || copy.circleName || "Circle 1")}
         </div>
         <div style={{ color: "#475569" }}>

@@ -761,11 +761,7 @@ export async function generatePft2ChallanPdf(
     doc.line(innerX, footerY, innerX + innerW, footerY);
 
     const inspectorName =
-      copy.issuingInspector?.name ||
-      (copy.assessmentInfo.etoName &&
-      copy.assessmentInfo.etoName.toLowerCase().includes("inspector")
-        ? copy.assessmentInfo.etoName
-        : "Inspector Muhammad Aslam");
+      copy.issuingInspector?.name || copy.assessmentInfo.etoName || "Tax Inspector";
     const circleDisplay = cleanCircleName(
       copy.assessmentInfo.circleName || copy.circleName || "Circle 1"
     );

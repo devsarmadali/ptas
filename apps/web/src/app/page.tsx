@@ -485,7 +485,9 @@ export default function HomePage({
   const [selectedDispatchUnitIds, setSelectedDispatchUnitIds] = useState<string[]>([]);
   const [showRecordBatchServiceModal, setShowRecordBatchServiceModal] = useState(false);
   const [batchServedDate, setBatchServedDate] = useState("2026-07-15");
-  const [batchServerName, setBatchServerName] = useState("Muhammad Aslam, Tax Inspector");
+  const [batchServerName, setBatchServerName] = useState(
+    officer.name ? `${officer.name}, ${officer.title || "Tax Inspector"}` : "Tax Inspector"
+  );
   const [batchServiceStatus, setBatchServiceStatus] = useState<
     "SERVED" | "REFUSED" | "UNTRACEABLE"
   >("SERVED");
@@ -2504,31 +2506,18 @@ export default function HomePage({
 
   const pft3EnrolledUnits = useMemo(() => {
     return units.filter((unit) => {
-      // Exclude prospective/potential register units
-      if (
-        unit.demandUnit?.permanentDemandNo?.startsWith("V-") ||
-        unit.demandNumber?.startsWith("V-")
-      ) {
-        return false;
-      }
-      if (
-        unit.pinNumber?.startsWith("Potential-") ||
-        unit.provincialUin?.startsWith("Potential-")
-      ) {
-        return false;
-      }
-
-      // If officially registered in Form P.F.T-3 (via ETO approval or payment realization migration)
+      // If officially registered in Form P.F.T-3 (via database pft3_register_entries or migration flag)
       if (unit.pft3Registered === true) {
         return true;
       }
 
+      // Exclude active unmigrated prospective/potential register units
       if (activePotentialIds.has(unit.id)) return false;
       if (unit.pinNumber && activePotentialPins.has(unit.pinNumber)) return false;
       if (unit.demandNumber && activePotentialPins.has(unit.demandNumber)) return false;
       if (unit.provincialUin && activePotentialPins.has(unit.provincialUin)) return false;
 
-      // Must be officially approved and registered in PFT-3
+      // Must be officially approved to appear in Form P.F.T-3
       return unit.assessments[0]?.status === "APPROVED" && unit.pft3Registered !== false;
     });
   }, [units, activePotentialIds, activePotentialPins]);
@@ -3990,7 +3979,7 @@ export default function HomePage({
       target: disc.assesseeLegalName,
       timestamp: new Date().toISOString(),
       correlationId: `corr-insp-${Date.now()}`,
-      details: `Recorded Rule 10 field inspection findings for ${disc.noticeNumber}. Premises verified by Inspector Muhammad Aslam. Forwarded to ETO for final closure order.`
+      details: `Recorded Rule 10 field inspection findings for ${disc.noticeNumber}. Premises verified by ${officer.name}. Forwarded to ETO for final closure order.`
     };
 
     const updatedDiscs = discontinuances.map((d) => (d.id === targetDiscId ? updatedDisc : d));
@@ -4714,8 +4703,8 @@ export default function HomePage({
       setPotentialUnits(updatedPotentialUnits);
       savePersistedPotentialUnits(updatedPotentialUnits);
 
-      // Async record migration in database
-      void recordPotentialUnitMigrationInDatabase(targetMigratePotential.id, assignedDemandNo);
+      // Record migration in database
+      await recordPotentialUnitMigrationInDatabase(targetMigratePotential.id, assignedDemandNo);
 
       // Add to active units state (lands with SUBMITTED status for ETO review)
       const existingIdx = units.findIndex(
@@ -5133,8 +5122,8 @@ export default function HomePage({
       setPotentialUnits(updatedPotentialUnits);
       savePersistedPotentialUnits(updatedPotentialUnits);
 
-      // Async record migration in database
-      void recordPotentialUnitMigrationInDatabase(matchingPotential.id, promDemandNo);
+      // Record migration in database
+      await recordPotentialUnitMigrationInDatabase(matchingPotential.id, promDemandNo);
 
       // Merge into active units (replace if already present, otherwise prepend)
       const existingIdx = units.findIndex(
@@ -5647,39 +5636,18 @@ export default function HomePage({
         });
       }
     } else if (status === "APPROVED") {
-      actions.push(
-        {
-          id: "edit-survey-approved",
-          label: "Edit Unit Particulars",
-          icon: "✏️",
-          onClick: () => handleOpenEditSurveyUnit(targetUnit)
-        },
-        {
-          id: "audit-trace",
-          label: "View Audit Dossier",
-          icon: "👁️",
-          onClick: () => handleOpenAuditTraceModal(targetUnit)
-        },
-        {
-          id: "view-in-pft3",
-          label: "Enrolled in Form PFT-3 Register ↗",
-          icon: "📑",
-          onClick: () => {
-            setPft3SearchQuery(targetUnit.demandNumber || targetUnit.demandUnit.permanentDemandNo);
-            setPft3SearchExecuted(true);
-            setPft3CurrentPage(1);
-            switchTab("REGISTER_PFT3");
-          }
+      actions.push({
+        id: "view-in-pft3",
+        label: "View in Form P.F.T-3 Register ↗",
+        icon: "📑",
+        onClick: () => {
+          setPft3SearchQuery(targetUnit.demandNumber || targetUnit.demandUnit.permanentDemandNo);
+          setPft3SearchExecuted(true);
+          setPft3CurrentPage(1);
+          switchTab("REGISTER_PFT3");
         }
-      );
+      });
     }
-
-    actions.push({
-      id: "open-in-queue",
-      label: "Open in Assessment Queue ↗",
-      icon: "⚖️",
-      onClick: () => switchTab("ASSESSMENTS")
-    });
 
     return <RowActionMenu align="right" actions={actions} />;
   };
@@ -21347,9 +21315,9 @@ export default function HomePage({
                     <thead>
                       <tr>
                         <th>Statutory Action / Feature</th>
-                        <th>Tax Inspector (Aslam)</th>
-                        <th>Assessing Authority / ETO (Tariq)</th>
-                        <th>Appellate Authority / Director (Shahid)</th>
+                        <th>Tax Inspector</th>
+                        <th>Assessing Authority / ETO</th>
+                        <th>Appellate Authority / Director</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -21983,8 +21951,8 @@ export default function HomePage({
                   }}
                 >
                   <strong>⚠️ Legal Notice:</strong> Filing this notice will trigger a physical field
-                  inspection by Circle Inspector Muhammad Aslam. Once verified, Assessing Authority
-                  ETO Tariq Mahmood passes the final closure order. Historical arrears remain
+                  inspection by the designated Circle Inspector. Once verified, the Assessing
+                  Authority (ETO) passes the final closure order. Historical arrears remain
                   recoverable.
                 </div>
               </div>
@@ -22025,7 +21993,7 @@ export default function HomePage({
               <div>
                 <h3>🔍 Circle Inspector Field Verification (Rule 10)</h3>
                 <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
-                  On-site physical inspection by Tax Inspector Muhammad Aslam
+                  On-site physical inspection by {officer.name || "Circle Inspector"}
                 </p>
               </div>
               <button

@@ -574,12 +574,17 @@ export async function recordPotentialUnitMigrationInDatabase(
   if (typeof window === "undefined") return;
   try {
     const supabase = getSupabaseAuthClient();
-    await supabase.rpc("migrate_potential_unit_to_pft3", {
+    const { error } = await supabase.rpc("migrate_potential_unit_to_pft3", {
       p_potential_id: potentialId,
       p_assigned_demand_no: assignedDemandNo
     });
+    if (error) {
+      console.error("recordPotentialUnitMigrationInDatabase error:", error);
+      throw error;
+    }
   } catch (err) {
     console.warn("recordPotentialUnitMigrationInDatabase failed:", err);
+    throw err;
   }
 }
 

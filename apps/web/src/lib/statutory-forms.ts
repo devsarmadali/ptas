@@ -1232,11 +1232,9 @@ export function generateFormPFT2(
     issuingInspector: {
       name:
         opts?.inspectorName ||
-        (opts?.officer?.name &&
-        (opts.officer.role === "INSPECTOR" ||
-          opts.officer.title?.toLowerCase().includes("inspector"))
-          ? opts.officer.name
-          : unit.servedBy || "Inspector Muhammad Aslam"),
+        (unit.servedBy && !unit.servedBy.includes("Muhammad Aslam") ? unit.servedBy : null) ||
+        opts?.officer?.name ||
+        "Tax Inspector",
       title:
         (opts?.officer?.role === "INSPECTOR" ? opts.officer.title : undefined) || "Tax Inspector"
     },
@@ -1673,7 +1671,7 @@ export function generateCircleDispatchRegister(
       categoryName: u.statutoryRule.category,
       assessedAmount: taxAmount,
       dueDate: "31/08/2026",
-      serverName: u.servedBy ?? "Muhammad Aslam, Tax Inspector",
+      serverName: u.servedBy ?? "Tax Inspector",
       serviceStatus: status,
       servedAt: u.servedAt,
       recipientName: u.recipientName ?? (status === "SERVED" ? u.legalName : undefined)

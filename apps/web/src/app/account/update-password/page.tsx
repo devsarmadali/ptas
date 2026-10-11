@@ -65,8 +65,8 @@ export default function UpdatePasswordPage() {
     event.preventDefault();
     setMessage(null);
     setError(null);
-    if (password.length < 12) {
-      setError("Use at least 12 characters for the new password.");
+    if (password.length < 6) {
+      setError("Use at least 6 characters for the new password.");
       return;
     }
     if (password !== confirmation) {
@@ -109,7 +109,7 @@ export default function UpdatePasswordPage() {
             autoComplete="new-password"
             className="form-control"
             required
-            minLength={12}
+            minLength={6}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
@@ -122,7 +122,7 @@ export default function UpdatePasswordPage() {
             autoComplete="new-password"
             className="form-control"
             required
-            minLength={12}
+            minLength={6}
             value={confirmation}
             onChange={(event) => setConfirmation(event.target.value)}
           />
