@@ -300,3 +300,43 @@ export async function loadOperationalContext(): Promise<{
   ]);
   return { officer, units: rawUnits };
 }
+
+export interface UpdateSurveyUnitInput {
+  readonly legal_name: string;
+  readonly trade_name?: string | undefined;
+  readonly identifier_type?: string | undefined;
+  readonly identifier_value?: string | undefined;
+  readonly address: string;
+  readonly locality?: string | undefined;
+  readonly circle_id?: string | undefined;
+  readonly circle_name?: string | undefined;
+  readonly tehsil?: string | undefined;
+  readonly statutory_rule_id: string;
+  readonly opening_arrears?: number | undefined;
+  readonly edit_reason?: string | undefined;
+}
+
+export async function updateIndividualSurveyUnit(
+  unitId: string,
+  input: UpdateSurveyUnitInput,
+  actorId: string
+): Promise<{ success: boolean; id: string; error?: string }> {
+  try {
+    const supabase = getSupabaseAuthClient();
+    const requestId = crypto.randomUUID();
+    const { data, error } = await supabase.rpc("update_individual_survey_unit", {
+      p_unit_id: unitId,
+      p_unit: input as unknown as Json,
+      p_idempotency_key: `survey-update:${actorId}:${unitId}:${requestId}`,
+      p_correlation_id: `survey-update:${requestId}`
+    });
+    if (error) {
+      return { success: false, id: unitId, error: error.message };
+    }
+    const res = data as Record<string, unknown> | null;
+    return { success: true, id: String(res?.id ?? unitId) };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, id: unitId, error: msg };
+  }
+}

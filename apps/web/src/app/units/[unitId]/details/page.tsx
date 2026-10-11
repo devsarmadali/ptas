@@ -976,7 +976,16 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
                           PKR {r.amountPaidPkr.toLocaleString()}
                         </strong>
                       </td>
-                      <td>{r.dateOfReceipt}</td>
+                      <td>
+                        <span style={{ display: "block", fontWeight: 600, color: "#065f46" }}>
+                          💳 {r.dateOfReceipt}
+                        </span>
+                        {r.entryTimestamp && (
+                          <span style={{ display: "block", fontSize: "0.7rem", color: "#64748b" }}>
+                            🕒 Entry: {new Date(r.entryTimestamp).toLocaleDateString("en-PK")}
+                          </span>
+                        )}
+                      </td>
                       <td>
                         <span>{r.paymentChannel}</span>
                         <span

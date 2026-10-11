@@ -95,7 +95,7 @@ import {
   parseSurveyImportPayloadRows
 } from "../lib/bulk-survey";
 import { executeWorkflowCommand } from "../lib/workflow-command-client";
-import { loadOperationalSurveyUnits } from "../lib/operational-survey";
+import { loadOperationalSurveyUnits, updateIndividualSurveyUnit } from "../lib/operational-survey";
 import {
   OFFICIAL_OFFICERS_REGISTRY,
   getSupabaseAuthClient,
@@ -148,6 +148,7 @@ import {
   migratePotentialUnitToPft3,
   updatePotentialUnitArrears,
   updatePotentialUnitParticulars,
+  persistPotentialUnitUpdateToDatabase,
   recordPotentialUnitMigrationInDatabase
 } from "../lib/potential-units-storage";
 import {
@@ -1398,6 +1399,37 @@ export default function HomePage({
         nextLedger.splice(adjIdx, 1);
       }
 
+      const matchedCircle = DISTRICT_VEHARI_CIRCLES.find(
+        (c) => c.name === normalizeCircleName(newCircleName) || c.id === newCircleName
+      );
+
+      // Backend Server RPC: Persist survey unit modifications with server-side jurisdiction & Rule 4 validation
+      const serverUpdate = await updateIndividualSurveyUnit(
+        editingUnitId,
+        {
+          legal_name: newLegalName.trim(),
+          trade_name: newTradeName.trim() || undefined,
+          identifier_type: newIdentifierType,
+          identifier_value: newIdentifierValue.trim(),
+          address: newAddress.trim(),
+          locality: newLocality.trim() || undefined,
+          circle_id: matchedCircle?.id,
+          circle_name: newCircleName,
+          tehsil: newTehsil,
+          statutory_rule_id: rule.rule_id,
+          opening_arrears: sanitizedArrears,
+          edit_reason: `Particulars modified by ${officer.name} (${officer.role}) under statutory governance`
+        },
+        officer.id
+      );
+
+      if (!serverUpdate.success) {
+        showToast("error", `Unable to update survey unit on server: ${serverUpdate.error}`);
+        return;
+      }
+
+      await refreshOperationalSurveyUnits();
+
       const updatedUnit: StoredUnit = {
         ...target,
         legalName: newLegalName.trim(),
@@ -1438,6 +1470,9 @@ export default function HomePage({
 
     const requestId = crypto.randomUUID();
     const sanitizedArrears = Math.max(0, Math.round(Number(newOpeningArrears) || 0));
+    const matchedCircle = DISTRICT_VEHARI_CIRCLES.find(
+      (c) => c.name === normalizeCircleName(newCircleName) || c.id === newCircleName
+    );
     const { data, error } = await getSupabaseAuthClient().rpc("create_individual_survey_unit", {
       p_unit: {
         legal_name: newLegalName.trim(),
@@ -1446,7 +1481,9 @@ export default function HomePage({
         identifier_value: newIdentifierValue.trim(),
         address: newAddress.trim(),
         locality: newLocality.trim(),
+        circle_id: matchedCircle?.id,
         circle_name: newCircleName,
+        tehsil: newTehsil,
         statutory_rule_id: rule.rule_id,
         opening_arrears: sanitizedArrears
       },
@@ -4214,9 +4251,13 @@ export default function HomePage({
     setNewIdentifierValue("");
     setNewAddress("");
     setNewLocality("");
-    const circle = normalizeCircleName(defaultCircle || officer.jurisdictionName || "Circle 1");
-    setNewCircleName(circle);
-    const defaultTehsil = getDefaultTehsilForCircle(circle);
+    const assignedCircle = normalizeCircleName(
+      officer.role === "INSPECTOR"
+        ? officer.jurisdictionName || "Circle 1"
+        : defaultCircle || officer.jurisdictionName || "Circle 1"
+    );
+    setNewCircleName(assignedCircle);
+    const defaultTehsil = getDefaultTehsilForCircle(assignedCircle);
     setNewTehsil(defaultTehsil);
     setNewCategoryCode("1");
     setNewSubclassCode("1(i)");
@@ -4234,9 +4275,9 @@ export default function HomePage({
     setPotNewIdValue("");
     setPotNewAddress("");
     setPotNewLocality("");
-    const circle = normalizeCircleName(officer.jurisdictionName || "Circle 1");
-    setPotNewCircleName(circle);
-    const defaultTehsil = getDefaultTehsilForCircle(circle);
+    const assignedCircle = normalizeCircleName(officer.jurisdictionName || "Circle 1");
+    setPotNewCircleName(assignedCircle);
+    const defaultTehsil = getDefaultTehsilForCircle(assignedCircle);
     setPotNewTehsil(defaultTehsil);
     setPotNewCategoryCode("1");
     setPotNewSubclassCode("1(i)");
@@ -4253,6 +4294,18 @@ export default function HomePage({
         `Editing is strictly prohibited: Potential Unit '${pot.potentialNumber}' has already been migrated to Form P.F.T-3 Assessment Register and is under formal statutory lifecycle governance.`
       );
       return;
+    }
+
+    if (officer.role === "INSPECTOR") {
+      const assignedCircle = normalizeCircleName(officer.jurisdictionName || "Circle 1");
+      const unitCircle = normalizeCircleName(pot.circleName || "Circle 1");
+      if (unitCircle !== assignedCircle) {
+        showToast(
+          "error",
+          `Unauthorized: As a Tax Inspector for ${assignedCircle}, you may only edit potential units within your assigned circle jurisdiction.`
+        );
+        return;
+      }
     }
 
     setEditingPotentialUnitId(pot.id);
@@ -4315,7 +4368,7 @@ export default function HomePage({
       }
 
       try {
-        const updated = updatePotentialUnitParticulars(editingPotentialUnitId, {
+        const payloadUpdates: Partial<PotentialUnitRecord> = {
           legalName: potNewLegalName.trim(),
           tradeName: potNewTradeName.trim() || undefined,
           identifierType: potNewIdType,
@@ -4336,15 +4389,24 @@ export default function HomePage({
           statutoryRule: rule,
           annualRatePkr: rule.annual_rate_pkr ?? 4000,
           openingArrears: potNewOpeningArrears
-        });
+        };
 
-        if (updated) {
+        // Backend Server RPC: Persist potential unit modification with server-side role & jurisdiction validation
+        const serverUpdated = await persistPotentialUnitUpdateToDatabase(
+          editingPotentialUnitId,
+          payloadUpdates
+        );
+
+        const localUpdated = updatePotentialUnitParticulars(editingPotentialUnitId, payloadUpdates);
+        const resolved = serverUpdated || localUpdated;
+
+        if (resolved) {
           setPotentialUnits((current) =>
-            current.map((u) => (u.id === editingPotentialUnitId ? updated : u))
+            current.map((u) => (u.id === editingPotentialUnitId ? resolved : u))
           );
           setShowAddPotentialModal(false);
           setEditingPotentialUnitId(null);
-          showToast("success", `✓ Potential Unit ${updated.potentialNumber} particulars updated.`);
+          showToast("success", `✓ Potential Unit ${resolved.potentialNumber} particulars updated.`);
         }
         return;
       } catch (err) {
@@ -5323,6 +5385,18 @@ export default function HomePage({
         `Editing is strictly prohibited: Unit '${u.legalName}' is currently in '${status}' status. Assessees may only be modified while in FEEDED (DRAFT) status or when explicitly RETURNED by ETO for review.`
       );
       return;
+    }
+
+    if (officer.role === "INSPECTOR") {
+      const assignedCircle = normalizeCircleName(officer.jurisdictionName || "Circle 1");
+      const unitCircle = normalizeCircleName(u.circleName || "Circle 1");
+      if (unitCircle !== assignedCircle) {
+        showToast(
+          "error",
+          `Unauthorized: As a Tax Inspector for ${assignedCircle}, you may only edit units within your assigned circle jurisdiction.`
+        );
+        return;
+      }
     }
 
     setEditingUnitId(u.id);
@@ -16305,13 +16379,32 @@ export default function HomePage({
                     {/* Administrative Circle & Tehsil */}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                       <div className="form-group">
-                        <label htmlFor="new-circle-name" style={{ fontWeight: 600 }}>
-                          Administrative Circle *
+                        <label
+                          htmlFor="new-circle-name"
+                          style={{
+                            fontWeight: 600,
+                            display: "flex",
+                            justifyContent: "space-between"
+                          }}
+                        >
+                          <span>Administrative Circle *</span>
+                          {officer.role === "INSPECTOR" && (
+                            <span
+                              style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 400 }}
+                            >
+                              🔒 Assigned Circle
+                            </span>
+                          )}
                         </label>
                         <select
                           id="new-circle-name"
-                          disabled={!isEditable}
+                          disabled={!isEditable || officer.role === "INSPECTOR"}
                           className="form-control"
+                          style={
+                            officer.role === "INSPECTOR"
+                              ? { background: "#f1f5f9", cursor: "not-allowed", color: "#475569" }
+                              : undefined
+                          }
                           value={newCircleName}
                           onChange={(e) => {
                             const c = e.target.value;
@@ -25468,17 +25561,23 @@ export default function HomePage({
                     <div>
                       <label
                         style={{
-                          display: "block",
+                          display: "flex",
+                          justifyContent: "space-between",
                           fontSize: "0.8rem",
                           fontWeight: 600,
                           color: "#334155",
                           marginBottom: "0.25rem"
                         }}
                       >
-                        Administrative Circle *
+                        <span>Administrative Circle *</span>
+                        {officer.role === "INSPECTOR" && (
+                          <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 400 }}>
+                            🔒 Assigned Circle
+                          </span>
+                        )}
                       </label>
                       <select
-                        disabled={!isPotEditable}
+                        disabled={!isPotEditable || officer.role === "INSPECTOR"}
                         value={potNewCircleName}
                         onChange={(e) => {
                           const circle = e.target.value;
@@ -25489,7 +25588,10 @@ export default function HomePage({
                           width: "100%",
                           padding: "0.5rem",
                           borderRadius: "6px",
-                          border: "1px solid #cbd5e1"
+                          border: "1px solid #cbd5e1",
+                          background: officer.role === "INSPECTOR" ? "#f1f5f9" : "#ffffff",
+                          cursor: officer.role === "INSPECTOR" ? "not-allowed" : "pointer",
+                          color: officer.role === "INSPECTOR" ? "#475569" : "inherit"
                         }}
                       >
                         {DISTRICT_VEHARI_CIRCLES.map((c) => (

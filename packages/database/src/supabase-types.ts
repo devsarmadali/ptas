@@ -594,8 +594,21 @@ export type Database = {
         };
         Returns: Json;
       };
+      update_individual_survey_unit: {
+        Args: {
+          p_unit_id: string;
+          p_unit: Json;
+          p_idempotency_key: string;
+          p_correlation_id: string;
+        };
+        Returns: Json;
+      };
       create_potential_assessment_unit: {
         Args: { p_unit: Json };
+        Returns: Json;
+      };
+      update_potential_assessment_unit: {
+        Args: { p_id: string; p_unit: Json };
         Returns: Json;
       };
       migrate_potential_unit_to_pft3: {

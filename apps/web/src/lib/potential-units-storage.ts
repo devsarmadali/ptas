@@ -517,6 +517,54 @@ export async function persistPotentialUnitToDatabase(
 }
 
 /**
+ * Persist updates to a potential unit in Supabase via update_potential_assessment_unit RPC.
+ */
+export async function persistPotentialUnitUpdateToDatabase(
+  potentialId: string,
+  updates: Partial<PotentialUnitRecord>
+): Promise<PotentialUnitRecord | null> {
+  if (typeof window === "undefined") return null;
+  try {
+    const supabase = getSupabaseAuthClient();
+    const payload = {
+      legal_name: updates.legalName,
+      trade_name: updates.tradeName,
+      identifier_type: updates.identifierType,
+      identifier_value: updates.identifierValue,
+      address: updates.address,
+      locality: updates.locality,
+      circle_id: updates.circleId,
+      circle_name: updates.circleName,
+      district_name: updates.districtName,
+      category_code: updates.categoryCode,
+      category_name: updates.categoryName,
+      subclassification_code: updates.subclassificationCode,
+      subclassification_name: updates.subclassificationName,
+      statutory_tertiary_code: updates.statutoryTertiaryCode,
+      statutory_tertiary_classification: updates.statutoryTertiaryClassification,
+      statutory_rule_id: updates.statutoryRuleId,
+      annual_rate_pkr: updates.annualRatePkr,
+      opening_arrears: updates.openingArrears ?? 0,
+      correlation_id: `potential-unit-update:${crypto.randomUUID()}`
+    };
+
+    const { error } = await supabase.rpc("update_potential_assessment_unit", {
+      p_id: potentialId,
+      p_unit: payload as unknown as Json
+    });
+    if (error) {
+      console.warn("persistPotentialUnitUpdateToDatabase error:", error.message);
+      return null;
+    }
+    const refreshed = await fetchPotentialAssessmentUnitsFromDatabase();
+    return refreshed?.find((candidate) => candidate.id === potentialId) ?? null;
+  } catch (err) {
+    console.warn("persistPotentialUnitUpdateToDatabase failed:", err);
+    return null;
+  }
+}
+
+/**
  * Update a potential unit's status in Supabase when migrated to PFT-3.
  */
 export async function recordPotentialUnitMigrationInDatabase(
