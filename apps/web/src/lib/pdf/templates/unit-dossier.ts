@@ -24,6 +24,7 @@ import {
 import type { DocumentGenerationOptions, UnitDossierData } from "../types";
 import { computeUnitFinancialSummary, getScheduleEntryLabel } from "../../statutory-forms";
 import type { DemandLedgerEntry } from "@ptas/domain";
+import { buildVerificationUrl } from "../../site-url";
 
 export async function generateUnitDossierPdf(
   data: UnitDossierData,
@@ -394,7 +395,12 @@ export async function generateUnitDossierPdf(
   curY = Math.max(curY + 6.0, 245.0);
 
   // Left: Scannable Vector QR Code with Security Code Box
-  const qrPayload = `https://ptas.punjab.gov.pk/verify?type=DOSSIER&id=${unit.id}&pdn=${unit.demandUnit?.permanentDemandNo || ""}&pin=${unit.pinNumber || ""}`;
+  const qrPayload = buildVerificationUrl({
+    type: "DOSSIER",
+    id: unit.id,
+    pdn: unit.demandUnit?.permanentDemandNo || "",
+    pin: unit.pinNumber || ""
+  });
   const qrDataUrl = await generateQrDataUrl(qrPayload);
   const QR_SIZE = 20.0;
   doc.addImage(qrDataUrl, "PNG", left + 2, curY, QR_SIZE, QR_SIZE);

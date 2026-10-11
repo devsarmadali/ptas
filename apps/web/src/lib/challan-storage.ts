@@ -3,6 +3,7 @@ export type { Pft2ChallanRecord, StatutoryReceiptRecord };
 import { numberToWordsPkr, generatePft2NoticeNumber } from "./statutory-forms";
 import { generateDocumentPin } from "@ptas/domain";
 import { loadPersistedMigratedUnits } from "./potential-units-storage";
+import { buildVerificationUrl } from "./site-url";
 import { getSupabaseAuthClient } from "./supabase-auth";
 import type { Json } from "@ptas/database/types";
 
@@ -288,7 +289,12 @@ export function ensureChallansAndReceiptsForUnits(units?: readonly StoredUnit[])
         receivingOfficerName: c.receivedBy ?? "Tax Inspector",
         receivingOfficerTitle: "Tax Inspector, Vehari Circle I (City / Commercial)",
         officialSha256: c.officialSha256,
-        qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-REC&ref=${c.receiptNumber}&pdn=${c.demandNumber}&amt=${c.amountPayable}`,
+        qrPayload: buildVerificationUrl({
+          type: "PFT-REC",
+          ref: c.receiptNumber,
+          pdn: c.demandNumber,
+          amt: c.amountPayable
+        }),
         remarks: "Discharged under Rule 10.",
         paymentSource: "ISSUED_PFT2",
         receiptCategory: c.isProvisional ? "PROVISIONAL_POTENTIAL" : "REGULAR_PFT3",

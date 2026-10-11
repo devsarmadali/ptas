@@ -22,6 +22,7 @@ import type { OfficialDocumentType } from "./pdf/types";
 import { loadPilotState } from "./pilot-store";
 import { generateFormPFT3Rows, generateCircleDispatchRegister } from "./statutory-forms";
 import { calculatePft2ExecutiveSummary } from "./receipt-generator";
+import { buildVerificationUrl } from "./site-url";
 
 export interface PdfExportOptions {
   readonly orientation?: "portrait" | "landscape";
@@ -246,7 +247,7 @@ export async function downloadDocumentPdf(
           appellateAuthorityDesignation: "Director Excise & Taxation / Appellate Authority",
           canonicalOrderText: "Judicial Order Decree",
           officialSha256: "sha256-appellate-order-auth",
-          qrPayload: "https://ptas.punjab.gov.pk/verify?type=APP&ref=APP-2026-0001"
+          qrPayload: buildVerificationUrl({ type: "APP", ref: "APP-2026-0001" })
         },
         defaultFilename: effectiveFilename
       });

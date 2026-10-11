@@ -23,6 +23,7 @@ import {
   VEHARI_PILOT_JURISDICTION
 } from "@ptas/domain";
 import { formatStandardDocNumber, generatePft2NoticeNumber } from "./statutory-forms";
+import { buildVerificationUrl } from "./site-url";
 
 export type MockRole = "INSPECTOR" | "ETO" | "DIRECTOR" | "ADMIN";
 
@@ -1734,7 +1735,13 @@ export function createInitialPft2Challans(units: StoredUnit[]): Pft2ChallanRecor
       bankScrollRef: isPaid ? "ePay-PUNJAB-TXN-994182" : undefined,
       paymentChannel: isPaid ? "ePay Punjab (Digital Bank Transfer)" : undefined,
       officialSha256: `sha256-pft2-${serial}-${amountPayable}`,
-      qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-2&ref=${challanNumber}&pdn=${u.demandUnit.permanentDemandNo}&amt=${amountPayable}&pin=${pin}`
+      qrPayload: buildVerificationUrl({
+        type: "PFT-2",
+        ref: challanNumber,
+        pdn: u.demandUnit.permanentDemandNo,
+        amt: amountPayable,
+        pin
+      })
     });
   }
 
@@ -1771,7 +1778,13 @@ export function createInitialPft2Challans(units: StoredUnit[]): Pft2ChallanRecor
     cancelledAt: "2026-07-28",
     cancelledBy: "Excise & Taxation Officer (ETO)",
     officialSha256: "sha256-pft2-cancelled-00099",
-    qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-2&ref=${cancelledNumber}&pdn=0099&amt=4000&pin=${cancelledPin}`
+    qrPayload: buildVerificationUrl({
+      type: "PFT-2",
+      ref: cancelledNumber,
+      pdn: "0099",
+      amt: 4000,
+      pin: cancelledPin
+    })
   });
 
   return challans;
@@ -1813,8 +1826,13 @@ export function createInitialStatutoryReceipts(units: StoredUnit[]): StatutoryRe
       receivingOfficerName: "Tax Inspector",
       receivingOfficerTitle: "Tax Inspector, Vehari Circle I (City / Commercial)",
       officialSha256: "8e3c1a9f02b4d6e8a1c3e5f7b9d2a4c6e8f0a2b4c6d8e0f2a4b6c8e0d2f4a6b8",
-      qrPayload:
-        "https://ptas.punjab.gov.pk/verify?type=PFT-REC&ref=PFT-REC-2026-0001&pdn=0001&amt=10000&sha=8e3c1a9f",
+      qrPayload: buildVerificationUrl({
+        type: "PFT-REC",
+        ref: "PFT-REC-2026-0001",
+        pdn: "0001",
+        amt: 10000,
+        sha: "8e3c1a9f"
+      }),
       remarks: "Full annual liability discharged via ePay Punjab electronic treasury gateway.",
       paymentSource: "ISSUED_PFT2",
       receiptCategory: "REGULAR_PFT3",

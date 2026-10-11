@@ -12,8 +12,9 @@ import {
 import { loadOperationalSurveyUnits } from "../../../../lib/operational-survey";
 import { generateFormPFT2, generatePft2NoticeNumber } from "../../../../lib/statutory-forms";
 import { computeContentSha256, generateDocumentPin } from "@ptas/domain";
-import { Pft2ChallanDocument } from "../../../../components/Pft2ChallanDocument";
 import { downloadOfficialPdf } from "../../../../lib/pdf";
+import { Pft2ChallanDocument } from "../../../../components/Pft2ChallanDocument";
+import { buildVerificationUrl } from "../../../../lib/site-url";
 import {
   issueDurablePft2Challan,
   loadChallanJurisdictionCodes,
@@ -322,7 +323,13 @@ function DocumentIssuanceContent() {
         officialSha256: computeContentSha256(
           `${noticeNumber}|${freshUnit.id}|${effectivePayableAmount}|${systemIssueDate}|${dueDate}`
         ),
-        qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-2&ref=${noticeNumber}&pdn=${freshUnit.demandUnit?.permanentDemandNo || ""}&amt=${effectivePayableAmount}&pin=${pin}`
+        qrPayload: buildVerificationUrl({
+          type: "PFT-2",
+          ref: noticeNumber,
+          pdn: freshUnit.demandUnit?.permanentDemandNo || "",
+          amt: effectivePayableAmount,
+          pin
+        })
       };
 
       const issued = await issueDurablePft2Challan(

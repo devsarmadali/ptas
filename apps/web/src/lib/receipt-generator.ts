@@ -12,6 +12,7 @@ import type {
 } from "./pilot-store";
 import { getReceiptCategory } from "./pilot-store";
 import { numberToWordsPkr, formatStandardDocNumber, formatDemandNumber } from "./statutory-forms";
+import { buildVerificationUrl } from "./site-url";
 
 export function generateStandardReceiptNumber(sequence: number | string): string {
   return formatStandardDocNumber({ docCode: "RCPT", sequence });
@@ -100,7 +101,14 @@ export function buildStatutoryReceiptDocument(
   ].join("\n");
 
   const officialSha256 = computeContentSha256(canonicalReceiptText);
-  const qrPayload = `https://ptas.punjab.gov.pk/verify?type=PFT-REC&ref=${record.receiptNumber}&pdn=${demandClean}&amt=${record.amountPaidPkr}&pin=${pin}&sha=${officialSha256.slice(0, 16)}`;
+  const qrPayload = buildVerificationUrl({
+    type: "PFT-REC",
+    ref: record.receiptNumber,
+    pdn: demandClean,
+    amt: record.amountPaidPkr,
+    pin,
+    sha: officialSha256.slice(0, 16)
+  });
 
   return {
     receiptNumber: record.receiptNumber,

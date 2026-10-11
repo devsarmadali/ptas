@@ -158,7 +158,7 @@ describe("Receive Challan Simulation Test", () => {
       receivingOfficerTitle: "Excise & Taxation Officer",
       pin: target.pinNumber || "237-0010106110200002-01",
       officialSha256: "sha256-hash",
-      qrPayload: "https://ptas.punjab.gov.pk"
+      qrPayload: "/verify"
     };
 
     savePersistedStatutoryReceipts([receipt]);

@@ -85,7 +85,7 @@ describe("Form P.F.T-2 Challans & Statutory Receipts Persistence Layer", () => {
       dueDate: "2026-07-31",
       status: "ISSUED",
       officialSha256: "sha256-sample",
-      qrPayload: "https://ptas.punjab.gov.pk/verify"
+      qrPayload: "/verify"
     };
 
     savePersistedPft2Challans([mockChallan]);

@@ -32,7 +32,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (origin && host) {
     try {
       const originHost = new URL(origin).host;
-      if (originHost !== host && !originHost.endsWith(".punjab.gov.pk")) {
+      if (originHost !== host) {
         return NextResponse.json(
           { error: "Cross-origin workflow request rejected" },
           { status: 403 }

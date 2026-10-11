@@ -62,6 +62,7 @@ import {
   getPakistanCurrentDate,
   getPakistanCurrentTimestamp
 } from "../lib/pilot-store";
+import { buildVerificationUrl } from "../lib/site-url";
 import { computeFileSha256, uploadReceiptScan } from "../lib/storage";
 import {
   type AppellateOrderModel,
@@ -4298,7 +4299,12 @@ export default function HomePage({
         officialSha256: computeContentSha256(
           `PTAS:PFT2:${noticeNumber}:${unit.potentialNumber}:${payableAmount}:${dueDate}`
         ),
-        qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT2-PROV&ref=${noticeNumber}&pdn=${unit.potentialNumber}&amt=${payableAmount}`
+        qrPayload: buildVerificationUrl({
+          type: "PFT2-PROV",
+          ref: noticeNumber,
+          pdn: unit.potentialNumber,
+          amt: payableAmount
+        })
       };
 
       const issued = await issueDurablePft2Challan(
@@ -5060,7 +5066,12 @@ export default function HomePage({
       officialSha256: computeContentSha256(
         `${receiptNumber}|${receivingChallan.challanNumber}|${payableAmount}|${receiveDate}|${receiveBankScrollRef.trim()}`
       ),
-      qrPayload: `https://ptas.punjab.gov.pk/verify?type=PFT-REC&ref=${receiptNumber}&pdn=${assignedDemandNo}&amt=${payableAmount}`,
+      qrPayload: buildVerificationUrl({
+        type: "PFT-REC",
+        ref: receiptNumber,
+        pdn: assignedDemandNo,
+        amt: payableAmount
+      }),
       remarks: receiveRemarks
     };
 
@@ -21267,7 +21278,7 @@ export default function HomePage({
                         id="authEmail"
                         required
                         className="form-control"
-                        placeholder="e.g. officer.vehari@punjab.gov.pk or yourname@gmail.com"
+                        placeholder="e.g. officer@example.com or yourname@gmail.com"
                         value={authEmailInput}
                         onChange={(e) => setAuthEmailInput(e.target.value)}
                       />

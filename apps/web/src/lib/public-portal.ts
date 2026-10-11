@@ -35,6 +35,9 @@ import {
   generateTaxClearanceCertificate
 } from "./statutory-forms";
 import { getSupabaseAuthClient } from "./supabase-auth";
+import { getPublicBaseUrl, buildVerificationUrl } from "./site-url";
+
+export { getPublicBaseUrl, buildVerificationUrl };
 
 export type DocumentVerificationType =
   "FORM_PFT1_NOTICE" | "FORM_PFT2_CHALLAN" | "FORM_PFT5_CLEARANCE" | "FORM_PFT_RECEIPT";
@@ -172,9 +175,14 @@ export function verifyStatutoryDocument(
     (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.includes("/verify"))
   ) {
     try {
-      const url = new URL(
-        trimmed.startsWith("http") ? trimmed : `https://ptas.punjab.gov.pk/${trimmed}`
-      );
+      const base = getPublicBaseUrl() || "http://localhost";
+      const candidateUrl =
+        trimmed.startsWith("http://") || trimmed.startsWith("https://")
+          ? trimmed
+          : trimmed.startsWith("/")
+            ? `${base}${trimmed}`
+            : `${base}/${trimmed}`;
+      const url = new URL(candidateUrl);
       const ref =
         url.searchParams.get("ref") ||
         url.searchParams.get("pdn") ||
@@ -1024,9 +1032,14 @@ export async function verifyStatutoryDocumentOnline(
     (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.includes("/verify"))
   ) {
     try {
-      const url = new URL(
-        trimmed.startsWith("http") ? trimmed : `https://ptas.punjab.gov.pk/${trimmed}`
-      );
+      const base = getPublicBaseUrl() || "http://localhost";
+      const candidateUrl =
+        trimmed.startsWith("http://") || trimmed.startsWith("https://")
+          ? trimmed
+          : trimmed.startsWith("/")
+            ? `${base}${trimmed}`
+            : `${base}/${trimmed}`;
+      const url = new URL(candidateUrl);
       effectiveRef =
         url.searchParams.get("ref") ||
         url.searchParams.get("pdn") ||
