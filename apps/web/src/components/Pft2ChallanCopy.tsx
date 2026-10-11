@@ -100,7 +100,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           paddingBottom: "0.35rem"
         }}
       >
-        {/* Left: Scannable Statutory QR Code & Security Code Badge */}
+        {/* Left: Scannable Statutory QR Code */}
         <div
           style={{
             flexShrink: 0,
@@ -112,26 +112,14 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           <StatutoryQrCode payload={copy.qrPayload} size={58} onScanOrClick={onScanOrClick} />
           <div
             style={{
-              marginTop: "0.22rem",
-              width: "58px",
-              background: "#e0f2fe",
-              border: "1px solid #bae6fd",
-              borderRadius: "3px",
-              padding: "0.15rem 0.15rem",
-              textAlign: "center"
+              fontSize: "0.48rem",
+              color: "#64748b",
+              fontWeight: 700,
+              marginTop: "0.15rem",
+              letterSpacing: "0.3px"
             }}
           >
-            <div
-              style={{
-                fontFamily: "monospace",
-                fontSize: "0.82rem",
-                fontWeight: 800,
-                color: "#1e3a8a",
-                lineHeight: 1.15
-              }}
-            >
-              {securityCode}
-            </div>
+            SCAN TO VERIFY
           </div>
         </div>
 
@@ -244,7 +232,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           </div>
         </div>
 
-        {/* Right: Official Government of the Punjab Seal (Opposite QR code) */}
+        {/* Right: Official Government of the Punjab Seal & Security Code Badge */}
         <div
           style={{
             flexShrink: 0,
@@ -261,13 +249,48 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
             width={48}
             height={40}
             style={{
-              width: "48px",
+              width: "44px",
               height: "auto",
-              maxHeight: "44px",
+              maxHeight: "38px",
               objectFit: "contain",
               filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.08))"
             }}
           />
+          <div
+            style={{
+              marginTop: "0.22rem",
+              width: "56px",
+              background: "#e0f2fe",
+              border: "1px solid #bae6fd",
+              borderRadius: "3px",
+              padding: "0.1rem 0.15rem",
+              textAlign: "center"
+            }}
+          >
+            <div
+              style={{
+                fontSize: "0.45rem",
+                fontWeight: 700,
+                color: "#0369a1",
+                textTransform: "uppercase",
+                letterSpacing: "0.3px",
+                lineHeight: 1.1
+              }}
+            >
+              Security Code
+            </div>
+            <div
+              style={{
+                fontFamily: "monospace",
+                fontSize: "0.8rem",
+                fontWeight: 800,
+                color: "#1e3a8a",
+                lineHeight: 1.15
+              }}
+            >
+              {securityCode}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -522,11 +545,11 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           </span>
         </div>
 
-        {/* Class Row (Full width classification, no redundant rate label) */}
+        {/* Class Row (Full horizontal space, prefix "Class 3(ii) -" removed) */}
         <div style={{ display: "flex", alignItems: "baseline" }}>
           <span
             style={{
-              width: "6.8rem",
+              width: "4.5rem",
               flexShrink: 0,
               fontWeight: 700,
               color: "#334155"
@@ -546,16 +569,24 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
               whiteSpace: "normal"
             }}
           >
-            {copy.taxpayerInfo.classification?.replace(/Class undefined/gi, "Class 1") ||
-              "Class 1 - Companies"}
+            {(() => {
+              let cleanClass = (copy.taxpayerInfo.categoryName || "").trim();
+              if (!cleanClass) {
+                cleanClass = (copy.taxpayerInfo.classification || "")
+                  .replace(/^Class\s+[0-9a-zA-Z().\s]+[-–—]\s*/i, "")
+                  .replace(/^Class\s+\d+\s*[-–—]?\s*/i, "")
+                  .trim();
+              }
+              return cleanClass || "Contractors, Suppliers and Consultants";
+            })()}
           </span>
         </div>
 
-        {/* Sub-Class Row */}
+        {/* Sub-Class Row (Code preserved + Tertiary Class Values with Separator) */}
         <div style={{ display: "flex", alignItems: "baseline" }}>
           <span
             style={{
-              width: "6.8rem",
+              width: "5.5rem",
               flexShrink: 0,
               fontWeight: 700,
               color: "#334155"
@@ -582,6 +613,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
                 copy.taxpayerInfo.categoryCode ||
                 copy.taxpayerInfo.classification?.split("-")[0]?.replace(/[^0-9]/g, "");
               const tertiary = copy.taxpayerInfo.tertiarySlab?.trim();
+              const tertCode = copy.taxpayerInfo.statutoryTertiaryCode?.trim();
               const resolvedCode = formatFullSubclassCode(
                 rawSubCode,
                 catCode,
@@ -590,13 +622,24 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
               );
               const sCode = resolvedCode.replace(/^Code\s+/i, "").trim();
               const subLabel = copy.taxpayerInfo.subclassificationLabel?.trim();
-              if (sCode && sCode !== "1" && sCode !== "undefined") {
-                return `Code ${sCode}${subLabel ? ` — ${subLabel}` : ""}${tertiary && tertiary !== subLabel ? ` (${tertiary})` : ""}`;
+              const baseSub =
+                sCode && sCode !== "1" && sCode !== "undefined"
+                  ? `Code ${sCode}${subLabel ? ` — ${subLabel}` : ""}`
+                  : subLabel && subLabel !== "1"
+                    ? subLabel
+                    : "General / Standard Class";
+
+              let tertDisplay = "";
+              if (tertiary && tertiary !== baseSub && tertiary !== subLabel) {
+                tertDisplay =
+                  tertCode && !tertiary.includes(tertCode) ? `${tertCode} — ${tertiary}` : tertiary;
+              } else if (tertCode && tertCode !== sCode) {
+                tertDisplay = tertCode;
               }
-              if (subLabel && subLabel !== "1") {
-                return `${subLabel}${tertiary && tertiary !== subLabel ? ` (${tertiary})` : ""}`;
-              }
-              return tertiary || "General / Standard Class";
+
+              return tertDisplay
+                ? `${baseSub}  |  ${tertDisplay.startsWith("Tertiary:") ? tertDisplay : `Tertiary: ${tertDisplay}`}`
+                : baseSub;
             })()}
           </span>
         </div>
@@ -655,7 +698,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           <tbody>
             <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
               <td style={{ padding: "0.22rem 0.35rem", color: "#334155", fontSize: "0.72rem" }}>
-                Current Tax Demand
+                Current Year Tax
               </td>
               <td
                 style={{
@@ -671,7 +714,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
             </tr>
             <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
               <td style={{ padding: "0.22rem 0.35rem", color: "#334155", fontSize: "0.72rem" }}>
-                Prior Year Arrears
+                Arrears
               </td>
               <td
                 style={{
@@ -847,6 +890,31 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
             <span>Authorized Cashier</span>
             <span>Signature &amp; Stamp</span>
           </div>
+        </div>
+      </div>
+
+      {/* ── SECTION 6: STATUTORY ISSUANCE FOOTER (OFFICER & OFFICE ADDRESS) ── */}
+      <div
+        style={{
+          border: "1px solid #cbd5e1",
+          borderTop: "1.5px solid #0d3822",
+          background: "#f8fafc",
+          borderRadius: "3px",
+          padding: "0.22rem 0.35rem",
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.1rem",
+          fontSize: "0.58rem"
+        }}
+      >
+        <div style={{ fontWeight: 800, color: "#0d3822" }}>
+          Issued by: {copy.issuingInspector?.name || "Inspector Muhammad Aslam"} &bull; Circle:{" "}
+          {cleanCircleName(copy.assessmentInfo.circleName || copy.circleName || "Circle 1")}
+        </div>
+        <div style={{ color: "#475569" }}>
+          Office:{" "}
+          {copy.officeAddress ||
+            "Excise & Taxation Office, Danewal Road, Near General Bus Stand, Vehari"}
         </div>
       </div>
     </div>

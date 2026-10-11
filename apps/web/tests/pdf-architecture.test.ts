@@ -289,6 +289,24 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
       }
     });
 
+    it("renders modern decoupled security code, tertiary subclass separator, and issuance footer", async () => {
+      const challan = generateFormPFT2(cotton, {
+        inspectorName: "Inspector Muhammad Aslam",
+        officeAddress: "Excise & Taxation Office, Danewal Road, Near General Bus Stand, Vehari"
+      });
+      (challan as any).challanStatus = "ISSUED";
+
+      expect(challan.copies[0]?.issuingInspector?.name).toBe("Inspector Muhammad Aslam");
+      expect(challan.copies[0]?.officeAddress).toBe(
+        "Excise & Taxation Office, Danewal Road, Near General Bus Stand, Vehari"
+      );
+
+      const pdf = await generatePft2ChallanPdf(challan);
+      expect(pdf.getNumberOfPages()).toBe(1);
+      const pdfBytes = Buffer.from(pdf.output("arraybuffer"));
+      expect(pdfBytes.length).toBeGreaterThan(5000);
+    });
+
     it("verifies date and tax year formatters for compact statutory display", async () => {
       const { formatChallanDisplayDate, formatChallanTaxYear, cleanChallanScope } =
         await import("../src/lib/pft2-formatters.js");

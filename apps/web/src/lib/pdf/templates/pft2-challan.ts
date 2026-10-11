@@ -99,24 +99,8 @@ export async function generatePft2ChallanPdf(
     const innerBottom = cardBottom - 1.8;
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SECTION 1 — TOP HEADER ROW, QR CODE & SECURITY CODE (BELOW QR) & PUNJAB SEAL
+    // SECTION 1 — TOP HEADER ROW, VECTOR QR (LEFT), PUNJAB SEAL + SECURITY CODE (RIGHT)
     // ══════════════════════════════════════════════════════════════════════════
-    const QR_SIZE = 20.0;
-    const qrX = innerX + 0.5;
-    const qrY = curY + 1.2;
-
-    // Render crisp vector QR image (quiet space preserved)
-    doc.addImage(qrDataUrl, "PNG", qrX, qrY, QR_SIZE, QR_SIZE);
-
-    // Security PIN Box Elegantly Positioned Below QR Code (Number Only)
-    const secBoxY = qrY + QR_SIZE + 0.8;
-    const secBoxW = QR_SIZE;
-    const secBoxH = 5.8;
-    doc.setFillColor(...C.blueBadgeBg);
-    doc.setDrawColor(...C.blueBadgeBorder);
-    doc.setLineWidth(0.2);
-    doc.roundedRect(qrX, secBoxY, secBoxW, secBoxH, 0.6, 0.6, "FD");
-
     const secCode =
       copy.securityCode && /^\d{6}$/.test(copy.securityCode)
         ? copy.securityCode
@@ -129,21 +113,48 @@ export async function generatePft2ChallanPdf(
                 challan.pin ||
                 copy.qrPayload
             );
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.5);
-    doc.setTextColor(...C.blueDeep);
-    doc.text(secCode, qrX + secBoxW / 2, secBoxY + 4.1, { align: "center" });
 
-    // Official Government of the Punjab Seal (Opposite QR code on the right side)
-    const LOGO_W = 15.5;
-    const LOGO_H = LOGO_W / PUNJAB_LOGO_ASPECT_RATIO; // 15.5 / 1.1976 = ~12.94mm
-    const logoX = innerX + innerW - LOGO_W - 0.5;
-    const logoY = curY + 6.0; // Perfectly parallel to GOVERNMENT OF THE PUNJAB & EXCISE DEPARTMENT lines
+    // Left: Crisp vector QR Code with Micro Caption (Decoupled from Security Code)
+    const QR_SIZE = 21.0;
+    const qrX = innerX + 0.8;
+    const qrY = curY + 1.2;
+    doc.addImage(qrDataUrl, "PNG", qrX, qrY, QR_SIZE, QR_SIZE);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(4.8);
+    doc.setTextColor(...C.textMuted);
+    doc.text("SCAN TO VERIFY", qrX + QR_SIZE / 2, qrY + QR_SIZE + 2.2, { align: "center" });
+
+    // Right: Official Government of the Punjab Seal
+    const LOGO_W = 14.8;
+    const LOGO_H = LOGO_W / PUNJAB_LOGO_ASPECT_RATIO; // 14.8 / 1.1976 = ~12.36mm
+    const logoX = innerX + innerW - LOGO_W - 0.8;
+    const logoY = curY + 1.2;
     doc.addImage(PUNJAB_LOGO_DATA_URL, "PNG", logoX, logoY, LOGO_W, LOGO_H);
 
-    // Center region: Authority header between QR code (left) and Punjab Logo (right)
-    const deptX = qrX + QR_SIZE + 1.5;
-    const deptW = logoX - deptX - 1.5; // ~ 50.0mm centered area
+    // Right (Directly below Punjab Logo): Decoupled Official Security Verification PIN Box
+    const secBoxW = 16.5;
+    const secBoxH = 7.0;
+    const secBoxX = logoX + (LOGO_W - secBoxW) / 2;
+    const secBoxY = logoY + LOGO_H + 1.2;
+    doc.setFillColor(...C.blueBadgeBg);
+    doc.setDrawColor(...C.blueBadgeBorder);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(secBoxX, secBoxY, secBoxW, secBoxH, 0.6, 0.6, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(4.6);
+    doc.setTextColor(...C.blueBadgeText);
+    doc.text("SECURITY CODE", secBoxX + secBoxW / 2, secBoxY + 2.3, { align: "center" });
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.2);
+    doc.setTextColor(...C.blueDeep);
+    doc.text(secCode, secBoxX + secBoxW / 2, secBoxY + 5.7, { align: "center" });
+
+    // Center region: Authority header between QR code (left) and Punjab Logo / Sec Box (right)
+    const deptX = qrX + QR_SIZE + 1.4;
+    const rightBoundary = Math.min(logoX, secBoxX);
+    const deptW = rightBoundary - deptX - 1.4; // ~ 48.0mm centered area
     const deptCX = deptX + deptW / 2;
 
     // 1. Copy Title Badge (Pill)
@@ -440,64 +451,90 @@ export async function generatePft2ChallanPdf(
     }
     curY += 4.8;
 
-    // Row 3: CLASS (Full Width Available, No Redundant Slab Amount Label)
+    // Row 3: CLASS (Full Horizontal Width, prefix "Class 3(ii) -" removed)
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.4);
     doc.setTextColor(...C.textDark);
     doc.text("CLASS:", innerX + 1.0, curY + 3.2);
 
+    const classLabelW = 12.5;
+    const classValX = innerX + classLabelW + 1.0;
+    const classValW = innerW - (classLabelW + 2.0); // 73.9mm full horizontal space!
+
+    let cleanClass = (copy.taxpayerInfo.categoryName || "").trim();
+    if (!cleanClass) {
+      cleanClass = (copy.taxpayerInfo.classification || "")
+        .replace(/^Class\s+[0-9a-zA-Z().\s]+[-–—]\s*/i, "")
+        .replace(/^Class\s+\d+\s*[-–—]?\s*/i, "")
+        .trim();
+    }
+    if (!cleanClass) {
+      cleanClass = "Contractors, Suppliers and Consultants";
+    }
+
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.2);
-    const classVal =
-      copy.taxpayerInfo.classification?.replace(/Class undefined/gi, "Class 1") ||
-      "Class 1 - Companies";
-    const classLines = doc.splitTextToSize(classVal, valColW);
-    doc.text(classLines[0] ?? classVal, valColX, curY + 3.2);
+    doc.setTextColor(...C.textDark);
+    const classLines = doc.splitTextToSize(cleanClass, classValW);
+    doc.text(classLines[0] ?? cleanClass, classValX, curY + 3.2);
     for (let cIdx = 1; cIdx < classLines.length; cIdx++) {
       curY += 3.6;
-      doc.text(classLines[cIdx] ?? "", valColX, curY + 3.2);
+      doc.text(classLines[cIdx] ?? "", classValX, curY + 3.2);
     }
     curY += 4.6;
 
-    // Row 3b: SUB-CLASS (Sub-Classification Code & Description)
+    // Row 3b: SUB-CLASS (Sub-Classification Code & Description + Tertiary Class Values with Separator)
     const rawSubCode = copy.taxpayerInfo.subclassificationCode;
     const catCode =
       copy.taxpayerInfo.categoryCode ||
       copy.taxpayerInfo.classification?.split("-")[0]?.replace(/[^0-9]/g, "");
-    const tertiary = copy.taxpayerInfo.tertiarySlab;
     const resolvedCode = formatFullSubclassCode(
       rawSubCode,
       catCode,
       copy.taxpayerInfo.statutoryRuleId,
       copy.taxpayerInfo.statutoryTertiaryCode
     );
-    const subLabel = copy.taxpayerInfo.subclassificationLabel;
-    const subClassText = (() => {
-      const sCode = resolvedCode.replace(/^Code\s+/i, "").trim();
-      const sLabel = subLabel?.trim();
-      const tert = tertiary?.trim();
-      if (sCode && sCode !== "1" && sCode !== "undefined") {
-        return `Code ${sCode}${sLabel ? ` \u2014 ${sLabel}` : ""}${tert && tert !== sLabel ? ` (${tert})` : ""}`;
-      }
-      if (sLabel && sLabel !== "1") {
-        return `${sLabel}${tert && tert !== sLabel ? ` (${tert})` : ""}`;
-      }
-      return tert || "General / Standard Class";
-    })();
+    const sCodeClean = resolvedCode.replace(/^Code\s+/i, "").trim();
+    const subLabel = copy.taxpayerInfo.subclassificationLabel?.trim();
+    const tertSlab = copy.taxpayerInfo.tertiarySlab?.trim();
+    const tertCode = copy.taxpayerInfo.statutoryTertiaryCode?.trim();
+
+    const baseSub =
+      sCodeClean && sCodeClean !== "1" && sCodeClean !== "undefined"
+        ? `Code ${sCodeClean}${subLabel && subLabel !== "1" ? ` \u2014 ${subLabel}` : ""}`
+        : subLabel && subLabel !== "1"
+          ? subLabel
+          : "General / Standard Class";
+
+    let tertDisplay = "";
+    if (tertSlab && tertSlab !== baseSub && tertSlab !== subLabel) {
+      tertDisplay =
+        tertCode && !tertSlab.includes(tertCode) ? `${tertCode} \u2014 ${tertSlab}` : tertSlab;
+    } else if (tertCode && tertCode !== sCodeClean) {
+      tertDisplay = tertCode;
+    }
+
+    const subClassText = tertDisplay
+      ? `${baseSub}  |  ${tertDisplay.startsWith("Tertiary:") ? tertDisplay : `Tertiary: ${tertDisplay}`}`
+      : baseSub;
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.4);
     doc.setTextColor(...C.textDark);
     doc.text("SUB-CLASS:", innerX + 1.0, curY + 3.2);
 
+    const subLabelW = 18.0;
+    const subValX = innerX + subLabelW + 1.0;
+    const subValW = innerW - (subLabelW + 2.0); // 68.4mm!
+
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.4);
     doc.setTextColor(...C.primaryLight);
-    const subLines = doc.splitTextToSize(subClassText, valColW);
-    doc.text(subLines[0] ?? subClassText, valColX, curY + 3.2);
+    const subLines = doc.splitTextToSize(subClassText, subValW);
+    doc.text(subLines[0] ?? subClassText, subValX, curY + 3.2);
     for (let sIdx = 1; sIdx < subLines.length; sIdx++) {
       curY += 3.4;
-      doc.text(subLines[sIdx] ?? "", valColX, curY + 3.2);
+      doc.text(subLines[sIdx] ?? "", subValX, curY + 3.2);
     }
     curY += 4.8;
 
@@ -507,14 +544,18 @@ export async function generatePft2ChallanPdf(
     doc.setTextColor(...C.textDark);
     doc.text("ADDRESS:", innerX + 1.0, curY + 3.2);
 
+    const addrLabelW = 16.0;
+    const addrValX = innerX + addrLabelW + 1.0;
+    const addrValW = innerW - (addrLabelW + 2.0);
+
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.0);
     doc.setTextColor(...C.textMid);
-    const addrLines = doc.splitTextToSize(copy.taxpayerInfo.address, valColW);
-    doc.text(addrLines[0] ?? "", valColX, curY + 3.2);
+    const addrLines = doc.splitTextToSize(copy.taxpayerInfo.address, addrValW);
+    doc.text(addrLines[0] ?? "", addrValX, curY + 3.2);
     for (let aIdx = 1; aIdx < addrLines.length; aIdx++) {
       curY += 3.8;
-      doc.text(addrLines[aIdx] ?? "", valColX, curY + 3.2);
+      doc.text(addrLines[aIdx] ?? "", addrValX, curY + 3.2);
     }
     curY += 5.6;
 
@@ -539,8 +580,8 @@ export async function generatePft2ChallanPdf(
       total?: boolean;
       amber?: boolean;
     }[] = [
-      { label: "Current Tax Demand", value: `Rs. ${copy.taxPayable.currentTax.toLocaleString()}` },
-      { label: "Prior Year Arrears", value: `Rs. ${copy.taxPayable.arrears.toLocaleString()}` },
+      { label: "Current Year Tax", value: `Rs. ${copy.taxPayable.currentTax.toLocaleString()}` },
+      { label: "Arrears", value: `Rs. ${copy.taxPayable.arrears.toLocaleString()}` },
       {
         label: "Late Surcharge / Penalty",
         value: `Rs. ${copy.taxPayable.penalty.toLocaleString()}`
@@ -624,10 +665,11 @@ export async function generatePft2ChallanPdf(
 
     // ══════════════════════════════════════════════════════════════════════════
     // SECTION 5 — FOR BANK'S USE ONLY (COMPACT, PRACTICAL STATUTORY COUNTERFOIL)
-    // Anchored at bottom of card with standard practical height
     // ══════════════════════════════════════════════════════════════════════════
-    const BANK_H = 26.0;
-    const bankY = innerBottom - BANK_H;
+    const FOOTER_H = 8.5;
+    const BANK_H = 21.0;
+    const footerY = innerBottom - FOOTER_H;
+    const bankY = footerY - BANK_H - 1.2;
 
     doc.setFillColor(...C.bgBank);
     doc.setDrawColor(...C.borderMed);
@@ -640,54 +682,54 @@ export async function generatePft2ChallanPdf(
     doc.line(innerX, bankY, innerX + innerW, bankY);
 
     // Header bar (amber-tinted)
-    const headerBarH = 3.6;
+    const headerBarH = 3.2;
     doc.setFillColor(...C.amberBg);
     doc.rect(innerX, bankY + 0.2, innerW, headerBarH, "F");
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.2);
+    doc.setFontSize(6.0);
     doc.setTextColor(...C.amberDark);
-    doc.text("FOR BANK'S USE ONLY \u2022 Rule 9 Statutory Counterfoil", innerX + 2.0, bankY + 2.6);
+    doc.text("FOR BANK'S USE ONLY \u2022 Rule 9 Statutory Counterfoil", innerX + 2.0, bankY + 2.4);
 
     // Left Pane: Operational inputs and amount callout
     const bLeftW = 49.0;
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(5.8);
+    doc.setFontSize(5.6);
     doc.setTextColor(...C.textDark);
 
     // Row 1: Bank & Branch
-    doc.text("Bank / Branch: __________________________", innerX + 2.0, bankY + 7.5);
+    doc.text("Bank / Branch: __________________________", innerX + 2.0, bankY + 6.6);
 
     // Row 2: Scroll No & Deposit Date
-    doc.text("Scroll No.: _________ Payment Date: _______", innerX + 2.0, bankY + 11.5);
+    doc.text("Scroll No.: _________ Payment Date: _______", innerX + 2.0, bankY + 10.2);
 
     // Row 3: Amount Received Callout Pill
-    const amtPillH = 4.8;
+    const amtPillH = 4.2;
     doc.setFillColor(...C.primaryMint);
     doc.setDrawColor(...C.primaryLight);
     doc.setLineWidth(0.2);
-    doc.roundedRect(innerX + 1.5, bankY + 14.0, bLeftW - 3.0, amtPillH, 0.5, 0.5, "FD");
+    doc.roundedRect(innerX + 1.5, bankY + 11.8, bLeftW - 3.0, amtPillH, 0.5, 0.5, "FD");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.2);
+    doc.setFontSize(7.0);
     doc.setTextColor(...C.primary);
     doc.text(
       `Amount: Rs. ${copy.taxPayable.totalPayable.toLocaleString()} /-`,
       innerX + (bLeftW - 3.0) / 2 + 1.5,
-      bankY + 17.4,
+      bankY + 14.8,
       { align: "center" }
     );
 
     // Row 4: Mode of Payment
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(5.2);
+    doc.setFontSize(5.0);
     doc.setTextColor(...C.textMid);
-    doc.text("Mode: [  ] Cash   [  ] Cheque / Pay Order", innerX + 2.0, bankY + 22.8);
+    doc.text("Mode: [  ] Cash   [  ] Cheque / Pay Order", innerX + 2.0, bankY + 19.4);
 
     // Right Pane: Cashier Signature & Stamp Box
     const stampX = innerX + bLeftW + 1.2;
     const stampW = innerW - bLeftW - 2.4;
-    const stampY = bankY + headerBarH + 1.0;
-    const stampH = BANK_H - headerBarH - 2.0;
+    const stampY = bankY + headerBarH + 0.8;
+    const stampH = BANK_H - headerBarH - 1.6;
 
     doc.setFillColor(...C.white);
     doc.setDrawColor(...C.borderDark);
@@ -697,13 +739,53 @@ export async function generatePft2ChallanPdf(
     doc.setLineDashPattern([], 0);
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(5.6);
+    doc.setFontSize(5.4);
     doc.setTextColor(...C.textDark);
-    doc.text("Authorized Cashier", stampX + stampW / 2, stampY + stampH - 4.2, { align: "center" });
+    doc.text("Authorized Cashier", stampX + stampW / 2, stampY + stampH - 3.6, { align: "center" });
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(5.0);
+    doc.setFontSize(4.8);
     doc.setTextColor(...C.textMuted);
-    doc.text("Signature & Stamp", stampX + stampW / 2, stampY + stampH - 1.6, { align: "center" });
+    doc.text("Signature & Stamp", stampX + stampW / 2, stampY + stampH - 1.4, { align: "center" });
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // SECTION 6 — STATUTORY ISSUANCE FOOTER (OFFICER NAME & OFFICIAL OFFICE ADDRESS)
+    // ══════════════════════════════════════════════════════════════════════════
+    doc.setFillColor(...C.bgMeta);
+    doc.setDrawColor(...C.borderMed);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(innerX, footerY, innerW, FOOTER_H, 0.6, 0.6, "FD");
+
+    // Top primary accent line on footer card
+    doc.setDrawColor(...C.primary);
+    doc.setLineWidth(0.3);
+    doc.line(innerX, footerY, innerX + innerW, footerY);
+
+    const inspectorName =
+      copy.issuingInspector?.name ||
+      (copy.assessmentInfo.etoName &&
+      copy.assessmentInfo.etoName.toLowerCase().includes("inspector")
+        ? copy.assessmentInfo.etoName
+        : "Inspector Muhammad Aslam");
+    const circleDisplay = cleanCircleName(
+      copy.assessmentInfo.circleName || copy.circleName || "Circle 1"
+    );
+    const officeAddress =
+      copy.officeAddress ||
+      "Excise & Taxation Office, Danewal Road, Near General Bus Stand, Vehari";
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.2);
+    doc.setTextColor(...C.primary);
+    doc.text(
+      `Issued by: ${inspectorName}  \u2022  Circle: ${circleDisplay}`,
+      innerX + 2.0,
+      footerY + 3.2
+    );
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(5.5);
+    doc.setTextColor(...C.textMid);
+    doc.text(`Office: ${officeAddress}`, innerX + 2.0, footerY + 6.6);
 
     // ══════════════════════════════════════════════════════════════════════════
     // Perforated scissor cut line between counterfoils (Full Page Height)

@@ -533,6 +533,13 @@ export interface FormPFT2CopyModel {
     readonly bankName: string;
     readonly branchName: string;
   };
+  readonly issuingInspector?:
+    | {
+        readonly name: string;
+        readonly title: string;
+      }
+    | undefined;
+  readonly officeAddress?: string | undefined;
 }
 
 export interface FormPFT2Model {
@@ -950,7 +957,33 @@ export interface GenerateFormPFT2Options {
   readonly challanStatus?: string | undefined;
   readonly isTampered?: boolean | undefined;
   readonly tamperedAmount?: number | undefined;
-  readonly officer?: { readonly name?: string; readonly title?: string } | undefined;
+  readonly officer?:
+    { readonly name?: string; readonly title?: string; readonly role?: string } | undefined;
+  readonly inspectorName?: string | undefined;
+  readonly officeAddress?: string | undefined;
+}
+
+/**
+ * Returns the gazetted administrative office address for a jurisdiction.
+ * For District Vehari & Tehsil Vehari: Excise & Taxation Office, Danewal Road, Near General Bus Stand, Vehari
+ */
+export function getJurisdictionOfficeAddress(
+  district?: string | null,
+  tehsil?: string | null
+): string {
+  const normTeh = (tehsil || "").trim().toLowerCase();
+  const normDist = (district || "").trim().toLowerCase();
+
+  if (normTeh.includes("burewala")) {
+    return "Excise & Taxation Sub-Office, Old Tehsil Road, Burewala";
+  }
+  if (normTeh.includes("mailsi")) {
+    return "Excise & Taxation Sub-Office, Colony Road, Mailsi";
+  }
+  if (normDist.includes("vehari") || normTeh.includes("vehari") || !normDist) {
+    return "Excise & Taxation Office, Danewal Road, Near General Bus Stand, Vehari";
+  }
+  return `Excise & Taxation Office, ${tehsil || district || "District Headquarter"}, District ${district || "Vehari"}`;
 }
 
 /**
@@ -1195,7 +1228,19 @@ export function generateFormPFT2(
       challanSerial: challanNumber,
       bankName: "National Bank of Pakistan",
       branchName: `Main Branch, Club Road, ${district}`
-    }
+    },
+    issuingInspector: {
+      name:
+        opts?.inspectorName ||
+        (opts?.officer?.name &&
+        (opts.officer.role === "INSPECTOR" ||
+          opts.officer.title?.toLowerCase().includes("inspector"))
+          ? opts.officer.name
+          : unit.servedBy || "Inspector Muhammad Aslam"),
+      title:
+        (opts?.officer?.role === "INSPECTOR" ? opts.officer.title : undefined) || "Tax Inspector"
+    },
+    officeAddress: opts?.officeAddress || getJurisdictionOfficeAddress(district, tehsil)
   };
 
   const copy1: FormPFT2CopyModel = {
