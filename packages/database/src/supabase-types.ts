@@ -615,6 +615,74 @@ export type Database = {
         Args: { p_potential_id: string; p_assigned_demand_no: string };
         Returns: Json;
       };
+      get_officers_directory: {
+        Args: Record<PropertyKey, never>;
+        Returns: Json;
+      };
+      get_district_governance_matrix: {
+        Args: Record<PropertyKey, never>;
+        Returns: Json;
+      };
+      get_user_management_audit_log: {
+        Args: { p_limit?: number };
+        Returns: Json;
+      };
+      update_officer_profile: {
+        Args: {
+          p_user_id: string;
+          p_display_name: string;
+          p_phone: string;
+          p_cnic: string;
+          p_designation: string;
+          p_office_address: string;
+        };
+        Returns: Json;
+      };
+      reassign_officer_circle: {
+        Args: {
+          p_user_id: string;
+          p_new_circle_id: string;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
+      attach_circle_to_tehsil: {
+        Args: {
+          p_circle_id: string;
+          p_tehsil_id: string;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
+      set_officer_status: {
+        Args: {
+          p_user_id: string;
+          p_active: boolean;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
+      admin_set_officer_password: {
+        Args: {
+          p_target_user_id: string;
+          p_new_password: string;
+        };
+        Returns: Json;
+      };
+      admin_create_officer: {
+        Args: {
+          p_name: string;
+          p_email: string;
+          p_role: string;
+          p_circle_id: string;
+          p_phone: string;
+          p_cnic: string;
+          p_designation: string;
+          p_office_address: string;
+          p_initial_password: string;
+        };
+        Returns: Json;
+      };
     };
     Enums: {
       [_ in never]: never;
