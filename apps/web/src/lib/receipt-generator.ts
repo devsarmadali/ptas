@@ -38,6 +38,9 @@ export interface StatutoryReceiptDocument {
   readonly amountPaidWords: string;
   readonly dateOfReceipt: string;
   readonly timeOfReceipt: string;
+  readonly entryTimestamp?: string | undefined;
+  readonly challanIssueDate?: string | undefined;
+  readonly challanDueDate?: string | undefined;
   readonly paymentChannel: string;
   readonly bankBranch: string;
   readonly bankScrollRef: string;
@@ -116,6 +119,9 @@ export function buildStatutoryReceiptDocument(
     amountPaidWords: amountWords,
     dateOfReceipt: record.dateOfReceipt,
     timeOfReceipt: record.timeOfReceipt,
+    entryTimestamp: record.entryTimestamp,
+    challanIssueDate: record.challanIssueDate,
+    challanDueDate: record.challanDueDate,
     paymentChannel: record.paymentChannel,
     bankBranch: branch,
     bankScrollRef: record.bankScrollRef,
@@ -197,9 +203,11 @@ export function exportStatutoryReceiptsCsv(receipts: readonly StatutoryReceiptRe
   const headers = [
     "Receipt Number",
     "Receipt Category",
-    "Date of Receipt",
-    "Time of Receipt",
+    "Date of Receipt (Payment Date)",
+    "System Entry Timestamp",
     "Challan Number",
+    "Challan Issue Date",
+    "Challan Due Date",
     "Permanent Demand Number",
     "Assessee Legal Name",
     "Trade Name",
@@ -227,8 +235,10 @@ export function exportStatutoryReceiptsCsv(receipts: readonly StatutoryReceiptRe
         : "Regular Demand (PFT-3)"
     ),
     escapeCsv(r.dateOfReceipt),
-    escapeCsv(r.timeOfReceipt),
+    escapeCsv(r.entryTimestamp ?? `${r.dateOfReceipt} ${r.timeOfReceipt}`),
     escapeCsv(r.challanNumber),
+    escapeCsv(r.challanIssueDate ?? ""),
+    escapeCsv(r.challanDueDate ?? ""),
     escapeCsv(r.demandNumber),
     escapeCsv(r.assesseeLegalName),
     escapeCsv(r.assesseeTradeName ?? ""),

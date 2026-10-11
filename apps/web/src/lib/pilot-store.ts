@@ -764,6 +764,12 @@ export interface StatutoryReceiptRecord {
   readonly amountPaidWords: string;
   readonly dateOfReceipt: string;
   readonly timeOfReceipt: string;
+  /** Auto-assigned immutable system entry timestamp (e.g. 2026-10-11T12:05:00+05:00) */
+  readonly entryTimestamp?: string | undefined;
+  /** Original Form P.F.T-2 issuance date (e.g. 2026-10-10) */
+  readonly challanIssueDate?: string | undefined;
+  /** Statutory payment deadline / due date (e.g. 2026-10-31) */
+  readonly challanDueDate?: string | undefined;
   readonly paymentChannel: string;
   readonly bankBranch?: string | undefined;
   readonly bankScrollRef: string;
@@ -1798,6 +1804,9 @@ export function createInitialStatutoryReceipts(units: StoredUnit[]): StatutoryRe
       amountPaidWords: "Ten Thousand Rupees Only",
       dateOfReceipt: "2026-07-15",
       timeOfReceipt: "11:24 AM",
+      entryTimestamp: "2026-07-15T11:24:00+05:00",
+      challanIssueDate: "2026-07-01",
+      challanDueDate: "2026-07-31",
       paymentChannel: "ePay Punjab (Digital Bank Transfer)",
       bankBranch: "State Bank / 1Link Portal",
       bankScrollRef: "ePay-PUNJAB-TXN-994182",

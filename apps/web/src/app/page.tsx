@@ -58,7 +58,9 @@ import {
   type StatutoryReceiptCategory,
   type Pft2Status,
   RECEIPT_SOURCE_CONFIG,
-  getReceiptCategory
+  getReceiptCategory,
+  getPakistanCurrentDate,
+  getPakistanCurrentTimestamp
 } from "../lib/pilot-store";
 import { computeFileSha256, uploadReceiptScan } from "../lib/storage";
 import {
@@ -2242,6 +2244,15 @@ export default function HomePage({
 
     if (!paymentReceiptNo.trim()) {
       showToast("error", "Challan / Receipt number is mandatory");
+      return;
+    }
+
+    const today = getPakistanCurrentDate();
+    if (paymentDate > today) {
+      showToast(
+        "error",
+        `Deposit date (${paymentDate}) cannot be in the future (today is ${today}). Payment must have already occurred at the bank.`
+      );
       return;
     }
 
@@ -4665,81 +4676,10 @@ export default function HomePage({
           display: "flex",
           alignItems: "center",
           justifyContent: "flex-end",
-          gap: "0.35rem",
           whiteSpace: "nowrap"
         }}
       >
-        {/* Action Button 1: Migrate to PFT-3 (Lands with SUBMITTED status for ETO approval) */}
-        {isMigrated ? (
-          <button
-            type="button"
-            disabled
-            className="btn-secondary"
-            style={{
-              fontSize: "0.72rem",
-              padding: "0.22rem 0.5rem",
-              opacity: 0.65,
-              cursor: "not-allowed",
-              background: "#f1f5f9",
-              borderColor: "#cbd5e1"
-            }}
-            title={`Already migrated to Form P.F.T-3 Register as Demand No. ${target.migratedToDemandNo ?? ""}`}
-          >
-            ✓ Migrated
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="btn-primary"
-            style={{
-              fontSize: "0.72rem",
-              padding: "0.22rem 0.55rem",
-              background: "#065f46",
-              borderColor: "#047857",
-              whiteSpace: "nowrap"
-            }}
-            onClick={() => handleOpenMigratePotential(target)}
-            title="Migrate unit to Form P.F.T-3 Assessment Register with SUBMITTED status for ETO review & approval"
-          >
-            📥 Migrate to PFT-3
-          </button>
-        )}
-
-        {/* Action Button: Edit unmigrated potential unit particulars */}
-        {!isMigrated && (
-          <button
-            type="button"
-            className="btn-secondary"
-            style={{
-              fontSize: "0.72rem",
-              padding: "0.22rem 0.5rem",
-              whiteSpace: "nowrap"
-            }}
-            onClick={() => handleOpenEditPotentialUnit(target)}
-            title="Edit potential assessee particulars, circle, locality, and classification"
-          >
-            ✏️ Edit
-          </button>
-        )}
-
-        {/* Action Button 2: Add / Edit Arrears directly on potential units */}
-        <button
-          type="button"
-          className="btn-secondary"
-          style={{
-            fontSize: "0.72rem",
-            padding: "0.22rem 0.5rem",
-            whiteSpace: "nowrap",
-            borderColor: (target.openingArrears ?? 0) > 0 ? "#b45309" : undefined,
-            color: (target.openingArrears ?? 0) > 0 ? "#92400e" : undefined
-          }}
-          onClick={() => handleOpenEditPotentialArrears(target)}
-          title="Add or edit opening arrears liability for this prospective unit"
-        >
-          💰 {(target.openingArrears ?? 0) > 0 ? "Edit Arrears" : "Add Arrears"}
-        </button>
-
-        {/* Universal Floating Dropdown Menu for secondary statutory actions */}
+        {/* Universal Floating Dropdown Menu containing all statutory prospective actions */}
         <RowActionMenu
           align="right"
           actions={[
@@ -4762,7 +4702,9 @@ export default function HomePage({
             {
               id: "add-edit-arrears-menu",
               label:
-                (target.openingArrears ?? 0) > 0 ? "Edit Arrears Balance" : "Add Arrears Balance",
+                (target.openingArrears ?? 0) > 0
+                  ? `Edit Arrears (PKR ${(target.openingArrears ?? 0).toLocaleString()})`
+                  : "Add Arrears Balance",
               icon: "💰",
               onClick: () => handleOpenEditPotentialArrears(target)
             },
@@ -4843,13 +4785,16 @@ export default function HomePage({
     setReceiveBankBranch(defaultBranch);
     setReceiveBankScrollRef("");
 
-    // Constrain initial receipt date between challan issue date and due date
-    const today = new Date().toISOString().split("T")[0]!;
+    // Constrain initial receipt date between challan issue date and due date, never exceeding today
+    const today = getPakistanCurrentDate();
     let initialDate = today;
     if (challan.issueDate && initialDate < challan.issueDate) {
       initialDate = challan.issueDate;
     } else if (challan.dueDate && initialDate > challan.dueDate) {
       initialDate = challan.dueDate;
+    }
+    if (initialDate > today) {
+      initialDate = today;
     }
     setReceiveDate(initialDate);
     setReceiveRemarks("");
@@ -4866,18 +4811,29 @@ export default function HomePage({
       return;
     }
 
+    const today = getPakistanCurrentDate();
+
+    // Statutory Rule: Date of payment cannot be in the future (after today)
+    if (receiveDate > today) {
+      showToast(
+        "error",
+        `Date of receipt / payment (${receiveDate}) cannot be in the future (today is ${today}). Payment must have already occurred at the authorized bank.`
+      );
+      return;
+    }
+
     // Statutory Rule: Receipt date must strictly be between challan issue date and due date
     if (receivingChallan.issueDate && receiveDate < receivingChallan.issueDate) {
       showToast(
         "error",
-        `Receipt date cannot be earlier than Challan Issue Date (${receivingChallan.issueDate}).`
+        `Receipt date (${receiveDate}) cannot be earlier than Challan Issue Date (${receivingChallan.issueDate}).`
       );
       return;
     }
     if (receivingChallan.dueDate && receiveDate > receivingChallan.dueDate) {
       showToast(
         "error",
-        `Receipt date cannot be later than Challan Due Date (${receivingChallan.dueDate}). Payment on expired challans cannot be accepted directly.`
+        `Receipt date (${receiveDate}) cannot be later than Challan Due Date (${receivingChallan.dueDate}). Payment on expired challans cannot be accepted directly.`
       );
       return;
     }
@@ -4889,6 +4845,7 @@ export default function HomePage({
 
     const receiptSeq = String(statutoryReceipts.length + 1).padStart(5, "0");
     const receiptNumber = formatStandardDocNumber({ docCode: "RCPT", sequence: receiptSeq });
+    const nowTimestamp = getPakistanCurrentTimestamp();
     const nowTime = new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 
     // 1. Check for Potential Unit Migration
@@ -4947,6 +4904,9 @@ export default function HomePage({
       amountPaidWords: numberToWordsPkr(payableAmount),
       dateOfReceipt: receiveDate,
       timeOfReceipt: nowTime,
+      entryTimestamp: nowTimestamp,
+      challanIssueDate: receivingChallan.issueDate,
+      challanDueDate: receivingChallan.dueDate,
       paymentChannel: receivePaymentChannel,
       bankBranch: receiveBankBranch,
       district: receiveBranchDistrict,
@@ -11950,8 +11910,23 @@ export default function HomePage({
                           >
                             {rec.receiptNumber.replace(/^PB\/ET\/VHR\/CIR-1\//, "")}
                           </strong>
-                          <span style={{ display: "block", fontSize: "0.68rem", color: "#64748b" }}>
-                            PB/ET/VHR &bull; {rec.dateOfReceipt}
+                          <span
+                            style={{
+                              display: "block",
+                              fontSize: "0.68rem",
+                              color: "#065f46",
+                              fontWeight: 600
+                            }}
+                          >
+                            💳 Paid: {rec.dateOfReceipt}
+                          </span>
+                          <span style={{ display: "block", fontSize: "0.65rem", color: "#64748b" }}>
+                            🕒 Entry:{" "}
+                            {rec.entryTimestamp
+                              ? new Date(rec.entryTimestamp).toLocaleDateString("en-PK") +
+                                " " +
+                                (rec.timeOfReceipt || "")
+                              : rec.timeOfReceipt || rec.dateOfReceipt}
                           </span>
                         </td>
                         <td style={{ whiteSpace: "nowrap" }}>
@@ -11967,6 +11942,14 @@ export default function HomePage({
                           <span style={{ display: "block", fontSize: "0.68rem", color: "#64748b" }}>
                             PDN: {rec.demandNumber}
                           </span>
+                          {(rec.challanIssueDate || rec.challanDueDate) && (
+                            <span
+                              style={{ display: "block", fontSize: "0.64rem", color: "#475569" }}
+                            >
+                              {rec.challanIssueDate ? `📅 Issued: ${rec.challanIssueDate}` : ""}
+                              {rec.challanDueDate ? ` • ⏰ Due: ${rec.challanDueDate}` : ""}
+                            </span>
+                          )}
                         </td>
                         <td style={{ maxWidth: "12rem" }}>
                           <strong style={{ fontSize: "0.8rem" }}>{rec.assesseeLegalName}</strong>
@@ -16868,30 +16851,40 @@ export default function HomePage({
                     <div className="form-group">
                       <label
                         htmlFor="pay-district"
-                        style={{ fontWeight: 700, fontSize: "0.85rem" }}
-                      >
-                        📍 Relevant District:
-                      </label>
-                      <select
-                        id="pay-district"
-                        className="form-control"
-                        value={paymentDistrict}
-                        onChange={(e) => {
-                          const newDist = e.target.value;
-                          setPaymentDistrict(newDist);
-                          const branches = getDesignatedBranchesForDistrict(newDist);
-                          const firstBranch = branches[0];
-                          if (firstBranch) {
-                            setPaymentBankBranch(formatBranchDisplay(firstBranch));
-                          }
+                        style={{
+                          fontWeight: 700,
+                          fontSize: "0.85rem",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.3rem"
                         }}
                       >
-                        {allDesignatedDistricts.map((d) => (
-                          <option key={d} value={d}>
-                            {d}
-                          </option>
-                        ))}
-                      </select>
+                        <span>🔒</span>
+                        <span>📍 Relevant District:</span>
+                        <span style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 500 }}>
+                          (Jurisdiction Locked)
+                        </span>
+                      </label>
+                      <input
+                        id="pay-district"
+                        type="text"
+                        className="form-control"
+                        value={paymentDistrict}
+                        readOnly
+                        disabled
+                        style={{
+                          backgroundColor: "#f8fafc",
+                          color: "#0f172a",
+                          cursor: "not-allowed",
+                          fontWeight: 700,
+                          border: "1px solid #cbd5e1"
+                        }}
+                        title="Administrative district is legally locked to assessee circle jurisdiction"
+                      />
+                      <small style={{ color: "#64748b", display: "block", marginTop: "0.2rem" }}>
+                        Legally locked to assessee circle &amp; officer jurisdiction (
+                        {paymentDistrict}).
+                      </small>
                     </div>
 
                     <div className="form-group">
@@ -16932,15 +16925,27 @@ export default function HomePage({
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="pay-date">Deposit Date *</label>
+                  <label htmlFor="pay-date">Deposit Date (Payment Date) *</label>
                   <input
                     id="pay-date"
                     type="date"
                     required
                     className="form-control"
                     value={paymentDate}
+                    max={getPakistanCurrentDate()}
                     onChange={(e) => setPaymentDate(e.target.value)}
                   />
+                  <small
+                    style={{
+                      color: "#047857",
+                      fontSize: "0.72rem",
+                      display: "block",
+                      marginTop: "0.25rem",
+                      fontWeight: 600
+                    }}
+                  >
+                    Payment date cannot be in the future (today: {getPakistanCurrentDate()}).
+                  </small>
                 </div>
 
                 <div className="form-group">
@@ -23073,31 +23078,39 @@ export default function HomePage({
                   }}
                 >
                   <div className="form-group">
-                    <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                      📍 Relevant District:
+                    <label
+                      style={{
+                        fontWeight: 700,
+                        fontSize: "0.85rem",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.3rem"
+                      }}
+                    >
+                      <span>🔒</span>
+                      <span>📍 Relevant District:</span>
+                      <span style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 500 }}>
+                        (Jurisdiction Locked)
+                      </span>
                     </label>
-                    <select
+                    <input
+                      type="text"
                       className="form-control"
                       value={receiveBranchDistrict}
-                      onChange={(e) => {
-                        const newDist = e.target.value;
-                        setReceiveBranchDistrict(newDist);
-                        const branches = getDesignatedBranchesForDistrict(newDist);
-                        const firstBranch = branches[0];
-                        if (firstBranch) {
-                          setReceiveBankBranch(formatBranchDisplay(firstBranch));
-                        }
+                      readOnly
+                      disabled
+                      style={{
+                        backgroundColor: "#f8fafc",
+                        color: "#0f172a",
+                        cursor: "not-allowed",
+                        fontWeight: 700,
+                        border: "1px solid #cbd5e1"
                       }}
-                      title="Filter designated bank branches by administrative district"
-                    >
-                      {allDesignatedDistricts.map((d) => (
-                        <option key={d} value={d}>
-                          {d}
-                        </option>
-                      ))}
-                    </select>
+                      title="Administrative district is legally locked to assessee circle jurisdiction"
+                    />
                     <small style={{ color: "#64748b", display: "block", marginTop: "0.2rem" }}>
-                      Auto-detected from challan / jurisdiction.
+                      Legally locked to assessee circle &amp; officer jurisdiction (
+                      {receiveBranchDistrict}).
                     </small>
                   </div>
 
@@ -23185,14 +23198,19 @@ export default function HomePage({
                 >
                   <div className="form-group">
                     <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                      📅 Date of Receipt:
+                      💳 Date of Receipt (Payment Date):
                     </label>
                     <input
                       type="date"
                       className="form-control"
                       value={receiveDate}
                       min={receivingChallan.issueDate}
-                      max={receivingChallan.dueDate}
+                      max={
+                        receivingChallan.dueDate &&
+                        receivingChallan.dueDate < getPakistanCurrentDate()
+                          ? receivingChallan.dueDate
+                          : getPakistanCurrentDate()
+                      }
                       onChange={(e) => setReceiveDate(e.target.value)}
                       required
                     />
@@ -23205,7 +23223,8 @@ export default function HomePage({
                         fontWeight: 600
                       }}
                     >
-                      Permitted: {receivingChallan.issueDate} to {receivingChallan.dueDate}
+                      Permitted: {receivingChallan.issueDate} up to today (
+                      {getPakistanCurrentDate()})
                     </small>
                   </div>
                   <div className="form-group">
@@ -24372,10 +24391,23 @@ export default function HomePage({
                   </div>
                   <div>
                     <span style={{ color: "#64748b", display: "block", fontSize: "0.7rem" }}>
-                      Date &amp; Time of Receipt:
+                      💳 Date of Receipt (Payment Date):
                     </span>
-                    <strong>
-                      {activeReceiptRecord.dateOfReceipt} {activeReceiptRecord.timeOfReceipt}
+                    <strong style={{ color: "#065f46" }}>
+                      {activeReceiptRecord.dateOfReceipt}
+                    </strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "#64748b", display: "block", fontSize: "0.7rem" }}>
+                      🕒 System Entry (Date &amp; Time):
+                    </span>
+                    <strong style={{ color: "#1e293b", fontSize: "0.75rem" }}>
+                      {activeReceiptRecord.entryTimestamp
+                        ? new Date(activeReceiptRecord.entryTimestamp).toLocaleString("en-PK", {
+                            dateStyle: "medium",
+                            timeStyle: "short"
+                          })
+                        : `${activeReceiptRecord.dateOfReceipt} ${activeReceiptRecord.timeOfReceipt || ""}`}
                     </strong>
                   </div>
                   <div>
@@ -24383,6 +24415,21 @@ export default function HomePage({
                       Challan Reference (Form P.F.T-2):
                     </span>
                     <strong>{activeReceiptRecord.challanNumber}</strong>
+                    {(activeReceiptRecord.challanIssueDate ||
+                      activeReceiptRecord.challanDueDate) && (
+                      <div style={{ fontSize: "0.7rem", color: "#475569", marginTop: "0.15rem" }}>
+                        {activeReceiptRecord.challanIssueDate && (
+                          <span style={{ marginRight: "0.5rem" }}>
+                            📅 Issued: {activeReceiptRecord.challanIssueDate}
+                          </span>
+                        )}
+                        {activeReceiptRecord.challanDueDate && (
+                          <span style={{ color: "#b91c1c", fontWeight: 600 }}>
+                            ⏰ Due Date: {activeReceiptRecord.challanDueDate}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <span style={{ color: "#64748b", display: "block", fontSize: "0.7rem" }}>
