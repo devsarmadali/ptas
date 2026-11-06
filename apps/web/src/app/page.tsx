@@ -37,7 +37,6 @@ import {
 import {
   CIRCLE_VEHARI_ID,
   DISTRICT_VEHARI_CIRCLES,
-  DISTRICT_VEHARI_TEHSILS,
   normalizeCircleName,
   getCircleCode,
   getTehsilCode,
@@ -688,8 +687,12 @@ export default function HomePage({
     useState<CitizenPaymentSimulationResult | null>(null);
 
   // Phase 10 State: PFT-2 Challan Management & Statutory Receipts Desk
-  const [pft2Challans, setPft2Challans] = useState<Pft2ChallanRecord[]>(() => loadPersistedPft2Challans());
-  const [statutoryReceipts, setStatutoryReceipts] = useState<StatutoryReceiptRecord[]>(() => loadPersistedStatutoryReceipts());
+  const [pft2Challans, setPft2Challans] = useState<Pft2ChallanRecord[]>(() =>
+    loadPersistedPft2Challans()
+  );
+  const [statutoryReceipts, setStatutoryReceipts] = useState<StatutoryReceiptRecord[]>(() =>
+    loadPersistedStatutoryReceipts()
+  );
 
   // Tax Units & Survey Filters
   const [unitsSearchQuery, setUnitsSearchQuery] = useState("");
@@ -919,7 +922,15 @@ export default function HomePage({
               error instanceof Error ? error.message : "Unable to load operational survey units"
             );
           }
-        } catch {
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          if (errMsg.includes("connection pool") || errMsg.includes("timeout")) {
+            showToast(
+              "error",
+              "Database connection pool is temporarily saturated. Please refresh in a moment."
+            );
+            return;
+          }
           await signOutOfficer();
           rejectUnauthenticatedSession();
         }
@@ -2445,7 +2456,8 @@ export default function HomePage({
         identifierType: targetUnit.identifierType,
         identifierValue: targetUnit.identifierValue,
         address: targetUnit.address,
-        district: paymentDistrict || targetUnit.districtName || officer.jurisdictionName || "Vehari",
+        district:
+          paymentDistrict || targetUnit.districtName || officer.jurisdictionName || "Vehari",
         statutoryCategory: targetUnit.statutoryRule?.category ?? "Statutory Assessment",
         subclassificationCode: targetUnit.subclassificationCode ?? null,
         statutoryTertiaryCode: targetUnit.statutoryTertiaryCode ?? null,
@@ -3823,11 +3835,14 @@ export default function HomePage({
       const supabase = getSupabaseAuthClient();
       const idemp = `bulk-submit:${batchId}:${Date.now()}`;
       const corr = `corr-submit:${crypto.randomUUID()}`;
-      const { error } = await supabase.rpc("bulk_submit_survey_import" as never, {
-        p_batch_id: batchId,
-        p_idempotency_key: idemp,
-        p_correlation_id: corr
-      } as never);
+      const { error } = await supabase.rpc(
+        "bulk_submit_survey_import" as never,
+        {
+          p_batch_id: batchId,
+          p_idempotency_key: idemp,
+          p_correlation_id: corr
+        } as never
+      );
       if (error) {
         showToast("error", `Batch submission failed: ${error.message}`);
         return;
@@ -3855,11 +3870,14 @@ export default function HomePage({
       const supabase = getSupabaseAuthClient();
       const idemp = `bulk-approve:${batchId}:${Date.now()}`;
       const corr = `corr-approve:${crypto.randomUUID()}`;
-      const { error } = await supabase.rpc("bulk_approve_survey_import" as never, {
-        p_batch_id: batchId,
-        p_idempotency_key: idemp,
-        p_correlation_id: corr
-      } as never);
+      const { error } = await supabase.rpc(
+        "bulk_approve_survey_import" as never,
+        {
+          p_batch_id: batchId,
+          p_idempotency_key: idemp,
+          p_correlation_id: corr
+        } as never
+      );
       if (error) {
         showToast("error", `Bulk approval failed: ${error.message}`);
         return;
@@ -6880,13 +6898,35 @@ export default function HomePage({
                     <strong style={{ color: "#166534", fontSize: "0.9rem" }}>
                       📋 Active Survey Import Batches ({actionableSurveyImportBatches.length})
                     </strong>
-                    <div style={{ color: "#475569", fontSize: "0.78rem", marginTop: "0.4rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                    <div
+                      style={{
+                        color: "#475569",
+                        fontSize: "0.78rem",
+                        marginTop: "0.4rem",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.5rem"
+                      }}
+                    >
                       {actionableSurveyImportBatches.map((b) => (
-                        <div key={b.batch_id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap", padding: "0.4rem 0.6rem", background: "#f0fdf4", borderRadius: "6px", border: "1px solid #bbf7d0" }}>
+                        <div
+                          key={b.batch_id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: "1rem",
+                            flexWrap: "wrap",
+                            padding: "0.4rem 0.6rem",
+                            background: "#f0fdf4",
+                            borderRadius: "6px",
+                            border: "1px solid #bbf7d0"
+                          }}
+                        >
                           <span>
                             <strong>{b.source_filename}</strong> (FY {b.financial_year_code}):{" "}
-                            Imported {b.imported_rows} &bull; Feeded {b.feeded_rows} &bull; Submitted{" "}
-                            {b.submitted_rows} &bull; Approved {b.approved_rows}
+                            Imported {b.imported_rows} &bull; Feeded {b.feeded_rows} &bull;
+                            Submitted {b.submitted_rows} &bull; Approved {b.approved_rows}
                             {b.pending_review_rows > 0 && (
                               <span style={{ color: "#b45309", fontWeight: 600 }}>
                                 {" "}
@@ -6899,7 +6939,13 @@ export default function HomePage({
                               <button
                                 type="button"
                                 className="btn-secondary"
-                                style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem", background: "#fef3c7", borderColor: "#f59e0b", color: "#92400e" }}
+                                style={{
+                                  padding: "0.25rem 0.6rem",
+                                  fontSize: "0.75rem",
+                                  background: "#fef3c7",
+                                  borderColor: "#f59e0b",
+                                  color: "#92400e"
+                                }}
                                 disabled={isProcessingBatchAction}
                                 onClick={() => handleBulkSubmitBatch(b.batch_id)}
                               >
@@ -6910,7 +6956,13 @@ export default function HomePage({
                               <button
                                 type="button"
                                 className="btn-primary"
-                                style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem", background: "#16a34a", borderColor: "#15803d", color: "#fff" }}
+                                style={{
+                                  padding: "0.25rem 0.6rem",
+                                  fontSize: "0.75rem",
+                                  background: "#16a34a",
+                                  borderColor: "#15803d",
+                                  color: "#fff"
+                                }}
                                 disabled={isProcessingBatchAction}
                                 onClick={() => handleBulkApproveBatch(b.batch_id)}
                               >
@@ -16651,9 +16703,7 @@ export default function HomePage({
                       >
                         <span>Administrative Circle *</span>
                         {officer.role === "INSPECTOR" && (
-                          <span
-                            style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 400 }}
-                          >
+                          <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 400 }}>
                             🔒 Assigned Circle
                           </span>
                         )}

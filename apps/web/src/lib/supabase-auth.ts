@@ -133,20 +133,41 @@ export function mapActorAssignmentToOfficer(
   };
 }
 
-/** Resolve the current authenticated identity through server-controlled PTAS assignments. */
+/** Resolve the current authenticated identity through server-controlled PTAS assignments with transient retry resilience. */
 export async function resolveAuthenticatedOfficer(user: User): Promise<MockOfficer> {
   const supabase = getSupabaseAuthClient();
-  const { data: assignment, error } = await supabase.rpc("resolve_my_ptas_actor");
-  if (error) {
-    console.error("resolve_my_ptas_actor error:", error);
-    throw new Error(`Officer jurisdiction lookup failed: ${error.message}`);
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const { data: assignment, error } = await supabase.rpc("resolve_my_ptas_actor");
+    if (!error) {
+      if (!assignment || typeof assignment !== "object" || Array.isArray(assignment)) {
+        throw new Error(
+          "Authenticated account has no active PTAS role assignment in this jurisdiction"
+        );
+      }
+      return mapActorAssignmentToOfficer(assignment as ActorAssignment, user);
+    }
+
+    console.warn(`resolve_my_ptas_actor attempt ${attempt} failed:`, error.message);
+    lastError = new Error(`Officer jurisdiction lookup failed: ${error.message}`);
+
+    const isTransient =
+      error.message?.includes("connection pool") ||
+      error.message?.includes("timeout") ||
+      error.message?.includes("fetch failed") ||
+      error.message?.includes("503") ||
+      error.message?.includes("504");
+
+    if (!isTransient || attempt === 3) {
+      break;
+    }
+
+    // Exponential backoff: 300ms, 800ms
+    await new Promise((resolve) => setTimeout(resolve, attempt * 300 + Math.random() * 150));
   }
-  if (!assignment || typeof assignment !== "object" || Array.isArray(assignment)) {
-    throw new Error(
-      "Authenticated account has no active PTAS role assignment in this jurisdiction"
-    );
-  }
-  return mapActorAssignmentToOfficer(assignment as ActorAssignment, user);
+
+  throw lastError ?? new Error("Officer jurisdiction lookup failed");
 }
 
 /**

@@ -43,34 +43,45 @@ export async function pushPilotStateToSupabase(
 
     // 1. Sync PFT-3 Assessment Units
     for (const unit of units) {
-      const { error: unitErr } = await (supabase as any).from("pft3_assessment_units").upsert(
-        {
-          id: unit.id,
-          legal_name: unit.legalName,
-          taxpayer_name: unit.tradeName ?? unit.legalName,
-          trade_name: unit.tradeName ?? unit.legalName,
-          identifier_type: unit.identifierType,
-          identifier_value: unit.identifierValue,
-          address: unit.address,
-          locality: unit.locality ?? null,
-          circle_id: unit.circleId,
-          permanent_demand_no: unit.demandUnit?.permanentDemandNo ?? null,
-          pin_number: unit.demandUnit?.permanentDemandNo ?? null,
-          category_code: unit.categoryCode,
-          subclassification_code: unit.subclassificationCode ?? null,
-          statutory_rule_id: unit.statutoryRuleId,
-          annual_rate_pkr: unit.statutoryRule?.annual_rate_pkr ?? 0,
-          state: unit.assessments?.[0]?.status === "APPROVED" ? "APPROVED" : "SUBMITTED"
-        },
-        { onConflict: "id" }
-      );
+      const { error: unitErr } = await (
+        supabase as unknown as {
+          from: (table: string) => {
+            upsert: (
+              data: Record<string, unknown>,
+              opts: Record<string, unknown>
+            ) => Promise<{ error: Error | null }>;
+          };
+        }
+      )
+        .from("pft3_assessment_units")
+        .upsert(
+          {
+            id: unit.id,
+            legal_name: unit.legalName,
+            taxpayer_name: unit.tradeName ?? unit.legalName,
+            trade_name: unit.tradeName ?? unit.legalName,
+            identifier_type: unit.identifierType,
+            identifier_value: unit.identifierValue,
+            address: unit.address,
+            locality: unit.locality ?? null,
+            circle_id: unit.circleId,
+            permanent_demand_no: unit.demandUnit?.permanentDemandNo ?? null,
+            pin_number: unit.demandUnit?.permanentDemandNo ?? null,
+            category_code: unit.categoryCode,
+            subclassification_code: unit.subclassificationCode ?? null,
+            statutory_rule_id: unit.statutoryRuleId,
+            annual_rate_pkr: unit.statutoryRule?.annual_rate_pkr ?? 0,
+            state: unit.assessments?.[0]?.status === "APPROVED" ? "APPROVED" : "SUBMITTED"
+          },
+          { onConflict: "id" }
+        );
       if (unitErr) {
         console.warn("PFT3 unit upsert note:", unitErr.message);
       }
     }
 
     // 2. Audit Events Sync (Append-Only)
-    let newLedgerEntriesCount = 0;
+    const newLedgerEntriesCount = 0;
 
     // 3. Sync Audit Events (Append-Only: check existing)
     const { data: existingAuditRows } = await supabase.from("audit_events").select("id");

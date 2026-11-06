@@ -5,9 +5,7 @@ import {
   getAllStatutoryRules,
   normalizeIdentifier,
   maskIdentifier,
-  SURVEY_IMPORT_HEADERS,
-  SURVEY_IMPORT_COLUMNS,
-  isExactSurveyImportHeader
+  SURVEY_IMPORT_HEADERS
 } from "@ptas/domain";
 import type { StoredUnit, MockOfficer } from "./pilot-store";
 import { DISTRICT_VEHARI_CIRCLES } from "./pilot-store";
@@ -562,9 +560,12 @@ export async function persistBulkPotentialUnitsToDatabase(
       remarks: unit.remarks ?? null
     }));
 
-    const { error } = await supabase.rpc("bulk_create_potential_assessment_units" as never, {
-      p_units: payload as unknown as Json
-    } as never);
+    const { error } = await supabase.rpc(
+      "bulk_create_potential_assessment_units" as never,
+      {
+        p_units: payload as unknown as Json
+      } as never
+    );
     if (error) {
       console.warn("persistBulkPotentialUnitsToDatabase error:", error.message);
       return null;
@@ -615,7 +616,7 @@ export async function persistPotentialUnitUpdateToDatabase(
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     potentialId
   );
-  const { data, error } = await supabase.rpc("update_potential_assessment_unit", {
+  const { error } = await supabase.rpc("update_potential_assessment_unit", {
     p_id: isUuid ? potentialId : "00000000-0000-0000-0000-000000000000",
     p_unit: payload as unknown as Json
   });

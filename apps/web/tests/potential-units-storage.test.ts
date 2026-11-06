@@ -241,7 +241,9 @@ Multan,Multan Circle 1,Multan,Cantt,"Mall Road",Nishat Fabrics,Nishat,NTN,889900
     expect(etoResult.validRowsCount).toBe(4);
     expect(etoResult.errorRowsCount).toBe(0);
     expect(etoResult.rows[2]?.parsedUnit?.openingArrears).toBe(2500);
-    expect(etoResult.rows[2]?.parsedUnit?.remarks).toBe("Brought forward balance from previous inspection");
+    expect(etoResult.rows[2]?.parsedUnit?.remarks).toBe(
+      "Brought forward balance from previous inspection"
+    );
   });
 
   it("preserves supplied survey number, arrears, and remarks on potential units import", () => {

@@ -3,7 +3,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const migration0039Package = readFileSync(
-  fileURLToPath(new URL("../migrations/0039_durable_pft2_receipts_and_payments.sql", import.meta.url)),
+  fileURLToPath(
+    new URL("../migrations/0039_durable_pft2_receipts_and_payments.sql", import.meta.url)
+  ),
   "utf8"
 );
 const migration0039Deploy = readFileSync(
@@ -23,11 +25,19 @@ describe("durable PFT2 receipts and payment synchronization migration", () => {
 
   it("establishes public.pft2_receipts with RLS and dual FK links", () => {
     expect(migration0039Package).toContain("CREATE TABLE IF NOT EXISTS public.pft2_receipts");
-    expect(migration0039Package).toContain("ALTER TABLE public.pft2_receipts ENABLE ROW LEVEL SECURITY");
-    expect(migration0039Package).toContain("pft3_unit_id uuid REFERENCES public.pft3_assessment_units(id)");
-    expect(migration0039Package).toContain("potential_unit_id uuid REFERENCES public.potential_assessment_units(id)");
+    expect(migration0039Package).toContain(
+      "ALTER TABLE public.pft2_receipts ENABLE ROW LEVEL SECURITY"
+    );
+    expect(migration0039Package).toContain(
+      "pft3_unit_id uuid REFERENCES public.pft3_assessment_units(id)"
+    );
+    expect(migration0039Package).toContain(
+      "potential_unit_id uuid REFERENCES public.potential_assessment_units(id)"
+    );
     expect(migration0039Package).toContain("challan_id uuid REFERENCES public.pft2_challans(id)");
-    expect(migration0039Package).toContain("potential_challan_id uuid REFERENCES public.potential_pft2_challans(id)");
+    expect(migration0039Package).toContain(
+      "potential_challan_id uuid REFERENCES public.potential_pft2_challans(id)"
+    );
   });
 
   it("implements list_pft2_receipt_registry with jurisdiction scoping", () => {

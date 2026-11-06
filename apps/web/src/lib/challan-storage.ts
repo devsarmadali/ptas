@@ -113,13 +113,16 @@ export async function recordDurableManualReceipt(
   correlationId: string
 ): Promise<StatutoryReceiptRecord> {
   const supabase = getSupabaseAuthClient();
-  const { data, error } = await supabase.rpc("record_direct_statutory_receipt" as never, {
-    p_unit_id: unitId,
-    p_is_potential: isPotential,
-    p_receipt: receipt as unknown as Json,
-    p_idempotency_key: idempotencyKey,
-    p_correlation_id: correlationId
-  } as never);
+  const { data, error } = await supabase.rpc(
+    "record_direct_statutory_receipt" as never,
+    {
+      p_unit_id: unitId,
+      p_is_potential: isPotential,
+      p_receipt: receipt as unknown as Json,
+      p_idempotency_key: idempotencyKey,
+      p_correlation_id: correlationId
+    } as never
+  );
   if (error) throw new Error(`Unable to record manual receipt: ${error.message}`);
   if (!isRecord(data)) throw new Error("Manual receipt command returned an invalid record");
   return data as unknown as StatutoryReceiptRecord;

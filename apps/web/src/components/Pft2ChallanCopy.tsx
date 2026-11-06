@@ -761,24 +761,25 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
                 Rs. {copy.taxPayable.totalPayable.toLocaleString()}
               </td>
             </tr>
-            {(copy.isPartial || (copy.remainingBalance ?? 0) > 0) && (copy.remainingBalance ?? 0) > 0 && (
-              <tr style={{ background: "#fef3c7" }}>
-                <td style={{ padding: "0.18rem 0.35rem", color: "#92400e", fontWeight: 700 }}>
-                  Remaining Balance
-                </td>
-                <td
-                  style={{
-                    padding: "0.18rem 0.35rem",
-                    textAlign: "right",
-                    color: "#92400e",
-                    fontWeight: 800,
-                    fontVariantNumeric: "tabular-nums"
-                  }}
-                >
-                  Rs. {(copy.remainingBalance ?? 0).toLocaleString()}
-                </td>
-              </tr>
-            )}
+            {(copy.isPartial || (copy.remainingBalance ?? 0) > 0) &&
+              (copy.remainingBalance ?? 0) > 0 && (
+                <tr style={{ background: "#fef3c7" }}>
+                  <td style={{ padding: "0.18rem 0.35rem", color: "#92400e", fontWeight: 700 }}>
+                    Remaining Balance
+                  </td>
+                  <td
+                    style={{
+                      padding: "0.18rem 0.35rem",
+                      textAlign: "right",
+                      color: "#92400e",
+                      fontWeight: 800,
+                      fontVariantNumeric: "tabular-nums"
+                    }}
+                  >
+                    Rs. {(copy.remainingBalance ?? 0).toLocaleString()}
+                  </td>
+                </tr>
+              )}
           </tbody>
         </table>
 

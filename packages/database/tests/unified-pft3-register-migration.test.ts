@@ -3,7 +3,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const migration0037Package = readFileSync(
-  fileURLToPath(new URL("../migrations/0037_unified_pft3_register_and_cleanup.sql", import.meta.url)),
+  fileURLToPath(
+    new URL("../migrations/0037_unified_pft3_register_and_cleanup.sql", import.meta.url)
+  ),
   "utf8"
 );
 const migration0037Deploy = readFileSync(
@@ -40,20 +42,32 @@ describe("unified PFT3 register and legacy survey table cleanup migrations", () 
   });
 
   it("0037 establishes public.pft3_assessment_units with RLS and PIN allocator", () => {
-    expect(migration0037Package).toContain("CREATE TABLE IF NOT EXISTS public.pft3_assessment_units");
-    expect(migration0037Package).toContain("ALTER TABLE public.pft3_assessment_units ENABLE ROW LEVEL SECURITY");
+    expect(migration0037Package).toContain(
+      "CREATE TABLE IF NOT EXISTS public.pft3_assessment_units"
+    );
+    expect(migration0037Package).toContain(
+      "ALTER TABLE public.pft3_assessment_units ENABLE ROW LEVEL SECURITY"
+    );
     expect(migration0037Package).toContain("ptas_private.allocate_pft3_pin");
     expect(migration0037Package).toContain("ptas_private.active_actor");
   });
 
   it("0038 consolidates governance, directory, challan issuance and drops 8 legacy tables", () => {
-    expect(migration0038Package).toContain("DROP TABLE IF EXISTS public.pft3_register_entries CASCADE");
-    expect(migration0038Package).toContain("DROP TABLE IF EXISTS public.assessment_versions CASCADE");
+    expect(migration0038Package).toContain(
+      "DROP TABLE IF EXISTS public.pft3_register_entries CASCADE"
+    );
+    expect(migration0038Package).toContain(
+      "DROP TABLE IF EXISTS public.assessment_versions CASCADE"
+    );
     expect(migration0038Package).toContain("DROP TABLE IF EXISTS public.assessments CASCADE");
     expect(migration0038Package).toContain("DROP TABLE IF EXISTS public.demand_units CASCADE");
-    expect(migration0038Package).toContain("DROP TABLE IF EXISTS public.taxpayer_identifiers CASCADE");
+    expect(migration0038Package).toContain(
+      "DROP TABLE IF EXISTS public.taxpayer_identifiers CASCADE"
+    );
     expect(migration0038Package).toContain("DROP TABLE IF EXISTS public.taxpayers CASCADE");
-    expect(migration0038Package).toContain("DROP TABLE IF EXISTS public.survey_unit_profiles CASCADE");
+    expect(migration0038Package).toContain(
+      "DROP TABLE IF EXISTS public.survey_unit_profiles CASCADE"
+    );
     expect(migration0038Package).toContain("DROP TABLE IF EXISTS public.survey_units CASCADE");
   });
 
