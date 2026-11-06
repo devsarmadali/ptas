@@ -421,16 +421,8 @@ export async function fetchPotentialAssessmentUnitsFromDatabase(): Promise<
         pinNumber: pinNum,
         provincialUin: pinNum,
         legalName: String(row.legal_name || "Unnamed Unit"),
-        tradeName: row.trade_name
-          ? String(row.trade_name)
-          : row.taxpayer_name
-            ? String(row.taxpayer_name)
-            : undefined,
-        taxpayerName: row.taxpayer_name
-          ? String(row.taxpayer_name)
-          : row.trade_name
-            ? String(row.trade_name)
-            : undefined,
+        tradeName: row.trade_name ? String(row.trade_name) : undefined,
+        taxpayerName: row.taxpayer_name ? String(row.taxpayer_name) : undefined,
         identifierType: String(row.identifier_type).toUpperCase() === "NTN" ? "NTN" : "CNIC",
         identifierValue: String(row.identifier_value || ""),
         address: String(row.address || ""),
@@ -536,57 +528,52 @@ export async function persistPotentialUnitUpdateToDatabase(
   updates: Partial<PotentialUnitRecord>
 ): Promise<PotentialUnitRecord | null> {
   if (typeof window === "undefined") return null;
-  try {
-    const supabase = getSupabaseAuthClient();
-    const payload = {
-      potential_number: updates.potentialNumber,
-      pin_number: updates.pinNumber,
-      legal_name: updates.legalName,
-      trade_name: updates.tradeName ?? updates.taxpayerName,
-      taxpayer_name: updates.taxpayerName ?? updates.tradeName,
-      identifier_type: updates.identifierType,
-      identifier_value: updates.identifierValue ?? "",
-      address: updates.address ?? "",
-      locality: updates.locality,
-      circle_id: updates.circleId,
-      circle_name: updates.circleName,
-      district_name: updates.districtName,
-      category_code: updates.categoryCode,
-      category_name: updates.categoryName,
-      subclassification_code: updates.subclassificationCode,
-      subclassification_name: updates.subclassificationName,
-      statutory_tertiary_code: updates.statutoryTertiaryCode,
-      statutory_tertiary_classification: updates.statutoryTertiaryClassification,
-      statutory_rule_id: updates.statutoryRuleId,
-      annual_rate_pkr: updates.annualRatePkr,
-      opening_arrears: updates.openingArrears ?? 0,
-      correlation_id: `potential-unit-update:${crypto.randomUUID()}`
-    };
+  const supabase = getSupabaseAuthClient();
+  const payload = {
+    potential_number: updates.potentialNumber,
+    pin_number: updates.pinNumber,
+    legal_name: updates.legalName,
+    trade_name: updates.tradeName ?? null,
+    taxpayer_name: updates.taxpayerName ?? null,
+    identifier_type: updates.identifierType,
+    identifier_value: updates.identifierValue ?? "",
+    address: updates.address ?? "",
+    locality: updates.locality,
+    circle_id: updates.circleId,
+    circle_name: updates.circleName,
+    district_name: updates.districtName,
+    category_code: updates.categoryCode,
+    category_name: updates.categoryName,
+    subclassification_code: updates.subclassificationCode,
+    subclassification_name: updates.subclassificationName,
+    statutory_tertiary_code: updates.statutoryTertiaryCode,
+    statutory_tertiary_classification: updates.statutoryTertiaryClassification,
+    statutory_rule_id: updates.statutoryRuleId,
+    annual_rate_pkr: updates.annualRatePkr,
+    opening_arrears: updates.openingArrears !== undefined ? Number(updates.openingArrears) : 0,
+    correlation_id: `potential-unit-update:${crypto.randomUUID()}`
+  };
 
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      potentialId
-    );
-    const { error } = await supabase.rpc("update_potential_assessment_unit", {
-      p_id: isUuid ? potentialId : "00000000-0000-0000-0000-000000000000",
-      p_unit: payload as unknown as Json
-    });
-    if (error) {
-      console.warn("persistPotentialUnitUpdateToDatabase error:", error.message);
-      return null;
-    }
-    const refreshed = await fetchPotentialAssessmentUnitsFromDatabase();
-    return (
-      refreshed?.find(
-        (candidate) =>
-          candidate.id === potentialId ||
-          (updates.potentialNumber && candidate.potentialNumber === updates.potentialNumber) ||
-          (updates.pinNumber && candidate.pinNumber === updates.pinNumber)
-      ) ?? null
-    );
-  } catch (err) {
-    console.warn("persistPotentialUnitUpdateToDatabase failed:", err);
-    return null;
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    potentialId
+  );
+  const { data, error } = await supabase.rpc("update_potential_assessment_unit", {
+    p_id: isUuid ? potentialId : "00000000-0000-0000-0000-000000000000",
+    p_unit: payload as unknown as Json
+  });
+  if (error) {
+    console.error("persistPotentialUnitUpdateToDatabase error:", error.message);
+    throw new Error(error.message);
   }
+  const refreshed = await fetchPotentialAssessmentUnitsFromDatabase();
+  return (
+    refreshed?.find(
+      (candidate) =>
+        candidate.id === potentialId ||
+        (updates.potentialNumber && candidate.potentialNumber === updates.potentialNumber) ||
+        (updates.pinNumber && candidate.pinNumber === updates.pinNumber)
+    ) ?? null
+  );
 }
 
 /**
