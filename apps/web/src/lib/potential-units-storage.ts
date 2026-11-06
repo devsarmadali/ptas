@@ -4,7 +4,10 @@ import {
   getStatutoryRuleBySubclassification,
   getAllStatutoryRules,
   normalizeIdentifier,
-  maskIdentifier
+  maskIdentifier,
+  SURVEY_IMPORT_HEADERS,
+  SURVEY_IMPORT_COLUMNS,
+  isExactSurveyImportHeader
 } from "@ptas/domain";
 import type { StoredUnit, MockOfficer } from "./pilot-store";
 import { DISTRICT_VEHARI_CIRCLES } from "./pilot-store";
@@ -1143,91 +1146,142 @@ export function migrateVDemandUnitsToPotentialRegister(surveyUnits: readonly Sto
 }
 
 /**
- * Official CSV Template for Bulk Potential Discovery Units Ingestion.
- * Contains authentic Vehari jurisdiction circles and realistic commercial examples without arrears.
+ * Official Standard 30-Column CSV Template for Bulk Potential Discovery Units Ingestion.
+ * Aligned with the database schema of survey_import_rows and pft3_assessment_units.
+ * Contains authentic Vehari jurisdiction circles, preserved survey numbers, realistic commercial examples,
+ * opening arrears, and remarks.
  */
 export function generatePotentialCsvTemplate(): string {
-  const headers = [
-    "Survey No",
-    "District",
-    "Circle",
-    "Tehsil",
-    "Locality",
-    "Commercial Address",
-    "Legal Name",
-    "Trade Name",
-    "Identifier Type",
-    "Identifier Value",
-    "Category Code",
-    "Subclass Code",
-    "Arrears",
-    "Remarks"
-  ].join(",");
+  const headers = SURVEY_IMPORT_HEADERS.join(",");
 
   const sampleRows = [
     [
       "SURV-2026-001",
+      "Multan",
+      "Multan",
+      "Vehari",
+      "Vehari Zone",
       "Vehari",
       "Vehari Circle I (City / Commercial)",
-      "Vehari",
       "Club Road Commercial Area",
       '"Shop # 12, Club Road, Vehari"',
       "Al-Madina Medical & Surgical Store",
       "Al-Madina Pharmacy",
       "CNIC",
       "36603-1234567-1",
+      "03001234567",
+      "info@almadina.pk",
+      "Commercial Establishments",
+      "Category A",
+      "1(i)",
+      "4000",
       "1",
       "1(i)",
+      "Annual",
+      "PFT-1.i",
+      "FY-2026-27",
+      "2026-11-06",
+      "Active",
+      "",
       "0",
-      "Discovered during field survey"
+      "Discovered during field survey",
+      "PENDING"
     ].join(","),
     [
       "SURV-2026-002",
+      "Multan",
+      "Multan",
+      "Vehari",
+      "Vehari Zone",
       "Vehari",
       "Vehari Circle II (Grain Market / Rural)",
-      "Vehari",
       "Grain Market (Galla Mandi)",
       '"Plot 44-B, Grain Market, Vehari"',
       "Ittehad Seed & Pesticides Corporation",
       "Ittehad Seeds",
       "NTN",
       "4192837-1",
+      "03009876543",
+      "ittehad@seeds.com.pk",
+      "Wholesale Dealers",
+      "Category B",
+      "4(ii)",
+      "6000",
       "4",
       "4(ii)",
+      "Annual",
+      "PFT-4.ii",
+      "FY-2026-27",
+      "2026-11-06",
+      "Active",
+      "",
       "0",
-      "Commercial wholesale discovery"
+      "Commercial wholesale discovery",
+      "PENDING"
     ].join(","),
     [
       "SURV-2026-003",
+      "Multan",
+      "Multan",
       "Vehari",
-      "Burewala Circle",
+      "Burewala Zone",
       "Burewala",
+      "Burewala Circle",
       "Chichawatni Road Commercial Strip",
       '"Main Chichawatni Road, Burewala"',
       "Bismillah Engineering & Spares Works",
       "Bismillah Engineering",
       "CNIC",
       "36601-9876543-3",
+      "03005551234",
+      "bismillah.eng@gmail.com",
+      "Industrial Establishments",
+      "Category A",
+      "2(i)",
+      "5000",
       "2",
       "2(i)",
+      "Annual",
+      "PFT-2.i",
+      "FY-2026-27",
+      "2026-11-06",
+      "Active",
+      "",
       "2500",
-      "Brought forward balance from previous inspection"
+      "Brought forward balance from previous inspection",
+      "PENDING"
     ].join(","),
     [
       "SURV-2026-004",
+      "Multan",
+      "Multan",
       "Vehari",
-      "Mailsi Circle",
+      "Mailsi Zone",
       "Mailsi",
+      "Mailsi Circle",
       "Mailsi Main Bazaar",
       '"Shop 18, Colony Road, Mailsi"',
       "Chenab Fabrics & Garments Emporium",
       "Chenab Fabrics",
       "CNIC",
       "36602-5432109-5",
+      "03004445678",
+      "chenab.fabrics@gmail.com",
+      "Contractors & Suppliers",
+      "Category A",
+      "3(i)",
+      "3000",
       "3",
       "3(i)",
+      "Annual",
+      "PFT-3.i",
+      "FY-2026-27",
+      "2026-11-06",
+      "Active",
+      "",
       "0",
-      ""
+      "",
+      "PENDING"
     ].join(",")
   ].join("\r\n");
 
@@ -1465,13 +1519,47 @@ export function parseBulkPotentialUnits(
     const warnings: string[] = [];
 
     const rowMap: Record<string, string> = {};
-    if (hasHeaders && headerMap.size >= 2) {
+    if (cols.length === 30) {
+      // Official Standard 30-Column Template based on database headers:
+      // 0: Survey No. (Auto), 1: Division, 2: Region, 3: District, 4: Zone, 5: Tehsil, 6: Circle, 7: Locality,
+      // 8: Commercial Address, 9: Legal Name / Entity Name, 10: Taxpayer Name / Proprietor, 11: Identifier Type,
+      // 12: Identifier Value, 13: Phone, 14: Email, 15: Tax Class (Select), 16: Tax Assessment Option (Select),
+      // 17: Tax Sub-Class (Auto), 18: Statutory Assessment Rate (PKR) (Auto), 19: Primary Class Code (Auto),
+      // 20: Schedule Sub-Class Code (Auto), 21: Rate Basis (Auto), 22: Statutory Rule ID (Auto),
+      // 23: Financial Year (Auto), 24: Survey Date (Auto), 25: Taxpayer Status, 26: Legacy Demand No,
+      // 27: Arrears, 28: Remarks, 29: Import Status (Auto)
+      rowMap["surveyNo"] = cols[0] || "";
+      rowMap["division"] = cols[1] || "Multan";
+      rowMap["region"] = cols[2] || "Multan";
+      rowMap["district"] = cols[3] || "Vehari";
+      rowMap["zone"] = cols[4] || "Vehari Zone";
+      rowMap["tehsil"] = cols[5] || "Vehari";
+      rowMap["circle"] = cols[6] || "";
+      rowMap["locality"] = cols[7] || "";
+      rowMap["address"] = cols[8] || "";
+      rowMap["legalName"] = cols[9] || "";
+      rowMap["tradeName"] = cols[10] || "";
+      rowMap["idType"] = cols[11] || "";
+      rowMap["idVal"] = cols[12] || "";
+      rowMap["phone"] = cols[13] || "";
+      rowMap["email"] = cols[14] || "";
+      rowMap["taxClass"] = cols[15] || "";
+      rowMap["taxAssessmentOption"] = cols[16] || "";
+      rowMap["subCode"] = cols[17] || cols[20] || "";
+      rowMap["assessmentRate"] = cols[18] || "";
+      rowMap["catCode"] = cols[19] || "1";
+      rowMap["ruleId"] = cols[22] || "";
+      rowMap["financialYear"] = cols[23] || "FY-2026-27";
+      rowMap["taxpayerStatus"] = cols[25] || "Active";
+      rowMap["legacyDemandNo"] = cols[26] || "";
+      rowMap["arrears"] = cols[27] || "0";
+      rowMap["remarks"] = cols[28] || "";
+    } else if (hasHeaders && headerMap.size >= 2) {
       for (const [key, colIdx] of headerMap.entries()) {
         rowMap[key] = (cols[colIdx] ?? "").trim();
       }
     } else if (cols.length >= 13) {
-      // Standard 14-column base template:
-      // Survey No, District, Circle, Tehsil, Locality, Commercial Address, Legal Name, Trade Name, ID Type, ID Val, Cat Code, Sub Code, Arrears, Remarks
+      // 14-column base template fallback
       rowMap["surveyNo"] = cols[0] || "";
       rowMap["district"] = cols[1] || "Vehari";
       rowMap["circle"] = cols[2] || "Vehari Circle I (City / Commercial)";

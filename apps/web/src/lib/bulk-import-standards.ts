@@ -160,56 +160,68 @@ export function validateOfficerImportJurisdiction(
 
   // 3. Role-specific jurisdiction constraints
   if (officer.role === "INSPECTOR") {
-    // Inspector is restricted to their assigned circle
+    // Inspector is restricted strictly to their assigned circle
     const inspectorCircle = DISTRICT_VEHARI_CIRCLES.find(
       (c) =>
         c.id === officer.jurisdictionId ||
         c.name.toLowerCase() === officer.jurisdictionName.toLowerCase()
     );
 
-    // If row explicitly supplied a circle that does not resolve or match the inspector's circle:
-    if (rowCircleStr && rowCircleStr.trim()) {
-      if (!resolvedCircle) {
-        return {
-          allowed: false,
-          error: `Unrecognized Circle "${rowCircleStr}". Inspector ${officer.name} may only import records for assigned circle "${officer.jurisdictionName}".`,
-          resolvedDistrict: "Vehari"
-        };
-      }
-
-      if (inspectorCircle && resolvedCircle.id !== inspectorCircle.id) {
-        return {
-          allowed: false,
-          error: `Jurisdiction mismatch: Inspector ${officer.name} is assigned to "${officer.jurisdictionName}". Cannot import record for Circle "${resolvedCircle.name}".`,
-          resolvedCircle,
-          resolvedDistrict: "Vehari"
-        };
-      }
+    if (!rowCircleStr || !rowCircleStr.trim()) {
+      return {
+        allowed: false,
+        error: `Missing Circle: Inspector ${officer.name} may only import records explicitly designated for assigned circle "${officer.jurisdictionName}".`,
+        resolvedDistrict: "Vehari"
+      };
     }
 
-    const effectiveCircle = resolvedCircle ?? inspectorCircle ?? DISTRICT_VEHARI_CIRCLES[0]!;
+    if (!resolvedCircle) {
+      return {
+        allowed: false,
+        error: `Unrecognized Circle "${rowCircleStr}". Inspector ${officer.name} may only import records for assigned circle "${officer.jurisdictionName}".`,
+        resolvedDistrict: "Vehari"
+      };
+    }
+
+    if (inspectorCircle && resolvedCircle.id !== inspectorCircle.id) {
+      return {
+        allowed: false,
+        error: `Jurisdiction mismatch: Inspector ${officer.name} is assigned to "${officer.jurisdictionName}". Cannot import record for Circle "${resolvedCircle.name}".`,
+        resolvedCircle,
+        resolvedDistrict: "Vehari"
+      };
+    }
+
     return {
       allowed: true,
-      resolvedCircle: effectiveCircle,
+      resolvedCircle,
       resolvedDistrict: "Vehari"
     };
   }
 
   if (officer.role === "ETO") {
-    // ETO is authorized for District Vehari and all its sub-jurisdiction circles
-    if (!resolvedCircle) {
-      if (rowCircleStr && rowCircleStr.trim()) {
-        return {
-          allowed: false,
-          error: `Jurisdiction mismatch: Circle "${rowCircleStr}" is outside District Vehari sub-jurisdiction circles.`,
-          resolvedDistrict: "Vehari"
-        };
-      }
-      // If circle is omitted in ETO import row, require explicit circle assignment
+    // ETO is authorized strictly for District Vehari and its sub-jurisdiction circles
+    if (!normalizedDistrict || !normalizedDistrict.includes("vehari")) {
+      return {
+        allowed: false,
+        error: `Jurisdiction mismatch: Assessing Authority (ETO) is assigned to District "Vehari". Cannot import record with District "${rowDistrictStr || "Unspecified"}".`,
+        resolvedDistrict: rowDistrictStr?.trim() || "Unknown"
+      };
+    }
+
+    if (!rowCircleStr || !rowCircleStr.trim()) {
       return {
         allowed: false,
         error:
-          "Missing circle: Assessing Authority (ETO) import requires explicit Circle identification for each record.",
+          "Missing circle: Assessing Authority (ETO) import requires explicit Circle identification for each record within District Vehari.",
+        resolvedDistrict: "Vehari"
+      };
+    }
+
+    if (!resolvedCircle) {
+      return {
+        allowed: false,
+        error: `Jurisdiction mismatch: Circle "${rowCircleStr}" is outside District Vehari sub-jurisdiction circles.`,
         resolvedDistrict: "Vehari"
       };
     }

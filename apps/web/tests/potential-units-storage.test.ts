@@ -185,12 +185,63 @@ Multan,Multan Circle 1,Multan,Cantt,"Mall Road",Nishat Fabrics,Nishat,NTN,889900
 
   it("generates authentic CSV template with Vehari jurisdiction headers and prioritized columns", () => {
     const template = generatePotentialCsvTemplate();
-    expect(template).toContain("Survey No,District,Circle,Tehsil,Locality,Commercial Address");
+    expect(template).toContain("Survey No. (Auto)");
+    expect(template).toContain("Division");
+    expect(template).toContain("District");
+    expect(template).toContain("Circle");
+    expect(template).toContain("Commercial Address");
     expect(template).toContain("Arrears,Remarks");
     expect(template).toContain("Vehari Circle I (City / Commercial)");
     expect(template).toContain("Burewala Circle");
     expect(template).toContain("Mailsi Circle");
     expect(template).toContain("SURV-2026-001");
+  });
+
+  it("accurately parses standardized 30-column template with strict jurisdiction checks", () => {
+    const inspector = MOCK_OFFICERS[0]!; // Inspector Aslam (Vehari Circle I)
+    const eto = MOCK_OFFICERS[1]!; // ETO Vehari
+    const initialUnits = createInitialPotentialUnits();
+
+    // 30-column row format:
+    // 0: Survey No. (Auto), 1: Division, 2: Region, 3: District, 4: Zone, 5: Tehsil, 6: Circle, 7: Locality,
+    // 8: Commercial Address, 9: Legal Name / Entity Name, 10: Taxpayer Name / Proprietor, 11: Identifier Type,
+    // 12: Identifier Value, 13: Phone, 14: Email, 15: Tax Class (Select), 16: Tax Assessment Option (Select),
+    // 17: Tax Sub-Class (Auto), 18: Statutory Assessment Rate (PKR) (Auto), 19: Primary Class Code (Auto),
+    // 20: Schedule Sub-Class Code (Auto), 21: Rate Basis (Auto), 22: Statutory Rule ID (Auto),
+    // 23: Financial Year (Auto), 24: Survey Date (Auto), 25: Taxpayer Status, 26: Legacy Demand No,
+    // 27: Arrears, 28: Remarks, 29: Import Status (Auto)
+
+    const template = generatePotentialCsvTemplate();
+    // Template includes 4 sample rows:
+    // Row 1: Vehari Circle I (City / Commercial)
+    // Row 2: Vehari Circle II (Grain Market / Rural)
+    // Row 3: Burewala Circle
+    // Row 4: Mailsi Circle
+
+    // When Inspector of Circle 1 parses the template:
+    const inspectorResult = parseBulkPotentialUnits(template, initialUnits, inspector);
+    expect(inspectorResult.totalRows).toBe(4);
+    // Row 1 matches Inspector Circle I
+    expect(inspectorResult.rows[0]?.status).toBe("VALID");
+    expect(inspectorResult.rows[0]?.parsedUnit?.circleName).toBe("Circle 1");
+    expect(inspectorResult.rows[0]?.parsedUnit?.openingArrears).toBe(0);
+    expect(inspectorResult.rows[0]?.parsedUnit?.remarks).toBe("Discovered during field survey");
+    // Rows 2, 3, 4 are outside Inspector Circle I
+    expect(inspectorResult.rows[1]?.status).toBe("ERROR");
+    expect(inspectorResult.rows[1]?.errors[0]).toContain("Jurisdiction mismatch: Inspector");
+    expect(inspectorResult.rows[2]?.status).toBe("ERROR");
+    expect(inspectorResult.rows[2]?.errors[0]).toContain("Jurisdiction mismatch: Inspector");
+    expect(inspectorResult.rows[3]?.status).toBe("ERROR");
+    expect(inspectorResult.rows[3]?.errors[0]).toContain("Jurisdiction mismatch: Inspector");
+
+    // When ETO of Vehari District parses the template:
+    const etoResult = parseBulkPotentialUnits(template, initialUnits, eto);
+    expect(etoResult.totalRows).toBe(4);
+    // All 4 rows are in Vehari district sub-circles, so all should be valid
+    expect(etoResult.validRowsCount).toBe(4);
+    expect(etoResult.errorRowsCount).toBe(0);
+    expect(etoResult.rows[2]?.parsedUnit?.openingArrears).toBe(2500);
+    expect(etoResult.rows[2]?.parsedUnit?.remarks).toBe("Brought forward balance from previous inspection");
   });
 
   it("preserves supplied survey number, arrears, and remarks on potential units import", () => {
