@@ -40,8 +40,9 @@ export interface PotentialUnitRecord {
   readonly potentialNumber: string; // e.g. "POT-0001"
   readonly pinNumber: string; // e.g. "Potential-237-0010106110200054-01"
   readonly provincialUin: string; // matches pinNumber
-  readonly legalName: string;
-  readonly tradeName?: string | undefined;
+  readonly legalName: string; // Legal Name / Trade Name (Mandatory)
+  readonly tradeName?: string | undefined; // Taxpayer / Assessee (Secondary, Optional)
+  readonly taxpayerName?: string | undefined; // Taxpayer / Assessee (Secondary, Optional)
   readonly identifierType: "CNIC" | "NTN";
   readonly identifierValue: string;
   readonly address: string;
@@ -146,8 +147,8 @@ export function convertPotentialUnitToStoredUnit(pot: PotentialUnitRecord): Stor
     legalName: pot.legalName,
     tradeName: pot.tradeName || pot.legalName,
     identifierType: pot.identifierType,
-    identifierValue: pot.identifierValue,
-    address: pot.address,
+    identifierValue: pot.identifierValue ?? "",
+    address: pot.address ?? "",
     locality: pot.locality || "Vehari City Commercial Zone",
     circleId: pot.circleId,
     circleName: pot.circleName ?? "Circle 1",
@@ -203,7 +204,7 @@ export function convertPotentialUnitToStoredUnit(pot: PotentialUnitRecord): Stor
         approvedAt: pot.createdAt || new Date().toISOString(),
         snapshot: {
           taxAmount: annualRate,
-          openingArrears: 0,
+          openingArrears: pot.openingArrears ?? 0,
           statutoryCategory: pot.categoryName || rule.category,
           legalBasis: rule.official_text || "Punjab Finance Act, 1977",
           ruleId: pot.statutoryRuleId || rule.rule_id,
@@ -215,7 +216,7 @@ export function convertPotentialUnitToStoredUnit(pot: PotentialUnitRecord): Stor
       }
     ],
     ledgerEntries: [],
-    openingArrears: 0,
+    openingArrears: pot.openingArrears ?? 0,
     createdAt: pot.createdAt || new Date().toISOString()
   };
 }
@@ -420,10 +421,19 @@ export async function fetchPotentialAssessmentUnitsFromDatabase(): Promise<
         pinNumber: pinNum,
         provincialUin: pinNum,
         legalName: String(row.legal_name || "Unnamed Unit"),
-        tradeName: row.trade_name ? String(row.trade_name) : undefined,
+        tradeName: row.trade_name
+          ? String(row.trade_name)
+          : row.taxpayer_name
+            ? String(row.taxpayer_name)
+            : undefined,
+        taxpayerName: row.taxpayer_name
+          ? String(row.taxpayer_name)
+          : row.trade_name
+            ? String(row.trade_name)
+            : undefined,
         identifierType: String(row.identifier_type).toUpperCase() === "NTN" ? "NTN" : "CNIC",
-        identifierValue: String(row.identifier_value || "36603-0000000-0"),
-        address: String(row.address || "Vehari"),
+        identifierValue: String(row.identifier_value || ""),
+        address: String(row.address || ""),
         locality: row.locality ? String(row.locality) : undefined,
         circleId: String(row.circle_id || "00000000-0000-4000-8000-000000000004"),
         circleName: String(row.circle_name || "Circle 1"),
@@ -479,13 +489,15 @@ export async function persistPotentialUnitToDatabase(
       pin_number: unit.pinNumber,
       provincial_uin: unit.provincialUin,
       legal_name: unit.legalName,
-      trade_name: unit.tradeName,
+      trade_name: unit.tradeName ?? unit.taxpayerName,
+      taxpayer_name: unit.taxpayerName ?? unit.tradeName,
       identifier_type: unit.identifierType,
-      identifier_value: unit.identifierValue,
-      address: unit.address,
+      identifier_value: unit.identifierValue ?? "",
+      address: unit.address ?? "",
       locality: unit.locality,
       circle_id: unit.circleId,
       circle_name: unit.circleName,
+      tehsil: unit.tehsil ?? null,
       district_name: unit.districtName,
       category_code: unit.categoryCode,
       category_name: unit.categoryName,
@@ -527,11 +539,14 @@ export async function persistPotentialUnitUpdateToDatabase(
   try {
     const supabase = getSupabaseAuthClient();
     const payload = {
+      potential_number: updates.potentialNumber,
+      pin_number: updates.pinNumber,
       legal_name: updates.legalName,
-      trade_name: updates.tradeName,
+      trade_name: updates.tradeName ?? updates.taxpayerName,
+      taxpayer_name: updates.taxpayerName ?? updates.tradeName,
       identifier_type: updates.identifierType,
-      identifier_value: updates.identifierValue,
-      address: updates.address,
+      identifier_value: updates.identifierValue ?? "",
+      address: updates.address ?? "",
       locality: updates.locality,
       circle_id: updates.circleId,
       circle_name: updates.circleName,
@@ -548,8 +563,11 @@ export async function persistPotentialUnitUpdateToDatabase(
       correlation_id: `potential-unit-update:${crypto.randomUUID()}`
     };
 
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      potentialId
+    );
     const { error } = await supabase.rpc("update_potential_assessment_unit", {
-      p_id: potentialId,
+      p_id: isUuid ? potentialId : "00000000-0000-0000-0000-000000000000",
       p_unit: payload as unknown as Json
     });
     if (error) {
@@ -557,7 +575,14 @@ export async function persistPotentialUnitUpdateToDatabase(
       return null;
     }
     const refreshed = await fetchPotentialAssessmentUnitsFromDatabase();
-    return refreshed?.find((candidate) => candidate.id === potentialId) ?? null;
+    return (
+      refreshed?.find(
+        (candidate) =>
+          candidate.id === potentialId ||
+          (updates.potentialNumber && candidate.potentialNumber === updates.potentialNumber) ||
+          (updates.pinNumber && candidate.pinNumber === updates.pinNumber)
+      ) ?? null
+    );
   } catch (err) {
     console.warn("persistPotentialUnitUpdateToDatabase failed:", err);
     return null;

@@ -147,7 +147,6 @@ import {
   formatPotentialPin,
   submitPotentialUnitToPft3,
   migratePotentialUnitToPft3,
-  updatePotentialUnitArrears,
   updatePotentialUnitParticulars,
   persistPotentialUnitUpdateToDatabase,
   recordPotentialUnitMigrationInDatabase
@@ -290,6 +289,26 @@ const UNAUTHENTICATED_OFFICER_CONTEXT: MockOfficer = {
   jurisdictionTier: "CIRCLE",
   badgeText: ""
 };
+
+/**
+ * Automatically format tax identifier input:
+ * - Allows numeric input only.
+ * - CNIC format: 36601-1234567-1 (5 digits - 7 digits - 1 digit, max 13 digits)
+ * - NTN format: 1234567-8 (7 digits - 1 digit, max 8 digits, no "NTN" prefix)
+ */
+function formatTaxIdentifierInput(val: string, type: "CNIC" | "NTN"): string {
+  const digits = val.replace(/\D/g, "");
+  if (type === "CNIC") {
+    const trimmed = digits.slice(0, 13);
+    if (trimmed.length <= 5) return trimmed;
+    if (trimmed.length <= 12) return `${trimmed.slice(0, 5)}-${trimmed.slice(5)}`;
+    return `${trimmed.slice(0, 5)}-${trimmed.slice(5, 12)}-${trimmed.slice(12, 13)}`;
+  } else {
+    const trimmed = digits.slice(0, 8);
+    if (trimmed.length <= 7) return trimmed;
+    return `${trimmed.slice(0, 7)}-${trimmed.slice(7, 8)}`;
+  }
+}
 
 export default function HomePage({
   initialRouteHub,
@@ -577,11 +596,6 @@ export default function HomePage({
   const [targetMigratePotential, setTargetMigratePotential] = useState<PotentialUnitRecord | null>(
     null
   );
-  const [showEditPotentialArrearsModal, setShowEditPotentialArrearsModal] = useState(false);
-  const [targetEditArrearsUnit, setTargetEditArrearsUnit] = useState<PotentialUnitRecord | null>(
-    null
-  );
-  const [editArrearsAmount, setEditArrearsAmount] = useState<number>(0);
 
   // Supabase Real Auth & Session State (Phase 5)
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -4420,10 +4434,11 @@ export default function HomePage({
 
     setEditingPotentialUnitId(pot.id);
     setPotNewLegalName(pot.legalName);
-    setPotNewTradeName(pot.tradeName || "");
-    setPotNewIdType((pot.identifierType as "CNIC" | "NTN") || "CNIC");
-    setPotNewIdValue(pot.identifierValue);
-    setPotNewAddress(pot.address);
+    setPotNewTradeName(pot.taxpayerName || pot.tradeName || "");
+    const idType = (pot.identifierType as "CNIC" | "NTN") || "CNIC";
+    setPotNewIdType(idType);
+    setPotNewIdValue(formatTaxIdentifierInput(pot.identifierValue || "", idType));
+    setPotNewAddress(pot.address || "");
     setPotNewLocality(pot.locality || "");
     const circleName = normalizeCircleName(pot.circleName || "Circle 1");
     setPotNewCircleName(circleName);
@@ -4441,8 +4456,8 @@ export default function HomePage({
 
   const handleAddPotentialUnit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!potNewLegalName.trim() || !potNewIdValue.trim()) {
-      showToast("error", "Legal Name and Identifier are mandatory.");
+    if (!potNewLegalName.trim()) {
+      showToast("error", "Legal Name / Trade Name is mandatory.");
       return;
     }
 
@@ -4479,16 +4494,17 @@ export default function HomePage({
 
       try {
         const payloadUpdates: Partial<PotentialUnitRecord> = {
+          potentialNumber: existing.potentialNumber,
+          pinNumber: existing.pinNumber,
           legalName: potNewLegalName.trim(),
           tradeName: potNewTradeName.trim() || undefined,
+          taxpayerName: potNewTradeName.trim() || undefined,
           identifierType: potNewIdType,
           identifierValue: potNewIdValue.trim(),
-          address: potNewAddress.trim() || "Vehari Commercial Area",
-          locality: potNewLocality.trim() || "Vehari City Commercial Zone",
+          address: potNewAddress.trim(),
+          locality: potNewLocality.trim() || undefined,
           circleId,
           circleName: potNewCircleName,
-          tehsil: potNewTehsil,
-          districtName: "Vehari",
           categoryCode: rule.category_code,
           categoryName: rule.category,
           subclassificationCode: rule.subclassification_code,
@@ -4512,7 +4528,11 @@ export default function HomePage({
 
         if (resolved) {
           setPotentialUnits((current) =>
-            current.map((u) => (u.id === editingPotentialUnitId ? resolved : u))
+            current.map((u) =>
+              u.id === editingPotentialUnitId || u.potentialNumber === resolved.potentialNumber
+                ? resolved
+                : u
+            )
           );
           setShowAddPotentialModal(false);
           setEditingPotentialUnitId(null);
@@ -4532,13 +4552,13 @@ export default function HomePage({
       provincialUin: pinNumber,
       legalName: potNewLegalName.trim(),
       tradeName: potNewTradeName.trim() || undefined,
+      taxpayerName: potNewTradeName.trim() || undefined,
       identifierType: potNewIdType,
       identifierValue: potNewIdValue.trim(),
-      address: potNewAddress.trim() || "Vehari Commercial Area",
-      locality: potNewLocality.trim() || "Vehari City Commercial Zone",
+      address: potNewAddress.trim(),
+      locality: potNewLocality.trim() || undefined,
       circleId,
       circleName: potNewCircleName,
-      tehsil: potNewTehsil,
       districtName: "Vehari",
       categoryCode: rule.category_code,
       categoryName: rule.category,
@@ -4788,58 +4808,6 @@ export default function HomePage({
     }
   };
 
-  const handleOpenEditPotentialArrears = (target: PotentialUnitRecord) => {
-    setTargetEditArrearsUnit(target);
-    setEditArrearsAmount(target.openingArrears ?? 0);
-    setShowEditPotentialArrearsModal(true);
-  };
-
-  const handleConfirmSavePotentialArrears = async () => {
-    if (!targetEditArrearsUnit) return;
-    const sanitizedArrears = Math.max(0, Math.round(Number(editArrearsAmount) || 0));
-
-    try {
-      const updated = updatePotentialUnitArrears(targetEditArrearsUnit.id, sanitizedArrears);
-      if (updated) {
-        setPotentialUnits((prev) =>
-          prev.map((p) => (p.id === targetEditArrearsUnit.id ? updated : p))
-        );
-      } else {
-        const nextUnits = potentialUnits.map((p) =>
-          p.id === targetEditArrearsUnit.id ? { ...p, openingArrears: sanitizedArrears } : p
-        );
-        setPotentialUnits(nextUnits);
-        savePersistedPotentialUnits(nextUnits);
-      }
-
-      // Audit Log
-      const auditItem: PilotAuditItem = {
-        id: `audit-${Date.now()}`,
-        eventType: "POTENTIAL_UNIT_ARREARS_UPDATED",
-        actorName: officer.name,
-        actorRole: officer.role,
-        target: targetEditArrearsUnit.legalName,
-        timestamp: new Date().toISOString(),
-        correlationId: `corr-arr-${targetEditArrearsUnit.id}`,
-        details: `Opening arrears for Potential Unit ${targetEditArrearsUnit.potentialNumber} (${targetEditArrearsUnit.legalName}) updated from PKR ${(targetEditArrearsUnit.openingArrears ?? 0).toLocaleString()} to PKR ${sanitizedArrears.toLocaleString()}. Total Demand: PKR ${(targetEditArrearsUnit.annualRatePkr + sanitizedArrears).toLocaleString()}.`
-      };
-      setAuditLogs([auditItem, ...auditLogs]);
-
-      setShowEditPotentialArrearsModal(false);
-      setTargetEditArrearsUnit(null);
-
-      showToast(
-        "success",
-        `✓ Opening arrears for ${targetEditArrearsUnit.potentialNumber} updated to PKR ${sanitizedArrears.toLocaleString()}. Total Demand: PKR ${(targetEditArrearsUnit.annualRatePkr + sanitizedArrears).toLocaleString()}.`
-      );
-    } catch (err) {
-      showToast(
-        "error",
-        err instanceof Error ? err.message : "Failed to update potential unit arrears."
-      );
-    }
-  };
-
   const renderPotentialUnitActions = (target: PotentialUnitRecord) => {
     const isMigrated = target.status === "MIGRATED";
     return (
@@ -4870,15 +4838,6 @@ export default function HomePage({
               icon: "📥",
               disabled: isMigrated,
               onClick: () => handleOpenMigratePotential(target)
-            },
-            {
-              id: "add-edit-arrears-menu",
-              label:
-                (target.openingArrears ?? 0) > 0
-                  ? `Edit Arrears (PKR ${(target.openingArrears ?? 0).toLocaleString()})`
-                  : "Add Arrears Balance",
-              icon: "💰",
-              onClick: () => handleOpenEditPotentialArrears(target)
             },
             {
               id: "issue-provisional-pft2",
@@ -7890,7 +7849,8 @@ export default function HomePage({
                 <thead>
                   <tr>
                     <th>Potential No &amp; PIN</th>
-                    <th>Assessee &amp; Trade Name</th>
+                    <th>Legal Name / Trade Name</th>
+                    <th>Taxpayer / Assessee</th>
                     <th>Identifier (CNIC/NTN)</th>
                     <th>Location &amp; Locality</th>
                     <th>Statutory Classification</th>
@@ -7905,7 +7865,7 @@ export default function HomePage({
                   {paginatedPotentialUnits.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={10}
+                        colSpan={11}
                         style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
                       >
                         No prospective units found matching filter criteria. Click &quot;Add
@@ -7939,12 +7899,12 @@ export default function HomePage({
                           </div>
                         </td>
                         <td>
-                          <div style={{ fontWeight: 700, color: "#0f172a" }}>{u.legalName}</div>
-                          {u.tradeName && (
-                            <div style={{ fontSize: "0.78rem", color: "#475569" }}>
-                              Trade: {u.tradeName}
-                            </div>
-                          )}
+                          <strong style={{ color: "#0f172a" }}>{u.legalName}</strong>
+                        </td>
+                        <td>
+                          <span style={{ color: "#475569" }}>
+                            {u.taxpayerName || u.tradeName || "—"}
+                          </span>
                         </td>
                         <td>
                           <span
@@ -8581,7 +8541,8 @@ export default function HomePage({
                   <thead>
                     <tr>
                       <th style={{ whiteSpace: "nowrap" }}>Demand No.</th>
-                      <th style={{ maxWidth: "16rem" }}>Taxpayer Legal Name</th>
+                      <th style={{ maxWidth: "16rem" }}>Legal Name / Trade Name</th>
+                      <th style={{ maxWidth: "14rem" }}>Taxpayer / Assessee</th>
                       <th style={{ maxWidth: "18rem" }}>Statutory Class</th>
                       <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Assessed (PKR)</th>
                       <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Arrears (PKR)</th>
@@ -8597,7 +8558,7 @@ export default function HomePage({
                     {filteredFormPFT3Rows.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={9}
+                          colSpan={10}
                           style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
                         >
                           No assessed units match the selected search or filter criteria.
@@ -8611,13 +8572,9 @@ export default function HomePage({
                           </td>
                           <td style={{ maxWidth: "16rem" }}>
                             <strong>{row.legalName}</strong>
-                            {row.tradeName && (
-                              <span
-                                style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
-                              >
-                                Trade: {row.tradeName}
-                              </span>
-                            )}
+                          </td>
+                          <td style={{ maxWidth: "14rem", color: "#334155" }}>
+                            {row.tradeName || "—"}
                           </td>
                           <td style={{ maxWidth: "18rem" }}>
                             <span className="badge badge-draft" style={{ fontSize: "0.7rem" }}>
@@ -25576,7 +25533,7 @@ export default function HomePage({
                           marginBottom: "0.25rem"
                         }}
                       >
-                        Legal / Assessee Name *
+                        Legal Name / Trade Name *
                       </label>
                       <input
                         type="text"
@@ -25603,14 +25560,14 @@ export default function HomePage({
                           marginBottom: "0.25rem"
                         }}
                       >
-                        Trade / Business Name
+                        Taxpayer / Assessee
                       </label>
                       <input
                         type="text"
                         disabled={!isPotEditable}
                         value={potNewTradeName}
                         onChange={(e) => setPotNewTradeName(e.target.value)}
-                        placeholder="e.g. Al-Madina Super Store"
+                        placeholder="e.g. Muhammad Ahmad"
                         style={{
                           width: "100%",
                           padding: "0.5rem",
@@ -25640,12 +25597,16 @@ export default function HomePage({
                           marginBottom: "0.25rem"
                         }}
                       >
-                        Tax ID Type *
+                        Tax ID Type
                       </label>
                       <select
                         disabled={!isPotEditable}
                         value={potNewIdType}
-                        onChange={(e) => setPotNewIdType(e.target.value as "CNIC" | "NTN")}
+                        onChange={(e) => {
+                          const nextType = e.target.value as "CNIC" | "NTN";
+                          setPotNewIdType(nextType);
+                          setPotNewIdValue((prev) => formatTaxIdentifierInput(prev, nextType));
+                        }}
                         style={{
                           width: "100%",
                           padding: "0.5rem",
@@ -25667,15 +25628,16 @@ export default function HomePage({
                           marginBottom: "0.25rem"
                         }}
                       >
-                        Tax Identifier Value *
+                        Tax Identifier Value
                       </label>
                       <input
                         type="text"
-                        required
                         disabled={!isPotEditable}
                         value={potNewIdValue}
-                        onChange={(e) => setPotNewIdValue(e.target.value)}
-                        placeholder={potNewIdType === "CNIC" ? "36601-1234567-1" : "NTN-1234567-8"}
+                        onChange={(e) =>
+                          setPotNewIdValue(formatTaxIdentifierInput(e.target.value, potNewIdType))
+                        }
+                        placeholder={potNewIdType === "CNIC" ? "36601-1234567-1" : "1234567-8"}
                         style={{
                           width: "100%",
                           padding: "0.5rem",
@@ -25686,88 +25648,48 @@ export default function HomePage({
                     </div>
                   </div>
 
-                  {/* Administrative Circle & Tehsil */}
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "1rem",
-                      marginBottom: "1rem"
-                    }}
-                  >
-                    <div>
-                      <label
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          fontSize: "0.8rem",
-                          fontWeight: 600,
-                          color: "#334155",
-                          marginBottom: "0.25rem"
-                        }}
-                      >
-                        <span>Administrative Circle *</span>
-                        {officer.role === "INSPECTOR" && (
-                          <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 400 }}>
-                            🔒 Assigned Circle
-                          </span>
-                        )}
-                      </label>
-                      <select
-                        disabled={!isPotEditable || officer.role === "INSPECTOR"}
-                        value={potNewCircleName}
-                        onChange={(e) => {
-                          const circle = e.target.value;
-                          setPotNewCircleName(circle);
-                          setPotNewTehsil(getDefaultTehsilForCircle(circle));
-                        }}
-                        style={{
-                          width: "100%",
-                          padding: "0.5rem",
-                          borderRadius: "6px",
-                          border: "1px solid #cbd5e1",
-                          background: officer.role === "INSPECTOR" ? "#f1f5f9" : "#ffffff",
-                          cursor: officer.role === "INSPECTOR" ? "not-allowed" : "pointer",
-                          color: officer.role === "INSPECTOR" ? "#475569" : "inherit"
-                        }}
-                      >
-                        {DISTRICT_VEHARI_CIRCLES.map((c) => (
-                          <option key={c.id} value={c.name}>
-                            {c.name} ({c.code})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label
-                        style={{
-                          display: "block",
-                          fontSize: "0.8rem",
-                          fontWeight: 600,
-                          color: "#334155",
-                          marginBottom: "0.25rem"
-                        }}
-                      >
-                        Attached Tehsil *
-                      </label>
-                      <select
-                        disabled={!isPotEditable}
-                        value={potNewTehsil}
-                        onChange={(e) => setPotNewTehsil(e.target.value)}
-                        style={{
-                          width: "100%",
-                          padding: "0.5rem",
-                          borderRadius: "6px",
-                          border: "1px solid #cbd5e1"
-                        }}
-                      >
-                        {DISTRICT_VEHARI_TEHSILS.map((t) => (
-                          <option key={t} value={t}>
-                            Tehsil {t}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                  {/* Administrative Circle */}
+                  <div style={{ marginBottom: "1rem" }}>
+                    <label
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        color: "#334155",
+                        marginBottom: "0.25rem"
+                      }}
+                    >
+                      <span>Administrative Circle *</span>
+                      {officer.role === "INSPECTOR" && (
+                        <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 400 }}>
+                          🔒 Assigned Circle
+                        </span>
+                      )}
+                    </label>
+                    <select
+                      disabled={!isPotEditable || officer.role === "INSPECTOR"}
+                      value={potNewCircleName}
+                      onChange={(e) => {
+                        const circle = e.target.value;
+                        setPotNewCircleName(circle);
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "0.5rem",
+                        borderRadius: "6px",
+                        border: "1px solid #cbd5e1",
+                        background: officer.role === "INSPECTOR" ? "#f1f5f9" : "#ffffff",
+                        cursor: officer.role === "INSPECTOR" ? "not-allowed" : "pointer",
+                        color: officer.role === "INSPECTOR" ? "#475569" : "inherit"
+                      }}
+                    >
+                      {DISTRICT_VEHARI_CIRCLES.map((c) => (
+                        <option key={c.id} value={c.name}>
+                          {c.name} ({c.code})
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Assigned Locality from System Database for this Circle */}
@@ -25782,7 +25704,7 @@ export default function HomePage({
                         marginBottom: "0.25rem"
                       }}
                     >
-                      <span>Assigned Locality / Commercial Zone *</span>
+                      <span>Assigned Locality / Commercial Zone</span>
                       <span style={{ fontSize: "0.75rem", color: "#059669", fontWeight: 700 }}>
                         {potCircleLocalities.length} Localities in {potNewCircleName}
                       </span>
@@ -25821,7 +25743,6 @@ export default function HomePage({
                       </select>
                       <input
                         type="text"
-                        required
                         disabled={!isPotEditable}
                         value={potNewLocality}
                         onChange={(e) => setPotNewLocality(e.target.value)}
@@ -25859,11 +25780,10 @@ export default function HomePage({
                         marginBottom: "0.25rem"
                       }}
                     >
-                      Physical Business Address *
+                      Physical Business Address
                     </label>
                     <input
                       type="text"
-                      required
                       disabled={!isPotEditable}
                       value={potNewAddress}
                       onChange={(e) => setPotNewAddress(e.target.value)}
@@ -27039,212 +26959,6 @@ export default function HomePage({
                   onClick={handleConfirmMigratePotential}
                 >
                   Confirm Migration to PFT-3 (Submit for ETO Approval)
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: ADD / EDIT OPENING ARREARS FOR POTENTIAL REGISTER UNIT */}
-      {showEditPotentialArrearsModal && targetEditArrearsUnit && (
-        <div
-          className="modal-overlay"
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(15, 23, 42, 0.75)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-            padding: "1rem"
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowEditPotentialArrearsModal(false);
-          }}
-        >
-          <div
-            className="modal-container"
-            style={{
-              backgroundColor: "#ffffff",
-              borderRadius: "10px",
-              width: "100%",
-              maxWidth: "34rem",
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-              border: "1px solid #cbd5e1",
-              padding: "1.5rem"
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "1rem",
-                borderBottom: "1px solid #e2e8f0",
-                paddingBottom: "0.75rem"
-              }}
-            >
-              <div>
-                <h3 style={{ margin: 0, color: "#0f172a", fontSize: "1.2rem", fontWeight: 800 }}>
-                  💰 Add / Edit Opening Arrears
-                </h3>
-                <p style={{ margin: "0.25rem 0 0", fontSize: "0.78rem", color: "#64748b" }}>
-                  Record or update brought-forward tax arrears for prospective unit{" "}
-                  {targetEditArrearsUnit.potentialNumber}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowEditPotentialArrearsModal(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  fontSize: "1.25rem",
-                  cursor: "pointer",
-                  color: "#64748b"
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-              <div
-                style={{
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "6px",
-                  padding: "0.75rem",
-                  fontSize: "0.82rem"
-                }}
-              >
-                <div style={{ fontWeight: 700, color: "#0f172a" }}>
-                  {targetEditArrearsUnit.legalName}
-                  {targetEditArrearsUnit.tradeName ? ` (${targetEditArrearsUnit.tradeName})` : ""}
-                </div>
-                <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "0.15rem" }}>
-                  {targetEditArrearsUnit.categoryName} &bull; PIN: {targetEditArrearsUnit.pinNumber}
-                </div>
-                <div
-                  style={{
-                    fontSize: "0.75rem",
-                    color: "#166534",
-                    marginTop: "0.15rem",
-                    fontWeight: 600
-                  }}
-                >
-                  Annual Statutory Rate: PKR {targetEditArrearsUnit.annualRatePkr.toLocaleString()}
-                </div>
-              </div>
-
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    fontWeight: 700,
-                    color: "#1e293b",
-                    marginBottom: "0.35rem"
-                  }}
-                >
-                  Opening Arrears Balance (PKR):
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  className="form-control"
-                  style={{ width: "100%", fontSize: "0.95rem", fontWeight: 700 }}
-                  value={editArrearsAmount}
-                  onChange={(e) => setEditArrearsAmount(Math.max(0, Number(e.target.value) || 0))}
-                  placeholder="0"
-                  autoFocus
-                />
-                <span
-                  style={{
-                    fontSize: "0.72rem",
-                    color: "#64748b",
-                    display: "block",
-                    marginTop: "0.25rem"
-                  }}
-                >
-                  Specify any prior-year unrecovered professional tax arrears brought forward.
-                </span>
-              </div>
-
-              <div
-                style={{
-                  background: "#f0fdf4",
-                  border: "1px solid #bbf7d0",
-                  borderRadius: "6px",
-                  padding: "0.75rem",
-                  fontSize: "0.85rem"
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: "0.25rem"
-                  }}
-                >
-                  <span style={{ color: "#166534" }}>Current Annual Tax:</span>
-                  <span>PKR {targetEditArrearsUnit.annualRatePkr.toLocaleString()}</span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: "0.25rem"
-                  }}
-                >
-                  <span style={{ color: "#b45309" }}>Opening Arrears:</span>
-                  <span>PKR {editArrearsAmount.toLocaleString()}</span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    fontWeight: 800,
-                    borderTop: "1px dashed #86efac",
-                    paddingTop: "0.35rem",
-                    color: "#065f46"
-                  }}
-                >
-                  <span>Total Assessed Demand:</span>
-                  <span>
-                    PKR {(targetEditArrearsUnit.annualRatePkr + editArrearsAmount).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: "0.5rem",
-                  marginTop: "0.5rem"
-                }}
-              >
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowEditPotentialArrearsModal(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={handleConfirmSavePotentialArrears}
-                >
-                  Save Arrears Balance
                 </button>
               </div>
             </div>

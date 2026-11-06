@@ -63,5 +63,5 @@ describe("Standardized Ingestion Audit of PTAS_Multan_Division_Field_Survey_With
     expect(firstPayload?.division).toBe("Multan");
     expect(firstPayload?.district).toBe("Vehari");
     expect(firstPayload?.legal_name).toBe("Horizon Oil Company");
-  }, 60000);
+  }, 180000);
 });

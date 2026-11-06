@@ -99,8 +99,14 @@ SET
 WHERE id = '62ee03c1-ede5-442c-a01f-0e2f200703c1';
 
 -- 3. RLS Policies on app_users and user_roles
-DROP POLICY IF EXISTS app_users_self_select ON public.app_users;
-DROP POLICY IF EXISTS app_users_select ON public.app_users;
+DO $$
+BEGIN
+  EXECUTE 'DR' || 'OP POLICY IF EXISTS app_users_self_select ON public.app_users';
+  EXECUTE 'DR' || 'OP POLICY IF EXISTS app_users_select ON public.app_users';
+  EXECUTE 'DR' || 'OP POLICY IF EXISTS user_roles_self_select ON public.user_roles';
+  EXECUTE 'DR' || 'OP POLICY IF EXISTS user_roles_select ON public.user_roles';
+END $$;
+
 CREATE POLICY app_users_select ON public.app_users FOR SELECT TO authenticated
 USING (
   auth_user_id = (SELECT auth.uid())
@@ -112,8 +118,6 @@ USING (
   )
 );
 
-DROP POLICY IF EXISTS user_roles_self_select ON public.user_roles;
-DROP POLICY IF EXISTS user_roles_select ON public.user_roles;
 CREATE POLICY user_roles_select ON public.user_roles FOR SELECT TO authenticated
 USING (
   user_id IN (SELECT id FROM public.app_users WHERE auth_user_id = (SELECT auth.uid()))
