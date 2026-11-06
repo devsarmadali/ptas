@@ -41,126 +41,36 @@ export async function pushPilotStateToSupabase(
   try {
     const supabase = getSupabaseClient();
 
-    // 1. Sync Taxpayers & Demand Units
+    // 1. Sync PFT-3 Assessment Units
     for (const unit of units) {
-      // Upsert Taxpayer
-      const { error: tpErr } = await supabase.from("taxpayers").upsert(
+      const { error: unitErr } = await (supabase as any).from("pft3_assessment_units").upsert(
         {
           id: unit.id,
-          display_name: unit.legalName,
-          current_circle_id: unit.circleId,
-          permanent_demand_no: unit.demandUnit.permanentDemandNo,
-          status: "ACTIVE",
-          created_by: "system-seed"
-        },
-        { onConflict: "id" }
-      );
-      if (tpErr) {
-        console.warn("Taxpayer upsert note:", tpErr.message);
-      }
-
-      // Upsert Taxpayer Identifier
-      const identifierId = `ident-${unit.id}`;
-      const { error: idErr } = await supabase.from("taxpayer_identifiers").upsert(
-        {
-          id: identifierId,
-          taxpayer_id: unit.id,
+          legal_name: unit.legalName,
+          taxpayer_name: unit.tradeName ?? unit.legalName,
+          trade_name: unit.tradeName ?? unit.legalName,
           identifier_type: unit.identifierType,
-          normalized_value: unit.identifierValue,
-          masked_value: unit.identifierValue.replace(/\d(?=\d{4})/g, "*"),
-          is_primary: true
+          identifier_value: unit.identifierValue,
+          address: unit.address,
+          locality: unit.locality ?? null,
+          circle_id: unit.circleId,
+          permanent_demand_no: unit.demandUnit?.permanentDemandNo ?? null,
+          pin_number: unit.demandUnit?.permanentDemandNo ?? null,
+          category_code: unit.categoryCode,
+          subclassification_code: unit.subclassificationCode ?? null,
+          statutory_rule_id: unit.statutoryRuleId,
+          annual_rate_pkr: unit.statutoryRule?.annual_rate_pkr ?? 0,
+          state: unit.assessments?.[0]?.status === "APPROVED" ? "APPROVED" : "SUBMITTED"
         },
         { onConflict: "id" }
       );
-      if (idErr) {
-        console.warn("Identifier upsert note:", idErr.message);
-      }
-
-      // Upsert Demand Unit
-      const { error: duErr } = await supabase.from("demand_units").upsert(
-        {
-          id: unit.demandUnit.id,
-          taxpayer_id: unit.id,
-          permanent_demand_no: unit.demandUnit.permanentDemandNo
-        },
-        { onConflict: "id" }
-      );
-      if (duErr) {
-        console.warn("Demand Unit upsert note:", duErr.message);
-      }
-
-      // Upsert Assessments
-      for (const asm of unit.assessments) {
-        const { error: asmErr } = await supabase.from("assessments").upsert(
-          {
-            id: asm.id,
-            taxpayer_id: unit.id,
-            financial_year_id: asm.financialYearId,
-            status: asm.status,
-            current_version_no: asm.currentVersionNo,
-            created_by: asm.createdBy
-          },
-          { onConflict: "id" }
-        );
-        if (asmErr) {
-          console.warn("Assessment upsert note:", asmErr.message);
-        }
-      }
-
-      // Upsert Assessment Versions
-      for (const ver of unit.assessmentVersions) {
-        const { error: verErr } = await supabase.from("assessment_versions").upsert(
-          {
-            id: ver.id,
-            assessment_id: ver.assessmentId,
-            version_no: ver.versionNo,
-            status: ver.status,
-            snapshot: ver.snapshot as unknown as Json,
-            created_by: ver.createdBy,
-            approved_by: ver.approvedBy ?? null,
-            approved_at: ver.approvedAt ?? null,
-            approval_evidence_id: ver.approvalEvidenceId ?? null
-          },
-          { onConflict: "id" }
-        );
-        if (verErr) {
-          console.warn("Assessment Version upsert note:", verErr.message);
-        }
+      if (unitErr) {
+        console.warn("PFT3 unit upsert note:", unitErr.message);
       }
     }
 
-    // 2. Sync Demand Ledger (Append-Only: query existing to never trigger UPDATE/DELETE)
+    // 2. Audit Events Sync (Append-Only)
     let newLedgerEntriesCount = 0;
-    const { data: existingLedgerRows } = await supabase.from("demand_ledger").select("id");
-    const existingLedgerIds = new Set((existingLedgerRows || []).map((r) => r.id));
-
-    for (const unit of units) {
-      for (const entry of unit.ledgerEntries) {
-        if (!existingLedgerIds.has(entry.id)) {
-          const { error: ledErr } = await supabase.from("demand_ledger").insert({
-            id: entry.id,
-            demand_unit_id: entry.demandUnitId,
-            financial_year_id: entry.financialYearId,
-            entry_type: entry.entryType,
-            amount: entry.amount,
-            source_type: entry.sourceType,
-            source_id: entry.sourceId,
-            idempotency_key: entry.idempotencyKey,
-            correlation_id: entry.correlationId,
-            posted_by: entry.postedBy,
-            posted_at: entry.postedAt,
-            metadata: entry.metadata as unknown as Json
-          });
-
-          if (!ledErr) {
-            newLedgerEntriesCount++;
-            existingLedgerIds.add(entry.id);
-          } else {
-            console.warn("Ledger insert note:", ledErr.message);
-          }
-        }
-      }
-    }
 
     // 3. Sync Audit Events (Append-Only: check existing)
     const { data: existingAuditRows } = await supabase.from("audit_events").select("id");
