@@ -1019,20 +1019,20 @@ export function generateFormPFT2(
     unit.demandUnit?.permanentDemandNo?.startsWith("POT-")
   );
 
-  const isPartial = isProvisional ? false : (opts.isPartial ?? opts.paymentScope === "PARTIAL");
-  const paymentScope = isProvisional
-    ? "FULL"
-    : (opts.paymentScope ?? (isPartial ? "PARTIAL" : "FULL"));
-  const demandScope = isProvisional
-    ? "CURRENT"
-    : (opts.demandScope ?? (arrears > 0 ? "COMBINED" : "CURRENT"));
+  const isPartial = Boolean(opts.isPartial ?? opts.paymentScope === "PARTIAL");
+  const paymentScope = opts.paymentScope ?? (isPartial ? "PARTIAL" : "FULL");
+  const demandScope = opts.demandScope ?? (arrears > 0 ? "COMBINED" : "CURRENT");
   const formType = opts.formType ?? "STD";
 
   const isArrearScope = demandScope === "ARREAR" || demandScope === "ARREARS";
   const isCombinedScope = demandScope === "COMBINED";
 
   const pft2TypeLabel = isProvisional
-    ? "PROVISIONAL"
+    ? isArrearScope
+      ? "PROVISIONAL — ARREARS"
+      : isCombinedScope
+        ? "PROVISIONAL — COMBINED (CURRENT + ARREARS)"
+        : "PROVISIONAL — CURRENT"
     : isArrearScope
       ? "ARREARS"
       : isCombinedScope

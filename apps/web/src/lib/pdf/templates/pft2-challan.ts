@@ -594,10 +594,11 @@ export async function generatePft2ChallanPdf(
       }
     ];
 
-    if (copy.isPartial && (copy.remainingBalance ?? 0) > 0) {
+    const remBalance = copy.remainingBalance ?? copy.taxPayable?.remainingBalance ?? 0;
+    if ((copy.isPartial || remBalance > 0) && remBalance > 0) {
       tableData.push({
         label: "Remaining Balance",
-        value: `Rs. ${(copy.remainingBalance ?? 0).toLocaleString()}`,
+        value: `Rs. ${remBalance.toLocaleString()}`,
         bold: true,
         amber: true
       });
