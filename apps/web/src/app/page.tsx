@@ -132,8 +132,13 @@ import {
   loadDurableChallanRegistry,
   issueDurablePft2Challan,
   receiveDurablePft2Challan,
+  recordDurableManualReceipt,
   cancelDurablePft2Challan,
   loadChallanJurisdictionCodes,
+  savePersistedStatutoryReceipts,
+  savePersistedPft2Challans,
+  loadPersistedStatutoryReceipts,
+  loadPersistedPft2Challans,
   type ChallanJurisdictionCodes
 } from "../lib/challan-storage";
 import {
@@ -682,8 +687,8 @@ export default function HomePage({
     useState<CitizenPaymentSimulationResult | null>(null);
 
   // Phase 10 State: PFT-2 Challan Management & Statutory Receipts Desk
-  const [pft2Challans, setPft2Challans] = useState<Pft2ChallanRecord[]>([]);
-  const [statutoryReceipts, setStatutoryReceipts] = useState<StatutoryReceiptRecord[]>([]);
+  const [pft2Challans, setPft2Challans] = useState<Pft2ChallanRecord[]>(() => loadPersistedPft2Challans());
+  const [statutoryReceipts, setStatutoryReceipts] = useState<StatutoryReceiptRecord[]>(() => loadPersistedStatutoryReceipts());
 
   // Tax Units & Survey Filters
   const [unitsSearchQuery, setUnitsSearchQuery] = useState("");
@@ -2425,6 +2430,65 @@ export default function HomePage({
         depositDate: paymentDate,
         metadata: scanMetadata
       });
+
+      const manualReceiptRecord: StatutoryReceiptRecord = {
+        id: `rec-${Date.now()}`,
+        receiptNumber: paymentReceiptNo.trim(),
+        paymentSource: "MANUAL",
+        receiptCategory: "REGULAR_PFT3",
+        challanNumber: paymentReceiptNo.trim(),
+        demandNumber: targetUnit.demandUnit?.permanentDemandNo ?? targetUnit.demandNumber ?? "",
+        unitId: targetUnit.id,
+        assesseeLegalName: targetUnit.legalName,
+        assesseeTradeName: targetUnit.tradeName,
+        identifierType: targetUnit.identifierType,
+        identifierValue: targetUnit.identifierValue,
+        address: targetUnit.address,
+        district: paymentDistrict || targetUnit.districtName || officer.jurisdictionName || "Vehari",
+        statutoryCategory: targetUnit.statutoryRule?.category ?? "Statutory Assessment",
+        subclassificationCode: targetUnit.subclassificationCode ?? null,
+        statutoryTertiaryCode: targetUnit.statutoryTertiaryCode ?? null,
+        tertiarySlab: null,
+        amountPaidPkr: paymentAmount,
+        amountPaidWords: numberToWordsPkr(paymentAmount),
+        dateOfReceipt: paymentDate,
+        timeOfReceipt: new Date().toLocaleTimeString("en-PK", { hour12: false }),
+        entryTimestamp: new Date().toISOString(),
+        paymentChannel: paymentChannel,
+        bankBranch: paymentBankBranch,
+        bankScrollRef: paymentReceiptNo.trim(),
+        receivingOfficerName: officer.name,
+        receivingOfficerTitle: officer.title,
+        pin: targetUnit.pinNumber || generateDocumentPin(paymentReceiptNo.trim()),
+        provincialUin: targetUnit.provincialUin || targetUnit.pinNumber,
+        officialSha256: computeContentSha256(
+          `${paymentReceiptNo.trim()}|${paymentAmount}|${paymentDate}|${targetUnit.id}`
+        ),
+        qrPayload: buildVerificationUrl({
+          type: "PFT-REC",
+          ref: paymentReceiptNo.trim(),
+          pdn: targetUnit.demandUnit?.permanentDemandNo ?? "",
+          amt: paymentAmount
+        }),
+        remarks: `Direct Manual Receipt (${paymentChannel})`
+      };
+
+      let durableReceipt: StatutoryReceiptRecord = manualReceiptRecord;
+      try {
+        durableReceipt = await recordDurableManualReceipt(
+          targetUnit.id,
+          false,
+          manualReceiptRecord,
+          `idem-pay-${targetUnit.id}-${paymentReceiptNo.trim()}`,
+          correlationId
+        );
+      } catch (durableErr) {
+        console.warn("Direct receipt database persistence notice:", durableErr);
+      }
+
+      const updatedReceipts = [durableReceipt, ...statutoryReceipts];
+      setStatutoryReceipts(updatedReceipts);
+      savePersistedStatutoryReceipts(updatedReceipts);
 
       const updatedUnit: StoredUnit = {
         ...targetUnit,
@@ -5016,7 +5080,7 @@ export default function HomePage({
     const newReceipt: StatutoryReceiptRecord = {
       id: `rec-${Date.now()}`,
       receiptNumber,
-      paymentSource: isPotentialMigration ? "MANUAL" : "ISSUED_PFT2",
+      paymentSource: "ISSUED_PFT2",
       receiptCategory,
       challanNumber: receivingChallan.challanNumber,
       demandNumber: assignedDemandNo,
@@ -5173,7 +5237,9 @@ export default function HomePage({
     const updatedAudits = [auditItem, ...auditLogs];
 
     setPft2Challans(updatedChallans);
+    savePersistedPft2Challans(updatedChallans);
     setStatutoryReceipts(updatedReceipts);
+    savePersistedStatutoryReceipts(updatedReceipts);
     setUnits(updatedUnits);
     setAuditLogs(updatedAudits);
 
