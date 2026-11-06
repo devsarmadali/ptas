@@ -145,6 +145,7 @@ import {
   type PotentialUnitRecord,
   fetchPotentialAssessmentUnitsFromDatabase,
   persistPotentialUnitToDatabase,
+  persistBulkPotentialUnitsToDatabase,
   savePersistedPotentialUnits,
   parseBulkPotentialUnits,
   type BulkPotentialParseResult,
@@ -3807,6 +3808,72 @@ export default function HomePage({
     }
   };
 
+  const [isProcessingBatchAction, setIsProcessingBatchAction] = useState(false);
+
+  const handleBulkSubmitBatch = async (batchId: string) => {
+    if (officer.role !== "INSPECTOR" && officer.role !== "ADMIN") {
+      showToast(
+        "error",
+        "Only an assigned Inspector may submit imported units for ETO statutory review."
+      );
+      return;
+    }
+    setIsProcessingBatchAction(true);
+    try {
+      const supabase = getSupabaseAuthClient();
+      const idemp = `bulk-submit:${batchId}:${Date.now()}`;
+      const corr = `corr-submit:${crypto.randomUUID()}`;
+      const { error } = await supabase.rpc("bulk_submit_survey_import" as never, {
+        p_batch_id: batchId,
+        p_idempotency_key: idemp,
+        p_correlation_id: corr
+      } as never);
+      if (error) {
+        showToast("error", `Batch submission failed: ${error.message}`);
+        return;
+      }
+      showToast("success", "✓ Batch units submitted successfully for ETO statutory review.");
+      await Promise.all([refreshOperationalSurveyUnits(), refreshActionableSurveyImportBatches()]);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast("error", `Batch submission error: ${msg}`);
+    } finally {
+      setIsProcessingBatchAction(false);
+    }
+  };
+
+  const handleBulkApproveBatch = async (batchId: string) => {
+    if (officer.role !== "ETO" && officer.role !== "ADMIN") {
+      showToast(
+        "error",
+        "Only an Assessing Authority (ETO) may approve batch assessments under Rule 11."
+      );
+      return;
+    }
+    setIsProcessingBatchAction(true);
+    try {
+      const supabase = getSupabaseAuthClient();
+      const idemp = `bulk-approve:${batchId}:${Date.now()}`;
+      const corr = `corr-approve:${crypto.randomUUID()}`;
+      const { error } = await supabase.rpc("bulk_approve_survey_import" as never, {
+        p_batch_id: batchId,
+        p_idempotency_key: idemp,
+        p_correlation_id: corr
+      } as never);
+      if (error) {
+        showToast("error", `Bulk approval failed: ${error.message}`);
+        return;
+      }
+      showToast("success", "✓ Batch units approved under Rule 11 with statutory PINs allocated.");
+      await Promise.all([refreshOperationalSurveyUnits(), refreshActionableSurveyImportBatches()]);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast("error", `Bulk approval error: ${msg}`);
+    } finally {
+      setIsProcessingBatchAction(false);
+    }
+  };
+
   const handleDownloadSurveyTemplate = () => {
     const csv = generateSurveyCsvTemplate();
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -4740,20 +4807,22 @@ export default function HomePage({
     setIsImportingPotential(true);
     try {
       const validToImport = bulkPotentialParseResult.validUnits;
-      const persisted = (
-        await Promise.all(validToImport.map((unit) => persistPotentialUnitToDatabase(unit)))
-      ).filter((unit): unit is PotentialUnitRecord => unit !== null);
+      const bulkResult = await persistBulkPotentialUnitsToDatabase(validToImport);
+      let persistedCount = validToImport.length;
 
-      if (persisted.length !== validToImport.length) {
-        showToast(
-          "error",
-          `Only ${persisted.length} of ${validToImport.length} potential units were saved to database. Refreshing register.`
-        );
+      if (!bulkResult) {
+        // Fallback to individual persistence if bulk RPC is unavailable
+        const individualPersisted = (
+          await Promise.all(validToImport.map((unit) => persistPotentialUnitToDatabase(unit)))
+        ).filter((unit): unit is PotentialUnitRecord => unit !== null);
+        persistedCount = individualPersisted.length;
+        const updatedLocalStorage = [...potentialUnits, ...individualPersisted];
+        savePersistedPotentialUnits(updatedLocalStorage);
+        setPotentialUnits(updatedLocalStorage);
+      } else {
+        setPotentialUnits(bulkResult);
+        savePersistedPotentialUnits(bulkResult);
       }
-
-      // Also save to localStorage as cache fallback
-      const updatedLocalStorage = [...potentialUnits, ...persisted];
-      savePersistedPotentialUnits(updatedLocalStorage);
 
       // Audit trail record
       const auditItem: PilotAuditItem = {
@@ -4761,15 +4830,12 @@ export default function HomePage({
         eventType: "BULK_POTENTIAL_UNITS_IMPORTED",
         actorName: officer.name,
         actorRole: officer.role,
-        target: `Potential Register Bulk Import (${persisted.length} Units)`,
+        target: `Potential Register Bulk Import (${persistedCount} Units)`,
         timestamp: new Date().toISOString(),
         correlationId: `corr-pot-bulk-${Date.now()}`,
-        details: `Imported ${persisted.length} potential discovery units as ACTIVE and operational in the Potential Register for ${officer.jurisdictionName}.`
+        details: `Imported ${persistedCount} potential discovery units as ACTIVE and operational in the Potential Register for ${officer.jurisdictionName}.`
       };
       setAuditLogs((prev: PilotAuditItem[]) => [auditItem, ...prev]);
-
-      const refreshed = await fetchPotentialAssessmentUnitsFromDatabase();
-      setPotentialUnits(refreshed ?? updatedLocalStorage);
 
       setShowImportPotentialModal(false);
       setPotentialCsvInput("");
@@ -4778,7 +4844,7 @@ export default function HomePage({
 
       showToast(
         "success",
-        `✓ Permanently imported ${persisted.length} units into Potential Register as active and operational.`
+        `✓ Permanently imported ${persistedCount} units into Potential Register as active and operational.`
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -6814,19 +6880,45 @@ export default function HomePage({
                     <strong style={{ color: "#166534", fontSize: "0.9rem" }}>
                       📋 Active Survey Import Batches ({actionableSurveyImportBatches.length})
                     </strong>
-                    <div style={{ color: "#475569", fontSize: "0.78rem", marginTop: "0.2rem" }}>
+                    <div style={{ color: "#475569", fontSize: "0.78rem", marginTop: "0.4rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                       {actionableSurveyImportBatches.map((b) => (
-                        <span key={b.batch_id} style={{ marginRight: "1rem" }}>
-                          <strong>{b.source_filename}</strong> (FY {b.financial_year_code}):{" "}
-                          Imported {b.imported_rows} &bull; Feeded {b.feeded_rows} &bull; Submitted{" "}
-                          {b.submitted_rows} &bull; Approved {b.approved_rows}
-                          {b.pending_review_rows > 0 && (
-                            <span style={{ color: "#b45309", fontWeight: 600 }}>
-                              {" "}
-                              &bull; {b.pending_review_rows} under classification review
-                            </span>
-                          )}
-                        </span>
+                        <div key={b.batch_id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap", padding: "0.4rem 0.6rem", background: "#f0fdf4", borderRadius: "6px", border: "1px solid #bbf7d0" }}>
+                          <span>
+                            <strong>{b.source_filename}</strong> (FY {b.financial_year_code}):{" "}
+                            Imported {b.imported_rows} &bull; Feeded {b.feeded_rows} &bull; Submitted{" "}
+                            {b.submitted_rows} &bull; Approved {b.approved_rows}
+                            {b.pending_review_rows > 0 && (
+                              <span style={{ color: "#b45309", fontWeight: 600 }}>
+                                {" "}
+                                &bull; {b.pending_review_rows} under classification review
+                              </span>
+                            )}
+                          </span>
+                          <div style={{ display: "flex", gap: "0.5rem" }}>
+                            {officer.role === "INSPECTOR" && b.feeded_rows > 0 && (
+                              <button
+                                type="button"
+                                className="btn-secondary"
+                                style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem", background: "#fef3c7", borderColor: "#f59e0b", color: "#92400e" }}
+                                disabled={isProcessingBatchAction}
+                                onClick={() => handleBulkSubmitBatch(b.batch_id)}
+                              >
+                                📤 Submit Feeded Rows for ETO Review ({b.feeded_rows})
+                              </button>
+                            )}
+                            {officer.role === "ETO" && b.submitted_rows > 0 && (
+                              <button
+                                type="button"
+                                className="btn-primary"
+                                style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem", background: "#16a34a", borderColor: "#15803d", color: "#fff" }}
+                                disabled={isProcessingBatchAction}
+                                onClick={() => handleBulkApproveBatch(b.batch_id)}
+                              >
+                                ⚖️ Bulk Approve Submitted Rows ({b.submitted_rows})
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -7561,7 +7653,7 @@ export default function HomePage({
                   className="btn-primary"
                   onClick={() => {
                     const csvRows = [
-                      "Potential No,Provisional PIN,Legal Name,Trade Name,Identifier Type,Identifier Value,Address,Locality,Circle,Statutory Category,Annual Rate PKR,Arrears PKR,Total Potential Demand PKR,Status",
+                      "Potential No,Provisional PIN,Legal Name,Trade Name,Identifier Type,Identifier Value,District,Circle,Tehsil,Locality,Commercial Address,Category Code,Statutory Category,Subclass Code,Annual Rate PKR,Arrears PKR,Total Potential Demand PKR,Status,Remarks",
                       ...filteredPotentialUnits.map((u) =>
                         [
                           `"${u.potentialNumber}"`,
@@ -7570,14 +7662,19 @@ export default function HomePage({
                           `"${(u.tradeName || "").replace(/"/g, '""')}"`,
                           `"${u.identifierType}"`,
                           `"${u.identifierValue}"`,
-                          `"${u.address.replace(/"/g, '""')}"`,
-                          `"${u.locality}"`,
+                          `"${u.districtName || "Vehari"}"`,
                           `"${u.circleName || "Vehari Circle I (City / Commercial)"}"`,
+                          `"${u.tehsil || "Vehari"}"`,
+                          `"${(u.locality || "").replace(/"/g, '""')}"`,
+                          `"${u.address.replace(/"/g, '""')}"`,
+                          `"${u.categoryCode}"`,
                           `"${u.categoryName.replace(/"/g, '""')}"`,
+                          `"${u.subclassificationCode || ""}"`,
                           u.annualRatePkr,
                           u.openingArrears ?? 0,
                           u.annualRatePkr + (u.openingArrears ?? 0),
-                          `"${u.status}"`
+                          `"${u.status}"`,
+                          `"${(u.remarks || "").replace(/"/g, '""')}"`
                         ].join(",")
                       )
                     ].join("\n");

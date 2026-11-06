@@ -108,7 +108,8 @@ describe("Potential Assessment Register Persistence & Migration Layer", () => {
     expect(result.importedUnits[0]?.pinNumber).toMatch(/^Potential-/);
     expect(result.importedUnits[0]?.potentialNumber).toMatch(/^POT-/);
     expect(result.importedUnits[0]?.createdBy).toBe("Inspector Ahmad");
-    expect(result.importedUnits[0]?.openingArrears).toBe(0);
+    expect(result.importedUnits[0]?.openingArrears).toBe(2000);
+    expect(result.importedUnits[1]?.openingArrears).toBe(0);
   });
 
   it("enforces circle jurisdiction boundary for Inspector on potential units import", () => {
@@ -182,13 +183,31 @@ Multan,Multan Circle 1,Multan,Cantt,"Mall Road",Nishat Fabrics,Nishat,NTN,889900
     expect(result.rows[1]?.errors[0]).toContain("Duplicate legal name in upload file");
   });
 
-  it("generates authentic CSV template with Vehari jurisdiction headers and no arrears", () => {
+  it("generates authentic CSV template with Vehari jurisdiction headers and prioritized columns", () => {
     const template = generatePotentialCsvTemplate();
-    expect(template).toContain("District,Circle,Tehsil,Locality,Commercial Address");
+    expect(template).toContain("Survey No,District,Circle,Tehsil,Locality,Commercial Address");
+    expect(template).toContain("Arrears,Remarks");
     expect(template).toContain("Vehari Circle I (City / Commercial)");
     expect(template).toContain("Burewala Circle");
     expect(template).toContain("Mailsi Circle");
-    expect(template).not.toContain("Arrears");
+    expect(template).toContain("SURV-2026-001");
+  });
+
+  it("preserves supplied survey number, arrears, and remarks on potential units import", () => {
+    const initialUnits = createInitialPotentialUnits();
+    const csv = `Survey No,District,Circle,Tehsil,Locality,Commercial Address,Legal Name,Trade Name,Identifier Type,Identifier Value,Category Code,Subclass Code,Arrears,Remarks
+SURV-2026-999,Vehari,Vehari Circle I (City / Commercial),Vehari,City Zone,"Shop 99 Club Road",Hussain Super Store,Hussain Traders,CNIC,36603-9999999-1,1,1(i),4500,"Discovered during survey"`;
+
+    const result = importPotentialUnitsCsv(csv, initialUnits, "Inspector Survey");
+    expect(result.errors).toHaveLength(0);
+    expect(result.importedUnits).toHaveLength(1);
+    const unit = result.importedUnits[0]!;
+    expect(unit.potentialNumber).toBe("SURV-2026-999");
+    expect(unit.legalName).toBe("Hussain Super Store");
+    expect(unit.tradeName).toBe("Hussain Traders");
+    expect(unit.openingArrears).toBe(4500);
+    expect(unit.remarks).toBe("Discovered during survey");
+    expect(unit.tehsil).toBe("Vehari");
   });
 
   it("migrates potential unit to PFT-3 upon payment realization", () => {

@@ -61,6 +61,7 @@ export interface PotentialUnitRecord {
   readonly statutoryRule: StatutoryRuleDefinition;
   readonly annualRatePkr: number;
   readonly openingArrears?: number | undefined;
+  readonly remarks?: string | undefined;
   readonly status: "ACTIVE" | "MIGRATED" | "CANCELLED";
   readonly migratedToDemandNo?: string | undefined;
   readonly migratedAt?: string | undefined;
@@ -447,6 +448,7 @@ export async function fetchPotentialAssessmentUnitsFromDatabase(): Promise<
         statutoryRule: rule,
         annualRatePkr: Number(row.annual_rate_pkr) || rule.annual_rate_pkr || 4000,
         openingArrears: Number(row.opening_arrears) || 0,
+        remarks: row.remarks ? String(row.remarks) : undefined,
         status:
           row.status === "MIGRATED" || row.status === "CANCELLED"
             ? (row.status as "MIGRATED" | "CANCELLED")
@@ -500,6 +502,7 @@ export async function persistPotentialUnitToDatabase(
       statutory_rule_id: unit.statutoryRuleId,
       annual_rate_pkr: unit.annualRatePkr,
       opening_arrears: unit.openingArrears ?? 0,
+      remarks: unit.remarks ?? null,
       correlation_id: `potential-unit:${crypto.randomUUID()}`
     };
 
@@ -516,6 +519,57 @@ export async function persistPotentialUnitToDatabase(
     return refreshed?.find((candidate) => candidate.id === createdId) ?? null;
   } catch (err) {
     console.warn("persistPotentialUnitToDatabase failed:", err);
+    return null;
+  }
+}
+
+/**
+ * Persist multiple newly created potential units to Supabase atomically via bulk_create_potential_assessment_units RPC.
+ */
+export async function persistBulkPotentialUnitsToDatabase(
+  units: readonly PotentialUnitRecord[]
+): Promise<PotentialUnitRecord[] | null> {
+  if (typeof window === "undefined" || units.length === 0) return [];
+  try {
+    const supabase = getSupabaseAuthClient();
+    const payload = units.map((unit) => ({
+      potential_number: unit.potentialNumber,
+      pin_number: unit.pinNumber,
+      provincial_uin: unit.provincialUin,
+      legal_name: unit.legalName,
+      trade_name: unit.tradeName ?? unit.taxpayerName,
+      taxpayer_name: unit.taxpayerName ?? unit.tradeName,
+      identifier_type: unit.identifierType,
+      identifier_value: unit.identifierValue ?? "",
+      address: unit.address ?? "",
+      locality: unit.locality,
+      circle_id: unit.circleId,
+      circle_name: unit.circleName,
+      tehsil: unit.tehsil ?? null,
+      district_name: unit.districtName,
+      category_code: unit.categoryCode,
+      category_name: unit.categoryName,
+      subclassification_code: unit.subclassificationCode,
+      subclassification_name: unit.subclassificationName,
+      statutory_tertiary_code: unit.statutoryTertiaryCode,
+      statutory_tertiary_classification: unit.statutoryTertiaryClassification,
+      statutory_rule_id: unit.statutoryRuleId,
+      annual_rate_pkr: unit.annualRatePkr,
+      opening_arrears: unit.openingArrears ?? 0,
+      remarks: unit.remarks ?? null
+    }));
+
+    const { error } = await supabase.rpc("bulk_create_potential_assessment_units" as never, {
+      p_units: payload as unknown as Json
+    } as never);
+    if (error) {
+      console.warn("persistBulkPotentialUnitsToDatabase error:", error.message);
+      return null;
+    }
+    const refreshed = await fetchPotentialAssessmentUnitsFromDatabase();
+    return refreshed;
+  } catch (err) {
+    console.warn("persistBulkPotentialUnitsToDatabase failed:", err);
     return null;
   }
 }
@@ -551,6 +605,7 @@ export async function persistPotentialUnitUpdateToDatabase(
     statutory_rule_id: updates.statutoryRuleId,
     annual_rate_pkr: updates.annualRatePkr,
     opening_arrears: updates.openingArrears !== undefined ? Number(updates.openingArrears) : 0,
+    remarks: updates.remarks ?? null,
     correlation_id: `potential-unit-update:${crypto.randomUUID()}`
   };
 
@@ -1093,6 +1148,7 @@ export function migrateVDemandUnitsToPotentialRegister(surveyUnits: readonly Sto
  */
 export function generatePotentialCsvTemplate(): string {
   const headers = [
+    "Survey No",
     "District",
     "Circle",
     "Tehsil",
@@ -1103,11 +1159,14 @@ export function generatePotentialCsvTemplate(): string {
     "Identifier Type",
     "Identifier Value",
     "Category Code",
-    "Subclass Code"
+    "Subclass Code",
+    "Arrears",
+    "Remarks"
   ].join(",");
 
   const sampleRows = [
     [
+      "SURV-2026-001",
       "Vehari",
       "Vehari Circle I (City / Commercial)",
       "Vehari",
@@ -1118,9 +1177,12 @@ export function generatePotentialCsvTemplate(): string {
       "CNIC",
       "36603-1234567-1",
       "1",
-      "1(i)"
+      "1(i)",
+      "0",
+      "Discovered during field survey"
     ].join(","),
     [
+      "SURV-2026-002",
       "Vehari",
       "Vehari Circle II (Grain Market / Rural)",
       "Vehari",
@@ -1131,9 +1193,12 @@ export function generatePotentialCsvTemplate(): string {
       "NTN",
       "4192837-1",
       "4",
-      "4(ii)"
+      "4(ii)",
+      "0",
+      "Commercial wholesale discovery"
     ].join(","),
     [
+      "SURV-2026-003",
       "Vehari",
       "Burewala Circle",
       "Burewala",
@@ -1144,9 +1209,12 @@ export function generatePotentialCsvTemplate(): string {
       "CNIC",
       "36601-9876543-3",
       "2",
-      "2(i)"
+      "2(i)",
+      "2500",
+      "Brought forward balance from previous inspection"
     ].join(","),
     [
+      "SURV-2026-004",
       "Vehari",
       "Mailsi Circle",
       "Mailsi",
@@ -1157,7 +1225,9 @@ export function generatePotentialCsvTemplate(): string {
       "CNIC",
       "36602-5432109-5",
       "3",
-      "3(i)"
+      "3(i)",
+      "0",
+      ""
     ].join(",")
   ].join("\r\n");
 
@@ -1257,7 +1327,15 @@ export function parseBulkPotentialUnits(
   if (hasHeaders) {
     firstLineCols.forEach((col, idx) => {
       const clean = col.replace(/[^a-z0-9]/g, "");
-      if (clean.includes("district")) headerMap.set("district", idx);
+      if (
+        clean.includes("surveyno") ||
+        clean.includes("survey") ||
+        clean.includes("potentialno") ||
+        clean.includes("potno") ||
+        clean === "refno"
+      ) {
+        headerMap.set("surveyNo", idx);
+      } else if (clean.includes("district")) headerMap.set("district", idx);
       else if (clean.includes("circle")) headerMap.set("circle", idx);
       else if (clean.includes("tehsil")) headerMap.set("tehsil", idx);
       else if (clean.includes("locality")) headerMap.set("locality", idx);
@@ -1301,6 +1379,10 @@ export function parseBulkPotentialUnits(
         clean.includes("primaryclass")
       ) {
         headerMap.set("catCode", idx);
+      } else if (clean.includes("arrear") || clean.includes("openingarrear")) {
+        headerMap.set("arrears", idx);
+      } else if (clean.includes("remark") || clean.includes("note")) {
+        headerMap.set("remarks", idx);
       } else if (clean.includes("division")) {
         headerMap.set("division", idx);
       } else if (clean.includes("region")) {
@@ -1387,6 +1469,23 @@ export function parseBulkPotentialUnits(
       for (const [key, colIdx] of headerMap.entries()) {
         rowMap[key] = (cols[colIdx] ?? "").trim();
       }
+    } else if (cols.length >= 13) {
+      // Standard 14-column base template:
+      // Survey No, District, Circle, Tehsil, Locality, Commercial Address, Legal Name, Trade Name, ID Type, ID Val, Cat Code, Sub Code, Arrears, Remarks
+      rowMap["surveyNo"] = cols[0] || "";
+      rowMap["district"] = cols[1] || "Vehari";
+      rowMap["circle"] = cols[2] || "Vehari Circle I (City / Commercial)";
+      rowMap["tehsil"] = cols[3] || "Vehari";
+      rowMap["locality"] = cols[4] || "Vehari City Commercial Zone";
+      rowMap["address"] = cols[5] || "Vehari Commercial Area";
+      rowMap["legalName"] = cols[6] || "";
+      rowMap["tradeName"] = cols[7] || "";
+      rowMap["idType"] = cols[8] || "";
+      rowMap["idVal"] = cols[9] || "";
+      rowMap["catCode"] = cols[10] || "1";
+      rowMap["subCode"] = cols[11] || "";
+      rowMap["arrears"] = cols[12] || "0";
+      rowMap["remarks"] = cols[13] || "";
     } else if (cols.length >= 10) {
       // Standard 10/11-column template:
       // District, Circle, Tehsil, Locality, Commercial Address, Legal Name, Trade Name, ID Type, ID Val, Cat Code, Sub Code
@@ -1531,10 +1630,16 @@ export function parseBulkPotentialUnits(
 
     let parsedUnit: PotentialUnitRecord | undefined;
     if (isValid) {
-      const potNum = `POT-${currentSequence.toString().padStart(4, "0")}`;
+      const suppliedSurveyNo = (rowMap["surveyNo"] || "").trim();
+      const potNum = suppliedSurveyNo
+        ? suppliedSurveyNo
+        : `POT-${currentSequence.toString().padStart(4, "0")}`;
       const pinNumber = formatPotentialPin(
         `237-00101061102${currentSequence.toString().padStart(4, "0")}-01`
       );
+      const arrearsValue = rowMap["arrears"]
+        ? Math.max(0, Math.round(Number(rowMap["arrears"]) || 0))
+        : 0;
 
       parsedUnit = {
         id: `pot-import-${Date.now()}-${currentSequence}`,
@@ -1543,12 +1648,14 @@ export function parseBulkPotentialUnits(
         provincialUin: pinNumber,
         legalName,
         tradeName,
+        taxpayerName: tradeName,
         identifierType,
         identifierValue: idVal || `${Math.floor(1000000 + Math.random() * 9000000)}`,
         address,
         locality: locality || "Vehari City Commercial Zone",
         circleId: resolvedCircle.id,
         circleName: resolvedCircle.name,
+        tehsil: rowMap["tehsil"] || "Vehari",
         districtName: resolvedDistrict || "Vehari",
         categoryCode: rule.category_code,
         categoryName: rule.category,
@@ -1559,7 +1666,8 @@ export function parseBulkPotentialUnits(
         statutoryRuleId: rule.rule_id,
         statutoryRule: rule,
         annualRatePkr: rule.annual_rate_pkr ?? 4000,
-        openingArrears: 0, // Potential register strictly has no arrears
+        openingArrears: arrearsValue,
+        remarks: rowMap["remarks"] || undefined,
         status: "ACTIVE", // Immediately operational and active upon import
         createdAt: new Date().toISOString(),
         createdBy: officerName
