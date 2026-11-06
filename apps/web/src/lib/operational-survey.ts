@@ -307,9 +307,10 @@ export async function loadOperationalContext(): Promise<{
 export interface UpdateSurveyUnitInput {
   readonly legal_name: string;
   readonly trade_name?: string | undefined;
+  readonly taxpayer_name?: string | undefined;
   readonly identifier_type?: string | undefined;
   readonly identifier_value?: string | undefined;
-  readonly address: string;
+  readonly address?: string | undefined;
   readonly locality?: string | undefined;
   readonly circle_id?: string | undefined;
   readonly circle_name?: string | undefined;

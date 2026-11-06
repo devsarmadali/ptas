@@ -1348,11 +1348,7 @@ export default function HomePage({
   const handleAddUnit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLegalName.trim()) {
-      showToast("error", "Legal name is mandatory");
-      return;
-    }
-    if (!newIdentifierValue.trim()) {
-      showToast("error", "CNIC or NTN identifier is mandatory");
+      showToast("error", "Legal Name / Trade Name is mandatory.");
       return;
     }
 
@@ -1487,9 +1483,10 @@ export default function HomePage({
         {
           legal_name: newLegalName.trim(),
           trade_name: newTradeName.trim() || undefined,
+          taxpayer_name: newTradeName.trim() || undefined,
           identifier_type: newIdentifierType,
-          identifier_value: newIdentifierValue.trim(),
-          address: newAddress.trim(),
+          identifier_value: newIdentifierValue.trim() || undefined,
+          address: newAddress.trim() || undefined,
           locality: newLocality.trim() || undefined,
           circle_id: matchedCircle?.id,
           circle_name: newCircleName,
@@ -1568,11 +1565,12 @@ export default function HomePage({
     const { data, error } = await getSupabaseAuthClient().rpc("create_individual_survey_unit", {
       p_unit: {
         legal_name: newLegalName.trim(),
-        trade_name: newTradeName.trim(),
+        trade_name: newTradeName.trim() || undefined,
+        taxpayer_name: newTradeName.trim() || undefined,
         identifier_type: newIdentifierType,
-        identifier_value: newIdentifierValue.trim(),
-        address: newAddress.trim(),
-        locality: newLocality.trim(),
+        identifier_value: newIdentifierValue.trim() || undefined,
+        address: newAddress.trim() || "",
+        locality: newLocality.trim() || undefined,
         circle_id: matchedCircle?.id,
         circle_name: newCircleName,
         tehsil: newTehsil,
@@ -1606,7 +1604,7 @@ export default function HomePage({
     if (created?.id) setSelectedUnitId(created.id);
     showToast(
       "success",
-      `Unit '${newLegalName.trim()}' permanently added to the survey pipeline under Class ${rule.rule_code}${sanitizedArrears > 0 ? ` (Opening arrears: PKR ${sanitizedArrears.toLocaleString()})` : ""}.`
+      `✓ Unit '${newLegalName.trim()}' feeded into survey pipeline awaiting ETO statutory review under Class ${rule.rule_code}${sanitizedArrears > 0 ? ` (Opening arrears: PKR ${sanitizedArrears.toLocaleString()})` : ""}.`
     );
   };
 
@@ -5474,9 +5472,10 @@ export default function HomePage({
     setEditingUnitId(u.id);
     setNewLegalName(u.legalName);
     setNewTradeName(u.tradeName || "");
-    setNewIdentifierType((u.identifierType as "CNIC" | "NTN") || "CNIC");
-    setNewIdentifierValue(u.identifierValue);
-    setNewAddress(u.address);
+    const idType = (u.identifierType as "CNIC" | "NTN") || "CNIC";
+    setNewIdentifierType(idType);
+    setNewIdentifierValue(formatTaxIdentifierInput(u.identifierValue || "", idType));
+    setNewAddress(u.address || "");
     setNewLocality(u.locality || "");
     const circleName = normalizeCircleName(u.circleName || "Circle 1");
     setNewCircleName(circleName);
@@ -16407,10 +16406,10 @@ export default function HomePage({
                       </div>
                     )}
 
-                    {/* Assessee Names */}
+                    {/* Assessee Names: Legal Name / Trade Name (Mandatory) & Taxpayer / Assessee (Secondary) */}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                       <div className="form-group">
-                        <label htmlFor="new-legal-name">Legal Assessee Name *</label>
+                        <label htmlFor="new-legal-name">Legal Name / Trade Name *</label>
                         <input
                           id="new-legal-name"
                           type="text"
@@ -16423,112 +16422,101 @@ export default function HomePage({
                         />
                       </div>
                       <div className="form-group">
-                        <label htmlFor="new-trade-name">Trade / Business Name (if different)</label>
+                        <label htmlFor="new-trade-name">Taxpayer / Assessee</label>
                         <input
                           id="new-trade-name"
                           type="text"
                           disabled={!isEditable}
                           className="form-control"
-                          placeholder="e.g. Al-Madina Pharmacy"
+                          placeholder="e.g. Muhammad Ahmad"
                           value={newTradeName}
                           onChange={(e) => setNewTradeName(e.target.value)}
                         />
                       </div>
                     </div>
 
-                    {/* Tax Identifier Type & Value */}
+                    {/* Tax Identifier Type & Value (Optional, Numbers Only, Auto-Hyphenated) */}
                     <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: "1rem" }}>
                       <div className="form-group">
-                        <label htmlFor="new-id-type">Tax ID Type *</label>
+                        <label htmlFor="new-id-type">Tax ID Type</label>
                         <select
                           id="new-id-type"
                           disabled={!isEditable}
                           className="form-control"
                           value={newIdentifierType}
-                          onChange={(e) => setNewIdentifierType(e.target.value as "CNIC" | "NTN")}
+                          onChange={(e) => {
+                            const nextType = e.target.value as "CNIC" | "NTN";
+                            setNewIdentifierType(nextType);
+                            setNewIdentifierValue(
+                              formatTaxIdentifierInput(newIdentifierValue, nextType)
+                            );
+                          }}
                         >
                           <option value="CNIC">CNIC</option>
                           <option value="NTN">NTN</option>
                         </select>
                       </div>
                       <div className="form-group">
-                        <label htmlFor="new-id-val">Tax Identifier Number *</label>
+                        <label htmlFor="new-id-val">Tax Identifier Value</label>
                         <input
                           id="new-id-val"
                           type="text"
-                          required
                           disabled={!isEditable}
                           className="form-control"
                           placeholder={
-                            newIdentifierType === "CNIC" ? "36601-1234567-1" : "NTN-1234567-8"
+                            newIdentifierType === "CNIC" ? "36601-1234567-1" : "1234567-8"
                           }
                           value={newIdentifierValue}
-                          onChange={(e) => setNewIdentifierValue(e.target.value)}
+                          onChange={(e) =>
+                            setNewIdentifierValue(
+                              formatTaxIdentifierInput(e.target.value, newIdentifierType)
+                            )
+                          }
                         />
                       </div>
                     </div>
 
-                    {/* Administrative Circle & Tehsil */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-                      <div className="form-group">
-                        <label
-                          htmlFor="new-circle-name"
-                          style={{
-                            fontWeight: 600,
-                            display: "flex",
-                            justifyContent: "space-between"
-                          }}
-                        >
-                          <span>Administrative Circle *</span>
-                          {officer.role === "INSPECTOR" && (
-                            <span
-                              style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 400 }}
-                            >
-                              🔒 Assigned Circle
-                            </span>
-                          )}
-                        </label>
-                        <select
-                          id="new-circle-name"
-                          disabled={!isEditable || officer.role === "INSPECTOR"}
-                          className="form-control"
-                          style={
-                            officer.role === "INSPECTOR"
-                              ? { background: "#f1f5f9", cursor: "not-allowed", color: "#475569" }
-                              : undefined
-                          }
-                          value={newCircleName}
-                          onChange={(e) => {
-                            const c = e.target.value;
-                            setNewCircleName(c);
-                            setNewTehsil(getDefaultTehsilForCircle(c));
-                          }}
-                        >
-                          {DISTRICT_VEHARI_CIRCLES.map((c) => (
-                            <option key={c.id} value={c.name}>
-                              {c.name} ({c.code})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor="new-tehsil" style={{ fontWeight: 600 }}>
-                          Attached Tehsil *
-                        </label>
-                        <select
-                          id="new-tehsil"
-                          disabled={!isEditable}
-                          className="form-control"
-                          value={newTehsil}
-                          onChange={(e) => setNewTehsil(e.target.value)}
-                        >
-                          {DISTRICT_VEHARI_TEHSILS.map((t) => (
-                            <option key={t} value={t}>
-                              Tehsil {t}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                    {/* Administrative Circle (Tehsil resolved automatically from circle) */}
+                    <div className="form-group">
+                      <label
+                        htmlFor="new-circle-name"
+                        style={{
+                          fontWeight: 600,
+                          display: "flex",
+                          justifyContent: "space-between"
+                        }}
+                      >
+                        <span>Administrative Circle *</span>
+                        {officer.role === "INSPECTOR" && (
+                          <span
+                            style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 400 }}
+                          >
+                            🔒 Assigned Circle
+                          </span>
+                        )}
+                      </label>
+                      <select
+                        id="new-circle-name"
+                        disabled={!isEditable || officer.role === "INSPECTOR"}
+                        className="form-control"
+                        style={
+                          officer.role === "INSPECTOR"
+                            ? { background: "#f1f5f9", cursor: "not-allowed", color: "#475569" }
+                            : undefined
+                        }
+                        value={newCircleName}
+                        onChange={(e) => {
+                          const c = e.target.value;
+                          setNewCircleName(c);
+                          setNewTehsil(getDefaultTehsilForCircle(c));
+                        }}
+                      >
+                        {DISTRICT_VEHARI_CIRCLES.map((c) => (
+                          <option key={c.id} value={c.name}>
+                            {c.name} ({c.code})
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     {/* Assigned Locality from Database for this Circle */}
@@ -16541,7 +16529,7 @@ export default function HomePage({
                           justifyContent: "space-between"
                         }}
                       >
-                        <span>Assigned Locality / Commercial Zone *</span>
+                        <span>Assigned Locality / Commercial Zone</span>
                         <span style={{ fontSize: "0.75rem", color: "#059669", fontWeight: 700 }}>
                           {circleLocalities.length} Localities in {newCircleName}
                         </span>
@@ -16578,7 +16566,6 @@ export default function HomePage({
                         <input
                           id="new-locality"
                           type="text"
-                          required
                           disabled={!isEditable}
                           className="form-control"
                           style={{ flex: 1 }}
@@ -16600,13 +16587,12 @@ export default function HomePage({
                       </span>
                     </div>
 
-                    {/* Physical Address */}
+                    {/* Physical Address (Optional) */}
                     <div className="form-group">
-                      <label htmlFor="new-address">Physical Business Address *</label>
+                      <label htmlFor="new-address">Physical Business Address</label>
                       <input
                         id="new-address"
                         type="text"
-                        required
                         disabled={!isEditable}
                         className="form-control"
                         placeholder="e.g. Shop # 12, Club Road Commercial Market, Vehari"
@@ -16941,8 +16927,8 @@ export default function HomePage({
                           ? editingUnitId
                             ? isApproved
                               ? "✓ Save Changes & Submit for ETO Re-approval"
-                              : "✓ Save Survey Changes"
-                            : "Save & Create Draft Assessment"
+                              : "✓ Save Survey Changes (FEEDED)"
+                            : "Save & Feed for ETO Review"
                           : "🔒 Editing Prohibited (Locked)"}
                       </button>
                     </div>
