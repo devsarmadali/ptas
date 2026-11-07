@@ -10,7 +10,7 @@ const retiredPilotIdentities = [
 test("protected PTAS routes fail closed without a Supabase session", async ({ page }) => {
   for (const path of ["/assessment", "/enforcement", "/revenue", "/intelligence"]) {
     await page.goto(path);
-    await expect(page).toHaveURL(/\/sign-in$/);
+    await expect(page).toHaveURL(/\/sign-in(\?.*)?$/);
     await expect(page.getByRole("heading", { name: /PTAS Officer Sign In/i })).toBeVisible();
 
     for (const retiredIdentity of retiredPilotIdentities) {

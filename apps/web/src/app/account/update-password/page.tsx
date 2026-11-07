@@ -19,7 +19,6 @@ export default function UpdatePasswordPage() {
   useEffect(() => {
     if (hasInitialized.current) return;
     hasInitialized.current = true;
-    const supabase = getSupabaseAuthClient();
     const recoveryParameters = new URLSearchParams(window.location.hash.slice(1));
     const recoveryErrorCode = recoveryParameters.get("error_code");
     const recoveryErrorDescription = recoveryParameters.get("error_description");
@@ -33,6 +32,14 @@ export default function UpdatePasswordPage() {
           ? "This one-time password setup link has expired or was already used. Request a new link from the PTAS sign-in page."
           : recoveryErrorDescription || "This password setup link is invalid. Request a new link."
       );
+      return;
+    }
+
+    let supabase: ReturnType<typeof getSupabaseAuthClient>;
+    try {
+      supabase = getSupabaseAuthClient();
+    } catch {
+      setError("This password setup link is invalid or expired. Request a new link.");
       return;
     }
 
