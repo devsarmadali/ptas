@@ -17,6 +17,7 @@ import {
   validateOfficerImportJurisdiction
 } from "./bulk-import-standards";
 import { parseCsvContent } from "./bulk-survey";
+import { normalizeDemandNumber } from "./statutory-forms";
 
 export const POTENTIAL_UNITS_STORAGE_KEY = "ptas_potential_units_v2";
 export const POTENTIAL_UNITS_UPDATED_EVENT = "ptas-potential-units-updated";
@@ -86,8 +87,46 @@ export function cleanPotentialPin(potentialPin: string): string {
 }
 
 /**
+ * Calculates the next sequential demand number for a specific circle in Form PFT-3.
+ * Finds the maximum existing integer demand number in that circle and returns max + 1 as string.
+ */
+export function getNextCircleDemandNumber(
+  circleIdOrName: string | undefined | null,
+  existingUnits: readonly StoredUnit[]
+): string {
+  let maxDemand = 0;
+  const target = (circleIdOrName ?? "").trim().toLowerCase();
+
+  for (const u of existingUnits) {
+    const uCircleId = (u.circleId ?? "").trim().toLowerCase();
+    const uCircleName = (u.circleName ?? "").trim().toLowerCase();
+    const isSameCircle =
+      !target ||
+      uCircleId === target ||
+      uCircleName === target ||
+      uCircleName.includes(target) ||
+      target.includes(uCircleName);
+
+    if (isSameCircle) {
+      const d1 = normalizeDemandNumber(u.demandNumber);
+      const d2 = normalizeDemandNumber(u.demandUnit?.permanentDemandNo);
+      for (const d of [d1, d2]) {
+        if (d && /^[0-9]+$/.test(d)) {
+          const val = parseInt(d, 10);
+          if (val > maxDemand) {
+            maxDemand = val;
+          }
+        }
+      }
+    }
+  }
+
+  return String(maxDemand + 1);
+}
+
+/**
  * Resolve collision if a converted demand number already exists in Form PFT-3.
- * Follows Rule: collision marked as Demand/1, Demand/2, etc.
+ * Follows Rule: collision marked as Demand-1, Demand-2, etc. (hyphenated numeric).
  */
 export function resolveDemandNumberCollision(
   candidateDemandNo: string,
@@ -97,9 +136,13 @@ export function resolveDemandNumberCollision(
   for (const u of existingUnits) {
     if (u.demandNumber) {
       existingDemands.add(u.demandNumber.trim().toUpperCase());
+      const norm = normalizeDemandNumber(u.demandNumber);
+      if (norm) existingDemands.add(norm.toUpperCase());
     }
     if (u.demandUnit?.permanentDemandNo) {
       existingDemands.add(u.demandUnit.permanentDemandNo.trim().toUpperCase());
+      const norm = normalizeDemandNumber(u.demandUnit.permanentDemandNo);
+      if (norm) existingDemands.add(norm.toUpperCase());
     }
   }
 
@@ -108,15 +151,16 @@ export function resolveDemandNumberCollision(
     return normalized;
   }
 
+  const useSlash = candidateDemandNo.includes("/") || candidateDemandNo.startsWith("D-");
   let counter = 1;
   while (counter < 1000) {
-    const candidate = `${normalized}/${counter}`;
+    const candidate = useSlash ? `${normalized}/${counter}` : `${normalized}-${counter}`;
     if (!existingDemands.has(candidate.toUpperCase())) {
       return candidate;
     }
     counter++;
   }
-  return `${normalized}/${Date.now()}`;
+  return useSlash ? `${normalized}/${Date.now()}` : `${normalized}-${Date.now()}`;
 }
 
 /**
@@ -173,14 +217,14 @@ export function convertPotentialUnitToStoredUnit(pot: PotentialUnitRecord): Stor
         pot.statutoryTertiaryClassification || rule.statutory_tertiary_classification || null
     },
     assessmentNumber: `POT-ASM-${pot.potentialNumber.replace(/^POT-?/i, "")}`,
-    demandNumber: pot.potentialNumber,
+    demandNumber: undefined,
     pinNumber: pin,
     provincialUin: pin,
     pft3Registered: false,
     demandUnit: {
       id: pot.id,
       taxpayerId: pot.id,
-      permanentDemandNo: pot.potentialNumber,
+      permanentDemandNo: "",
       createdAt: pot.createdAt || new Date().toISOString()
     },
     assessments: [
@@ -671,13 +715,15 @@ export function migratePotentialUnitToPft3(
   assignedDemandNo: string;
   cleanPin: string;
 } {
-  // Convert Potential Number to Demand Number, e.g. POT-0001 -> D-0001
-  const rawNum = potentialUnit.potentialNumber.replace(/^POT-/i, "").replace(/^P-/i, "").trim();
-  const candidateDemandNo = `D-${rawNum}`;
+  // Allocate circle-wise next pure numeric demand number in Form PFT-3
+  const candidateDemandNo = getNextCircleDemandNumber(
+    potentialUnit.circleId || potentialUnit.circleName,
+    existingUnits
+  );
   const assignedDemandNo = resolveDemandNumberCollision(candidateDemandNo, existingUnits);
 
   // Clean the PIN by stripping the "Potential-" prefix
-  const cleanPin = cleanPotentialPin(potentialUnit.pinNumber);
+  const cleanPin = cleanPotentialPin(potentialUnit.pinNumber || potentialUnit.provincialUin || "");
 
   const unitId = `migrated-${Date.now()}-${assignedDemandNo.replace(/[^a-zA-Z0-9]/g, "")}`;
   const nowIso = new Date().toISOString();
@@ -825,13 +871,15 @@ export function submitPotentialUnitToPft3(
   assignedDemandNo: string;
   cleanPin: string;
 } {
-  // Convert Potential Number to Demand Number, e.g. POT-0001 -> D-0001
-  const rawNum = potentialUnit.potentialNumber.replace(/^POT-/i, "").replace(/^P-/i, "").trim();
-  const candidateDemandNo = `D-${rawNum}`;
+  // Allocate circle-wise next pure numeric demand number in Form PFT-3
+  const candidateDemandNo = getNextCircleDemandNumber(
+    potentialUnit.circleId || potentialUnit.circleName,
+    existingUnits
+  );
   const assignedDemandNo = resolveDemandNumberCollision(candidateDemandNo, existingUnits);
 
   // Clean the PIN by stripping the "Potential-" prefix
-  const cleanPin = cleanPotentialPin(potentialUnit.pinNumber);
+  const cleanPin = cleanPotentialPin(potentialUnit.pinNumber || potentialUnit.provincialUin || "");
 
   const unitId = `migrated-${Date.now()}-${assignedDemandNo.replace(/[^a-zA-Z0-9]/g, "")}`;
   const nowIso = new Date().toISOString();

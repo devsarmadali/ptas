@@ -150,6 +150,7 @@ import {
   type BulkPotentialParseResult,
   generatePotentialCsvTemplate,
   formatPotentialPin,
+  getNextCircleDemandNumber,
   submitPotentialUnitToPft3,
   migratePotentialUnitToPft3,
   updatePotentialUnitParticulars,
@@ -1163,6 +1164,10 @@ export default function HomePage({
     }
   }, [selectedStatutoryRule, allRules, units.length, newTehsil, newCircleName]);
 
+  const previewNextDemand = useMemo(() => {
+    return getNextCircleDemandNumber(newCircleName, units);
+  }, [newCircleName, units]);
+
   // Classification Helpers for Potential Units Modal (matches Survey Add Modal)
   const potAvailableRulesForCategory = useMemo(() => {
     return getRulesByCategory(potNewCategoryCode);
@@ -1667,7 +1672,8 @@ export default function HomePage({
       };
 
       // Server RPC execution if session active
-      try {
+      const { data: sessionData } = await getSupabaseAuthClient().auth.getSession();
+      if (sessionData?.session?.access_token) {
         await executeWorkflowCommand("SURVEY_TRANSITION", {
           p_unit_id: unitId,
           p_action: "SUBMIT",
@@ -1675,8 +1681,7 @@ export default function HomePage({
           p_idempotency_key: `survey-sub:${officer.id}:${unitId}:${Date.now()}`,
           p_correlation_id: `survey-sub:${crypto.randomUUID()}`
         });
-      } catch (rpcErr) {
-        console.warn("Workflow server transition fallback:", rpcErr);
+        await refreshOperationalSurveyUnits();
       }
 
       const updatedUnits = units.map((u) => (u.id === unitId ? updatedUnit : u));
@@ -1727,7 +1732,8 @@ export default function HomePage({
         details: `Inspector resolved return observations and resubmitted assessment for '${targetUnit.legalName}' to ETO queue.`
       };
 
-      try {
+      const { data: sessionData } = await getSupabaseAuthClient().auth.getSession();
+      if (sessionData?.session?.access_token) {
         await executeWorkflowCommand("SURVEY_TRANSITION", {
           p_unit_id: unitId,
           p_action: "RESUBMIT",
@@ -1736,8 +1742,7 @@ export default function HomePage({
           p_correlation_id: `survey-resub:${crypto.randomUUID()}`,
           p_reason: "Resubmitted with addressed statutory observations"
         });
-      } catch (rpcErr) {
-        console.warn("Workflow server resubmit fallback:", rpcErr);
+        await refreshOperationalSurveyUnits();
       }
 
       const updatedUnits = units.map((u) => (u.id === unitId ? updatedUnit : u));
@@ -1880,7 +1885,8 @@ export default function HomePage({
       };
 
       // Server RPC execution if session active
-      try {
+      const { data: sessionData } = await getSupabaseAuthClient().auth.getSession();
+      if (sessionData?.session?.access_token) {
         await executeWorkflowCommand("SURVEY_TRANSITION", {
           p_unit_id: unitId,
           p_action: "APPROVE",
@@ -1889,8 +1895,7 @@ export default function HomePage({
           p_correlation_id: `survey-appr:${crypto.randomUUID()}`,
           p_reason: "Statutory assessment approval by ETO"
         });
-      } catch (rpcErr) {
-        console.warn("Workflow server approval fallback:", rpcErr);
+        await refreshOperationalSurveyUnits();
       }
 
       const updatedUnits = units.map((u) => (u.id === unitId ? updatedUnit : u));
@@ -4896,6 +4901,7 @@ export default function HomePage({
 
       // Record migration in live database first
       await recordPotentialUnitMigrationInDatabase(targetMigratePotential.id, assignedDemandNo);
+      await refreshOperationalSurveyUnits();
 
       const nowIso = new Date().toISOString();
       const updatedPotentialUnits = potentialUnits.map((p) =>
@@ -17030,55 +17036,85 @@ export default function HomePage({
                           </span>
                         </div>
 
-                        {/* PIN Preview Card */}
-                        {previewUin && (
+                        {/* Circle Sequential Demand & PIN Preview Card */}
+                        <div
+                          style={{
+                            marginTop: "0.65rem",
+                            padding: "0.5rem 0.75rem",
+                            background: "#ffffff",
+                            borderRadius: "5px",
+                            border: "1px solid #cbd5e1",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "0.35rem"
+                          }}
+                        >
                           <div
                             style={{
-                              marginTop: "0.65rem",
-                              padding: "0.5rem 0.75rem",
-                              background: "#ffffff",
-                              borderRadius: "5px",
-                              border: "1px solid #cbd5e1"
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center"
                             }}
                           >
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                marginBottom: "0.25rem"
-                              }}
+                            <span
+                              style={{ fontSize: "0.725rem", color: "#64748b", fontWeight: 600 }}
                             >
-                              <span
-                                style={{ fontSize: "0.725rem", color: "#64748b", fontWeight: 600 }}
-                              >
-                                PROFESSIONAL IDENTIFICATION NUMBER (PIN):
-                              </span>
-                              <span
-                                style={{ fontSize: "0.68rem", color: "#0284c7", fontWeight: 600 }}
-                              >
-                                PBS District 237 (Vehari) &bull; {newCircleName}
-                              </span>
-                            </div>
-                            <div
+                              ASSIGNED DEMAND NO ({newCircleName.toUpperCase()}):
+                            </span>
+                            <span
                               style={{
                                 fontFamily: "monospace",
                                 fontSize: "0.95rem",
-                                fontWeight: 700,
-                                color: "#1e40af",
-                                letterSpacing: "0.5px"
+                                fontWeight: 800,
+                                color: "#0f766e"
                               }}
                             >
-                              {previewUin}
-                            </div>
-                            <div
-                              style={{ fontSize: "0.68rem", color: "#94a3b8", marginTop: "0.2rem" }}
-                            >
-                              Format: [District]-[Tehsil+Circle+Classification+Sequence]-[Version]
-                              (Permanent)
-                            </div>
+                              {previewNextDemand}
+                            </span>
                           </div>
-                        )}
+                          {previewUin && (
+                            <>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                  marginTop: "0.15rem"
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: "0.725rem",
+                                    color: "#64748b",
+                                    fontWeight: 600
+                                  }}
+                                >
+                                  PROFESSIONAL IDENTIFICATION NUMBER (PIN):
+                                </span>
+                                <span
+                                  style={{ fontSize: "0.68rem", color: "#0284c7", fontWeight: 600 }}
+                                >
+                                  PBS District 237 (Vehari) &bull; {newCircleName}
+                                </span>
+                              </div>
+                              <div
+                                style={{
+                                  fontFamily: "monospace",
+                                  fontSize: "0.95rem",
+                                  fontWeight: 700,
+                                  color: "#1e40af",
+                                  letterSpacing: "0.5px"
+                                }}
+                              >
+                                {previewUin}
+                              </div>
+                            </>
+                          )}
+                          <div style={{ fontSize: "0.68rem", color: "#94a3b8" }}>
+                            Format: [District]-[Tehsil+Circle+Classification+Sequence]-[Version]
+                            (Permanent &amp; Circle-Scoped)
+                          </div>
+                        </div>
 
                         <span
                           style={{

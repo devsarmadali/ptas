@@ -33,8 +33,8 @@ describe("operational survey projection", () => {
     expect(unit.assessmentNumber).toBe("");
     expect(unit.pinNumber).toBeUndefined();
     expect(unit.provincialUin).toBe("");
-    expect(unit.demandNumber).toBe("V-01-184");
-    expect(unit.demandUnit.permanentDemandNo).toBe("V-01-184");
+    expect(unit.demandNumber).toBe("1184");
+    expect(unit.demandUnit.permanentDemandNo).toBe("1184");
     expect(unit.circleName).toBe("Circle 1");
     expect(unit.pft3Registered).toBe(true);
   });

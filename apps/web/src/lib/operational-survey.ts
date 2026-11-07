@@ -9,6 +9,7 @@ import type { Json } from "@ptas/database/types";
 import type { StoredUnit, StoredUnitSnapshot } from "./pilot-store";
 import { getSupabaseAuthClient, resolveAuthenticatedOfficer } from "./supabase-auth";
 import type { MockOfficer } from "./pilot-store";
+import { normalizeDemandNumber } from "./statutory-forms";
 
 const ASSESSMENT_STATUSES = new Set([
   "DRAFT",
@@ -194,32 +195,32 @@ export function mapOperationalUnit(value: unknown): StoredUnit {
     approvalEvidenceId: asOptionalString(versionRow.approval_evidence_id)
   };
 
+  const rawProfilePin = asOptionalString(profile.pin_number);
+  const rawProfileUin = asOptionalString(profile.provincial_uin);
   const rawPdn = asOptionalString(taxpayer.permanent_demand_no);
   const rawLegacy = asOptionalString(profile.legacy_demand_no);
   const rawDemandRowPdn = asOptionalString(demandRow.permanent_demand_no);
 
-  const provincialUin =
+  const resolvedPin =
+    rawProfilePin ??
+    rawProfileUin ??
     (isUinPattern(rawPdn) ? rawPdn : null) ??
     (isUinPattern(rawLegacy) ? rawLegacy : null) ??
     (isUinPattern(rawDemandRowPdn) ? rawDemandRowPdn : null) ??
     (rawPdn?.startsWith("PIN-") ? rawPdn : null) ??
-    (isUinPattern(asOptionalString(profile.provincial_uin))
-      ? asString(profile.provincial_uin)
-      : null) ??
     "";
 
-  const pinNumber =
-    (isUinPattern(rawPdn) ? rawPdn : null) ??
-    (rawPdn?.startsWith("PIN-") ? rawPdn : null) ??
-    asOptionalString(profile.pin_number) ??
-    (provincialUin || undefined);
+  const pinNumber = resolvedPin || undefined;
+  const provincialUin = resolvedPin || "";
 
-  const demandNumber =
+  const rawDemandNo =
     (!isUinPattern(rawLegacy) ? rawLegacy : null) ??
     (!isUinPattern(rawDemandRowPdn) ? rawDemandRowPdn : null) ??
     (!isUinPattern(rawPdn) && !rawPdn?.startsWith("PIN-") ? rawPdn : null) ??
     rawLegacy ??
     rawDemandRowPdn;
+
+  const demandNumber = normalizeDemandNumber(rawDemandNo);
 
   const demandUnitId = asString(demandRow.id, `pending-demand:${unitId}`);
   const ledgerEntries = Array.isArray(row.ledger_entries)
@@ -250,7 +251,7 @@ export function mapOperationalUnit(value: unknown): StoredUnit {
       asPublicBusinessIdentifier(assessmentRow.assessment_number) ??
       asPublicBusinessIdentifier(profile.assessment_number) ??
       "",
-    demandNumber,
+    demandNumber: demandNumber || undefined,
     pinNumber,
     provincialUin,
     circleName: asOptionalString(jurisdiction.name),
@@ -260,10 +261,11 @@ export function mapOperationalUnit(value: unknown): StoredUnit {
       asOptionalString(jurisdiction.parent_name) ??
       "Vehari",
     pft3Registered: row.pft3_registered === true,
+    rowVersion: asNumber(row.row_version, 1),
     demandUnit: {
       id: demandUnitId,
       taxpayerId,
-      permanentDemandNo: demandNumber ?? "",
+      permanentDemandNo: demandNumber || "",
       createdAt: asString(demandRow.created_at, createdAt)
     },
     assessments: [assessment],

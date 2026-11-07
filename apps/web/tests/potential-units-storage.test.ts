@@ -279,9 +279,9 @@ SURV-2026-999,Vehari,Vehari Circle I (City / Commercial),Vehari,City Zone,"Shop 
     expect(migratedUnit.pinNumber).toBe(cleanPin);
     expect(migratedUnit.provincialUin).toBe(cleanPin);
 
-    // Demand number assigned
-    expect(assignedDemandNo).toBe(`D-${target.potentialNumber.replace(/^POT-/i, "")}`);
-    expect(migratedUnit.demandNumber).toBe(assignedDemandNo);
+    // Demand number assigned as next circle numeric demand
+    expect(assignedDemandNo).toBe("1");
+    expect(migratedUnit.demandNumber).toBe("1");
     expect(migratedUnit.pft3Registered).toBe(true);
 
     // Assessment is approved

@@ -33,6 +33,7 @@ import {
   type StoredUnit,
   type StoredUnitSnapshot
 } from "./pilot-store";
+import { normalizeDemandNumber } from "./statutory-forms";
 import {
   MAX_BULK_IMPORT_ROWS,
   normalizeEntityLegalName,
@@ -52,6 +53,7 @@ export interface ValidSurveyUnit {
   readonly taxAmount: number;
   readonly openingArrears?: number | undefined;
   readonly phone?: string | undefined;
+  readonly legacyDemandNo?: string | undefined;
   readonly circleId?: string | undefined;
   readonly circleName?: string | undefined;
   readonly districtName?: string | undefined;
@@ -295,6 +297,12 @@ function normalizeHeaderName(header: string): string {
     h === "categorycode"
   ) {
     return "statutoryRuleId";
+  }
+  if (h.includes("legacydemand") || h.includes("demandno") || h === "demand") {
+    return "legacyDemandNo";
+  }
+  if (h.includes("arrears") || h === "openingarrears") {
+    return "arrears";
   }
   if (h.includes("phone") || h.includes("mobile") || h.includes("contact")) {
     return "phone";
@@ -664,6 +672,12 @@ export function parseBulkSurveyCsv(
     if (isValid && resolvedRule) {
       const arrearsRaw = rowMap["arrears"] || rowMap["Arrears"] || "0";
       const openingArrears = Number.parseFloat(arrearsRaw) || 0;
+      const rawLegacyDemand =
+        rowMap["legacyDemandNo"] ||
+        rowMap["legacy_demand_no"] ||
+        rowMap["Legacy Demand No"] ||
+        undefined;
+      const legacyDemandNo = rawLegacyDemand ? normalizeDemandNumber(rawLegacyDemand) : undefined;
       parsedUnit = {
         legalName,
         tradeName,
@@ -677,6 +691,7 @@ export function parseBulkSurveyCsv(
         taxAmount: resolvedRule.annual_rate_pkr,
         openingArrears,
         phone,
+        legacyDemandNo,
         circleId: resolvedCircle.id,
         circleName: resolvedCircle.name,
         districtName: resolvedDistrict
@@ -736,7 +751,7 @@ export function convertValidSurveyUnitsToStoredUnits(
     const unitId = `unit-survey-${Date.now()}-${idx}`;
     const demandUnitId = `du-survey-${Date.now()}-${idx}`;
     const sequenceNumber = existingUnitsCount + idx + 1;
-    const permanentDemandNo = String(sequenceNumber).padStart(4, "0");
+    const permanentDemandNo = item.legacyDemandNo || String(sequenceNumber);
     const provincialUin = generateUinForUnit({
       jurisdiction: VEHARI_PILOT_JURISDICTION,
       rule: item.statutoryRule,
@@ -772,9 +787,9 @@ export function convertValidSurveyUnitsToStoredUnits(
 
     const unit: StoredUnit = {
       id: unitId,
-      assessmentNumber: `ASM-${FINANCIAL_YEAR_2026_27.split("-")[1] ?? "2026"}-${String(sequenceNumber).padStart(4, "0")}`,
-      demandNumber: undefined,
-      pinNumber: undefined,
+      assessmentNumber: `ASM-${FINANCIAL_YEAR_2026_27.split("-")[1] ?? "2026"}-${permanentDemandNo}`,
+      demandNumber: permanentDemandNo,
+      pinNumber: provincialUin,
       locality: undefined,
       legalName: item.legalName,
       tradeName: item.tradeName,
@@ -790,6 +805,7 @@ export function convertValidSurveyUnitsToStoredUnits(
       statutoryTertiaryCode: item.statutoryRule.statutory_tertiary_code,
       statutoryRuleId: item.statutoryRule.rule_id,
       statutoryRule: item.statutoryRule,
+      rowVersion: 1,
       demandUnit: {
         id: demandUnitId,
         taxpayerId: unitId,

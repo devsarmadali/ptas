@@ -210,9 +210,9 @@ describe("Phase 4: Bulk Survey Import & PFT-3 Register Ingestion", () => {
     expect(auditItems[0]?.eventType).toBe("BULK_SURVEY_IMPORTED");
     expect(auditItems[0]?.details).toContain("Vehari Circle I");
 
-    // Check sequential permanent demand numbers (circle-wise 4-digit sequence)
-    expect(newUnits[0]?.demandUnit.permanentDemandNo).toBe("0005");
-    expect(newUnits[4]?.demandUnit.permanentDemandNo).toBe("0009");
+    // Check sequential permanent demand numbers (circle-wise numeric sequence)
+    expect(newUnits[0]?.demandUnit.permanentDemandNo).toBe("5");
+    expect(newUnits[4]?.demandUnit.permanentDemandNo).toBe("9");
 
     // Check initial draft (feeded) assessment state per Issue 03
     for (const unit of newUnits) {

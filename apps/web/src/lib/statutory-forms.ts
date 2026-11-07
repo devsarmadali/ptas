@@ -282,18 +282,87 @@ export interface Pft2NoticeNumberOptions {
  * Example: VHR-01-1184-261003010101-2000
  */
 /**
- * Formats a demand number to circle-wise 4 digits (e.g. "0005").
- * Demand numbers are circle-scoped; province-wide uniqueness is guaranteed by PIN.
+ * Normalizes a demand number to pure numbers (e.g. "5", "65", "876", "187"),
+ * preserving sub-demands with hyphen (e.g. "402-5").
+ * Strips all "D-" and "V-" prefixes, removes leading zeros.
+ * Demand numbers are circle-scoped and strictly restricted to Form P.F.T-3 Register.
+ */
+export function normalizeDemandNumber(demand: string | number | undefined | null): string {
+  if (demand === undefined || demand === null) return "";
+  let str = String(demand).trim();
+  if (!str) return "";
+  if (/^[0-9]{3}-[0-9]{13,}/.test(str) || str.startsWith("POT-") || str.startsWith("Potential-")) {
+    return "";
+  }
+
+  // 1. Format: V-01-87 or V-09-163 -> 187, 9163
+  const vMatchParts = str.match(/^V-([0-9]+)-([0-9]+)$/i);
+  if (vMatchParts && vMatchParts[1] && vMatchParts[2]) {
+    const p1 = vMatchParts[1].replace(/^0+/, "") || "0";
+    const p2 = vMatchParts[2];
+    return `${p1}${p2}`;
+  }
+
+  // 2. Format: V-05 or V-12 -> 5, 12
+  const vMatchSingle = str.match(/^V-([0-9]+)$/i);
+  if (vMatchSingle && vMatchSingle[1]) {
+    const p1 = vMatchSingle[1].replace(/^0+/, "") || "0";
+    return p1;
+  }
+
+  // 3. Format: D-402.5 or D-402/5 or D-402-5 -> 402-5
+  const dSubMatch = str.match(/^D-([0-9]+)[./-]([0-9]+)$/i);
+  if (dSubMatch && dSubMatch[1] && dSubMatch[2]) {
+    const p1 = dSubMatch[1].replace(/^0+/, "") || "0";
+    const p2 = dSubMatch[2];
+    return `${p1}-${p2}`;
+  }
+
+  // 4. Format: D-401 or D-5 -> 401, 5
+  const dMatch = str.match(/^D-([0-9]+)$/i);
+  if (dMatch && dMatch[1]) {
+    const p1 = dMatch[1].replace(/^0+/, "") || "0";
+    return p1;
+  }
+
+  // 5. Format: 402.5 or 402/5 -> 402-5
+  const subMatch = str.match(/^([0-9]+)[./]([0-9]+)$/);
+  if (subMatch && subMatch[1] && subMatch[2]) {
+    const p1 = subMatch[1].replace(/^0+/, "") || "0";
+    const p2 = subMatch[2];
+    return `${p1}-${p2}`;
+  }
+
+  // 6. Pure digits with hyphen (e.g. 402-5)
+  if (/^[0-9]+-[0-9]+$/.test(str)) {
+    return str.replace(/^0+/, "");
+  }
+
+  // 7. Pure digits (e.g. 0005 -> 5, 876 -> 876)
+  if (/^[0-9]+$/.test(str)) {
+    const p1 = str.replace(/^0+/, "");
+    return p1 || "0";
+  }
+
+  // Strip leading D/V and hyphens
+  str = str.replace(/^[DVdv][\s\-_]*/, "");
+  str = str.replace(/^0+/, "");
+  return str;
+}
+
+/**
+ * Formats a demand number for official statutory documents, barcodes, and notices.
+ * Pure numbers are formatted to the standard 4-digit notice format (e.g. "0001", "0005", "0187"),
+ * while sub-demands retain their hyphenated format (e.g. "402-5").
  */
 export function formatDemandNumber(demand: string | number | undefined | null): string {
   if (!demand) return "0001";
-  const str = String(demand).trim();
-  const match = str.match(/(\d{4,5})$/);
-  if (match && match[1]) {
-    return match[1].padStart(4, "0");
+  const normalized = normalizeDemandNumber(demand);
+  if (!normalized) return "0001";
+  if (/^\d+$/.test(normalized)) {
+    return normalized.padStart(4, "0");
   }
-  const digits = str.replace(/\D/g, "");
-  return digits ? digits.slice(-4).padStart(4, "0") : "0001";
+  return normalized;
 }
 
 export function generatePft2NoticeNumber(params: Pft2NoticeNumberOptions): string {
