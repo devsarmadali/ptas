@@ -346,6 +346,609 @@ export type PotentialSortField =
 
 export type PotentialColFilterKey = PotentialSortField;
 
+function matchTextFilter(target: string | null | undefined, filterVal: string): boolean {
+  if (!filterVal || !filterVal.trim()) return true;
+  const t = (target ?? "").toLowerCase().trim();
+  const f = filterVal.trim().toLowerCase();
+  if (f.startsWith("^")) {
+    return t.startsWith(f.slice(1).trim());
+  }
+  if (f.startsWith("=")) {
+    return t === f.slice(1).trim();
+  }
+  return t.includes(f);
+}
+
+function matchNumberFilter(num: number, filterVal: string): boolean {
+  if (!filterVal || !filterVal.trim()) return true;
+  const f = filterVal.trim().toLowerCase();
+  if (f === ">0" || f === "> 0") return num > 0;
+  if (f === "=0" || f === "= 0" || f === "0") return num === 0;
+  if (f.startsWith(">=")) {
+    const thresh = Number(f.slice(2).trim());
+    return !isNaN(thresh) && num >= thresh;
+  }
+  if (f.startsWith(">")) {
+    const thresh = Number(f.slice(1).trim());
+    return !isNaN(thresh) && num > thresh;
+  }
+  if (f.startsWith("<=")) {
+    const thresh = Number(f.slice(2).trim());
+    return !isNaN(thresh) && num <= thresh;
+  }
+  if (f.startsWith("<")) {
+    const thresh = Number(f.slice(1).trim());
+    return !isNaN(thresh) && num < thresh;
+  }
+  if (f.startsWith("!=")) {
+    const thresh = Number(f.slice(2).trim());
+    return !isNaN(thresh) && num !== thresh;
+  }
+  if (f.startsWith("=")) {
+    const thresh = Number(f.slice(1).trim());
+    return !isNaN(thresh) && num === thresh;
+  }
+  const thresh = Number(f);
+  if (!isNaN(thresh)) {
+    return num === thresh || String(num).includes(f);
+  }
+  return String(num).includes(f);
+}
+
+interface ColumnFilterPopoverProps {
+  columnLabel: string;
+  columnType: "text" | "number" | "status";
+  currentValue: string;
+  onApply: (value: string) => void;
+  onClear: () => void;
+  onClose: () => void;
+  align?: "left" | "right";
+  themeColor?: string;
+}
+
+function ColumnFilterPopover({
+  columnLabel,
+  columnType,
+  currentValue,
+  onApply,
+  onClear,
+  onClose,
+  align = "left",
+  themeColor = "#0284c7"
+}: ColumnFilterPopoverProps) {
+  // Text Mode state
+  const [textMode, setTextMode] = useState<"contains" | "startsWith" | "equals">(() => {
+    if (currentValue.startsWith("^")) return "startsWith";
+    if (currentValue.startsWith("=")) return "equals";
+    return "contains";
+  });
+  const [textInput, setTextInput] = useState<string>(() => {
+    if (currentValue.startsWith("^") || currentValue.startsWith("=")) {
+      return currentValue.slice(1).trim();
+    }
+    return currentValue;
+  });
+
+  // Number Mode state
+  const [numOp, setNumOp] = useState<string>(() => {
+    const v = currentValue.trim();
+    if (v === ">0" || v === "> 0") return ">0";
+    if (v === "=0" || v === "= 0" || v === "0") return "=0";
+    if (v.startsWith(">=")) return ">=";
+    if (v.startsWith(">")) return ">";
+    if (v.startsWith("<=")) return "<=";
+    if (v.startsWith("<")) return "<";
+    if (v.startsWith("!=")) return "!=";
+    if (v.startsWith("=")) return "=";
+    if (v.length > 0) return "=";
+    return "";
+  });
+  const [numInput, setNumInput] = useState<string>(() => {
+    const v = currentValue.trim();
+    if (v === ">0" || v === "> 0" || v === "=0" || v === "= 0") return "";
+    if (v.startsWith(">=") || v.startsWith("<=") || v.startsWith("!=")) {
+      return v.slice(2).trim();
+    }
+    if (v.startsWith(">") || v.startsWith("<") || v.startsWith("=")) {
+      return v.slice(1).trim();
+    }
+    return v;
+  });
+
+  // Status Mode state
+  const [statusVal, setStatusVal] = useState<string>(() => {
+    return currentValue.trim().toUpperCase() || "ALL";
+  });
+
+  const handleApplyText = () => {
+    const trimmed = textInput.trim();
+    if (!trimmed) {
+      onClear();
+      return;
+    }
+    if (textMode === "startsWith") {
+      onApply(`^${trimmed}`);
+    } else if (textMode === "equals") {
+      onApply(`=${trimmed}`);
+    } else {
+      onApply(trimmed);
+    }
+  };
+
+  const handleApplyNumber = () => {
+    if (numOp === ">0") {
+      onApply(">0");
+      return;
+    }
+    if (numOp === "=0") {
+      onApply("=0");
+      return;
+    }
+    const trimmed = numInput.trim();
+    if (!trimmed) {
+      onClear();
+      return;
+    }
+    const op = numOp || "=";
+    onApply(`${op}${trimmed}`);
+  };
+
+  const handleApplyStatus = (val?: string) => {
+    const s = (val ?? statusVal).trim().toUpperCase();
+    if (s === "ALL" || !s) {
+      onClear();
+    } else {
+      onApply(s);
+    }
+  };
+
+  return (
+    <>
+      <div
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 40,
+          cursor: "default"
+        }}
+      />
+      <div
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onClose();
+        }}
+        style={{
+          position: "absolute",
+          top: "calc(100% + 6px)",
+          ...(align === "right" ? { right: 0 } : { left: 0 }),
+          zIndex: 50,
+          width: "250px",
+          background: "#ffffff",
+          border: "1px solid #cbd5e1",
+          borderRadius: "8px",
+          boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.18), 0 8px 10px -6px rgba(0, 0, 0, 0.12)",
+          padding: "0.75rem",
+          color: "#1e293b",
+          fontSize: "0.78rem",
+          fontWeight: "normal",
+          textAlign: "left",
+          lineHeight: 1.4,
+          cursor: "default"
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "0.55rem",
+            paddingBottom: "0.4rem",
+            borderBottom: "1px solid #e2e8f0"
+          }}
+        >
+          <span style={{ fontWeight: 600, color: "#0f172a", fontSize: "0.8rem" }}>
+            Filter: {columnLabel}
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              color: "#94a3b8",
+              fontSize: "0.85rem",
+              padding: "0.1rem 0.3rem",
+              lineHeight: 1
+            }}
+            title="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        {columnType === "text" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.7rem",
+                  color: "#64748b",
+                  marginBottom: "0.2rem",
+                  fontWeight: 500
+                }}
+              >
+                Match Rule
+              </label>
+              <select
+                value={textMode}
+                onChange={(e) =>
+                  setTextMode(e.target.value as "contains" | "startsWith" | "equals")
+                }
+                style={{
+                  width: "100%",
+                  fontSize: "0.75rem",
+                  padding: "0.3rem 0.4rem",
+                  borderRadius: "4px",
+                  border: "1px solid #cbd5e1",
+                  background: "#f8fafc",
+                  color: "#1e293b"
+                }}
+              >
+                <option value="contains">Contains text</option>
+                <option value="startsWith">Starts with</option>
+                <option value="equals">Exact match</option>
+              </select>
+            </div>
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.7rem",
+                  color: "#64748b",
+                  marginBottom: "0.2rem",
+                  fontWeight: 500
+                }}
+              >
+                Search Term
+              </label>
+              <input
+                autoFocus
+                type="text"
+                placeholder={`Search ${columnLabel}...`}
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleApplyText();
+                }}
+                style={{
+                  width: "100%",
+                  fontSize: "0.75rem",
+                  padding: "0.35rem 0.5rem",
+                  borderRadius: "4px",
+                  border: "1px solid #cbd5e1",
+                  background: "#ffffff",
+                  color: "#1e293b",
+                  boxSizing: "border-box"
+                }}
+              />
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "0.5rem",
+                marginTop: "0.4rem",
+                paddingTop: "0.4rem",
+                borderTop: "1px solid #f1f5f9"
+              }}
+            >
+              <button
+                type="button"
+                onClick={onClear}
+                style={{
+                  background: "#f1f5f9",
+                  color: "#475569",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "4px",
+                  padding: "0.25rem 0.6rem",
+                  fontSize: "0.72rem",
+                  cursor: "pointer"
+                }}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyText}
+                style={{
+                  background: themeColor,
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "4px",
+                  padding: "0.25rem 0.75rem",
+                  fontSize: "0.72rem",
+                  fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        )}
+
+        {columnType === "number" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.7rem",
+                  color: "#64748b",
+                  marginBottom: "0.2rem",
+                  fontWeight: 500
+                }}
+              >
+                Condition
+              </label>
+              <select
+                value={numOp}
+                onChange={(e) => setNumOp(e.target.value)}
+                style={{
+                  width: "100%",
+                  fontSize: "0.75rem",
+                  padding: "0.3rem 0.4rem",
+                  borderRadius: "4px",
+                  border: "1px solid #cbd5e1",
+                  background: "#f8fafc",
+                  color: "#1e293b"
+                }}
+              >
+                <option value="">No filter (Show all)</option>
+                <option value=">0">Greater than 0 (&gt; 0)</option>
+                <option value="=0">Nil / Zero (= 0)</option>
+                <option value=">">Greater than (&gt;)</option>
+                <option value=">=">At least (&gt;=)</option>
+                <option value="<">Less than (&lt;)</option>
+                <option value="<=">At most (&lt;=)</option>
+                <option value="=">Exact amount (=)</option>
+                <option value="!=">Not equal (!=)</option>
+              </select>
+            </div>
+            {numOp !== ">0" && numOp !== "=0" && (
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.7rem",
+                    color: "#64748b",
+                    marginBottom: "0.2rem",
+                    fontWeight: 500
+                  }}
+                >
+                  Amount (PKR)
+                </label>
+                <input
+                  autoFocus
+                  type="number"
+                  placeholder="Enter amount..."
+                  value={numInput}
+                  onChange={(e) => setNumInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleApplyNumber();
+                  }}
+                  style={{
+                    width: "100%",
+                    fontSize: "0.75rem",
+                    padding: "0.35rem 0.5rem",
+                    borderRadius: "4px",
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    color: "#1e293b",
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+            )}
+            <div>
+              <div style={{ fontSize: "0.68rem", color: "#94a3b8", marginBottom: "0.25rem" }}>
+                Quick presets:
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
+                <button
+                  type="button"
+                  onClick={() => onApply(">0")}
+                  style={{
+                    background: currentValue === ">0" ? "#dbeafe" : "#f1f5f9",
+                    color: currentValue === ">0" ? "#1d4ed8" : "#475569",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "3px",
+                    padding: "0.15rem 0.35rem",
+                    fontSize: "0.68rem",
+                    cursor: "pointer"
+                  }}
+                >
+                  &gt; 0
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onApply("=0")}
+                  style={{
+                    background: currentValue === "=0" ? "#dbeafe" : "#f1f5f9",
+                    color: currentValue === "=0" ? "#1d4ed8" : "#475569",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "3px",
+                    padding: "0.15rem 0.35rem",
+                    fontSize: "0.68rem",
+                    cursor: "pointer"
+                  }}
+                >
+                  = 0 (Nil)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onApply(">=1000")}
+                  style={{
+                    background: currentValue === ">=1000" ? "#dbeafe" : "#f1f5f9",
+                    color: currentValue === ">=1000" ? "#1d4ed8" : "#475569",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "3px",
+                    padding: "0.15rem 0.35rem",
+                    fontSize: "0.68rem",
+                    cursor: "pointer"
+                  }}
+                >
+                  &gt;= 1,000
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onApply(">=5000")}
+                  style={{
+                    background: currentValue === ">=5000" ? "#dbeafe" : "#f1f5f9",
+                    color: currentValue === ">=5000" ? "#1d4ed8" : "#475569",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "3px",
+                    padding: "0.15rem 0.35rem",
+                    fontSize: "0.68rem",
+                    cursor: "pointer"
+                  }}
+                >
+                  &gt;= 5,000
+                </button>
+              </div>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "0.5rem",
+                marginTop: "0.4rem",
+                paddingTop: "0.4rem",
+                borderTop: "1px solid #f1f5f9"
+              }}
+            >
+              <button
+                type="button"
+                onClick={onClear}
+                style={{
+                  background: "#f1f5f9",
+                  color: "#475569",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "4px",
+                  padding: "0.25rem 0.6rem",
+                  fontSize: "0.72rem",
+                  cursor: "pointer"
+                }}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyNumber}
+                style={{
+                  background: themeColor,
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "4px",
+                  padding: "0.25rem 0.75rem",
+                  fontSize: "0.72rem",
+                  fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        )}
+
+        {columnType === "status" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.7rem",
+                  color: "#64748b",
+                  marginBottom: "0.2rem",
+                  fontWeight: 500
+                }}
+              >
+                Status
+              </label>
+              <select
+                value={statusVal}
+                onChange={(e) => setStatusVal(e.target.value)}
+                style={{
+                  width: "100%",
+                  fontSize: "0.75rem",
+                  padding: "0.3rem 0.4rem",
+                  borderRadius: "4px",
+                  border: "1px solid #cbd5e1",
+                  background: "#f8fafc",
+                  color: "#1e293b"
+                }}
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="MIGRATED">MIGRATED</option>
+              </select>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "0.5rem",
+                marginTop: "0.4rem",
+                paddingTop: "0.4rem",
+                borderTop: "1px solid #f1f5f9"
+              }}
+            >
+              <button
+                type="button"
+                onClick={onClear}
+                style={{
+                  background: "#f1f5f9",
+                  color: "#475569",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "4px",
+                  padding: "0.25rem 0.6rem",
+                  fontSize: "0.72rem",
+                  cursor: "pointer"
+                }}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApplyStatus()}
+                style={{
+                  background: themeColor,
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "4px",
+                  padding: "0.25rem 0.75rem",
+                  fontSize: "0.72rem",
+                  fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 export default function HomePage({
   initialRouteHub,
   initialTab
@@ -595,7 +1198,7 @@ export default function HomePage({
   const [pft3ColFilters, setPft3ColFilters] = useState<Partial<Record<Pft3ColFilterKey, string>>>(
     {}
   );
-  const [showPft3ColFilters, setShowPft3ColFilters] = useState<boolean>(true);
+  const [openPft3FilterCol, setOpenPft3FilterCol] = useState<Pft3ColFilterKey | null>(null);
   const activePft3ColFilterCount = useMemo(
     () =>
       Object.values(pft3ColFilters).filter((v) => typeof v === "string" && v.trim().length > 0)
@@ -620,7 +1223,8 @@ export default function HomePage({
   const [potentialColFilters, setPotentialColFilters] = useState<
     Partial<Record<PotentialColFilterKey, string>>
   >({});
-  const [showPotentialColFilters, setShowPotentialColFilters] = useState<boolean>(true);
+  const [openPotentialFilterCol, setOpenPotentialFilterCol] =
+    useState<PotentialColFilterKey | null>(null);
   const activePotentialColFilterCount = useMemo(
     () =>
       Object.values(potentialColFilters).filter((v) => typeof v === "string" && v.trim().length > 0)
@@ -2751,18 +3355,17 @@ export default function HomePage({
       // Column-Specific Interactive Filters
       for (const [k, rawVal] of Object.entries(pft3ColFilters)) {
         if (!rawVal || !rawVal.trim()) continue;
-        const val = rawVal.trim().toLowerCase();
         if (k === "permanentDemandNo") {
-          if (!row.permanentDemandNo.toLowerCase().includes(val)) return false;
+          if (!matchTextFilter(row.permanentDemandNo, rawVal)) return false;
         } else if (k === "provincialUin") {
-          if (!(row.provincialUin ?? "").toLowerCase().includes(val)) return false;
+          if (!matchTextFilter(row.provincialUin, rawVal)) return false;
         } else if (k === "legalName") {
-          if (!row.legalName.toLowerCase().includes(val)) return false;
+          if (!matchTextFilter(row.legalName, rawVal)) return false;
         } else if (k === "tradeName") {
-          if (!(row.tradeName ?? "").toLowerCase().includes(val)) return false;
+          if (!matchTextFilter(row.tradeName, rawVal)) return false;
         } else if (k === "scheduleEntry") {
-          const matchEntry = (row.scheduleEntry ?? "").toLowerCase().includes(val);
-          const matchCat = (row.categoryName ?? "").toLowerCase().includes(val);
+          const matchEntry = matchTextFilter(row.scheduleEntry, rawVal);
+          const matchCat = matchTextFilter(row.categoryName, rawVal);
           if (!matchEntry && !matchCat) return false;
         } else if (
           k === "assessedCurrentTax" ||
@@ -2781,21 +3384,7 @@ export default function HomePage({
                   : k === "totalPaid"
                     ? row.totalPaid
                     : row.outstandingBalance;
-          if (val.startsWith(">=")) {
-            const thresh = Number(val.slice(2).trim());
-            if (!isNaN(thresh) && num < thresh) return false;
-          } else if (val.startsWith(">")) {
-            const thresh = Number(val.slice(1).trim());
-            if (!isNaN(thresh) && num <= thresh) return false;
-          } else if (val.startsWith("<=")) {
-            const thresh = Number(val.slice(2).trim());
-            if (!isNaN(thresh) && num > thresh) return false;
-          } else if (val.startsWith("<")) {
-            const thresh = Number(val.slice(1).trim());
-            if (!isNaN(thresh) && num >= thresh) return false;
-          } else {
-            if (!String(num).includes(val)) return false;
-          }
+          if (!matchNumberFilter(num, rawVal)) return false;
         }
       }
 
@@ -2909,6 +3498,7 @@ export default function HomePage({
     setPft3CategoryFilter("ALL");
     setPft3SubclassFilter("ALL");
     setPft3ColFilters({});
+    setOpenPft3FilterCol(null);
     setPft3CurrentPage(1);
     setPft3SearchExecuted(false);
   };
@@ -3043,24 +3633,23 @@ export default function HomePage({
       // Column-Specific Interactive Filters
       for (const [k, rawVal] of Object.entries(potentialColFilters)) {
         if (!rawVal || !rawVal.trim()) continue;
-        const val = rawVal.trim().toLowerCase();
         if (k === "potentialNumber") {
-          if (!u.potentialNumber.toLowerCase().includes(val)) return false;
+          if (!matchTextFilter(u.potentialNumber, rawVal)) return false;
         } else if (k === "pinNumber") {
-          if (!u.pinNumber.toLowerCase().includes(val)) return false;
+          if (!matchTextFilter(u.pinNumber, rawVal)) return false;
         } else if (k === "legalName") {
-          if (!u.legalName.toLowerCase().includes(val)) return false;
+          if (!matchTextFilter(u.legalName, rawVal)) return false;
         } else if (k === "taxpayerName") {
-          const matchTaxpayer = (u.taxpayerName ?? "").toLowerCase().includes(val);
-          const matchTrade = (u.tradeName ?? "").toLowerCase().includes(val);
+          const matchTaxpayer = matchTextFilter(u.taxpayerName, rawVal);
+          const matchTrade = matchTextFilter(u.tradeName, rawVal);
           if (!matchTaxpayer && !matchTrade) return false;
         } else if (k === "identifierValue") {
-          if (!u.identifierValue.toLowerCase().includes(val)) return false;
+          if (!matchTextFilter(u.identifierValue, rawVal)) return false;
         } else if (k === "address") {
-          if (!(u.address ?? "").toLowerCase().includes(val)) return false;
+          if (!matchTextFilter(u.address, rawVal)) return false;
         } else if (k === "categoryName") {
-          const matchCat = (u.categoryName ?? "").toLowerCase().includes(val);
-          const matchSub = (u.subclassificationName ?? "").toLowerCase().includes(val);
+          const matchCat = matchTextFilter(u.categoryName, rawVal);
+          const matchSub = matchTextFilter(u.subclassificationName, rawVal);
           if (!matchCat && !matchSub) return false;
         } else if (k === "annualRatePkr" || k === "openingArrears" || k === "totalDemand") {
           const num =
@@ -3069,23 +3658,11 @@ export default function HomePage({
               : k === "openingArrears"
                 ? (u.openingArrears ?? 0)
                 : u.annualRatePkr + (u.openingArrears ?? 0);
-          if (val.startsWith(">=")) {
-            const thresh = Number(val.slice(2).trim());
-            if (!isNaN(thresh) && num < thresh) return false;
-          } else if (val.startsWith(">")) {
-            const thresh = Number(val.slice(1).trim());
-            if (!isNaN(thresh) && num <= thresh) return false;
-          } else if (val.startsWith("<=")) {
-            const thresh = Number(val.slice(2).trim());
-            if (!isNaN(thresh) && num > thresh) return false;
-          } else if (val.startsWith("<")) {
-            const thresh = Number(val.slice(1).trim());
-            if (!isNaN(thresh) && num >= thresh) return false;
-          } else {
-            if (!String(num).includes(val)) return false;
-          }
+          if (!matchNumberFilter(num, rawVal)) return false;
         } else if (k === "status") {
-          if (!u.status.toLowerCase().includes(val)) return false;
+          if (rawVal.trim().toUpperCase() !== "ALL" && !matchTextFilter(u.status, rawVal)) {
+            return false;
+          }
         }
       }
 
@@ -3217,6 +3794,7 @@ export default function HomePage({
     setPotentialClassificationFilter("ALL");
     setPotentialSubclassFilter("ALL");
     setPotentialColFilters({});
+    setOpenPotentialFilterCol(null);
     setPotentialCurrentPage(1);
   };
 
@@ -7929,20 +8507,26 @@ export default function HomePage({
                 >
                   📥 Import CSV
                 </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowPotentialColFilters((v) => !v)}
-                  title="Toggle per-column filter inputs"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.35rem"
-                  }}
-                >
-                  <span>🔍</span>
-                  <span>{showPotentialColFilters ? "Hide Column Filters" : "Column Filters"}</span>
-                  {activePotentialColFilterCount > 0 && (
+                {activePotentialColFilterCount > 0 && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => {
+                      setPotentialColFilters({});
+                      setPotentialCurrentPage(1);
+                      setOpenPotentialFilterCol(null);
+                    }}
+                    title="Reset all active column filters"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
+                      background: "#fef3c7",
+                      borderColor: "#fcd34d",
+                      color: "#92400e"
+                    }}
+                  >
+                    <span>✕ Clear Column Filters</span>
                     <span
                       style={{
                         background: "#b45309",
@@ -7955,8 +8539,8 @@ export default function HomePage({
                     >
                       {activePotentialColFilterCount}
                     </span>
-                  )}
-                </button>
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn-primary"
@@ -8323,7 +8907,14 @@ export default function HomePage({
                       style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
                       title="Click to sort by Potential No."
                     >
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          position: "relative"
+                        }}
+                      >
                         <span onClick={() => handlePotentialSort("potentialNumber")}>
                           Potential No.
                         </span>
@@ -8344,37 +8935,72 @@ export default function HomePage({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setShowPotentialColFilters(true);
+                            setOpenPotentialFilterCol(
+                              openPotentialFilterCol === "potentialNumber"
+                                ? null
+                                : "potentialNumber"
+                            );
                           }}
                           style={{
                             background: potentialColFilters.potentialNumber
-                              ? "#fef3c7"
+                              ? "#b45309"
                               : "transparent",
+                            color: potentialColFilters.potentialNumber ? "#ffffff" : "#94a3b8",
                             border: potentialColFilters.potentialNumber
-                              ? "1px solid #fcd34d"
+                              ? "1px solid #b45309"
                               : "none",
                             borderRadius: "3px",
                             cursor: "pointer",
                             padding: "0.1rem 0.25rem",
                             fontSize: "0.72rem",
-                            color: potentialColFilters.potentialNumber ? "#b45309" : "#94a3b8",
                             lineHeight: 1
                           }}
                           title={
                             potentialColFilters.potentialNumber
-                              ? `Filtered: "${potentialColFilters.potentialNumber}"`
+                              ? `Filtered: "${potentialColFilters.potentialNumber}" (Click to edit)`
                               : "Filter Potential No."
                           }
                         >
                           🔍
                         </button>
+                        {openPotentialFilterCol === "potentialNumber" && (
+                          <ColumnFilterPopover
+                            columnLabel="Potential No."
+                            columnType="text"
+                            currentValue={potentialColFilters.potentialNumber || ""}
+                            onApply={(val) => {
+                              setPotentialColFilters((prev) => ({ ...prev, potentialNumber: val }));
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClear={() => {
+                              setPotentialColFilters((prev) => {
+                                const next = { ...prev };
+                                delete next.potentialNumber;
+                                return next;
+                              });
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClose={() => setOpenPotentialFilterCol(null)}
+                            align="left"
+                            themeColor="#b45309"
+                          />
+                        )}
                       </div>
                     </th>
                     <th
                       style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
                       title="Click to sort by PIN"
                     >
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          position: "relative"
+                        }}
+                      >
                         <span onClick={() => handlePotentialSort("pinNumber")}>PIN</span>
                         <span
                           onClick={() => handlePotentialSort("pinNumber")}
@@ -8393,33 +9019,66 @@ export default function HomePage({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setShowPotentialColFilters(true);
+                            setOpenPotentialFilterCol(
+                              openPotentialFilterCol === "pinNumber" ? null : "pinNumber"
+                            );
                           }}
                           style={{
-                            background: potentialColFilters.pinNumber ? "#fef3c7" : "transparent",
-                            border: potentialColFilters.pinNumber ? "1px solid #fcd34d" : "none",
+                            background: potentialColFilters.pinNumber ? "#b45309" : "transparent",
+                            color: potentialColFilters.pinNumber ? "#ffffff" : "#94a3b8",
+                            border: potentialColFilters.pinNumber ? "1px solid #b45309" : "none",
                             borderRadius: "3px",
                             cursor: "pointer",
                             padding: "0.1rem 0.25rem",
                             fontSize: "0.72rem",
-                            color: potentialColFilters.pinNumber ? "#b45309" : "#94a3b8",
                             lineHeight: 1
                           }}
                           title={
                             potentialColFilters.pinNumber
-                              ? `Filtered: "${potentialColFilters.pinNumber}"`
+                              ? `Filtered: "${potentialColFilters.pinNumber}" (Click to edit)`
                               : "Filter PIN"
                           }
                         >
                           🔍
                         </button>
+                        {openPotentialFilterCol === "pinNumber" && (
+                          <ColumnFilterPopover
+                            columnLabel="PIN"
+                            columnType="text"
+                            currentValue={potentialColFilters.pinNumber || ""}
+                            onApply={(val) => {
+                              setPotentialColFilters((prev) => ({ ...prev, pinNumber: val }));
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClear={() => {
+                              setPotentialColFilters((prev) => {
+                                const next = { ...prev };
+                                delete next.pinNumber;
+                                return next;
+                              });
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClose={() => setOpenPotentialFilterCol(null)}
+                            align="left"
+                            themeColor="#b45309"
+                          />
+                        )}
                       </div>
                     </th>
                     <th
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Profession/Trade Name"
                     >
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          position: "relative"
+                        }}
+                      >
                         <span onClick={() => handlePotentialSort("legalName")}>
                           Profession/Trade Name
                         </span>
@@ -8440,33 +9099,66 @@ export default function HomePage({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setShowPotentialColFilters(true);
+                            setOpenPotentialFilterCol(
+                              openPotentialFilterCol === "legalName" ? null : "legalName"
+                            );
                           }}
                           style={{
-                            background: potentialColFilters.legalName ? "#fef3c7" : "transparent",
-                            border: potentialColFilters.legalName ? "1px solid #fcd34d" : "none",
+                            background: potentialColFilters.legalName ? "#b45309" : "transparent",
+                            color: potentialColFilters.legalName ? "#ffffff" : "#94a3b8",
+                            border: potentialColFilters.legalName ? "1px solid #b45309" : "none",
                             borderRadius: "3px",
                             cursor: "pointer",
                             padding: "0.1rem 0.25rem",
                             fontSize: "0.72rem",
-                            color: potentialColFilters.legalName ? "#b45309" : "#94a3b8",
                             lineHeight: 1
                           }}
                           title={
                             potentialColFilters.legalName
-                              ? `Filtered: "${potentialColFilters.legalName}"`
+                              ? `Filtered: "${potentialColFilters.legalName}" (Click to edit)`
                               : "Filter Profession/Trade Name"
                           }
                         >
                           🔍
                         </button>
+                        {openPotentialFilterCol === "legalName" && (
+                          <ColumnFilterPopover
+                            columnLabel="Profession/Trade Name"
+                            columnType="text"
+                            currentValue={potentialColFilters.legalName || ""}
+                            onApply={(val) => {
+                              setPotentialColFilters((prev) => ({ ...prev, legalName: val }));
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClear={() => {
+                              setPotentialColFilters((prev) => {
+                                const next = { ...prev };
+                                delete next.legalName;
+                                return next;
+                              });
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClose={() => setOpenPotentialFilterCol(null)}
+                            align="left"
+                            themeColor="#b45309"
+                          />
+                        )}
                       </div>
                     </th>
                     <th
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Taxpayer / Assessee"
                     >
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          position: "relative"
+                        }}
+                      >
                         <span onClick={() => handlePotentialSort("taxpayerName")}>
                           Taxpayer / Assessee
                         </span>
@@ -8487,35 +9179,68 @@ export default function HomePage({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setShowPotentialColFilters(true);
+                            setOpenPotentialFilterCol(
+                              openPotentialFilterCol === "taxpayerName" ? null : "taxpayerName"
+                            );
                           }}
                           style={{
                             background: potentialColFilters.taxpayerName
-                              ? "#fef3c7"
+                              ? "#b45309"
                               : "transparent",
-                            border: potentialColFilters.taxpayerName ? "1px solid #fcd34d" : "none",
+                            color: potentialColFilters.taxpayerName ? "#ffffff" : "#94a3b8",
+                            border: potentialColFilters.taxpayerName ? "1px solid #b45309" : "none",
                             borderRadius: "3px",
                             cursor: "pointer",
                             padding: "0.1rem 0.25rem",
                             fontSize: "0.72rem",
-                            color: potentialColFilters.taxpayerName ? "#b45309" : "#94a3b8",
                             lineHeight: 1
                           }}
                           title={
                             potentialColFilters.taxpayerName
-                              ? `Filtered: "${potentialColFilters.taxpayerName}"`
+                              ? `Filtered: "${potentialColFilters.taxpayerName}" (Click to edit)`
                               : "Filter Taxpayer / Assessee"
                           }
                         >
                           🔍
                         </button>
+                        {openPotentialFilterCol === "taxpayerName" && (
+                          <ColumnFilterPopover
+                            columnLabel="Taxpayer / Assessee"
+                            columnType="text"
+                            currentValue={potentialColFilters.taxpayerName || ""}
+                            onApply={(val) => {
+                              setPotentialColFilters((prev) => ({ ...prev, taxpayerName: val }));
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClear={() => {
+                              setPotentialColFilters((prev) => {
+                                const next = { ...prev };
+                                delete next.taxpayerName;
+                                return next;
+                              });
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClose={() => setOpenPotentialFilterCol(null)}
+                            align="left"
+                            themeColor="#b45309"
+                          />
+                        )}
                       </div>
                     </th>
                     <th
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Identifier"
                     >
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          position: "relative"
+                        }}
+                      >
                         <span onClick={() => handlePotentialSort("identifierValue")}>
                           Identifier (CNIC/NTN)
                         </span>
@@ -8536,37 +9261,72 @@ export default function HomePage({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setShowPotentialColFilters(true);
+                            setOpenPotentialFilterCol(
+                              openPotentialFilterCol === "identifierValue"
+                                ? null
+                                : "identifierValue"
+                            );
                           }}
                           style={{
                             background: potentialColFilters.identifierValue
-                              ? "#fef3c7"
+                              ? "#b45309"
                               : "transparent",
+                            color: potentialColFilters.identifierValue ? "#ffffff" : "#94a3b8",
                             border: potentialColFilters.identifierValue
-                              ? "1px solid #fcd34d"
+                              ? "1px solid #b45309"
                               : "none",
                             borderRadius: "3px",
                             cursor: "pointer",
                             padding: "0.1rem 0.25rem",
                             fontSize: "0.72rem",
-                            color: potentialColFilters.identifierValue ? "#b45309" : "#94a3b8",
                             lineHeight: 1
                           }}
                           title={
                             potentialColFilters.identifierValue
-                              ? `Filtered: "${potentialColFilters.identifierValue}"`
+                              ? `Filtered: "${potentialColFilters.identifierValue}" (Click to edit)`
                               : "Filter Identifier"
                           }
                         >
                           🔍
                         </button>
+                        {openPotentialFilterCol === "identifierValue" && (
+                          <ColumnFilterPopover
+                            columnLabel="Identifier (CNIC/NTN)"
+                            columnType="text"
+                            currentValue={potentialColFilters.identifierValue || ""}
+                            onApply={(val) => {
+                              setPotentialColFilters((prev) => ({ ...prev, identifierValue: val }));
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClear={() => {
+                              setPotentialColFilters((prev) => {
+                                const next = { ...prev };
+                                delete next.identifierValue;
+                                return next;
+                              });
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClose={() => setOpenPotentialFilterCol(null)}
+                            align="left"
+                            themeColor="#b45309"
+                          />
+                        )}
                       </div>
                     </th>
                     <th
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Location & Locality"
                     >
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          position: "relative"
+                        }}
+                      >
                         <span onClick={() => handlePotentialSort("address")}>
                           Location &amp; Locality
                         </span>
@@ -8587,33 +9347,66 @@ export default function HomePage({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setShowPotentialColFilters(true);
+                            setOpenPotentialFilterCol(
+                              openPotentialFilterCol === "address" ? null : "address"
+                            );
                           }}
                           style={{
-                            background: potentialColFilters.address ? "#fef3c7" : "transparent",
-                            border: potentialColFilters.address ? "1px solid #fcd34d" : "none",
+                            background: potentialColFilters.address ? "#b45309" : "transparent",
+                            color: potentialColFilters.address ? "#ffffff" : "#94a3b8",
+                            border: potentialColFilters.address ? "1px solid #b45309" : "none",
                             borderRadius: "3px",
                             cursor: "pointer",
                             padding: "0.1rem 0.25rem",
                             fontSize: "0.72rem",
-                            color: potentialColFilters.address ? "#b45309" : "#94a3b8",
                             lineHeight: 1
                           }}
                           title={
                             potentialColFilters.address
-                              ? `Filtered: "${potentialColFilters.address}"`
+                              ? `Filtered: "${potentialColFilters.address}" (Click to edit)`
                               : "Filter Location & Locality"
                           }
                         >
                           🔍
                         </button>
+                        {openPotentialFilterCol === "address" && (
+                          <ColumnFilterPopover
+                            columnLabel="Location & Locality"
+                            columnType="text"
+                            currentValue={potentialColFilters.address || ""}
+                            onApply={(val) => {
+                              setPotentialColFilters((prev) => ({ ...prev, address: val }));
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClear={() => {
+                              setPotentialColFilters((prev) => {
+                                const next = { ...prev };
+                                delete next.address;
+                                return next;
+                              });
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClose={() => setOpenPotentialFilterCol(null)}
+                            align="left"
+                            themeColor="#b45309"
+                          />
+                        )}
                       </div>
                     </th>
                     <th
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Classification"
                     >
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          position: "relative"
+                        }}
+                      >
                         <span onClick={() => handlePotentialSort("categoryName")}>
                           Statutory Classification
                         </span>
@@ -8634,28 +9427,54 @@ export default function HomePage({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setShowPotentialColFilters(true);
+                            setOpenPotentialFilterCol(
+                              openPotentialFilterCol === "categoryName" ? null : "categoryName"
+                            );
                           }}
                           style={{
                             background: potentialColFilters.categoryName
-                              ? "#fef3c7"
+                              ? "#b45309"
                               : "transparent",
-                            border: potentialColFilters.categoryName ? "1px solid #fcd34d" : "none",
+                            color: potentialColFilters.categoryName ? "#ffffff" : "#94a3b8",
+                            border: potentialColFilters.categoryName ? "1px solid #b45309" : "none",
                             borderRadius: "3px",
                             cursor: "pointer",
                             padding: "0.1rem 0.25rem",
                             fontSize: "0.72rem",
-                            color: potentialColFilters.categoryName ? "#b45309" : "#94a3b8",
                             lineHeight: 1
                           }}
                           title={
                             potentialColFilters.categoryName
-                              ? `Filtered: "${potentialColFilters.categoryName}"`
+                              ? `Filtered: "${potentialColFilters.categoryName}" (Click to edit)`
                               : "Filter Classification"
                           }
                         >
                           🔍
                         </button>
+                        {openPotentialFilterCol === "categoryName" && (
+                          <ColumnFilterPopover
+                            columnLabel="Statutory Classification"
+                            columnType="text"
+                            currentValue={potentialColFilters.categoryName || ""}
+                            onApply={(val) => {
+                              setPotentialColFilters((prev) => ({ ...prev, categoryName: val }));
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClear={() => {
+                              setPotentialColFilters((prev) => {
+                                const next = { ...prev };
+                                delete next.categoryName;
+                                return next;
+                              });
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClose={() => setOpenPotentialFilterCol(null)}
+                            align="left"
+                            themeColor="#b45309"
+                          />
+                        )}
                       </div>
                     </th>
                     <th
@@ -8667,7 +9486,8 @@ export default function HomePage({
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "0.35rem",
-                          justifyContent: "flex-end"
+                          justifyContent: "flex-end",
+                          position: "relative"
                         }}
                       >
                         <span onClick={() => handlePotentialSort("annualRatePkr")}>
@@ -8690,30 +9510,56 @@ export default function HomePage({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setShowPotentialColFilters(true);
+                            setOpenPotentialFilterCol(
+                              openPotentialFilterCol === "annualRatePkr" ? null : "annualRatePkr"
+                            );
                           }}
                           style={{
                             background: potentialColFilters.annualRatePkr
-                              ? "#fef3c7"
+                              ? "#b45309"
                               : "transparent",
+                            color: potentialColFilters.annualRatePkr ? "#ffffff" : "#94a3b8",
                             border: potentialColFilters.annualRatePkr
-                              ? "1px solid #fcd34d"
+                              ? "1px solid #b45309"
                               : "none",
                             borderRadius: "3px",
                             cursor: "pointer",
                             padding: "0.1rem 0.25rem",
                             fontSize: "0.72rem",
-                            color: potentialColFilters.annualRatePkr ? "#b45309" : "#94a3b8",
                             lineHeight: 1
                           }}
                           title={
                             potentialColFilters.annualRatePkr
-                              ? `Filtered: "${potentialColFilters.annualRatePkr}"`
+                              ? `Filtered: "${potentialColFilters.annualRatePkr}" (Click to edit)`
                               : "Filter Annual Rate"
                           }
                         >
                           🔍
                         </button>
+                        {openPotentialFilterCol === "annualRatePkr" && (
+                          <ColumnFilterPopover
+                            columnLabel="Annual Rate"
+                            columnType="number"
+                            currentValue={potentialColFilters.annualRatePkr || ""}
+                            onApply={(val) => {
+                              setPotentialColFilters((prev) => ({ ...prev, annualRatePkr: val }));
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClear={() => {
+                              setPotentialColFilters((prev) => {
+                                const next = { ...prev };
+                                delete next.annualRatePkr;
+                                return next;
+                              });
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClose={() => setOpenPotentialFilterCol(null)}
+                            align="right"
+                            themeColor="#b45309"
+                          />
+                        )}
                       </div>
                     </th>
                     <th
@@ -8725,7 +9571,8 @@ export default function HomePage({
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "0.35rem",
-                          justifyContent: "flex-end"
+                          justifyContent: "flex-end",
+                          position: "relative"
                         }}
                       >
                         <span onClick={() => handlePotentialSort("openingArrears")}>Arrears</span>
@@ -8746,30 +9593,56 @@ export default function HomePage({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setShowPotentialColFilters(true);
+                            setOpenPotentialFilterCol(
+                              openPotentialFilterCol === "openingArrears" ? null : "openingArrears"
+                            );
                           }}
                           style={{
                             background: potentialColFilters.openingArrears
-                              ? "#fef3c7"
+                              ? "#b45309"
                               : "transparent",
+                            color: potentialColFilters.openingArrears ? "#ffffff" : "#94a3b8",
                             border: potentialColFilters.openingArrears
-                              ? "1px solid #fcd34d"
+                              ? "1px solid #b45309"
                               : "none",
                             borderRadius: "3px",
                             cursor: "pointer",
                             padding: "0.1rem 0.25rem",
                             fontSize: "0.72rem",
-                            color: potentialColFilters.openingArrears ? "#b45309" : "#94a3b8",
                             lineHeight: 1
                           }}
                           title={
                             potentialColFilters.openingArrears
-                              ? `Filtered: "${potentialColFilters.openingArrears}"`
+                              ? `Filtered: "${potentialColFilters.openingArrears}" (Click to edit)`
                               : "Filter Arrears"
                           }
                         >
                           🔍
                         </button>
+                        {openPotentialFilterCol === "openingArrears" && (
+                          <ColumnFilterPopover
+                            columnLabel="Arrears"
+                            columnType="number"
+                            currentValue={potentialColFilters.openingArrears || ""}
+                            onApply={(val) => {
+                              setPotentialColFilters((prev) => ({ ...prev, openingArrears: val }));
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClear={() => {
+                              setPotentialColFilters((prev) => {
+                                const next = { ...prev };
+                                delete next.openingArrears;
+                                return next;
+                              });
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClose={() => setOpenPotentialFilterCol(null)}
+                            align="right"
+                            themeColor="#b45309"
+                          />
+                        )}
                       </div>
                     </th>
                     <th
@@ -8781,7 +9654,8 @@ export default function HomePage({
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "0.35rem",
-                          justifyContent: "flex-end"
+                          justifyContent: "flex-end",
+                          position: "relative"
                         }}
                       >
                         <span onClick={() => handlePotentialSort("totalDemand")}>Total Demand</span>
@@ -8802,33 +9676,66 @@ export default function HomePage({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setShowPotentialColFilters(true);
+                            setOpenPotentialFilterCol(
+                              openPotentialFilterCol === "totalDemand" ? null : "totalDemand"
+                            );
                           }}
                           style={{
-                            background: potentialColFilters.totalDemand ? "#fef3c7" : "transparent",
-                            border: potentialColFilters.totalDemand ? "1px solid #fcd34d" : "none",
+                            background: potentialColFilters.totalDemand ? "#b45309" : "transparent",
+                            color: potentialColFilters.totalDemand ? "#ffffff" : "#94a3b8",
+                            border: potentialColFilters.totalDemand ? "1px solid #b45309" : "none",
                             borderRadius: "3px",
                             cursor: "pointer",
                             padding: "0.1rem 0.25rem",
                             fontSize: "0.72rem",
-                            color: potentialColFilters.totalDemand ? "#b45309" : "#94a3b8",
                             lineHeight: 1
                           }}
                           title={
                             potentialColFilters.totalDemand
-                              ? `Filtered: "${potentialColFilters.totalDemand}"`
+                              ? `Filtered: "${potentialColFilters.totalDemand}" (Click to edit)`
                               : "Filter Total Demand"
                           }
                         >
                           🔍
                         </button>
+                        {openPotentialFilterCol === "totalDemand" && (
+                          <ColumnFilterPopover
+                            columnLabel="Total Demand"
+                            columnType="number"
+                            currentValue={potentialColFilters.totalDemand || ""}
+                            onApply={(val) => {
+                              setPotentialColFilters((prev) => ({ ...prev, totalDemand: val }));
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClear={() => {
+                              setPotentialColFilters((prev) => {
+                                const next = { ...prev };
+                                delete next.totalDemand;
+                                return next;
+                              });
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClose={() => setOpenPotentialFilterCol(null)}
+                            align="right"
+                            themeColor="#b45309"
+                          />
+                        )}
                       </div>
                     </th>
                     <th
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Pipeline Status"
                     >
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          position: "relative"
+                        }}
+                      >
                         <span onClick={() => handlePotentialSort("status")}>Pipeline Status</span>
                         <span
                           onClick={() => handlePotentialSort("status")}
@@ -8847,325 +9754,56 @@ export default function HomePage({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setShowPotentialColFilters(true);
+                            setOpenPotentialFilterCol(
+                              openPotentialFilterCol === "status" ? null : "status"
+                            );
                           }}
                           style={{
-                            background: potentialColFilters.status ? "#fef3c7" : "transparent",
-                            border: potentialColFilters.status ? "1px solid #fcd34d" : "none",
+                            background: potentialColFilters.status ? "#b45309" : "transparent",
+                            color: potentialColFilters.status ? "#ffffff" : "#94a3b8",
+                            border: potentialColFilters.status ? "1px solid #b45309" : "none",
                             borderRadius: "3px",
                             cursor: "pointer",
                             padding: "0.1rem 0.25rem",
                             fontSize: "0.72rem",
-                            color: potentialColFilters.status ? "#b45309" : "#94a3b8",
                             lineHeight: 1
                           }}
                           title={
                             potentialColFilters.status
-                              ? `Filtered: "${potentialColFilters.status}"`
+                              ? `Filtered: "${potentialColFilters.status}" (Click to edit)`
                               : "Filter Status"
                           }
                         >
                           🔍
                         </button>
+                        {openPotentialFilterCol === "status" && (
+                          <ColumnFilterPopover
+                            columnLabel="Pipeline Status"
+                            columnType="status"
+                            currentValue={potentialColFilters.status || ""}
+                            onApply={(val) => {
+                              setPotentialColFilters((prev) => ({ ...prev, status: val }));
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClear={() => {
+                              setPotentialColFilters((prev) => {
+                                const next = { ...prev };
+                                delete next.status;
+                                return next;
+                              });
+                              setPotentialCurrentPage(1);
+                              setOpenPotentialFilterCol(null);
+                            }}
+                            onClose={() => setOpenPotentialFilterCol(null)}
+                            align="right"
+                            themeColor="#b45309"
+                          />
+                        )}
                       </div>
                     </th>
                     <th style={{ textAlign: "right" }}>Actions</th>
                   </tr>
-                  {showPotentialColFilters && (
-                    <tr style={{ background: "#f8fafc", borderBottom: "2px solid #cbd5e1" }}>
-                      <th style={{ padding: "0.3rem 0.35rem" }}>
-                        <input
-                          type="text"
-                          placeholder="Filter #..."
-                          value={potentialColFilters.potentialNumber || ""}
-                          onChange={(e) => {
-                            setPotentialColFilters((prev) => ({
-                              ...prev,
-                              potentialNumber: e.target.value
-                            }));
-                            setPotentialCurrentPage(1);
-                          }}
-                          style={{
-                            width: "100%",
-                            fontSize: "0.75rem",
-                            padding: "0.2rem 0.35rem",
-                            borderRadius: "4px",
-                            border: potentialColFilters.potentialNumber
-                              ? "1px solid #b45309"
-                              : "1px solid #cbd5e1",
-                            background: potentialColFilters.potentialNumber ? "#fef3c7" : "#fff"
-                          }}
-                        />
-                      </th>
-                      <th style={{ padding: "0.3rem 0.35rem" }}>
-                        <input
-                          type="text"
-                          placeholder="Filter PIN..."
-                          value={potentialColFilters.pinNumber || ""}
-                          onChange={(e) => {
-                            setPotentialColFilters((prev) => ({
-                              ...prev,
-                              pinNumber: e.target.value
-                            }));
-                            setPotentialCurrentPage(1);
-                          }}
-                          style={{
-                            width: "100%",
-                            fontSize: "0.75rem",
-                            padding: "0.2rem 0.35rem",
-                            borderRadius: "4px",
-                            border: potentialColFilters.pinNumber
-                              ? "1px solid #b45309"
-                              : "1px solid #cbd5e1",
-                            background: potentialColFilters.pinNumber ? "#fef3c7" : "#fff"
-                          }}
-                        />
-                      </th>
-                      <th style={{ padding: "0.3rem 0.35rem" }}>
-                        <input
-                          type="text"
-                          placeholder="Filter Profession..."
-                          value={potentialColFilters.legalName || ""}
-                          onChange={(e) => {
-                            setPotentialColFilters((prev) => ({
-                              ...prev,
-                              legalName: e.target.value
-                            }));
-                            setPotentialCurrentPage(1);
-                          }}
-                          style={{
-                            width: "100%",
-                            fontSize: "0.75rem",
-                            padding: "0.2rem 0.35rem",
-                            borderRadius: "4px",
-                            border: potentialColFilters.legalName
-                              ? "1px solid #b45309"
-                              : "1px solid #cbd5e1",
-                            background: potentialColFilters.legalName ? "#fef3c7" : "#fff"
-                          }}
-                        />
-                      </th>
-                      <th style={{ padding: "0.3rem 0.35rem" }}>
-                        <input
-                          type="text"
-                          placeholder="Filter Taxpayer..."
-                          value={potentialColFilters.taxpayerName || ""}
-                          onChange={(e) => {
-                            setPotentialColFilters((prev) => ({
-                              ...prev,
-                              taxpayerName: e.target.value
-                            }));
-                            setPotentialCurrentPage(1);
-                          }}
-                          style={{
-                            width: "100%",
-                            fontSize: "0.75rem",
-                            padding: "0.2rem 0.35rem",
-                            borderRadius: "4px",
-                            border: potentialColFilters.taxpayerName
-                              ? "1px solid #b45309"
-                              : "1px solid #cbd5e1",
-                            background: potentialColFilters.taxpayerName ? "#fef3c7" : "#fff"
-                          }}
-                        />
-                      </th>
-                      <th style={{ padding: "0.3rem 0.35rem" }}>
-                        <input
-                          type="text"
-                          placeholder="Filter ID..."
-                          value={potentialColFilters.identifierValue || ""}
-                          onChange={(e) => {
-                            setPotentialColFilters((prev) => ({
-                              ...prev,
-                              identifierValue: e.target.value
-                            }));
-                            setPotentialCurrentPage(1);
-                          }}
-                          style={{
-                            width: "100%",
-                            fontSize: "0.75rem",
-                            padding: "0.2rem 0.35rem",
-                            borderRadius: "4px",
-                            border: potentialColFilters.identifierValue
-                              ? "1px solid #b45309"
-                              : "1px solid #cbd5e1",
-                            background: potentialColFilters.identifierValue ? "#fef3c7" : "#fff"
-                          }}
-                        />
-                      </th>
-                      <th style={{ padding: "0.3rem 0.35rem" }}>
-                        <input
-                          type="text"
-                          placeholder="Filter Location..."
-                          value={potentialColFilters.address || ""}
-                          onChange={(e) => {
-                            setPotentialColFilters((prev) => ({
-                              ...prev,
-                              address: e.target.value
-                            }));
-                            setPotentialCurrentPage(1);
-                          }}
-                          style={{
-                            width: "100%",
-                            fontSize: "0.75rem",
-                            padding: "0.2rem 0.35rem",
-                            borderRadius: "4px",
-                            border: potentialColFilters.address
-                              ? "1px solid #b45309"
-                              : "1px solid #cbd5e1",
-                            background: potentialColFilters.address ? "#fef3c7" : "#fff"
-                          }}
-                        />
-                      </th>
-                      <th style={{ padding: "0.3rem 0.35rem" }}>
-                        <input
-                          type="text"
-                          placeholder="Filter Class..."
-                          value={potentialColFilters.categoryName || ""}
-                          onChange={(e) => {
-                            setPotentialColFilters((prev) => ({
-                              ...prev,
-                              categoryName: e.target.value
-                            }));
-                            setPotentialCurrentPage(1);
-                          }}
-                          style={{
-                            width: "100%",
-                            fontSize: "0.75rem",
-                            padding: "0.2rem 0.35rem",
-                            borderRadius: "4px",
-                            border: potentialColFilters.categoryName
-                              ? "1px solid #b45309"
-                              : "1px solid #cbd5e1",
-                            background: potentialColFilters.categoryName ? "#fef3c7" : "#fff"
-                          }}
-                        />
-                      </th>
-                      <th style={{ padding: "0.3rem 0.35rem" }}>
-                        <input
-                          type="text"
-                          placeholder="> or exact..."
-                          value={potentialColFilters.annualRatePkr || ""}
-                          onChange={(e) => {
-                            setPotentialColFilters((prev) => ({
-                              ...prev,
-                              annualRatePkr: e.target.value
-                            }));
-                            setPotentialCurrentPage(1);
-                          }}
-                          style={{
-                            width: "100%",
-                            fontSize: "0.75rem",
-                            padding: "0.2rem 0.35rem",
-                            borderRadius: "4px",
-                            border: potentialColFilters.annualRatePkr
-                              ? "1px solid #b45309"
-                              : "1px solid #cbd5e1",
-                            background: potentialColFilters.annualRatePkr ? "#fef3c7" : "#fff",
-                            textAlign: "right"
-                          }}
-                        />
-                      </th>
-                      <th style={{ padding: "0.3rem 0.35rem" }}>
-                        <input
-                          type="text"
-                          placeholder="> or exact..."
-                          value={potentialColFilters.openingArrears || ""}
-                          onChange={(e) => {
-                            setPotentialColFilters((prev) => ({
-                              ...prev,
-                              openingArrears: e.target.value
-                            }));
-                            setPotentialCurrentPage(1);
-                          }}
-                          style={{
-                            width: "100%",
-                            fontSize: "0.75rem",
-                            padding: "0.2rem 0.35rem",
-                            borderRadius: "4px",
-                            border: potentialColFilters.openingArrears
-                              ? "1px solid #b45309"
-                              : "1px solid #cbd5e1",
-                            background: potentialColFilters.openingArrears ? "#fef3c7" : "#fff",
-                            textAlign: "right"
-                          }}
-                        />
-                      </th>
-                      <th style={{ padding: "0.3rem 0.35rem" }}>
-                        <input
-                          type="text"
-                          placeholder="> or exact..."
-                          value={potentialColFilters.totalDemand || ""}
-                          onChange={(e) => {
-                            setPotentialColFilters((prev) => ({
-                              ...prev,
-                              totalDemand: e.target.value
-                            }));
-                            setPotentialCurrentPage(1);
-                          }}
-                          style={{
-                            width: "100%",
-                            fontSize: "0.75rem",
-                            padding: "0.2rem 0.35rem",
-                            borderRadius: "4px",
-                            border: potentialColFilters.totalDemand
-                              ? "1px solid #b45309"
-                              : "1px solid #cbd5e1",
-                            background: potentialColFilters.totalDemand ? "#fef3c7" : "#fff",
-                            textAlign: "right"
-                          }}
-                        />
-                      </th>
-                      <th style={{ padding: "0.3rem 0.35rem" }}>
-                        <input
-                          type="text"
-                          placeholder="Filter Status..."
-                          value={potentialColFilters.status || ""}
-                          onChange={(e) => {
-                            setPotentialColFilters((prev) => ({ ...prev, status: e.target.value }));
-                            setPotentialCurrentPage(1);
-                          }}
-                          style={{
-                            width: "100%",
-                            fontSize: "0.75rem",
-                            padding: "0.2rem 0.35rem",
-                            borderRadius: "4px",
-                            border: potentialColFilters.status
-                              ? "1px solid #b45309"
-                              : "1px solid #cbd5e1",
-                            background: potentialColFilters.status ? "#fef3c7" : "#fff"
-                          }}
-                        />
-                      </th>
-                      <th style={{ padding: "0.3rem 0.35rem", textAlign: "right" }}>
-                        {activePotentialColFilterCount > 0 ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setPotentialColFilters({});
-                              setPotentialCurrentPage(1);
-                            }}
-                            style={{
-                              background: "#fee2e2",
-                              color: "#991b1b",
-                              border: "1px solid #fecaca",
-                              borderRadius: "4px",
-                              fontSize: "0.72rem",
-                              padding: "0.2rem 0.45rem",
-                              cursor: "pointer",
-                              fontWeight: 600,
-                              whiteSpace: "nowrap"
-                            }}
-                            title="Clear all column filters"
-                          >
-                            ✕ Clear
-                          </button>
-                        ) : (
-                          <span style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Filters</span>
-                        )}
-                      </th>
-                    </tr>
-                  )}
                 </thead>
                 <tbody>
                   {paginatedPotentialUnits.length === 0 ? (
@@ -9375,20 +10013,26 @@ export default function HomePage({
                 >
                   ➕ Add Tax Unit
                 </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowPft3ColFilters((v) => !v)}
-                  title="Toggle per-column filter inputs"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.35rem"
-                  }}
-                >
-                  <span>🔍</span>
-                  <span>{showPft3ColFilters ? "Hide Column Filters" : "Column Filters"}</span>
-                  {activePft3ColFilterCount > 0 && (
+                {activePft3ColFilterCount > 0 && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => {
+                      setPft3ColFilters({});
+                      setPft3CurrentPage(1);
+                      setOpenPft3FilterCol(null);
+                    }}
+                    title="Clear all active column filters"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
+                      background: "#f0f9ff",
+                      borderColor: "#7dd3fc",
+                      color: "#0369a1"
+                    }}
+                  >
+                    <span>✕ Clear Column Filters</span>
                     <span
                       style={{
                         background: "#0284c7",
@@ -9401,8 +10045,8 @@ export default function HomePage({
                     >
                       {activePft3ColFilterCount}
                     </span>
-                  )}
-                </button>
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn-primary"
@@ -9879,7 +10523,12 @@ export default function HomePage({
                         title="Click to sort by Demand No."
                       >
                         <div
-                          style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            position: "relative"
+                          }}
                         >
                           <span
                             onClick={() => handlePft3Sort("permanentDemandNo")}
@@ -9905,30 +10554,58 @@ export default function HomePage({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setShowPft3ColFilters(true);
+                              setOpenPft3FilterCol(
+                                openPft3FilterCol === "permanentDemandNo"
+                                  ? null
+                                  : "permanentDemandNo"
+                              );
                             }}
                             style={{
                               background: pft3ColFilters.permanentDemandNo
-                                ? "#e0f2fe"
+                                ? "#0284c7"
                                 : "transparent",
+                              color: pft3ColFilters.permanentDemandNo ? "#ffffff" : "#94a3b8",
                               border: pft3ColFilters.permanentDemandNo
-                                ? "1px solid #7dd3fc"
+                                ? "1px solid #0284c7"
                                 : "none",
                               borderRadius: "3px",
                               cursor: "pointer",
                               padding: "0.1rem 0.25rem",
                               fontSize: "0.72rem",
-                              color: pft3ColFilters.permanentDemandNo ? "#0369a1" : "#94a3b8",
                               lineHeight: 1
                             }}
                             title={
                               pft3ColFilters.permanentDemandNo
-                                ? `Filtered: "${pft3ColFilters.permanentDemandNo}"`
+                                ? `Filtered: "${pft3ColFilters.permanentDemandNo}" (Click to edit)`
                                 : "Filter Demand No."
                             }
                           >
                             🔍
                           </button>
+                          {openPft3FilterCol === "permanentDemandNo" && (
+                            <ColumnFilterPopover
+                              columnLabel="Demand No."
+                              columnType="text"
+                              currentValue={pft3ColFilters.permanentDemandNo || ""}
+                              onApply={(val) => {
+                                setPft3ColFilters((prev) => ({ ...prev, permanentDemandNo: val }));
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClear={() => {
+                                setPft3ColFilters((prev) => {
+                                  const next = { ...prev };
+                                  delete next.permanentDemandNo;
+                                  return next;
+                                });
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClose={() => setOpenPft3FilterCol(null)}
+                              align="left"
+                              themeColor="#0284c7"
+                            />
+                          )}
                         </div>
                       </th>
                       <th
@@ -9936,7 +10613,12 @@ export default function HomePage({
                         title="Click to sort by PIN"
                       >
                         <div
-                          style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            position: "relative"
+                          }}
                         >
                           <span
                             onClick={() => handlePft3Sort("provincialUin")}
@@ -9962,26 +10644,52 @@ export default function HomePage({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setShowPft3ColFilters(true);
+                              setOpenPft3FilterCol(
+                                openPft3FilterCol === "provincialUin" ? null : "provincialUin"
+                              );
                             }}
                             style={{
-                              background: pft3ColFilters.provincialUin ? "#e0f2fe" : "transparent",
-                              border: pft3ColFilters.provincialUin ? "1px solid #7dd3fc" : "none",
+                              background: pft3ColFilters.provincialUin ? "#0284c7" : "transparent",
+                              color: pft3ColFilters.provincialUin ? "#ffffff" : "#94a3b8",
+                              border: pft3ColFilters.provincialUin ? "1px solid #0284c7" : "none",
                               borderRadius: "3px",
                               cursor: "pointer",
                               padding: "0.1rem 0.25rem",
                               fontSize: "0.72rem",
-                              color: pft3ColFilters.provincialUin ? "#0369a1" : "#94a3b8",
                               lineHeight: 1
                             }}
                             title={
                               pft3ColFilters.provincialUin
-                                ? `Filtered: "${pft3ColFilters.provincialUin}"`
+                                ? `Filtered: "${pft3ColFilters.provincialUin}" (Click to edit)`
                                 : "Filter PIN"
                             }
                           >
                             🔍
                           </button>
+                          {openPft3FilterCol === "provincialUin" && (
+                            <ColumnFilterPopover
+                              columnLabel="PIN"
+                              columnType="text"
+                              currentValue={pft3ColFilters.provincialUin || ""}
+                              onApply={(val) => {
+                                setPft3ColFilters((prev) => ({ ...prev, provincialUin: val }));
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClear={() => {
+                                setPft3ColFilters((prev) => {
+                                  const next = { ...prev };
+                                  delete next.provincialUin;
+                                  return next;
+                                });
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClose={() => setOpenPft3FilterCol(null)}
+                              align="left"
+                              themeColor="#0284c7"
+                            />
+                          )}
                         </div>
                       </th>
                       <th
@@ -9989,7 +10697,12 @@ export default function HomePage({
                         title="Click to sort by Profession/Trade Name"
                       >
                         <div
-                          style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            position: "relative"
+                          }}
                         >
                           <span
                             onClick={() => handlePft3Sort("legalName")}
@@ -10015,26 +10728,52 @@ export default function HomePage({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setShowPft3ColFilters(true);
+                              setOpenPft3FilterCol(
+                                openPft3FilterCol === "legalName" ? null : "legalName"
+                              );
                             }}
                             style={{
-                              background: pft3ColFilters.legalName ? "#e0f2fe" : "transparent",
-                              border: pft3ColFilters.legalName ? "1px solid #7dd3fc" : "none",
+                              background: pft3ColFilters.legalName ? "#0284c7" : "transparent",
+                              color: pft3ColFilters.legalName ? "#ffffff" : "#94a3b8",
+                              border: pft3ColFilters.legalName ? "1px solid #0284c7" : "none",
                               borderRadius: "3px",
                               cursor: "pointer",
                               padding: "0.1rem 0.25rem",
                               fontSize: "0.72rem",
-                              color: pft3ColFilters.legalName ? "#0369a1" : "#94a3b8",
                               lineHeight: 1
                             }}
                             title={
                               pft3ColFilters.legalName
-                                ? `Filtered: "${pft3ColFilters.legalName}"`
+                                ? `Filtered: "${pft3ColFilters.legalName}" (Click to edit)`
                                 : "Filter Profession/Trade Name"
                             }
                           >
                             🔍
                           </button>
+                          {openPft3FilterCol === "legalName" && (
+                            <ColumnFilterPopover
+                              columnLabel="Profession/Trade Name"
+                              columnType="text"
+                              currentValue={pft3ColFilters.legalName || ""}
+                              onApply={(val) => {
+                                setPft3ColFilters((prev) => ({ ...prev, legalName: val }));
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClear={() => {
+                                setPft3ColFilters((prev) => {
+                                  const next = { ...prev };
+                                  delete next.legalName;
+                                  return next;
+                                });
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClose={() => setOpenPft3FilterCol(null)}
+                              align="left"
+                              themeColor="#0284c7"
+                            />
+                          )}
                         </div>
                       </th>
                       <th
@@ -10042,7 +10781,12 @@ export default function HomePage({
                         title="Click to sort by Taxpayer / Assessee"
                       >
                         <div
-                          style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            position: "relative"
+                          }}
                         >
                           <span
                             onClick={() => handlePft3Sort("tradeName")}
@@ -10068,26 +10812,52 @@ export default function HomePage({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setShowPft3ColFilters(true);
+                              setOpenPft3FilterCol(
+                                openPft3FilterCol === "tradeName" ? null : "tradeName"
+                              );
                             }}
                             style={{
-                              background: pft3ColFilters.tradeName ? "#e0f2fe" : "transparent",
-                              border: pft3ColFilters.tradeName ? "1px solid #7dd3fc" : "none",
+                              background: pft3ColFilters.tradeName ? "#0284c7" : "transparent",
+                              color: pft3ColFilters.tradeName ? "#ffffff" : "#94a3b8",
+                              border: pft3ColFilters.tradeName ? "1px solid #0284c7" : "none",
                               borderRadius: "3px",
                               cursor: "pointer",
                               padding: "0.1rem 0.25rem",
                               fontSize: "0.72rem",
-                              color: pft3ColFilters.tradeName ? "#0369a1" : "#94a3b8",
                               lineHeight: 1
                             }}
                             title={
                               pft3ColFilters.tradeName
-                                ? `Filtered: "${pft3ColFilters.tradeName}"`
+                                ? `Filtered: "${pft3ColFilters.tradeName}" (Click to edit)`
                                 : "Filter Taxpayer / Assessee"
                             }
                           >
                             🔍
                           </button>
+                          {openPft3FilterCol === "tradeName" && (
+                            <ColumnFilterPopover
+                              columnLabel="Taxpayer / Assessee"
+                              columnType="text"
+                              currentValue={pft3ColFilters.tradeName || ""}
+                              onApply={(val) => {
+                                setPft3ColFilters((prev) => ({ ...prev, tradeName: val }));
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClear={() => {
+                                setPft3ColFilters((prev) => {
+                                  const next = { ...prev };
+                                  delete next.tradeName;
+                                  return next;
+                                });
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClose={() => setOpenPft3FilterCol(null)}
+                              align="left"
+                              themeColor="#0284c7"
+                            />
+                          )}
                         </div>
                       </th>
                       <th
@@ -10095,7 +10865,12 @@ export default function HomePage({
                         title="Click to sort by Statutory Class"
                       >
                         <div
-                          style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            position: "relative"
+                          }}
                         >
                           <span
                             onClick={() => handlePft3Sort("scheduleEntry")}
@@ -10121,26 +10896,52 @@ export default function HomePage({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setShowPft3ColFilters(true);
+                              setOpenPft3FilterCol(
+                                openPft3FilterCol === "scheduleEntry" ? null : "scheduleEntry"
+                              );
                             }}
                             style={{
-                              background: pft3ColFilters.scheduleEntry ? "#e0f2fe" : "transparent",
-                              border: pft3ColFilters.scheduleEntry ? "1px solid #7dd3fc" : "none",
+                              background: pft3ColFilters.scheduleEntry ? "#0284c7" : "transparent",
+                              color: pft3ColFilters.scheduleEntry ? "#ffffff" : "#94a3b8",
+                              border: pft3ColFilters.scheduleEntry ? "1px solid #0284c7" : "none",
                               borderRadius: "3px",
                               cursor: "pointer",
                               padding: "0.1rem 0.25rem",
                               fontSize: "0.72rem",
-                              color: pft3ColFilters.scheduleEntry ? "#0369a1" : "#94a3b8",
                               lineHeight: 1
                             }}
                             title={
                               pft3ColFilters.scheduleEntry
-                                ? `Filtered: "${pft3ColFilters.scheduleEntry}"`
+                                ? `Filtered: "${pft3ColFilters.scheduleEntry}" (Click to edit)`
                                 : "Filter Statutory Class"
                             }
                           >
                             🔍
                           </button>
+                          {openPft3FilterCol === "scheduleEntry" && (
+                            <ColumnFilterPopover
+                              columnLabel="Statutory Class"
+                              columnType="text"
+                              currentValue={pft3ColFilters.scheduleEntry || ""}
+                              onApply={(val) => {
+                                setPft3ColFilters((prev) => ({ ...prev, scheduleEntry: val }));
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClear={() => {
+                                setPft3ColFilters((prev) => {
+                                  const next = { ...prev };
+                                  delete next.scheduleEntry;
+                                  return next;
+                                });
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClose={() => setOpenPft3FilterCol(null)}
+                              align="left"
+                              themeColor="#0284c7"
+                            />
+                          )}
                         </div>
                       </th>
                       <th
@@ -10152,7 +10953,8 @@ export default function HomePage({
                             display: "inline-flex",
                             alignItems: "center",
                             gap: "0.35rem",
-                            justifyContent: "flex-end"
+                            justifyContent: "flex-end",
+                            position: "relative"
                           }}
                         >
                           <span
@@ -10179,30 +10981,61 @@ export default function HomePage({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setShowPft3ColFilters(true);
+                              setOpenPft3FilterCol(
+                                openPft3FilterCol === "assessedCurrentTax"
+                                  ? null
+                                  : "assessedCurrentTax"
+                              );
                             }}
                             style={{
                               background: pft3ColFilters.assessedCurrentTax
-                                ? "#e0f2fe"
+                                ? "#0284c7"
                                 : "transparent",
+                              color: pft3ColFilters.assessedCurrentTax ? "#ffffff" : "#94a3b8",
                               border: pft3ColFilters.assessedCurrentTax
-                                ? "1px solid #7dd3fc"
+                                ? "1px solid #0284c7"
                                 : "none",
                               borderRadius: "3px",
                               cursor: "pointer",
                               padding: "0.1rem 0.25rem",
                               fontSize: "0.72rem",
-                              color: pft3ColFilters.assessedCurrentTax ? "#0369a1" : "#94a3b8",
                               lineHeight: 1
                             }}
                             title={
                               pft3ColFilters.assessedCurrentTax
-                                ? `Filtered: "${pft3ColFilters.assessedCurrentTax}"`
+                                ? `Filtered: "${pft3ColFilters.assessedCurrentTax}" (Click to edit)`
                                 : "Filter Assessed Tax"
                             }
                           >
                             🔍
                           </button>
+                          {openPft3FilterCol === "assessedCurrentTax" && (
+                            <ColumnFilterPopover
+                              columnLabel="Assessed Tax"
+                              columnType="number"
+                              currentValue={pft3ColFilters.assessedCurrentTax || ""}
+                              onApply={(val) => {
+                                setPft3ColFilters((prev) => ({
+                                  ...prev,
+                                  assessedCurrentTax: val
+                                }));
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClear={() => {
+                                setPft3ColFilters((prev) => {
+                                  const next = { ...prev };
+                                  delete next.assessedCurrentTax;
+                                  return next;
+                                });
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClose={() => setOpenPft3FilterCol(null)}
+                              align="right"
+                              themeColor="#0284c7"
+                            />
+                          )}
                         </div>
                       </th>
                       <th
@@ -10214,7 +11047,8 @@ export default function HomePage({
                             display: "inline-flex",
                             alignItems: "center",
                             gap: "0.35rem",
-                            justifyContent: "flex-end"
+                            justifyContent: "flex-end",
+                            position: "relative"
                           }}
                         >
                           <span
@@ -10241,26 +11075,52 @@ export default function HomePage({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setShowPft3ColFilters(true);
+                              setOpenPft3FilterCol(
+                                openPft3FilterCol === "arrears" ? null : "arrears"
+                              );
                             }}
                             style={{
-                              background: pft3ColFilters.arrears ? "#e0f2fe" : "transparent",
-                              border: pft3ColFilters.arrears ? "1px solid #7dd3fc" : "none",
+                              background: pft3ColFilters.arrears ? "#0284c7" : "transparent",
+                              color: pft3ColFilters.arrears ? "#ffffff" : "#94a3b8",
+                              border: pft3ColFilters.arrears ? "1px solid #0284c7" : "none",
                               borderRadius: "3px",
                               cursor: "pointer",
                               padding: "0.1rem 0.25rem",
                               fontSize: "0.72rem",
-                              color: pft3ColFilters.arrears ? "#0369a1" : "#94a3b8",
                               lineHeight: 1
                             }}
                             title={
                               pft3ColFilters.arrears
-                                ? `Filtered: "${pft3ColFilters.arrears}"`
+                                ? `Filtered: "${pft3ColFilters.arrears}" (Click to edit)`
                                 : "Filter Arrears"
                             }
                           >
                             🔍
                           </button>
+                          {openPft3FilterCol === "arrears" && (
+                            <ColumnFilterPopover
+                              columnLabel="Arrears"
+                              columnType="number"
+                              currentValue={pft3ColFilters.arrears || ""}
+                              onApply={(val) => {
+                                setPft3ColFilters((prev) => ({ ...prev, arrears: val }));
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClear={() => {
+                                setPft3ColFilters((prev) => {
+                                  const next = { ...prev };
+                                  delete next.arrears;
+                                  return next;
+                                });
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClose={() => setOpenPft3FilterCol(null)}
+                              align="right"
+                              themeColor="#0284c7"
+                            />
+                          )}
                         </div>
                       </th>
                       <th
@@ -10272,7 +11132,8 @@ export default function HomePage({
                             display: "inline-flex",
                             alignItems: "center",
                             gap: "0.35rem",
-                            justifyContent: "flex-end"
+                            justifyContent: "flex-end",
+                            position: "relative"
                           }}
                         >
                           <span
@@ -10299,26 +11160,52 @@ export default function HomePage({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setShowPft3ColFilters(true);
+                              setOpenPft3FilterCol(
+                                openPft3FilterCol === "totalDemand" ? null : "totalDemand"
+                              );
                             }}
                             style={{
-                              background: pft3ColFilters.totalDemand ? "#e0f2fe" : "transparent",
-                              border: pft3ColFilters.totalDemand ? "1px solid #7dd3fc" : "none",
+                              background: pft3ColFilters.totalDemand ? "#0284c7" : "transparent",
+                              color: pft3ColFilters.totalDemand ? "#ffffff" : "#94a3b8",
+                              border: pft3ColFilters.totalDemand ? "1px solid #0284c7" : "none",
                               borderRadius: "3px",
                               cursor: "pointer",
                               padding: "0.1rem 0.25rem",
                               fontSize: "0.72rem",
-                              color: pft3ColFilters.totalDemand ? "#0369a1" : "#94a3b8",
                               lineHeight: 1
                             }}
                             title={
                               pft3ColFilters.totalDemand
-                                ? `Filtered: "${pft3ColFilters.totalDemand}"`
+                                ? `Filtered: "${pft3ColFilters.totalDemand}" (Click to edit)`
                                 : "Filter Total Demand"
                             }
                           >
                             🔍
                           </button>
+                          {openPft3FilterCol === "totalDemand" && (
+                            <ColumnFilterPopover
+                              columnLabel="Total Demand"
+                              columnType="number"
+                              currentValue={pft3ColFilters.totalDemand || ""}
+                              onApply={(val) => {
+                                setPft3ColFilters((prev) => ({ ...prev, totalDemand: val }));
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClear={() => {
+                                setPft3ColFilters((prev) => {
+                                  const next = { ...prev };
+                                  delete next.totalDemand;
+                                  return next;
+                                });
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClose={() => setOpenPft3FilterCol(null)}
+                              align="right"
+                              themeColor="#0284c7"
+                            />
+                          )}
                         </div>
                       </th>
                       <th
@@ -10330,7 +11217,8 @@ export default function HomePage({
                             display: "inline-flex",
                             alignItems: "center",
                             gap: "0.35rem",
-                            justifyContent: "flex-end"
+                            justifyContent: "flex-end",
+                            position: "relative"
                           }}
                         >
                           <span
@@ -10357,26 +11245,52 @@ export default function HomePage({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setShowPft3ColFilters(true);
+                              setOpenPft3FilterCol(
+                                openPft3FilterCol === "totalPaid" ? null : "totalPaid"
+                              );
                             }}
                             style={{
-                              background: pft3ColFilters.totalPaid ? "#e0f2fe" : "transparent",
-                              border: pft3ColFilters.totalPaid ? "1px solid #7dd3fc" : "none",
+                              background: pft3ColFilters.totalPaid ? "#0284c7" : "transparent",
+                              color: pft3ColFilters.totalPaid ? "#ffffff" : "#94a3b8",
+                              border: pft3ColFilters.totalPaid ? "1px solid #0284c7" : "none",
                               borderRadius: "3px",
                               cursor: "pointer",
                               padding: "0.1rem 0.25rem",
                               fontSize: "0.72rem",
-                              color: pft3ColFilters.totalPaid ? "#0369a1" : "#94a3b8",
                               lineHeight: 1
                             }}
                             title={
                               pft3ColFilters.totalPaid
-                                ? `Filtered: "${pft3ColFilters.totalPaid}"`
+                                ? `Filtered: "${pft3ColFilters.totalPaid}" (Click to edit)`
                                 : "Filter Paid Amount"
                             }
                           >
                             🔍
                           </button>
+                          {openPft3FilterCol === "totalPaid" && (
+                            <ColumnFilterPopover
+                              columnLabel="Paid Amount"
+                              columnType="number"
+                              currentValue={pft3ColFilters.totalPaid || ""}
+                              onApply={(val) => {
+                                setPft3ColFilters((prev) => ({ ...prev, totalPaid: val }));
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClear={() => {
+                                setPft3ColFilters((prev) => {
+                                  const next = { ...prev };
+                                  delete next.totalPaid;
+                                  return next;
+                                });
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClose={() => setOpenPft3FilterCol(null)}
+                              align="right"
+                              themeColor="#0284c7"
+                            />
+                          )}
                         </div>
                       </th>
                       <th
@@ -10388,7 +11302,8 @@ export default function HomePage({
                             display: "inline-flex",
                             alignItems: "center",
                             gap: "0.35rem",
-                            justifyContent: "flex-end"
+                            justifyContent: "flex-end",
+                            position: "relative"
                           }}
                         >
                           <span
@@ -10415,298 +11330,65 @@ export default function HomePage({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setShowPft3ColFilters(true);
+                              setOpenPft3FilterCol(
+                                openPft3FilterCol === "outstandingBalance"
+                                  ? null
+                                  : "outstandingBalance"
+                              );
                             }}
                             style={{
                               background: pft3ColFilters.outstandingBalance
-                                ? "#e0f2fe"
+                                ? "#0284c7"
                                 : "transparent",
+                              color: pft3ColFilters.outstandingBalance ? "#ffffff" : "#94a3b8",
                               border: pft3ColFilters.outstandingBalance
-                                ? "1px solid #7dd3fc"
+                                ? "1px solid #0284c7"
                                 : "none",
                               borderRadius: "3px",
                               cursor: "pointer",
                               padding: "0.1rem 0.25rem",
                               fontSize: "0.72rem",
-                              color: pft3ColFilters.outstandingBalance ? "#0369a1" : "#94a3b8",
                               lineHeight: 1
                             }}
                             title={
                               pft3ColFilters.outstandingBalance
-                                ? `Filtered: "${pft3ColFilters.outstandingBalance}"`
+                                ? `Filtered: "${pft3ColFilters.outstandingBalance}" (Click to edit)`
                                 : "Filter Balance"
                             }
                           >
                             🔍
                           </button>
+                          {openPft3FilterCol === "outstandingBalance" && (
+                            <ColumnFilterPopover
+                              columnLabel="Balance"
+                              columnType="number"
+                              currentValue={pft3ColFilters.outstandingBalance || ""}
+                              onApply={(val) => {
+                                setPft3ColFilters((prev) => ({
+                                  ...prev,
+                                  outstandingBalance: val
+                                }));
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClear={() => {
+                                setPft3ColFilters((prev) => {
+                                  const next = { ...prev };
+                                  delete next.outstandingBalance;
+                                  return next;
+                                });
+                                setPft3CurrentPage(1);
+                                setOpenPft3FilterCol(null);
+                              }}
+                              onClose={() => setOpenPft3FilterCol(null)}
+                              align="right"
+                              themeColor="#0284c7"
+                            />
+                          )}
                         </div>
                       </th>
                       <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Actions</th>
                     </tr>
-                    {showPft3ColFilters && (
-                      <tr style={{ background: "#f8fafc", borderBottom: "2px solid #cbd5e1" }}>
-                        <th style={{ padding: "0.3rem 0.35rem" }}>
-                          <input
-                            type="text"
-                            placeholder="Filter #..."
-                            value={pft3ColFilters.permanentDemandNo || ""}
-                            onChange={(e) => {
-                              setPft3ColFilters((prev) => ({
-                                ...prev,
-                                permanentDemandNo: e.target.value
-                              }));
-                              setPft3CurrentPage(1);
-                            }}
-                            style={{
-                              width: "100%",
-                              fontSize: "0.75rem",
-                              padding: "0.2rem 0.35rem",
-                              borderRadius: "4px",
-                              border: pft3ColFilters.permanentDemandNo
-                                ? "1px solid #0284c7"
-                                : "1px solid #cbd5e1",
-                              background: pft3ColFilters.permanentDemandNo ? "#f0f9ff" : "#fff"
-                            }}
-                          />
-                        </th>
-                        <th style={{ padding: "0.3rem 0.35rem" }}>
-                          <input
-                            type="text"
-                            placeholder="Filter PIN..."
-                            value={pft3ColFilters.provincialUin || ""}
-                            onChange={(e) => {
-                              setPft3ColFilters((prev) => ({
-                                ...prev,
-                                provincialUin: e.target.value
-                              }));
-                              setPft3CurrentPage(1);
-                            }}
-                            style={{
-                              width: "100%",
-                              fontSize: "0.75rem",
-                              padding: "0.2rem 0.35rem",
-                              borderRadius: "4px",
-                              border: pft3ColFilters.provincialUin
-                                ? "1px solid #0284c7"
-                                : "1px solid #cbd5e1",
-                              background: pft3ColFilters.provincialUin ? "#f0f9ff" : "#fff"
-                            }}
-                          />
-                        </th>
-                        <th style={{ padding: "0.3rem 0.35rem" }}>
-                          <input
-                            type="text"
-                            placeholder="Filter Profession..."
-                            value={pft3ColFilters.legalName || ""}
-                            onChange={(e) => {
-                              setPft3ColFilters((prev) => ({ ...prev, legalName: e.target.value }));
-                              setPft3CurrentPage(1);
-                            }}
-                            style={{
-                              width: "100%",
-                              fontSize: "0.75rem",
-                              padding: "0.2rem 0.35rem",
-                              borderRadius: "4px",
-                              border: pft3ColFilters.legalName
-                                ? "1px solid #0284c7"
-                                : "1px solid #cbd5e1",
-                              background: pft3ColFilters.legalName ? "#f0f9ff" : "#fff"
-                            }}
-                          />
-                        </th>
-                        <th style={{ padding: "0.3rem 0.35rem" }}>
-                          <input
-                            type="text"
-                            placeholder="Filter Taxpayer..."
-                            value={pft3ColFilters.tradeName || ""}
-                            onChange={(e) => {
-                              setPft3ColFilters((prev) => ({ ...prev, tradeName: e.target.value }));
-                              setPft3CurrentPage(1);
-                            }}
-                            style={{
-                              width: "100%",
-                              fontSize: "0.75rem",
-                              padding: "0.2rem 0.35rem",
-                              borderRadius: "4px",
-                              border: pft3ColFilters.tradeName
-                                ? "1px solid #0284c7"
-                                : "1px solid #cbd5e1",
-                              background: pft3ColFilters.tradeName ? "#f0f9ff" : "#fff"
-                            }}
-                          />
-                        </th>
-                        <th style={{ padding: "0.3rem 0.35rem" }}>
-                          <input
-                            type="text"
-                            placeholder="Filter Class..."
-                            value={pft3ColFilters.scheduleEntry || ""}
-                            onChange={(e) => {
-                              setPft3ColFilters((prev) => ({
-                                ...prev,
-                                scheduleEntry: e.target.value
-                              }));
-                              setPft3CurrentPage(1);
-                            }}
-                            style={{
-                              width: "100%",
-                              fontSize: "0.75rem",
-                              padding: "0.2rem 0.35rem",
-                              borderRadius: "4px",
-                              border: pft3ColFilters.scheduleEntry
-                                ? "1px solid #0284c7"
-                                : "1px solid #cbd5e1",
-                              background: pft3ColFilters.scheduleEntry ? "#f0f9ff" : "#fff"
-                            }}
-                          />
-                        </th>
-                        <th style={{ padding: "0.3rem 0.35rem" }}>
-                          <input
-                            type="text"
-                            placeholder="> or exact..."
-                            value={pft3ColFilters.assessedCurrentTax || ""}
-                            onChange={(e) => {
-                              setPft3ColFilters((prev) => ({
-                                ...prev,
-                                assessedCurrentTax: e.target.value
-                              }));
-                              setPft3CurrentPage(1);
-                            }}
-                            style={{
-                              width: "100%",
-                              fontSize: "0.75rem",
-                              padding: "0.2rem 0.35rem",
-                              borderRadius: "4px",
-                              border: pft3ColFilters.assessedCurrentTax
-                                ? "1px solid #0284c7"
-                                : "1px solid #cbd5e1",
-                              background: pft3ColFilters.assessedCurrentTax ? "#f0f9ff" : "#fff",
-                              textAlign: "right"
-                            }}
-                          />
-                        </th>
-                        <th style={{ padding: "0.3rem 0.35rem" }}>
-                          <input
-                            type="text"
-                            placeholder="> or exact..."
-                            value={pft3ColFilters.arrears || ""}
-                            onChange={(e) => {
-                              setPft3ColFilters((prev) => ({ ...prev, arrears: e.target.value }));
-                              setPft3CurrentPage(1);
-                            }}
-                            style={{
-                              width: "100%",
-                              fontSize: "0.75rem",
-                              padding: "0.2rem 0.35rem",
-                              borderRadius: "4px",
-                              border: pft3ColFilters.arrears
-                                ? "1px solid #0284c7"
-                                : "1px solid #cbd5e1",
-                              background: pft3ColFilters.arrears ? "#f0f9ff" : "#fff",
-                              textAlign: "right"
-                            }}
-                          />
-                        </th>
-                        <th style={{ padding: "0.3rem 0.35rem" }}>
-                          <input
-                            type="text"
-                            placeholder="> or exact..."
-                            value={pft3ColFilters.totalDemand || ""}
-                            onChange={(e) => {
-                              setPft3ColFilters((prev) => ({
-                                ...prev,
-                                totalDemand: e.target.value
-                              }));
-                              setPft3CurrentPage(1);
-                            }}
-                            style={{
-                              width: "100%",
-                              fontSize: "0.75rem",
-                              padding: "0.2rem 0.35rem",
-                              borderRadius: "4px",
-                              border: pft3ColFilters.totalDemand
-                                ? "1px solid #0284c7"
-                                : "1px solid #cbd5e1",
-                              background: pft3ColFilters.totalDemand ? "#f0f9ff" : "#fff",
-                              textAlign: "right"
-                            }}
-                          />
-                        </th>
-                        <th style={{ padding: "0.3rem 0.35rem" }}>
-                          <input
-                            type="text"
-                            placeholder="> or exact..."
-                            value={pft3ColFilters.totalPaid || ""}
-                            onChange={(e) => {
-                              setPft3ColFilters((prev) => ({ ...prev, totalPaid: e.target.value }));
-                              setPft3CurrentPage(1);
-                            }}
-                            style={{
-                              width: "100%",
-                              fontSize: "0.75rem",
-                              padding: "0.2rem 0.35rem",
-                              borderRadius: "4px",
-                              border: pft3ColFilters.totalPaid
-                                ? "1px solid #0284c7"
-                                : "1px solid #cbd5e1",
-                              background: pft3ColFilters.totalPaid ? "#f0f9ff" : "#fff",
-                              textAlign: "right"
-                            }}
-                          />
-                        </th>
-                        <th style={{ padding: "0.3rem 0.35rem" }}>
-                          <input
-                            type="text"
-                            placeholder="> or exact..."
-                            value={pft3ColFilters.outstandingBalance || ""}
-                            onChange={(e) => {
-                              setPft3ColFilters((prev) => ({
-                                ...prev,
-                                outstandingBalance: e.target.value
-                              }));
-                              setPft3CurrentPage(1);
-                            }}
-                            style={{
-                              width: "100%",
-                              fontSize: "0.75rem",
-                              padding: "0.2rem 0.35rem",
-                              borderRadius: "4px",
-                              border: pft3ColFilters.outstandingBalance
-                                ? "1px solid #0284c7"
-                                : "1px solid #cbd5e1",
-                              background: pft3ColFilters.outstandingBalance ? "#f0f9ff" : "#fff",
-                              textAlign: "right"
-                            }}
-                          />
-                        </th>
-                        <th style={{ padding: "0.3rem 0.35rem", textAlign: "right" }}>
-                          {activePft3ColFilterCount > 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPft3ColFilters({});
-                                setPft3CurrentPage(1);
-                              }}
-                              style={{
-                                background: "#fee2e2",
-                                color: "#991b1b",
-                                border: "1px solid #fecaca",
-                                borderRadius: "4px",
-                                fontSize: "0.72rem",
-                                padding: "0.2rem 0.45rem",
-                                cursor: "pointer",
-                                fontWeight: 600,
-                                whiteSpace: "nowrap"
-                              }}
-                              title="Clear all column filters"
-                            >
-                              ✕ Clear
-                            </button>
-                          ) : (
-                            <span style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Filters</span>
-                          )}
-                        </th>
-                      </tr>
-                    )}
                   </thead>
                   <tbody>
                     {filteredFormPFT3Rows.length === 0 ? (
