@@ -102,9 +102,9 @@ export async function generateShowCauseNoticePdf(
   doc.setTextColor(...PDF_COLORS.textDark);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Legal Name:", left + 4, curY + 4);
+  doc.text("Profession/Trade Name:", left + 4, curY + 4);
   doc.setFont("helvetica", "normal");
-  doc.text(notice.assesseeLegalName, left + 28, curY + 4);
+  doc.text(notice.assesseeLegalName, left + 42, curY + 4);
 
   if (notice.assesseeTradeName) {
     doc.setFont("helvetica", "bold");

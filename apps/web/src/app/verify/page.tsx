@@ -267,7 +267,7 @@ export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: str
                 {result.unitName && (
                   <div>
                     <span style={{ color: "#64748b", display: "block", fontSize: "0.72rem" }}>
-                      Legal Name:
+                      Profession/Trade Name:
                     </span>
                     <strong>{result.unitName}</strong>
                   </div>

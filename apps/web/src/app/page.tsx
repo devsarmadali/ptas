@@ -317,6 +317,35 @@ function formatTaxIdentifierInput(val: string, type: "CNIC" | "NTN"): string {
   }
 }
 
+export type Pft3SortField =
+  | "permanentDemandNo"
+  | "provincialUin"
+  | "legalName"
+  | "tradeName"
+  | "scheduleEntry"
+  | "assessedCurrentTax"
+  | "arrears"
+  | "totalDemand"
+  | "totalPaid"
+  | "outstandingBalance";
+
+export type Pft3ColFilterKey = Pft3SortField;
+
+export type PotentialSortField =
+  | "potentialNumber"
+  | "pinNumber"
+  | "legalName"
+  | "taxpayerName"
+  | "identifierValue"
+  | "address"
+  | "categoryName"
+  | "annualRatePkr"
+  | "openingArrears"
+  | "totalDemand"
+  | "status";
+
+export type PotentialColFilterKey = PotentialSortField;
+
 export default function HomePage({
   initialRouteHub,
   initialTab
@@ -560,6 +589,20 @@ export default function HomePage({
   const [pft3CurrentPage, setPft3CurrentPage] = useState(1);
   const PFT3_PAGE_SIZE = 20;
 
+  // Form PFT-3 Sorting & Column Filter State
+  const [pft3SortField, setPft3SortField] = useState<Pft3SortField | null>(null);
+  const [pft3SortDirection, setPft3SortDirection] = useState<"asc" | "desc">("asc");
+  const [pft3ColFilters, setPft3ColFilters] = useState<Partial<Record<Pft3ColFilterKey, string>>>(
+    {}
+  );
+  const [showPft3ColFilters, setShowPft3ColFilters] = useState<boolean>(true);
+  const activePft3ColFilterCount = useMemo(
+    () =>
+      Object.values(pft3ColFilters).filter((v) => typeof v === "string" && v.trim().length > 0)
+        .length,
+    [pft3ColFilters]
+  );
+
   // Potential Register State, Search & Filter Controls
   const [potentialUnits, setPotentialUnits] = useState<PotentialUnitRecord[]>([]);
   const [potentialSearchQuery, setPotentialSearchQuery] = useState("");
@@ -570,6 +613,20 @@ export default function HomePage({
   const [potentialSubclassFilter, setPotentialSubclassFilter] = useState("ALL");
   const [potentialCurrentPage, setPotentialCurrentPage] = useState(1);
   const POTENTIAL_PAGE_SIZE = 20;
+
+  // Potential Register Sorting & Column Filter State
+  const [potentialSortField, setPotentialSortField] = useState<PotentialSortField | null>(null);
+  const [potentialSortDirection, setPotentialSortDirection] = useState<"asc" | "desc">("asc");
+  const [potentialColFilters, setPotentialColFilters] = useState<
+    Partial<Record<PotentialColFilterKey, string>>
+  >({});
+  const [showPotentialColFilters, setShowPotentialColFilters] = useState<boolean>(true);
+  const activePotentialColFilterCount = useMemo(
+    () =>
+      Object.values(potentialColFilters).filter((v) => typeof v === "string" && v.trim().length > 0)
+        .length,
+    [potentialColFilters]
+  );
 
   // Potential Register Modals
   const [showAddPotentialModal, setShowAddPotentialModal] = useState(false);
@@ -1380,7 +1437,7 @@ export default function HomePage({
   const handleAddUnit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLegalName.trim()) {
-      showToast("error", "Legal Name / Trade Name is mandatory.");
+      showToast("error", "Profession/Trade Name is mandatory.");
       return;
     }
 
@@ -2600,74 +2657,18 @@ export default function HomePage({
     return new Set(potentialUnits.filter((p) => p.status === "ACTIVE").map((p) => p.id));
   }, [potentialUnits]);
 
-  const activePotentialPins = useMemo(() => {
-    return new Set(
-      potentialUnits
-        .filter((p) => p.status === "ACTIVE")
-        .flatMap((p) => [
-          p.pinNumber,
-          p.potentialNumber,
-          p.provincialUin,
-          p.pinNumber ? p.pinNumber.replace(/^Potential-/i, "") : "",
-          p.provincialUin ? p.provincialUin.replace(/^Potential-/i, "") : ""
-        ])
-        .filter(Boolean)
-    );
-  }, [potentialUnits]);
-
-  const activePotentialNames = useMemo(() => {
-    return new Set(
-      potentialUnits
-        .filter((p) => p.status === "ACTIVE")
-        .map((p) => p.legalName.toLowerCase().trim())
-        .filter(Boolean)
-    );
-  }, [potentialUnits]);
-
   const pft3EnrolledUnits = useMemo(() => {
     return units.filter((unit) => {
-      // 1. Strict Statutory Separation: Prospective/potential units belong strictly to Potential Register, never PFT-3
+      // Isolate mock prospective potential units that strictly belong to Potential Register
       if (activePotentialIds.has(unit.id)) return false;
-      if (unit.pinNumber && activePotentialPins.has(unit.pinNumber)) return false;
-      if (unit.demandNumber && activePotentialPins.has(unit.demandNumber)) return false;
-      if (unit.provincialUin && activePotentialPins.has(unit.provincialUin)) return false;
-      if (
-        unit.demandUnit?.permanentDemandNo &&
-        activePotentialPins.has(unit.demandUnit.permanentDemandNo)
-      ) {
-        return false;
-      }
-      if (activePotentialNames.has(unit.legalName.toLowerCase().trim())) return false;
-
-      // 2. If officially registered in Form P.F.T-3 (via database pft3_register_entries or migration flag)
-      if (unit.pft3Registered === true) {
-        return true;
-      }
-
-      // 3. Must be officially approved to appear in Form P.F.T-3
-      return unit.assessments[0]?.status === "APPROVED" && unit.pft3Registered !== false;
+      return true;
     });
-  }, [units, activePotentialIds, activePotentialPins, activePotentialNames]);
+  }, [units, activePotentialIds]);
 
-  const pft3EnrolledUnitIds = useMemo(() => {
-    return new Set(pft3EnrolledUnits.map((u) => u.id));
-  }, [pft3EnrolledUnits]);
-
-  // Clean survey pipeline units excluding both PFT-3 enrolled and active potential register units
+  // Clean survey pipeline units excluding mock potential register units
   const surveyPendingUnits = useMemo(() => {
-    return units.filter(
-      (u) =>
-        !pft3EnrolledUnitIds.has(u.id) &&
-        !activePotentialIds.has(u.id) &&
-        !(u.pinNumber && activePotentialPins.has(u.pinNumber)) &&
-        !(u.demandNumber && activePotentialPins.has(u.demandNumber)) &&
-        !(u.provincialUin && activePotentialPins.has(u.provincialUin)) &&
-        !(
-          u.demandUnit?.permanentDemandNo && activePotentialPins.has(u.demandUnit.permanentDemandNo)
-        ) &&
-        !activePotentialNames.has(u.legalName.toLowerCase().trim())
-    );
-  }, [units, pft3EnrolledUnitIds, activePotentialIds, activePotentialPins, activePotentialNames]);
+    return units.filter((u) => !activePotentialIds.has(u.id));
+  }, [units, activePotentialIds]);
 
   const formPFT3Rows = useMemo(() => {
     return generateFormPFT3Rows(pft3EnrolledUnits);
@@ -2747,6 +2748,57 @@ export default function HomePage({
         }
       }
 
+      // Column-Specific Interactive Filters
+      for (const [k, rawVal] of Object.entries(pft3ColFilters)) {
+        if (!rawVal || !rawVal.trim()) continue;
+        const val = rawVal.trim().toLowerCase();
+        if (k === "permanentDemandNo") {
+          if (!row.permanentDemandNo.toLowerCase().includes(val)) return false;
+        } else if (k === "provincialUin") {
+          if (!(row.provincialUin ?? "").toLowerCase().includes(val)) return false;
+        } else if (k === "legalName") {
+          if (!row.legalName.toLowerCase().includes(val)) return false;
+        } else if (k === "tradeName") {
+          if (!(row.tradeName ?? "").toLowerCase().includes(val)) return false;
+        } else if (k === "scheduleEntry") {
+          const matchEntry = (row.scheduleEntry ?? "").toLowerCase().includes(val);
+          const matchCat = (row.categoryName ?? "").toLowerCase().includes(val);
+          if (!matchEntry && !matchCat) return false;
+        } else if (
+          k === "assessedCurrentTax" ||
+          k === "arrears" ||
+          k === "totalDemand" ||
+          k === "totalPaid" ||
+          k === "outstandingBalance"
+        ) {
+          const num =
+            k === "assessedCurrentTax"
+              ? row.assessedCurrentTax
+              : k === "arrears"
+                ? row.arrears
+                : k === "totalDemand"
+                  ? row.totalDemand
+                  : k === "totalPaid"
+                    ? row.totalPaid
+                    : row.outstandingBalance;
+          if (val.startsWith(">=")) {
+            const thresh = Number(val.slice(2).trim());
+            if (!isNaN(thresh) && num < thresh) return false;
+          } else if (val.startsWith(">")) {
+            const thresh = Number(val.slice(1).trim());
+            if (!isNaN(thresh) && num <= thresh) return false;
+          } else if (val.startsWith("<=")) {
+            const thresh = Number(val.slice(2).trim());
+            if (!isNaN(thresh) && num > thresh) return false;
+          } else if (val.startsWith("<")) {
+            const thresh = Number(val.slice(1).trim());
+            if (!isNaN(thresh) && num >= thresh) return false;
+          } else {
+            if (!String(num).includes(val)) return false;
+          }
+        }
+      }
+
       return true;
     });
   }, [
@@ -2758,6 +2810,7 @@ export default function HomePage({
     pft3LocalityFilter,
     pft3CategoryFilter,
     pft3SubclassFilter,
+    pft3ColFilters,
     officer.jurisdictionName
   ]);
 
@@ -2790,12 +2843,58 @@ export default function HomePage({
     };
   }, [filteredFormPFT3Rows]);
 
-  // Pagination for Form PFT-3 (20 rows per page)
-  const totalPft3Pages = Math.max(1, Math.ceil(filteredFormPFT3Rows.length / PFT3_PAGE_SIZE));
+  // Form PFT-3 Sorting & Pagination (20 rows per page)
+  const sortedFormPFT3Rows = useMemo(() => {
+    if (!pft3SortField) return filteredFormPFT3Rows;
+    const sorted = [...filteredFormPFT3Rows];
+    sorted.sort((a, b) => {
+      const valA = a[pft3SortField];
+      const valB = b[pft3SortField];
+
+      if (pft3SortField === "permanentDemandNo") {
+        const numA = parseInt(String(valA ?? "").replace(/[^0-9]/g, ""), 10) || 0;
+        const numB = parseInt(String(valB ?? "").replace(/[^0-9]/g, ""), 10) || 0;
+        return pft3SortDirection === "asc" ? numA - numB : numB - numA;
+      }
+
+      if (
+        pft3SortField === "assessedCurrentTax" ||
+        pft3SortField === "arrears" ||
+        pft3SortField === "totalDemand" ||
+        pft3SortField === "totalPaid" ||
+        pft3SortField === "outstandingBalance"
+      ) {
+        const numA = Number(valA) || 0;
+        const numB = Number(valB) || 0;
+        return pft3SortDirection === "asc" ? numA - numB : numB - numA;
+      }
+
+      const strA = String(valA ?? "").toLowerCase();
+      const strB = String(valB ?? "").toLowerCase();
+      return pft3SortDirection === "asc" ? strA.localeCompare(strB) : strB.localeCompare(strA);
+    });
+    return sorted;
+  }, [filteredFormPFT3Rows, pft3SortField, pft3SortDirection]);
+
+  const totalPft3Pages = Math.max(1, Math.ceil(sortedFormPFT3Rows.length / PFT3_PAGE_SIZE));
   const paginatedFormPFT3Rows = useMemo(() => {
     const startIndex = (pft3CurrentPage - 1) * PFT3_PAGE_SIZE;
-    return filteredFormPFT3Rows.slice(startIndex, startIndex + PFT3_PAGE_SIZE);
-  }, [filteredFormPFT3Rows, pft3CurrentPage]);
+    return sortedFormPFT3Rows.slice(startIndex, startIndex + PFT3_PAGE_SIZE);
+  }, [sortedFormPFT3Rows, pft3CurrentPage]);
+
+  const handlePft3Sort = (field: Pft3SortField) => {
+    if (pft3SortField === field) {
+      if (pft3SortDirection === "asc") {
+        setPft3SortDirection("desc");
+      } else {
+        setPft3SortField(null);
+        setPft3SortDirection("asc");
+      }
+    } else {
+      setPft3SortField(field);
+      setPft3SortDirection("asc");
+    }
+  };
 
   const handleExecutePft3Search = () => {
     setPft3SearchExecuted(true);
@@ -2809,6 +2908,7 @@ export default function HomePage({
     setPft3LocalityFilter("ALL");
     setPft3CategoryFilter("ALL");
     setPft3SubclassFilter("ALL");
+    setPft3ColFilters({});
     setPft3CurrentPage(1);
     setPft3SearchExecuted(false);
   };
@@ -2939,6 +3039,56 @@ export default function HomePage({
           return false;
         }
       }
+
+      // Column-Specific Interactive Filters
+      for (const [k, rawVal] of Object.entries(potentialColFilters)) {
+        if (!rawVal || !rawVal.trim()) continue;
+        const val = rawVal.trim().toLowerCase();
+        if (k === "potentialNumber") {
+          if (!u.potentialNumber.toLowerCase().includes(val)) return false;
+        } else if (k === "pinNumber") {
+          if (!u.pinNumber.toLowerCase().includes(val)) return false;
+        } else if (k === "legalName") {
+          if (!u.legalName.toLowerCase().includes(val)) return false;
+        } else if (k === "taxpayerName") {
+          const matchTaxpayer = (u.taxpayerName ?? "").toLowerCase().includes(val);
+          const matchTrade = (u.tradeName ?? "").toLowerCase().includes(val);
+          if (!matchTaxpayer && !matchTrade) return false;
+        } else if (k === "identifierValue") {
+          if (!u.identifierValue.toLowerCase().includes(val)) return false;
+        } else if (k === "address") {
+          if (!(u.address ?? "").toLowerCase().includes(val)) return false;
+        } else if (k === "categoryName") {
+          const matchCat = (u.categoryName ?? "").toLowerCase().includes(val);
+          const matchSub = (u.subclassificationName ?? "").toLowerCase().includes(val);
+          if (!matchCat && !matchSub) return false;
+        } else if (k === "annualRatePkr" || k === "openingArrears" || k === "totalDemand") {
+          const num =
+            k === "annualRatePkr"
+              ? u.annualRatePkr
+              : k === "openingArrears"
+                ? (u.openingArrears ?? 0)
+                : u.annualRatePkr + (u.openingArrears ?? 0);
+          if (val.startsWith(">=")) {
+            const thresh = Number(val.slice(2).trim());
+            if (!isNaN(thresh) && num < thresh) return false;
+          } else if (val.startsWith(">")) {
+            const thresh = Number(val.slice(1).trim());
+            if (!isNaN(thresh) && num <= thresh) return false;
+          } else if (val.startsWith("<=")) {
+            const thresh = Number(val.slice(2).trim());
+            if (!isNaN(thresh) && num > thresh) return false;
+          } else if (val.startsWith("<")) {
+            const thresh = Number(val.slice(1).trim());
+            if (!isNaN(thresh) && num >= thresh) return false;
+          } else {
+            if (!String(num).includes(val)) return false;
+          }
+        } else if (k === "status") {
+          if (!u.status.toLowerCase().includes(val)) return false;
+        }
+      }
+
       return true;
     });
   }, [
@@ -2948,7 +3098,8 @@ export default function HomePage({
     potentialLocalityFilter,
     potentialClassificationFilter,
     potentialSubclassFilter,
-    potentialSearchQuery
+    potentialSearchQuery,
+    potentialColFilters
   ]);
 
   const potentialAvailableSubclasses = useMemo(() => {
@@ -2996,14 +3147,67 @@ export default function HomePage({
     };
   }, [filteredPotentialUnits, potentialUnits, pft2Challans]);
 
+  // Potential Register Sorting & Pagination (20 rows per page)
+  const sortedPotentialUnits = useMemo(() => {
+    if (!potentialSortField) return filteredPotentialUnits;
+    const sorted = [...filteredPotentialUnits];
+    sorted.sort((a, b) => {
+      if (potentialSortField === "potentialNumber") {
+        const numA = parseInt(String(a.potentialNumber ?? "").replace(/[^0-9]/g, ""), 10) || 0;
+        const numB = parseInt(String(b.potentialNumber ?? "").replace(/[^0-9]/g, ""), 10) || 0;
+        return potentialSortDirection === "asc" ? numA - numB : numB - numA;
+      }
+
+      if (
+        potentialSortField === "annualRatePkr" ||
+        potentialSortField === "openingArrears" ||
+        potentialSortField === "totalDemand"
+      ) {
+        const numA =
+          potentialSortField === "annualRatePkr"
+            ? a.annualRatePkr
+            : potentialSortField === "openingArrears"
+              ? (a.openingArrears ?? 0)
+              : a.annualRatePkr + (a.openingArrears ?? 0);
+        const numB =
+          potentialSortField === "annualRatePkr"
+            ? b.annualRatePkr
+            : potentialSortField === "openingArrears"
+              ? (b.openingArrears ?? 0)
+              : b.annualRatePkr + (b.openingArrears ?? 0);
+        return potentialSortDirection === "asc" ? numA - numB : numB - numA;
+      }
+
+      const key = potentialSortField as keyof PotentialUnitRecord;
+      const strA = String(a[key] ?? "").toLowerCase();
+      const strB = String(b[key] ?? "").toLowerCase();
+      return potentialSortDirection === "asc" ? strA.localeCompare(strB) : strB.localeCompare(strA);
+    });
+    return sorted;
+  }, [filteredPotentialUnits, potentialSortField, potentialSortDirection]);
+
   const totalPotentialPages = Math.max(
     1,
-    Math.ceil(filteredPotentialUnits.length / POTENTIAL_PAGE_SIZE)
+    Math.ceil(sortedPotentialUnits.length / POTENTIAL_PAGE_SIZE)
   );
   const paginatedPotentialUnits = useMemo(() => {
     const startIndex = (potentialCurrentPage - 1) * POTENTIAL_PAGE_SIZE;
-    return filteredPotentialUnits.slice(startIndex, startIndex + POTENTIAL_PAGE_SIZE);
-  }, [filteredPotentialUnits, potentialCurrentPage]);
+    return sortedPotentialUnits.slice(startIndex, startIndex + POTENTIAL_PAGE_SIZE);
+  }, [sortedPotentialUnits, potentialCurrentPage]);
+
+  const handlePotentialSort = (field: PotentialSortField) => {
+    if (potentialSortField === field) {
+      if (potentialSortDirection === "asc") {
+        setPotentialSortDirection("desc");
+      } else {
+        setPotentialSortField(null);
+        setPotentialSortDirection("asc");
+      }
+    } else {
+      setPotentialSortField(field);
+      setPotentialSortDirection("asc");
+    }
+  };
 
   const handleResetPotentialFilters = () => {
     setPotentialSearchQuery("");
@@ -3012,6 +3216,7 @@ export default function HomePage({
     setPotentialLocalityFilter("ALL");
     setPotentialClassificationFilter("ALL");
     setPotentialSubclassFilter("ALL");
+    setPotentialColFilters({});
     setPotentialCurrentPage(1);
   };
 
@@ -3177,7 +3382,7 @@ export default function HomePage({
             columns: [
               { header: "Sr.", width: 8, align: "center" as const },
               { header: "Demand Number", width: 24, align: "left" as const },
-              { header: "Legal Name", width: 55, align: "left" as const },
+              { header: "Profession/Trade Name", width: 55, align: "left" as const },
               { header: "Category", width: 45, align: "left" as const },
               { header: "Overdue", width: 20, align: "center" as const },
               { header: "Current", width: 26, align: "right" as const },
@@ -3206,7 +3411,7 @@ export default function HomePage({
               { header: "Sr.", width: 8, align: "center" as const },
               { header: "Notice No", width: 38, align: "left" as const },
               { header: "Demand Number", width: 26, align: "left" as const },
-              { header: "Legal Name", width: 60, align: "left" as const },
+              { header: "Profession/Trade Name", width: 60, align: "left" as const },
               { header: "Amount (PKR)", width: 25, align: "right" as const },
               { header: "Due Date", width: 24, align: "center" as const },
               { header: "Server", width: 46, align: "left" as const },
@@ -3250,7 +3455,7 @@ export default function HomePage({
             columns: [
               { header: "Sr.", width: 8, align: "center" as const },
               { header: "Certificate No", width: 40, align: "left" as const },
-              { header: "Legal Name", width: 60, align: "left" as const },
+              { header: "Profession/Trade Name", width: 60, align: "left" as const },
               { header: "CNIC/NTN", width: 30, align: "left" as const },
               { header: "FY", width: 22, align: "center" as const },
               { header: "Issue Date", width: 24, align: "center" as const },
@@ -3285,7 +3490,7 @@ export default function HomePage({
             columns: [
               { header: "Sr.", width: 8, align: "center" as const },
               { header: "Notice No", width: 40, align: "left" as const },
-              { header: "Legal Name", width: 65, align: "left" as const },
+              { header: "Profession/Trade Name", width: 65, align: "left" as const },
               { header: "Date", width: 30, align: "center" as const },
               { header: "Status", width: 40, align: "center" as const },
               { header: "Grounds / Reason", width: 94, align: "left" as const }
@@ -4619,7 +4824,7 @@ export default function HomePage({
   const handleAddPotentialUnit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!potNewLegalName.trim()) {
-      showToast("error", "Legal Name / Trade Name is mandatory.");
+      showToast("error", "Profession/Trade Name is mandatory.");
       return;
     }
 
@@ -6535,7 +6740,7 @@ export default function HomePage({
                   <div style={{ flex: "1 1 16rem" }}>
                     <input
                       type="text"
-                      placeholder="Search by Legal Name, Taxpayer / Proprietor, CNIC, NTN, PIN, or Demand Number..."
+                      placeholder="Search by Profession/Trade Name, Taxpayer / Proprietor, CNIC, NTN, PIN, or Demand Number..."
                       value={unitsSearchQuery}
                       onChange={(e) => setUnitsSearchQuery(e.target.value)}
                       style={{
@@ -6644,7 +6849,7 @@ export default function HomePage({
                         <th style={{ whiteSpace: "nowrap" }}>Demand Number</th>
                         <th style={{ whiteSpace: "nowrap" }}>PIN</th>
                         <th style={{ maxWidth: "13rem" }}>
-                          Legal Name &amp; Taxpayer / Proprietor
+                          Profession/Trade Name &amp; Taxpayer / Proprietor
                         </th>
                         <th style={{ whiteSpace: "nowrap" }}>CNIC / NTN</th>
                         <th style={{ maxWidth: "15rem" }}>Second Schedule Classification</th>
@@ -7726,10 +7931,38 @@ export default function HomePage({
                 </button>
                 <button
                   type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowPotentialColFilters((v) => !v)}
+                  title="Toggle per-column filter inputs"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.35rem"
+                  }}
+                >
+                  <span>🔍</span>
+                  <span>{showPotentialColFilters ? "Hide Column Filters" : "Column Filters"}</span>
+                  {activePotentialColFilterCount > 0 && (
+                    <span
+                      style={{
+                        background: "#b45309",
+                        color: "#fff",
+                        borderRadius: "999px",
+                        padding: "0.1rem 0.45rem",
+                        fontSize: "0.7rem",
+                        fontWeight: 700
+                      }}
+                    >
+                      {activePotentialColFilterCount}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
                   className="btn-primary"
                   onClick={() => {
                     const csvRows = [
-                      "Potential No,Provisional PIN,Legal Name,Trade Name,Identifier Type,Identifier Value,District,Circle,Tehsil,Locality,Commercial Address,Category Code,Statutory Category,Subclass Code,Annual Rate PKR,Arrears PKR,Total Potential Demand PKR,Status,Remarks",
+                      "Potential No,Provisional PIN,Profession/Trade Name,Trade Name,Identifier Type,Identifier Value,District,Circle,Tehsil,Locality,Commercial Address,Category Code,Statutory Category,Subclass Code,Annual Rate PKR,Arrears PKR,Total Potential Demand PKR,Status,Remarks",
                       ...filteredPotentialUnits.map((u) =>
                         [
                           `"${u.potentialNumber}"`,
@@ -8086,19 +8319,853 @@ export default function HomePage({
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th style={{ whiteSpace: "nowrap" }}>Potential No.</th>
-                    <th style={{ whiteSpace: "nowrap" }}>PIN</th>
-                    <th>Legal Name / Trade Name</th>
-                    <th>Taxpayer / Assessee</th>
-                    <th>Identifier (CNIC/NTN)</th>
-                    <th>Location &amp; Locality</th>
-                    <th>Statutory Classification</th>
-                    <th style={{ textAlign: "right" }}>Annual Rate</th>
-                    <th style={{ textAlign: "right" }}>Arrears</th>
-                    <th style={{ textAlign: "right" }}>Total Demand</th>
-                    <th>Pipeline Status</th>
+                    <th
+                      style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+                      title="Click to sort by Potential No."
+                    >
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                        <span onClick={() => handlePotentialSort("potentialNumber")}>
+                          Potential No.
+                        </span>
+                        <span
+                          onClick={() => handlePotentialSort("potentialNumber")}
+                          style={{
+                            fontSize: "0.75rem",
+                            color: potentialSortField === "potentialNumber" ? "#b45309" : "#94a3b8"
+                          }}
+                        >
+                          {potentialSortField === "potentialNumber"
+                            ? potentialSortDirection === "asc"
+                              ? "▲"
+                              : "▼"
+                            : "⇅"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowPotentialColFilters(true);
+                          }}
+                          style={{
+                            background: potentialColFilters.potentialNumber
+                              ? "#fef3c7"
+                              : "transparent",
+                            border: potentialColFilters.potentialNumber
+                              ? "1px solid #fcd34d"
+                              : "none",
+                            borderRadius: "3px",
+                            cursor: "pointer",
+                            padding: "0.1rem 0.25rem",
+                            fontSize: "0.72rem",
+                            color: potentialColFilters.potentialNumber ? "#b45309" : "#94a3b8",
+                            lineHeight: 1
+                          }}
+                          title={
+                            potentialColFilters.potentialNumber
+                              ? `Filtered: "${potentialColFilters.potentialNumber}"`
+                              : "Filter Potential No."
+                          }
+                        >
+                          🔍
+                        </button>
+                      </div>
+                    </th>
+                    <th
+                      style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+                      title="Click to sort by PIN"
+                    >
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                        <span onClick={() => handlePotentialSort("pinNumber")}>PIN</span>
+                        <span
+                          onClick={() => handlePotentialSort("pinNumber")}
+                          style={{
+                            fontSize: "0.75rem",
+                            color: potentialSortField === "pinNumber" ? "#b45309" : "#94a3b8"
+                          }}
+                        >
+                          {potentialSortField === "pinNumber"
+                            ? potentialSortDirection === "asc"
+                              ? "▲"
+                              : "▼"
+                            : "⇅"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowPotentialColFilters(true);
+                          }}
+                          style={{
+                            background: potentialColFilters.pinNumber ? "#fef3c7" : "transparent",
+                            border: potentialColFilters.pinNumber ? "1px solid #fcd34d" : "none",
+                            borderRadius: "3px",
+                            cursor: "pointer",
+                            padding: "0.1rem 0.25rem",
+                            fontSize: "0.72rem",
+                            color: potentialColFilters.pinNumber ? "#b45309" : "#94a3b8",
+                            lineHeight: 1
+                          }}
+                          title={
+                            potentialColFilters.pinNumber
+                              ? `Filtered: "${potentialColFilters.pinNumber}"`
+                              : "Filter PIN"
+                          }
+                        >
+                          🔍
+                        </button>
+                      </div>
+                    </th>
+                    <th
+                      style={{ cursor: "pointer", userSelect: "none" }}
+                      title="Click to sort by Profession/Trade Name"
+                    >
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                        <span onClick={() => handlePotentialSort("legalName")}>
+                          Profession/Trade Name
+                        </span>
+                        <span
+                          onClick={() => handlePotentialSort("legalName")}
+                          style={{
+                            fontSize: "0.75rem",
+                            color: potentialSortField === "legalName" ? "#b45309" : "#94a3b8"
+                          }}
+                        >
+                          {potentialSortField === "legalName"
+                            ? potentialSortDirection === "asc"
+                              ? "▲"
+                              : "▼"
+                            : "⇅"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowPotentialColFilters(true);
+                          }}
+                          style={{
+                            background: potentialColFilters.legalName ? "#fef3c7" : "transparent",
+                            border: potentialColFilters.legalName ? "1px solid #fcd34d" : "none",
+                            borderRadius: "3px",
+                            cursor: "pointer",
+                            padding: "0.1rem 0.25rem",
+                            fontSize: "0.72rem",
+                            color: potentialColFilters.legalName ? "#b45309" : "#94a3b8",
+                            lineHeight: 1
+                          }}
+                          title={
+                            potentialColFilters.legalName
+                              ? `Filtered: "${potentialColFilters.legalName}"`
+                              : "Filter Profession/Trade Name"
+                          }
+                        >
+                          🔍
+                        </button>
+                      </div>
+                    </th>
+                    <th
+                      style={{ cursor: "pointer", userSelect: "none" }}
+                      title="Click to sort by Taxpayer / Assessee"
+                    >
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                        <span onClick={() => handlePotentialSort("taxpayerName")}>
+                          Taxpayer / Assessee
+                        </span>
+                        <span
+                          onClick={() => handlePotentialSort("taxpayerName")}
+                          style={{
+                            fontSize: "0.75rem",
+                            color: potentialSortField === "taxpayerName" ? "#b45309" : "#94a3b8"
+                          }}
+                        >
+                          {potentialSortField === "taxpayerName"
+                            ? potentialSortDirection === "asc"
+                              ? "▲"
+                              : "▼"
+                            : "⇅"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowPotentialColFilters(true);
+                          }}
+                          style={{
+                            background: potentialColFilters.taxpayerName
+                              ? "#fef3c7"
+                              : "transparent",
+                            border: potentialColFilters.taxpayerName ? "1px solid #fcd34d" : "none",
+                            borderRadius: "3px",
+                            cursor: "pointer",
+                            padding: "0.1rem 0.25rem",
+                            fontSize: "0.72rem",
+                            color: potentialColFilters.taxpayerName ? "#b45309" : "#94a3b8",
+                            lineHeight: 1
+                          }}
+                          title={
+                            potentialColFilters.taxpayerName
+                              ? `Filtered: "${potentialColFilters.taxpayerName}"`
+                              : "Filter Taxpayer / Assessee"
+                          }
+                        >
+                          🔍
+                        </button>
+                      </div>
+                    </th>
+                    <th
+                      style={{ cursor: "pointer", userSelect: "none" }}
+                      title="Click to sort by Identifier"
+                    >
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                        <span onClick={() => handlePotentialSort("identifierValue")}>
+                          Identifier (CNIC/NTN)
+                        </span>
+                        <span
+                          onClick={() => handlePotentialSort("identifierValue")}
+                          style={{
+                            fontSize: "0.75rem",
+                            color: potentialSortField === "identifierValue" ? "#b45309" : "#94a3b8"
+                          }}
+                        >
+                          {potentialSortField === "identifierValue"
+                            ? potentialSortDirection === "asc"
+                              ? "▲"
+                              : "▼"
+                            : "⇅"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowPotentialColFilters(true);
+                          }}
+                          style={{
+                            background: potentialColFilters.identifierValue
+                              ? "#fef3c7"
+                              : "transparent",
+                            border: potentialColFilters.identifierValue
+                              ? "1px solid #fcd34d"
+                              : "none",
+                            borderRadius: "3px",
+                            cursor: "pointer",
+                            padding: "0.1rem 0.25rem",
+                            fontSize: "0.72rem",
+                            color: potentialColFilters.identifierValue ? "#b45309" : "#94a3b8",
+                            lineHeight: 1
+                          }}
+                          title={
+                            potentialColFilters.identifierValue
+                              ? `Filtered: "${potentialColFilters.identifierValue}"`
+                              : "Filter Identifier"
+                          }
+                        >
+                          🔍
+                        </button>
+                      </div>
+                    </th>
+                    <th
+                      style={{ cursor: "pointer", userSelect: "none" }}
+                      title="Click to sort by Location & Locality"
+                    >
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                        <span onClick={() => handlePotentialSort("address")}>
+                          Location &amp; Locality
+                        </span>
+                        <span
+                          onClick={() => handlePotentialSort("address")}
+                          style={{
+                            fontSize: "0.75rem",
+                            color: potentialSortField === "address" ? "#b45309" : "#94a3b8"
+                          }}
+                        >
+                          {potentialSortField === "address"
+                            ? potentialSortDirection === "asc"
+                              ? "▲"
+                              : "▼"
+                            : "⇅"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowPotentialColFilters(true);
+                          }}
+                          style={{
+                            background: potentialColFilters.address ? "#fef3c7" : "transparent",
+                            border: potentialColFilters.address ? "1px solid #fcd34d" : "none",
+                            borderRadius: "3px",
+                            cursor: "pointer",
+                            padding: "0.1rem 0.25rem",
+                            fontSize: "0.72rem",
+                            color: potentialColFilters.address ? "#b45309" : "#94a3b8",
+                            lineHeight: 1
+                          }}
+                          title={
+                            potentialColFilters.address
+                              ? `Filtered: "${potentialColFilters.address}"`
+                              : "Filter Location & Locality"
+                          }
+                        >
+                          🔍
+                        </button>
+                      </div>
+                    </th>
+                    <th
+                      style={{ cursor: "pointer", userSelect: "none" }}
+                      title="Click to sort by Classification"
+                    >
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                        <span onClick={() => handlePotentialSort("categoryName")}>
+                          Statutory Classification
+                        </span>
+                        <span
+                          onClick={() => handlePotentialSort("categoryName")}
+                          style={{
+                            fontSize: "0.75rem",
+                            color: potentialSortField === "categoryName" ? "#b45309" : "#94a3b8"
+                          }}
+                        >
+                          {potentialSortField === "categoryName"
+                            ? potentialSortDirection === "asc"
+                              ? "▲"
+                              : "▼"
+                            : "⇅"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowPotentialColFilters(true);
+                          }}
+                          style={{
+                            background: potentialColFilters.categoryName
+                              ? "#fef3c7"
+                              : "transparent",
+                            border: potentialColFilters.categoryName ? "1px solid #fcd34d" : "none",
+                            borderRadius: "3px",
+                            cursor: "pointer",
+                            padding: "0.1rem 0.25rem",
+                            fontSize: "0.72rem",
+                            color: potentialColFilters.categoryName ? "#b45309" : "#94a3b8",
+                            lineHeight: 1
+                          }}
+                          title={
+                            potentialColFilters.categoryName
+                              ? `Filtered: "${potentialColFilters.categoryName}"`
+                              : "Filter Classification"
+                          }
+                        >
+                          🔍
+                        </button>
+                      </div>
+                    </th>
+                    <th
+                      style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
+                      title="Click to sort by Annual Rate"
+                    >
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          justifyContent: "flex-end"
+                        }}
+                      >
+                        <span onClick={() => handlePotentialSort("annualRatePkr")}>
+                          Annual Rate
+                        </span>
+                        <span
+                          onClick={() => handlePotentialSort("annualRatePkr")}
+                          style={{
+                            fontSize: "0.75rem",
+                            color: potentialSortField === "annualRatePkr" ? "#b45309" : "#94a3b8"
+                          }}
+                        >
+                          {potentialSortField === "annualRatePkr"
+                            ? potentialSortDirection === "asc"
+                              ? "▲"
+                              : "▼"
+                            : "⇅"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowPotentialColFilters(true);
+                          }}
+                          style={{
+                            background: potentialColFilters.annualRatePkr
+                              ? "#fef3c7"
+                              : "transparent",
+                            border: potentialColFilters.annualRatePkr
+                              ? "1px solid #fcd34d"
+                              : "none",
+                            borderRadius: "3px",
+                            cursor: "pointer",
+                            padding: "0.1rem 0.25rem",
+                            fontSize: "0.72rem",
+                            color: potentialColFilters.annualRatePkr ? "#b45309" : "#94a3b8",
+                            lineHeight: 1
+                          }}
+                          title={
+                            potentialColFilters.annualRatePkr
+                              ? `Filtered: "${potentialColFilters.annualRatePkr}"`
+                              : "Filter Annual Rate"
+                          }
+                        >
+                          🔍
+                        </button>
+                      </div>
+                    </th>
+                    <th
+                      style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
+                      title="Click to sort by Arrears"
+                    >
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          justifyContent: "flex-end"
+                        }}
+                      >
+                        <span onClick={() => handlePotentialSort("openingArrears")}>Arrears</span>
+                        <span
+                          onClick={() => handlePotentialSort("openingArrears")}
+                          style={{
+                            fontSize: "0.75rem",
+                            color: potentialSortField === "openingArrears" ? "#b45309" : "#94a3b8"
+                          }}
+                        >
+                          {potentialSortField === "openingArrears"
+                            ? potentialSortDirection === "asc"
+                              ? "▲"
+                              : "▼"
+                            : "⇅"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowPotentialColFilters(true);
+                          }}
+                          style={{
+                            background: potentialColFilters.openingArrears
+                              ? "#fef3c7"
+                              : "transparent",
+                            border: potentialColFilters.openingArrears
+                              ? "1px solid #fcd34d"
+                              : "none",
+                            borderRadius: "3px",
+                            cursor: "pointer",
+                            padding: "0.1rem 0.25rem",
+                            fontSize: "0.72rem",
+                            color: potentialColFilters.openingArrears ? "#b45309" : "#94a3b8",
+                            lineHeight: 1
+                          }}
+                          title={
+                            potentialColFilters.openingArrears
+                              ? `Filtered: "${potentialColFilters.openingArrears}"`
+                              : "Filter Arrears"
+                          }
+                        >
+                          🔍
+                        </button>
+                      </div>
+                    </th>
+                    <th
+                      style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
+                      title="Click to sort by Total Demand"
+                    >
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          justifyContent: "flex-end"
+                        }}
+                      >
+                        <span onClick={() => handlePotentialSort("totalDemand")}>Total Demand</span>
+                        <span
+                          onClick={() => handlePotentialSort("totalDemand")}
+                          style={{
+                            fontSize: "0.75rem",
+                            color: potentialSortField === "totalDemand" ? "#b45309" : "#94a3b8"
+                          }}
+                        >
+                          {potentialSortField === "totalDemand"
+                            ? potentialSortDirection === "asc"
+                              ? "▲"
+                              : "▼"
+                            : "⇅"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowPotentialColFilters(true);
+                          }}
+                          style={{
+                            background: potentialColFilters.totalDemand ? "#fef3c7" : "transparent",
+                            border: potentialColFilters.totalDemand ? "1px solid #fcd34d" : "none",
+                            borderRadius: "3px",
+                            cursor: "pointer",
+                            padding: "0.1rem 0.25rem",
+                            fontSize: "0.72rem",
+                            color: potentialColFilters.totalDemand ? "#b45309" : "#94a3b8",
+                            lineHeight: 1
+                          }}
+                          title={
+                            potentialColFilters.totalDemand
+                              ? `Filtered: "${potentialColFilters.totalDemand}"`
+                              : "Filter Total Demand"
+                          }
+                        >
+                          🔍
+                        </button>
+                      </div>
+                    </th>
+                    <th
+                      style={{ cursor: "pointer", userSelect: "none" }}
+                      title="Click to sort by Pipeline Status"
+                    >
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                        <span onClick={() => handlePotentialSort("status")}>Pipeline Status</span>
+                        <span
+                          onClick={() => handlePotentialSort("status")}
+                          style={{
+                            fontSize: "0.75rem",
+                            color: potentialSortField === "status" ? "#b45309" : "#94a3b8"
+                          }}
+                        >
+                          {potentialSortField === "status"
+                            ? potentialSortDirection === "asc"
+                              ? "▲"
+                              : "▼"
+                            : "⇅"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowPotentialColFilters(true);
+                          }}
+                          style={{
+                            background: potentialColFilters.status ? "#fef3c7" : "transparent",
+                            border: potentialColFilters.status ? "1px solid #fcd34d" : "none",
+                            borderRadius: "3px",
+                            cursor: "pointer",
+                            padding: "0.1rem 0.25rem",
+                            fontSize: "0.72rem",
+                            color: potentialColFilters.status ? "#b45309" : "#94a3b8",
+                            lineHeight: 1
+                          }}
+                          title={
+                            potentialColFilters.status
+                              ? `Filtered: "${potentialColFilters.status}"`
+                              : "Filter Status"
+                          }
+                        >
+                          🔍
+                        </button>
+                      </div>
+                    </th>
                     <th style={{ textAlign: "right" }}>Actions</th>
                   </tr>
+                  {showPotentialColFilters && (
+                    <tr style={{ background: "#f8fafc", borderBottom: "2px solid #cbd5e1" }}>
+                      <th style={{ padding: "0.3rem 0.35rem" }}>
+                        <input
+                          type="text"
+                          placeholder="Filter #..."
+                          value={potentialColFilters.potentialNumber || ""}
+                          onChange={(e) => {
+                            setPotentialColFilters((prev) => ({
+                              ...prev,
+                              potentialNumber: e.target.value
+                            }));
+                            setPotentialCurrentPage(1);
+                          }}
+                          style={{
+                            width: "100%",
+                            fontSize: "0.75rem",
+                            padding: "0.2rem 0.35rem",
+                            borderRadius: "4px",
+                            border: potentialColFilters.potentialNumber
+                              ? "1px solid #b45309"
+                              : "1px solid #cbd5e1",
+                            background: potentialColFilters.potentialNumber ? "#fef3c7" : "#fff"
+                          }}
+                        />
+                      </th>
+                      <th style={{ padding: "0.3rem 0.35rem" }}>
+                        <input
+                          type="text"
+                          placeholder="Filter PIN..."
+                          value={potentialColFilters.pinNumber || ""}
+                          onChange={(e) => {
+                            setPotentialColFilters((prev) => ({
+                              ...prev,
+                              pinNumber: e.target.value
+                            }));
+                            setPotentialCurrentPage(1);
+                          }}
+                          style={{
+                            width: "100%",
+                            fontSize: "0.75rem",
+                            padding: "0.2rem 0.35rem",
+                            borderRadius: "4px",
+                            border: potentialColFilters.pinNumber
+                              ? "1px solid #b45309"
+                              : "1px solid #cbd5e1",
+                            background: potentialColFilters.pinNumber ? "#fef3c7" : "#fff"
+                          }}
+                        />
+                      </th>
+                      <th style={{ padding: "0.3rem 0.35rem" }}>
+                        <input
+                          type="text"
+                          placeholder="Filter Profession..."
+                          value={potentialColFilters.legalName || ""}
+                          onChange={(e) => {
+                            setPotentialColFilters((prev) => ({
+                              ...prev,
+                              legalName: e.target.value
+                            }));
+                            setPotentialCurrentPage(1);
+                          }}
+                          style={{
+                            width: "100%",
+                            fontSize: "0.75rem",
+                            padding: "0.2rem 0.35rem",
+                            borderRadius: "4px",
+                            border: potentialColFilters.legalName
+                              ? "1px solid #b45309"
+                              : "1px solid #cbd5e1",
+                            background: potentialColFilters.legalName ? "#fef3c7" : "#fff"
+                          }}
+                        />
+                      </th>
+                      <th style={{ padding: "0.3rem 0.35rem" }}>
+                        <input
+                          type="text"
+                          placeholder="Filter Taxpayer..."
+                          value={potentialColFilters.taxpayerName || ""}
+                          onChange={(e) => {
+                            setPotentialColFilters((prev) => ({
+                              ...prev,
+                              taxpayerName: e.target.value
+                            }));
+                            setPotentialCurrentPage(1);
+                          }}
+                          style={{
+                            width: "100%",
+                            fontSize: "0.75rem",
+                            padding: "0.2rem 0.35rem",
+                            borderRadius: "4px",
+                            border: potentialColFilters.taxpayerName
+                              ? "1px solid #b45309"
+                              : "1px solid #cbd5e1",
+                            background: potentialColFilters.taxpayerName ? "#fef3c7" : "#fff"
+                          }}
+                        />
+                      </th>
+                      <th style={{ padding: "0.3rem 0.35rem" }}>
+                        <input
+                          type="text"
+                          placeholder="Filter ID..."
+                          value={potentialColFilters.identifierValue || ""}
+                          onChange={(e) => {
+                            setPotentialColFilters((prev) => ({
+                              ...prev,
+                              identifierValue: e.target.value
+                            }));
+                            setPotentialCurrentPage(1);
+                          }}
+                          style={{
+                            width: "100%",
+                            fontSize: "0.75rem",
+                            padding: "0.2rem 0.35rem",
+                            borderRadius: "4px",
+                            border: potentialColFilters.identifierValue
+                              ? "1px solid #b45309"
+                              : "1px solid #cbd5e1",
+                            background: potentialColFilters.identifierValue ? "#fef3c7" : "#fff"
+                          }}
+                        />
+                      </th>
+                      <th style={{ padding: "0.3rem 0.35rem" }}>
+                        <input
+                          type="text"
+                          placeholder="Filter Location..."
+                          value={potentialColFilters.address || ""}
+                          onChange={(e) => {
+                            setPotentialColFilters((prev) => ({
+                              ...prev,
+                              address: e.target.value
+                            }));
+                            setPotentialCurrentPage(1);
+                          }}
+                          style={{
+                            width: "100%",
+                            fontSize: "0.75rem",
+                            padding: "0.2rem 0.35rem",
+                            borderRadius: "4px",
+                            border: potentialColFilters.address
+                              ? "1px solid #b45309"
+                              : "1px solid #cbd5e1",
+                            background: potentialColFilters.address ? "#fef3c7" : "#fff"
+                          }}
+                        />
+                      </th>
+                      <th style={{ padding: "0.3rem 0.35rem" }}>
+                        <input
+                          type="text"
+                          placeholder="Filter Class..."
+                          value={potentialColFilters.categoryName || ""}
+                          onChange={(e) => {
+                            setPotentialColFilters((prev) => ({
+                              ...prev,
+                              categoryName: e.target.value
+                            }));
+                            setPotentialCurrentPage(1);
+                          }}
+                          style={{
+                            width: "100%",
+                            fontSize: "0.75rem",
+                            padding: "0.2rem 0.35rem",
+                            borderRadius: "4px",
+                            border: potentialColFilters.categoryName
+                              ? "1px solid #b45309"
+                              : "1px solid #cbd5e1",
+                            background: potentialColFilters.categoryName ? "#fef3c7" : "#fff"
+                          }}
+                        />
+                      </th>
+                      <th style={{ padding: "0.3rem 0.35rem" }}>
+                        <input
+                          type="text"
+                          placeholder="> or exact..."
+                          value={potentialColFilters.annualRatePkr || ""}
+                          onChange={(e) => {
+                            setPotentialColFilters((prev) => ({
+                              ...prev,
+                              annualRatePkr: e.target.value
+                            }));
+                            setPotentialCurrentPage(1);
+                          }}
+                          style={{
+                            width: "100%",
+                            fontSize: "0.75rem",
+                            padding: "0.2rem 0.35rem",
+                            borderRadius: "4px",
+                            border: potentialColFilters.annualRatePkr
+                              ? "1px solid #b45309"
+                              : "1px solid #cbd5e1",
+                            background: potentialColFilters.annualRatePkr ? "#fef3c7" : "#fff",
+                            textAlign: "right"
+                          }}
+                        />
+                      </th>
+                      <th style={{ padding: "0.3rem 0.35rem" }}>
+                        <input
+                          type="text"
+                          placeholder="> or exact..."
+                          value={potentialColFilters.openingArrears || ""}
+                          onChange={(e) => {
+                            setPotentialColFilters((prev) => ({
+                              ...prev,
+                              openingArrears: e.target.value
+                            }));
+                            setPotentialCurrentPage(1);
+                          }}
+                          style={{
+                            width: "100%",
+                            fontSize: "0.75rem",
+                            padding: "0.2rem 0.35rem",
+                            borderRadius: "4px",
+                            border: potentialColFilters.openingArrears
+                              ? "1px solid #b45309"
+                              : "1px solid #cbd5e1",
+                            background: potentialColFilters.openingArrears ? "#fef3c7" : "#fff",
+                            textAlign: "right"
+                          }}
+                        />
+                      </th>
+                      <th style={{ padding: "0.3rem 0.35rem" }}>
+                        <input
+                          type="text"
+                          placeholder="> or exact..."
+                          value={potentialColFilters.totalDemand || ""}
+                          onChange={(e) => {
+                            setPotentialColFilters((prev) => ({
+                              ...prev,
+                              totalDemand: e.target.value
+                            }));
+                            setPotentialCurrentPage(1);
+                          }}
+                          style={{
+                            width: "100%",
+                            fontSize: "0.75rem",
+                            padding: "0.2rem 0.35rem",
+                            borderRadius: "4px",
+                            border: potentialColFilters.totalDemand
+                              ? "1px solid #b45309"
+                              : "1px solid #cbd5e1",
+                            background: potentialColFilters.totalDemand ? "#fef3c7" : "#fff",
+                            textAlign: "right"
+                          }}
+                        />
+                      </th>
+                      <th style={{ padding: "0.3rem 0.35rem" }}>
+                        <input
+                          type="text"
+                          placeholder="Filter Status..."
+                          value={potentialColFilters.status || ""}
+                          onChange={(e) => {
+                            setPotentialColFilters((prev) => ({ ...prev, status: e.target.value }));
+                            setPotentialCurrentPage(1);
+                          }}
+                          style={{
+                            width: "100%",
+                            fontSize: "0.75rem",
+                            padding: "0.2rem 0.35rem",
+                            borderRadius: "4px",
+                            border: potentialColFilters.status
+                              ? "1px solid #b45309"
+                              : "1px solid #cbd5e1",
+                            background: potentialColFilters.status ? "#fef3c7" : "#fff"
+                          }}
+                        />
+                      </th>
+                      <th style={{ padding: "0.3rem 0.35rem", textAlign: "right" }}>
+                        {activePotentialColFilterCount > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPotentialColFilters({});
+                              setPotentialCurrentPage(1);
+                            }}
+                            style={{
+                              background: "#fee2e2",
+                              color: "#991b1b",
+                              border: "1px solid #fecaca",
+                              borderRadius: "4px",
+                              fontSize: "0.72rem",
+                              padding: "0.2rem 0.45rem",
+                              cursor: "pointer",
+                              fontWeight: 600,
+                              whiteSpace: "nowrap"
+                            }}
+                            title="Clear all column filters"
+                          >
+                            ✕ Clear
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Filters</span>
+                        )}
+                      </th>
+                    </tr>
+                  )}
                 </thead>
                 <tbody>
                   {paginatedPotentialUnits.length === 0 ? (
@@ -8310,12 +9377,40 @@ export default function HomePage({
                 </button>
                 <button
                   type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowPft3ColFilters((v) => !v)}
+                  title="Toggle per-column filter inputs"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.35rem"
+                  }}
+                >
+                  <span>🔍</span>
+                  <span>{showPft3ColFilters ? "Hide Column Filters" : "Column Filters"}</span>
+                  {activePft3ColFilterCount > 0 && (
+                    <span
+                      style={{
+                        background: "#0284c7",
+                        color: "#fff",
+                        borderRadius: "999px",
+                        padding: "0.1rem 0.45rem",
+                        fontSize: "0.7rem",
+                        fontWeight: 700
+                      }}
+                    >
+                      {activePft3ColFilterCount}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
                   className="btn-primary"
                   onClick={() =>
                     downloadOfficialPdf({
                       type: "FORM_PFT3_REGISTER",
                       documentIdOrData: {
-                        rows: pft3SearchExecuted ? filteredFormPFT3Rows : formPFT3Rows
+                        rows: pft3SearchExecuted ? sortedFormPFT3Rows : formPFT3Rows
                       },
                       defaultFilename: "Form_PFT3_Register.pdf"
                     }).catch((err) =>
@@ -8779,20 +9874,839 @@ export default function HomePage({
                 <table className="gov-table">
                   <thead>
                     <tr>
-                      <th style={{ whiteSpace: "nowrap" }}>Demand No.</th>
-                      <th style={{ whiteSpace: "nowrap" }}>PIN</th>
-                      <th style={{ maxWidth: "16rem" }}>Legal Name / Trade Name</th>
-                      <th style={{ maxWidth: "14rem" }}>Taxpayer / Assessee</th>
-                      <th style={{ maxWidth: "18rem" }}>Statutory Class</th>
-                      <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Assessed (PKR)</th>
-                      <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Arrears (PKR)</th>
-                      <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                        Total Demand (PKR)
+                      <th
+                        style={{ userSelect: "none", whiteSpace: "nowrap" }}
+                        title="Click to sort by Demand No."
+                      >
+                        <div
+                          style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                        >
+                          <span
+                            onClick={() => handlePft3Sort("permanentDemandNo")}
+                            style={{ cursor: "pointer" }}
+                          >
+                            Demand No.
+                          </span>
+                          <span
+                            onClick={() => handlePft3Sort("permanentDemandNo")}
+                            style={{
+                              cursor: "pointer",
+                              fontSize: "0.75rem",
+                              color: pft3SortField === "permanentDemandNo" ? "#0284c7" : "#94a3b8"
+                            }}
+                          >
+                            {pft3SortField === "permanentDemandNo"
+                              ? pft3SortDirection === "asc"
+                                ? "▲"
+                                : "▼"
+                              : "⇅"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowPft3ColFilters(true);
+                            }}
+                            style={{
+                              background: pft3ColFilters.permanentDemandNo
+                                ? "#e0f2fe"
+                                : "transparent",
+                              border: pft3ColFilters.permanentDemandNo
+                                ? "1px solid #7dd3fc"
+                                : "none",
+                              borderRadius: "3px",
+                              cursor: "pointer",
+                              padding: "0.1rem 0.25rem",
+                              fontSize: "0.72rem",
+                              color: pft3ColFilters.permanentDemandNo ? "#0369a1" : "#94a3b8",
+                              lineHeight: 1
+                            }}
+                            title={
+                              pft3ColFilters.permanentDemandNo
+                                ? `Filtered: "${pft3ColFilters.permanentDemandNo}"`
+                                : "Filter Demand No."
+                            }
+                          >
+                            🔍
+                          </button>
+                        </div>
                       </th>
-                      <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Paid (PKR)</th>
-                      <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Balance (PKR)</th>
+                      <th
+                        style={{ userSelect: "none", whiteSpace: "nowrap" }}
+                        title="Click to sort by PIN"
+                      >
+                        <div
+                          style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                        >
+                          <span
+                            onClick={() => handlePft3Sort("provincialUin")}
+                            style={{ cursor: "pointer" }}
+                          >
+                            PIN
+                          </span>
+                          <span
+                            onClick={() => handlePft3Sort("provincialUin")}
+                            style={{
+                              cursor: "pointer",
+                              fontSize: "0.75rem",
+                              color: pft3SortField === "provincialUin" ? "#0284c7" : "#94a3b8"
+                            }}
+                          >
+                            {pft3SortField === "provincialUin"
+                              ? pft3SortDirection === "asc"
+                                ? "▲"
+                                : "▼"
+                              : "⇅"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowPft3ColFilters(true);
+                            }}
+                            style={{
+                              background: pft3ColFilters.provincialUin ? "#e0f2fe" : "transparent",
+                              border: pft3ColFilters.provincialUin ? "1px solid #7dd3fc" : "none",
+                              borderRadius: "3px",
+                              cursor: "pointer",
+                              padding: "0.1rem 0.25rem",
+                              fontSize: "0.72rem",
+                              color: pft3ColFilters.provincialUin ? "#0369a1" : "#94a3b8",
+                              lineHeight: 1
+                            }}
+                            title={
+                              pft3ColFilters.provincialUin
+                                ? `Filtered: "${pft3ColFilters.provincialUin}"`
+                                : "Filter PIN"
+                            }
+                          >
+                            🔍
+                          </button>
+                        </div>
+                      </th>
+                      <th
+                        style={{ userSelect: "none", maxWidth: "16rem" }}
+                        title="Click to sort by Profession/Trade Name"
+                      >
+                        <div
+                          style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                        >
+                          <span
+                            onClick={() => handlePft3Sort("legalName")}
+                            style={{ cursor: "pointer" }}
+                          >
+                            Profession/Trade Name
+                          </span>
+                          <span
+                            onClick={() => handlePft3Sort("legalName")}
+                            style={{
+                              cursor: "pointer",
+                              fontSize: "0.75rem",
+                              color: pft3SortField === "legalName" ? "#0284c7" : "#94a3b8"
+                            }}
+                          >
+                            {pft3SortField === "legalName"
+                              ? pft3SortDirection === "asc"
+                                ? "▲"
+                                : "▼"
+                              : "⇅"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowPft3ColFilters(true);
+                            }}
+                            style={{
+                              background: pft3ColFilters.legalName ? "#e0f2fe" : "transparent",
+                              border: pft3ColFilters.legalName ? "1px solid #7dd3fc" : "none",
+                              borderRadius: "3px",
+                              cursor: "pointer",
+                              padding: "0.1rem 0.25rem",
+                              fontSize: "0.72rem",
+                              color: pft3ColFilters.legalName ? "#0369a1" : "#94a3b8",
+                              lineHeight: 1
+                            }}
+                            title={
+                              pft3ColFilters.legalName
+                                ? `Filtered: "${pft3ColFilters.legalName}"`
+                                : "Filter Profession/Trade Name"
+                            }
+                          >
+                            🔍
+                          </button>
+                        </div>
+                      </th>
+                      <th
+                        style={{ userSelect: "none", maxWidth: "14rem" }}
+                        title="Click to sort by Taxpayer / Assessee"
+                      >
+                        <div
+                          style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                        >
+                          <span
+                            onClick={() => handlePft3Sort("tradeName")}
+                            style={{ cursor: "pointer" }}
+                          >
+                            Taxpayer / Assessee
+                          </span>
+                          <span
+                            onClick={() => handlePft3Sort("tradeName")}
+                            style={{
+                              cursor: "pointer",
+                              fontSize: "0.75rem",
+                              color: pft3SortField === "tradeName" ? "#0284c7" : "#94a3b8"
+                            }}
+                          >
+                            {pft3SortField === "tradeName"
+                              ? pft3SortDirection === "asc"
+                                ? "▲"
+                                : "▼"
+                              : "⇅"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowPft3ColFilters(true);
+                            }}
+                            style={{
+                              background: pft3ColFilters.tradeName ? "#e0f2fe" : "transparent",
+                              border: pft3ColFilters.tradeName ? "1px solid #7dd3fc" : "none",
+                              borderRadius: "3px",
+                              cursor: "pointer",
+                              padding: "0.1rem 0.25rem",
+                              fontSize: "0.72rem",
+                              color: pft3ColFilters.tradeName ? "#0369a1" : "#94a3b8",
+                              lineHeight: 1
+                            }}
+                            title={
+                              pft3ColFilters.tradeName
+                                ? `Filtered: "${pft3ColFilters.tradeName}"`
+                                : "Filter Taxpayer / Assessee"
+                            }
+                          >
+                            🔍
+                          </button>
+                        </div>
+                      </th>
+                      <th
+                        style={{ userSelect: "none", maxWidth: "18rem" }}
+                        title="Click to sort by Statutory Class"
+                      >
+                        <div
+                          style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                        >
+                          <span
+                            onClick={() => handlePft3Sort("scheduleEntry")}
+                            style={{ cursor: "pointer" }}
+                          >
+                            Statutory Class
+                          </span>
+                          <span
+                            onClick={() => handlePft3Sort("scheduleEntry")}
+                            style={{
+                              cursor: "pointer",
+                              fontSize: "0.75rem",
+                              color: pft3SortField === "scheduleEntry" ? "#0284c7" : "#94a3b8"
+                            }}
+                          >
+                            {pft3SortField === "scheduleEntry"
+                              ? pft3SortDirection === "asc"
+                                ? "▲"
+                                : "▼"
+                              : "⇅"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowPft3ColFilters(true);
+                            }}
+                            style={{
+                              background: pft3ColFilters.scheduleEntry ? "#e0f2fe" : "transparent",
+                              border: pft3ColFilters.scheduleEntry ? "1px solid #7dd3fc" : "none",
+                              borderRadius: "3px",
+                              cursor: "pointer",
+                              padding: "0.1rem 0.25rem",
+                              fontSize: "0.72rem",
+                              color: pft3ColFilters.scheduleEntry ? "#0369a1" : "#94a3b8",
+                              lineHeight: 1
+                            }}
+                            title={
+                              pft3ColFilters.scheduleEntry
+                                ? `Filtered: "${pft3ColFilters.scheduleEntry}"`
+                                : "Filter Statutory Class"
+                            }
+                          >
+                            🔍
+                          </button>
+                        </div>
+                      </th>
+                      <th
+                        style={{ textAlign: "right", userSelect: "none", whiteSpace: "nowrap" }}
+                        title="Click to sort by Assessed Tax"
+                      >
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            justifyContent: "flex-end"
+                          }}
+                        >
+                          <span
+                            onClick={() => handlePft3Sort("assessedCurrentTax")}
+                            style={{ cursor: "pointer" }}
+                          >
+                            Assessed (PKR)
+                          </span>
+                          <span
+                            onClick={() => handlePft3Sort("assessedCurrentTax")}
+                            style={{
+                              cursor: "pointer",
+                              fontSize: "0.75rem",
+                              color: pft3SortField === "assessedCurrentTax" ? "#0284c7" : "#94a3b8"
+                            }}
+                          >
+                            {pft3SortField === "assessedCurrentTax"
+                              ? pft3SortDirection === "asc"
+                                ? "▲"
+                                : "▼"
+                              : "⇅"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowPft3ColFilters(true);
+                            }}
+                            style={{
+                              background: pft3ColFilters.assessedCurrentTax
+                                ? "#e0f2fe"
+                                : "transparent",
+                              border: pft3ColFilters.assessedCurrentTax
+                                ? "1px solid #7dd3fc"
+                                : "none",
+                              borderRadius: "3px",
+                              cursor: "pointer",
+                              padding: "0.1rem 0.25rem",
+                              fontSize: "0.72rem",
+                              color: pft3ColFilters.assessedCurrentTax ? "#0369a1" : "#94a3b8",
+                              lineHeight: 1
+                            }}
+                            title={
+                              pft3ColFilters.assessedCurrentTax
+                                ? `Filtered: "${pft3ColFilters.assessedCurrentTax}"`
+                                : "Filter Assessed Tax"
+                            }
+                          >
+                            🔍
+                          </button>
+                        </div>
+                      </th>
+                      <th
+                        style={{ textAlign: "right", userSelect: "none", whiteSpace: "nowrap" }}
+                        title="Click to sort by Arrears"
+                      >
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            justifyContent: "flex-end"
+                          }}
+                        >
+                          <span
+                            onClick={() => handlePft3Sort("arrears")}
+                            style={{ cursor: "pointer" }}
+                          >
+                            Arrears (PKR)
+                          </span>
+                          <span
+                            onClick={() => handlePft3Sort("arrears")}
+                            style={{
+                              cursor: "pointer",
+                              fontSize: "0.75rem",
+                              color: pft3SortField === "arrears" ? "#0284c7" : "#94a3b8"
+                            }}
+                          >
+                            {pft3SortField === "arrears"
+                              ? pft3SortDirection === "asc"
+                                ? "▲"
+                                : "▼"
+                              : "⇅"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowPft3ColFilters(true);
+                            }}
+                            style={{
+                              background: pft3ColFilters.arrears ? "#e0f2fe" : "transparent",
+                              border: pft3ColFilters.arrears ? "1px solid #7dd3fc" : "none",
+                              borderRadius: "3px",
+                              cursor: "pointer",
+                              padding: "0.1rem 0.25rem",
+                              fontSize: "0.72rem",
+                              color: pft3ColFilters.arrears ? "#0369a1" : "#94a3b8",
+                              lineHeight: 1
+                            }}
+                            title={
+                              pft3ColFilters.arrears
+                                ? `Filtered: "${pft3ColFilters.arrears}"`
+                                : "Filter Arrears"
+                            }
+                          >
+                            🔍
+                          </button>
+                        </div>
+                      </th>
+                      <th
+                        style={{ textAlign: "right", userSelect: "none", whiteSpace: "nowrap" }}
+                        title="Click to sort by Total Demand"
+                      >
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            justifyContent: "flex-end"
+                          }}
+                        >
+                          <span
+                            onClick={() => handlePft3Sort("totalDemand")}
+                            style={{ cursor: "pointer" }}
+                          >
+                            Total Demand (PKR)
+                          </span>
+                          <span
+                            onClick={() => handlePft3Sort("totalDemand")}
+                            style={{
+                              cursor: "pointer",
+                              fontSize: "0.75rem",
+                              color: pft3SortField === "totalDemand" ? "#0284c7" : "#94a3b8"
+                            }}
+                          >
+                            {pft3SortField === "totalDemand"
+                              ? pft3SortDirection === "asc"
+                                ? "▲"
+                                : "▼"
+                              : "⇅"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowPft3ColFilters(true);
+                            }}
+                            style={{
+                              background: pft3ColFilters.totalDemand ? "#e0f2fe" : "transparent",
+                              border: pft3ColFilters.totalDemand ? "1px solid #7dd3fc" : "none",
+                              borderRadius: "3px",
+                              cursor: "pointer",
+                              padding: "0.1rem 0.25rem",
+                              fontSize: "0.72rem",
+                              color: pft3ColFilters.totalDemand ? "#0369a1" : "#94a3b8",
+                              lineHeight: 1
+                            }}
+                            title={
+                              pft3ColFilters.totalDemand
+                                ? `Filtered: "${pft3ColFilters.totalDemand}"`
+                                : "Filter Total Demand"
+                            }
+                          >
+                            🔍
+                          </button>
+                        </div>
+                      </th>
+                      <th
+                        style={{ textAlign: "right", userSelect: "none", whiteSpace: "nowrap" }}
+                        title="Click to sort by Paid Amount"
+                      >
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            justifyContent: "flex-end"
+                          }}
+                        >
+                          <span
+                            onClick={() => handlePft3Sort("totalPaid")}
+                            style={{ cursor: "pointer" }}
+                          >
+                            Paid (PKR)
+                          </span>
+                          <span
+                            onClick={() => handlePft3Sort("totalPaid")}
+                            style={{
+                              cursor: "pointer",
+                              fontSize: "0.75rem",
+                              color: pft3SortField === "totalPaid" ? "#0284c7" : "#94a3b8"
+                            }}
+                          >
+                            {pft3SortField === "totalPaid"
+                              ? pft3SortDirection === "asc"
+                                ? "▲"
+                                : "▼"
+                              : "⇅"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowPft3ColFilters(true);
+                            }}
+                            style={{
+                              background: pft3ColFilters.totalPaid ? "#e0f2fe" : "transparent",
+                              border: pft3ColFilters.totalPaid ? "1px solid #7dd3fc" : "none",
+                              borderRadius: "3px",
+                              cursor: "pointer",
+                              padding: "0.1rem 0.25rem",
+                              fontSize: "0.72rem",
+                              color: pft3ColFilters.totalPaid ? "#0369a1" : "#94a3b8",
+                              lineHeight: 1
+                            }}
+                            title={
+                              pft3ColFilters.totalPaid
+                                ? `Filtered: "${pft3ColFilters.totalPaid}"`
+                                : "Filter Paid Amount"
+                            }
+                          >
+                            🔍
+                          </button>
+                        </div>
+                      </th>
+                      <th
+                        style={{ textAlign: "right", userSelect: "none", whiteSpace: "nowrap" }}
+                        title="Click to sort by Balance"
+                      >
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            justifyContent: "flex-end"
+                          }}
+                        >
+                          <span
+                            onClick={() => handlePft3Sort("outstandingBalance")}
+                            style={{ cursor: "pointer" }}
+                          >
+                            Balance (PKR)
+                          </span>
+                          <span
+                            onClick={() => handlePft3Sort("outstandingBalance")}
+                            style={{
+                              cursor: "pointer",
+                              fontSize: "0.75rem",
+                              color: pft3SortField === "outstandingBalance" ? "#0284c7" : "#94a3b8"
+                            }}
+                          >
+                            {pft3SortField === "outstandingBalance"
+                              ? pft3SortDirection === "asc"
+                                ? "▲"
+                                : "▼"
+                              : "⇅"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowPft3ColFilters(true);
+                            }}
+                            style={{
+                              background: pft3ColFilters.outstandingBalance
+                                ? "#e0f2fe"
+                                : "transparent",
+                              border: pft3ColFilters.outstandingBalance
+                                ? "1px solid #7dd3fc"
+                                : "none",
+                              borderRadius: "3px",
+                              cursor: "pointer",
+                              padding: "0.1rem 0.25rem",
+                              fontSize: "0.72rem",
+                              color: pft3ColFilters.outstandingBalance ? "#0369a1" : "#94a3b8",
+                              lineHeight: 1
+                            }}
+                            title={
+                              pft3ColFilters.outstandingBalance
+                                ? `Filtered: "${pft3ColFilters.outstandingBalance}"`
+                                : "Filter Balance"
+                            }
+                          >
+                            🔍
+                          </button>
+                        </div>
+                      </th>
                       <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Actions</th>
                     </tr>
+                    {showPft3ColFilters && (
+                      <tr style={{ background: "#f8fafc", borderBottom: "2px solid #cbd5e1" }}>
+                        <th style={{ padding: "0.3rem 0.35rem" }}>
+                          <input
+                            type="text"
+                            placeholder="Filter #..."
+                            value={pft3ColFilters.permanentDemandNo || ""}
+                            onChange={(e) => {
+                              setPft3ColFilters((prev) => ({
+                                ...prev,
+                                permanentDemandNo: e.target.value
+                              }));
+                              setPft3CurrentPage(1);
+                            }}
+                            style={{
+                              width: "100%",
+                              fontSize: "0.75rem",
+                              padding: "0.2rem 0.35rem",
+                              borderRadius: "4px",
+                              border: pft3ColFilters.permanentDemandNo
+                                ? "1px solid #0284c7"
+                                : "1px solid #cbd5e1",
+                              background: pft3ColFilters.permanentDemandNo ? "#f0f9ff" : "#fff"
+                            }}
+                          />
+                        </th>
+                        <th style={{ padding: "0.3rem 0.35rem" }}>
+                          <input
+                            type="text"
+                            placeholder="Filter PIN..."
+                            value={pft3ColFilters.provincialUin || ""}
+                            onChange={(e) => {
+                              setPft3ColFilters((prev) => ({
+                                ...prev,
+                                provincialUin: e.target.value
+                              }));
+                              setPft3CurrentPage(1);
+                            }}
+                            style={{
+                              width: "100%",
+                              fontSize: "0.75rem",
+                              padding: "0.2rem 0.35rem",
+                              borderRadius: "4px",
+                              border: pft3ColFilters.provincialUin
+                                ? "1px solid #0284c7"
+                                : "1px solid #cbd5e1",
+                              background: pft3ColFilters.provincialUin ? "#f0f9ff" : "#fff"
+                            }}
+                          />
+                        </th>
+                        <th style={{ padding: "0.3rem 0.35rem" }}>
+                          <input
+                            type="text"
+                            placeholder="Filter Profession..."
+                            value={pft3ColFilters.legalName || ""}
+                            onChange={(e) => {
+                              setPft3ColFilters((prev) => ({ ...prev, legalName: e.target.value }));
+                              setPft3CurrentPage(1);
+                            }}
+                            style={{
+                              width: "100%",
+                              fontSize: "0.75rem",
+                              padding: "0.2rem 0.35rem",
+                              borderRadius: "4px",
+                              border: pft3ColFilters.legalName
+                                ? "1px solid #0284c7"
+                                : "1px solid #cbd5e1",
+                              background: pft3ColFilters.legalName ? "#f0f9ff" : "#fff"
+                            }}
+                          />
+                        </th>
+                        <th style={{ padding: "0.3rem 0.35rem" }}>
+                          <input
+                            type="text"
+                            placeholder="Filter Taxpayer..."
+                            value={pft3ColFilters.tradeName || ""}
+                            onChange={(e) => {
+                              setPft3ColFilters((prev) => ({ ...prev, tradeName: e.target.value }));
+                              setPft3CurrentPage(1);
+                            }}
+                            style={{
+                              width: "100%",
+                              fontSize: "0.75rem",
+                              padding: "0.2rem 0.35rem",
+                              borderRadius: "4px",
+                              border: pft3ColFilters.tradeName
+                                ? "1px solid #0284c7"
+                                : "1px solid #cbd5e1",
+                              background: pft3ColFilters.tradeName ? "#f0f9ff" : "#fff"
+                            }}
+                          />
+                        </th>
+                        <th style={{ padding: "0.3rem 0.35rem" }}>
+                          <input
+                            type="text"
+                            placeholder="Filter Class..."
+                            value={pft3ColFilters.scheduleEntry || ""}
+                            onChange={(e) => {
+                              setPft3ColFilters((prev) => ({
+                                ...prev,
+                                scheduleEntry: e.target.value
+                              }));
+                              setPft3CurrentPage(1);
+                            }}
+                            style={{
+                              width: "100%",
+                              fontSize: "0.75rem",
+                              padding: "0.2rem 0.35rem",
+                              borderRadius: "4px",
+                              border: pft3ColFilters.scheduleEntry
+                                ? "1px solid #0284c7"
+                                : "1px solid #cbd5e1",
+                              background: pft3ColFilters.scheduleEntry ? "#f0f9ff" : "#fff"
+                            }}
+                          />
+                        </th>
+                        <th style={{ padding: "0.3rem 0.35rem" }}>
+                          <input
+                            type="text"
+                            placeholder="> or exact..."
+                            value={pft3ColFilters.assessedCurrentTax || ""}
+                            onChange={(e) => {
+                              setPft3ColFilters((prev) => ({
+                                ...prev,
+                                assessedCurrentTax: e.target.value
+                              }));
+                              setPft3CurrentPage(1);
+                            }}
+                            style={{
+                              width: "100%",
+                              fontSize: "0.75rem",
+                              padding: "0.2rem 0.35rem",
+                              borderRadius: "4px",
+                              border: pft3ColFilters.assessedCurrentTax
+                                ? "1px solid #0284c7"
+                                : "1px solid #cbd5e1",
+                              background: pft3ColFilters.assessedCurrentTax ? "#f0f9ff" : "#fff",
+                              textAlign: "right"
+                            }}
+                          />
+                        </th>
+                        <th style={{ padding: "0.3rem 0.35rem" }}>
+                          <input
+                            type="text"
+                            placeholder="> or exact..."
+                            value={pft3ColFilters.arrears || ""}
+                            onChange={(e) => {
+                              setPft3ColFilters((prev) => ({ ...prev, arrears: e.target.value }));
+                              setPft3CurrentPage(1);
+                            }}
+                            style={{
+                              width: "100%",
+                              fontSize: "0.75rem",
+                              padding: "0.2rem 0.35rem",
+                              borderRadius: "4px",
+                              border: pft3ColFilters.arrears
+                                ? "1px solid #0284c7"
+                                : "1px solid #cbd5e1",
+                              background: pft3ColFilters.arrears ? "#f0f9ff" : "#fff",
+                              textAlign: "right"
+                            }}
+                          />
+                        </th>
+                        <th style={{ padding: "0.3rem 0.35rem" }}>
+                          <input
+                            type="text"
+                            placeholder="> or exact..."
+                            value={pft3ColFilters.totalDemand || ""}
+                            onChange={(e) => {
+                              setPft3ColFilters((prev) => ({
+                                ...prev,
+                                totalDemand: e.target.value
+                              }));
+                              setPft3CurrentPage(1);
+                            }}
+                            style={{
+                              width: "100%",
+                              fontSize: "0.75rem",
+                              padding: "0.2rem 0.35rem",
+                              borderRadius: "4px",
+                              border: pft3ColFilters.totalDemand
+                                ? "1px solid #0284c7"
+                                : "1px solid #cbd5e1",
+                              background: pft3ColFilters.totalDemand ? "#f0f9ff" : "#fff",
+                              textAlign: "right"
+                            }}
+                          />
+                        </th>
+                        <th style={{ padding: "0.3rem 0.35rem" }}>
+                          <input
+                            type="text"
+                            placeholder="> or exact..."
+                            value={pft3ColFilters.totalPaid || ""}
+                            onChange={(e) => {
+                              setPft3ColFilters((prev) => ({ ...prev, totalPaid: e.target.value }));
+                              setPft3CurrentPage(1);
+                            }}
+                            style={{
+                              width: "100%",
+                              fontSize: "0.75rem",
+                              padding: "0.2rem 0.35rem",
+                              borderRadius: "4px",
+                              border: pft3ColFilters.totalPaid
+                                ? "1px solid #0284c7"
+                                : "1px solid #cbd5e1",
+                              background: pft3ColFilters.totalPaid ? "#f0f9ff" : "#fff",
+                              textAlign: "right"
+                            }}
+                          />
+                        </th>
+                        <th style={{ padding: "0.3rem 0.35rem" }}>
+                          <input
+                            type="text"
+                            placeholder="> or exact..."
+                            value={pft3ColFilters.outstandingBalance || ""}
+                            onChange={(e) => {
+                              setPft3ColFilters((prev) => ({
+                                ...prev,
+                                outstandingBalance: e.target.value
+                              }));
+                              setPft3CurrentPage(1);
+                            }}
+                            style={{
+                              width: "100%",
+                              fontSize: "0.75rem",
+                              padding: "0.2rem 0.35rem",
+                              borderRadius: "4px",
+                              border: pft3ColFilters.outstandingBalance
+                                ? "1px solid #0284c7"
+                                : "1px solid #cbd5e1",
+                              background: pft3ColFilters.outstandingBalance ? "#f0f9ff" : "#fff",
+                              textAlign: "right"
+                            }}
+                          />
+                        </th>
+                        <th style={{ padding: "0.3rem 0.35rem", textAlign: "right" }}>
+                          {activePft3ColFilterCount > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPft3ColFilters({});
+                                setPft3CurrentPage(1);
+                              }}
+                              style={{
+                                background: "#fee2e2",
+                                color: "#991b1b",
+                                border: "1px solid #fecaca",
+                                borderRadius: "4px",
+                                fontSize: "0.72rem",
+                                padding: "0.2rem 0.45rem",
+                                cursor: "pointer",
+                                fontWeight: 600,
+                                whiteSpace: "nowrap"
+                              }}
+                              title="Clear all column filters"
+                            >
+                              ✕ Clear
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: "0.7rem", color: "#94a3b8" }}>Filters</span>
+                          )}
+                        </th>
+                      </tr>
+                    )}
                   </thead>
                   <tbody>
                     {filteredFormPFT3Rows.length === 0 ? (
@@ -9081,7 +10995,11 @@ export default function HomePage({
                         columns: [
                           { header: "Sr.", width: 8, align: "center" as const },
                           { header: "Demand No", width: 24, align: "left" as const },
-                          { header: "Defaulter Legal Name", width: 55, align: "left" as const },
+                          {
+                            header: "Defaulter Profession/Trade Name",
+                            width: 55,
+                            align: "left" as const
+                          },
                           { header: "Category", width: 45, align: "left" as const },
                           { header: "Overdue", width: 20, align: "center" as const },
                           { header: "Current", width: 26, align: "right" as const },
@@ -15905,7 +17823,9 @@ export default function HomePage({
                         <strong>{portalVerificationResult.documentReference}</strong>
                       </div>
                       <div>
-                        <span style={{ color: "#64748b", display: "block" }}>Legal Name:</span>
+                        <span style={{ color: "#64748b", display: "block" }}>
+                          Profession/Trade Name:
+                        </span>
                         <strong>{portalVerificationResult.unitName}</strong>
                         {portalVerificationResult.tradeName && (
                           <span style={{ display: "block", color: "#475569" }}>
@@ -16666,10 +18586,10 @@ export default function HomePage({
                       </div>
                     )}
 
-                    {/* Assessee Names: Legal Name / Trade Name (Mandatory) & Taxpayer / Assessee (Secondary) */}
+                    {/* Assessee Names: Profession/Trade Name (Mandatory) & Taxpayer / Assessee (Secondary) */}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                       <div className="form-group">
-                        <label htmlFor="new-legal-name">Legal Name / Trade Name *</label>
+                        <label htmlFor="new-legal-name">Profession/Trade Name *</label>
                         <input
                           id="new-legal-name"
                           type="text"
@@ -18074,7 +19994,7 @@ export default function HomePage({
                 }}
               >
                 <div>
-                  <strong>Legal Name:</strong> {showCauseNoticeData.assesseeLegalName}
+                  <strong>Profession/Trade Name:</strong> {showCauseNoticeData.assesseeLegalName}
                 </div>
                 {showCauseNoticeData.assesseeTradeName && (
                   <div>
@@ -18548,7 +20468,7 @@ export default function HomePage({
                   <strong>District:</strong> {recoveryCertData.collectorDistrict}
                 </div>
                 <div style={{ marginTop: "0.5rem" }}>
-                  <strong>Legal Name:</strong> {recoveryCertData.assesseeLegalName}
+                  <strong>Profession/Trade Name:</strong> {recoveryCertData.assesseeLegalName}
                 </div>
                 {recoveryCertData.assesseeTradeName && (
                   <div>
@@ -18888,7 +20808,7 @@ export default function HomePage({
                         <strong>Notice Date:</strong> {pft1Data.issueDate}
                       </div>
                       <div>
-                        <strong>Legal Name:</strong> {pft1Data.assesseeLegalName}
+                        <strong>Profession/Trade Name:</strong> {pft1Data.assesseeLegalName}
                       </div>
                       <div>
                         <strong>Taxpayer / Proprietor:</strong>{" "}
@@ -19269,7 +21189,7 @@ export default function HomePage({
                         }}
                       >
                         <div>
-                          <strong>Legal Name:</strong> {noticeData.assesseeLegalName}
+                          <strong>Profession/Trade Name:</strong> {noticeData.assesseeLegalName}
                         </div>
                         {noticeData.assesseeTradeName && (
                           <div>
@@ -19360,7 +21280,8 @@ export default function HomePage({
                             </strong>
                           </div>
                           <div>
-                            Legal Name: <strong>{noticeData.serviceReceipt.assesseeName}</strong>
+                            Profession/Trade Name:{" "}
+                            <strong>{noticeData.serviceReceipt.assesseeName}</strong>
                           </div>
                           <div>
                             Process Server: <strong>{noticeData.serviceReceipt.serverName}</strong>
@@ -19674,7 +21595,7 @@ export default function HomePage({
                             { header: "Sr.", width: 8, align: "center" as const },
                             { header: "Notice No", width: 38, align: "left" as const },
                             { header: "Demand Number", width: 26, align: "left" as const },
-                            { header: "Legal Name", width: 60, align: "left" as const },
+                            { header: "Profession/Trade Name", width: 60, align: "left" as const },
                             { header: "Amount (PKR)", width: 25, align: "right" as const },
                             { header: "Due Date", width: 24, align: "center" as const },
                             { header: "Server", width: 46, align: "left" as const },
@@ -19713,7 +21634,7 @@ export default function HomePage({
                     <tr>
                       <th style={{ width: "2.5rem" }}>Select</th>
                       <th>Notice &amp; Demand Number</th>
-                      <th>Legal Name &amp; Address</th>
+                      <th>Profession/Trade Name &amp; Address</th>
                       <th>Entry</th>
                       <th>Assessed Tax</th>
                       <th>Process Server</th>
@@ -21050,7 +22971,9 @@ export default function HomePage({
                                 )}
                               </td>
                               <td>
-                                <strong>{row.rawData["legalName"] || "(Blank Legal Name)"}</strong>
+                                <strong>
+                                  {row.rawData["legalName"] || "(Blank Profession/Trade Name)"}
+                                </strong>
                                 {row.rawData["tradeName"] && (
                                   <span
                                     style={{
@@ -24912,7 +26835,7 @@ export default function HomePage({
                   <tbody>
                     <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
                       <td style={{ padding: "0.3rem 0", color: "#64748b", width: "28%" }}>
-                        Assessee Legal Name:
+                        Assessee Profession/Trade Name:
                       </td>
                       <td style={{ padding: "0.3rem 0", fontWeight: 700, color: "#0f172a" }}>
                         {activeReceiptRecord.assesseeLegalName}
@@ -25807,7 +27730,7 @@ export default function HomePage({
                           marginBottom: "0.25rem"
                         }}
                       >
-                        Legal Name / Trade Name *
+                        Profession/Trade Name *
                       </label>
                       <input
                         type="text"
@@ -26821,7 +28744,9 @@ export default function HomePage({
                                 )}
                               </td>
                               <td>
-                                <strong>{row.rawData["legalName"] || "(Blank Legal Name)"}</strong>
+                                <strong>
+                                  {row.rawData["legalName"] || "(Blank Profession/Trade Name)"}
+                                </strong>
                                 {row.rawData["tradeName"] && (
                                   <span
                                     style={{
@@ -27104,7 +29029,7 @@ export default function HomePage({
                 </div>
                 <div>
                   <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
-                    Assessee Legal Name
+                    Assessee Profession/Trade Name
                   </span>
                   <strong style={{ color: "#0f172a" }}>{targetMigratePotential.legalName}</strong>
                 </div>

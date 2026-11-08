@@ -82,14 +82,14 @@ export async function generateUnitDossierPdf(
   doc.setFontSize(7.6);
   doc.setTextColor(...PDF_COLORS.textDark);
 
-  // Row 1: Legal Name & Demand Number (PDN)
+  // Row 1: Profession/Trade Name & Demand Number (PDN)
   let rY = curY + 10.2;
   doc.setFont("helvetica", "bold");
-  doc.text("Legal Name:", left + 4, rY);
+  doc.text("Profession/Trade Name:", left + 4, rY);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.8);
   doc.setTextColor(...PDF_COLORS.textDark);
-  doc.text(unit.legalName, left + 28, rY);
+  doc.text(unit.legalName, left + 40, rY);
 
   doc.setFontSize(7.6);
   doc.setFont("helvetica", "bold");

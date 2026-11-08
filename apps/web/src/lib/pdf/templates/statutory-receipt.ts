@@ -156,12 +156,12 @@ export async function generateStatutoryReceiptPdf(
   doc.setTextColor(...PDF_COLORS.textDark);
 
   doc.setFont("helvetica", "bold");
-  doc.text("Legal Name:", left + 4, curY + 4);
+  doc.text("Profession/Trade Name:", left + 4, curY + 4);
   doc.setFont("helvetica", "normal");
   const nameLine = assesseeTradeName
     ? `${assesseeLegalName} (${assesseeTradeName})`
     : assesseeLegalName;
-  doc.text(String(nameLine), left + 34, curY + 4);
+  doc.text(String(nameLine), left + 42, curY + 4);
 
   curY += 5.5;
   doc.setFont("helvetica", "bold");

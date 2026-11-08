@@ -138,11 +138,11 @@ export async function generateTaxClearanceCertificatePdf(
   curY += 4;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.text("Legal Name:", left + 5, curY);
+  doc.text("Profession/Trade Name:", left + 5, curY);
   doc.setFont("helvetica", "normal");
   doc.text(
     `${assesseeLegalName} ${assesseeTradeName ? `(${assesseeTradeName})` : ""}`,
-    left + 42,
+    left + 45,
     curY
   );
 

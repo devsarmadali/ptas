@@ -458,7 +458,7 @@ function FormPft1NoticeContent() {
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.3rem 1.5rem" }}>
             <div>
-              <span style={{ fontWeight: 700, color: "#475569" }}>Legal Name: </span>
+              <span style={{ fontWeight: 700, color: "#475569" }}>Profession/Trade Name: </span>
               <strong style={{ fontSize: "0.92rem", color: "#0f172a" }}>
                 {pft1Data.assesseeLegalName}
               </strong>

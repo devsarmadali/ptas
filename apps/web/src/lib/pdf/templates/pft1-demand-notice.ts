@@ -126,12 +126,12 @@ export async function generatePft1DemandNoticePdf(
   doc.setFontSize(7.8);
   doc.setTextColor(...PDF_COLORS.textDark);
 
-  // Row 1: Legal Name & Proprietor
+  // Row 1: Profession/Trade Name & Proprietor
   doc.setFont("helvetica", "bold");
-  doc.text("Legal Name:", left + 4, tY);
+  doc.text("Profession/Trade Name:", left + 4, tY);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.8);
-  doc.text(notice.assesseeLegalName || "Taxpayer Assessee", left + 26, tY);
+  doc.text(notice.assesseeLegalName || "Taxpayer Assessee", left + 40, tY);
 
   if (notice.assesseeTradeName && notice.assesseeTradeName !== notice.assesseeLegalName) {
     doc.setFontSize(7.8);

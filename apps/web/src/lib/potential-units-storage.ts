@@ -42,7 +42,7 @@ export interface PotentialUnitRecord {
   readonly potentialNumber: string; // e.g. "POT-0001"
   readonly pinNumber: string; // e.g. "Potential-237-0010106110200054-01"
   readonly provincialUin: string; // matches pinNumber
-  readonly legalName: string; // Legal Name / Trade Name (Mandatory)
+  readonly legalName: string; // Profession/Trade Name (Mandatory)
   readonly tradeName?: string | undefined; // Taxpayer / Assessee (Secondary, Optional)
   readonly taxpayerName?: string | undefined; // Taxpayer / Assessee (Secondary, Optional)
   readonly identifierType: "CNIC" | "NTN";
@@ -1487,6 +1487,7 @@ export function parseBulkPotentialUnits(
       else if (clean.includes("locality")) headerMap.set("locality", idx);
       else if (clean.includes("address")) headerMap.set("address", idx);
       else if (
+        clean.includes("profession") ||
         clean.includes("legalname") ||
         clean.includes("entityname") ||
         (clean.includes("legal") && !clean.includes("trade"))

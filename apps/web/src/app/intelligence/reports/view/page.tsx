@@ -629,7 +629,9 @@ function ReportViewContent() {
                   <thead>
                     <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
                       <th style={{ padding: "0.35rem", textAlign: "left" }}>PDN</th>
-                      <th style={{ padding: "0.35rem", textAlign: "left" }}>Assessee Legal Name</th>
+                      <th style={{ padding: "0.35rem", textAlign: "left" }}>
+                        Assessee Profession/Trade Name
+                      </th>
                       <th style={{ padding: "0.35rem", textAlign: "left" }}>CNIC / NTN</th>
                       <th style={{ padding: "0.35rem", textAlign: "left" }}>Category / Entry</th>
                       <th style={{ padding: "0.35rem", textAlign: "right" }}>Demand (PKR)</th>
@@ -735,7 +737,7 @@ function ReportViewContent() {
             <thead>
               <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
                 <th style={{ padding: "0.35rem", textAlign: "left" }}>Demand Number</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Legal Name</th>
+                <th style={{ padding: "0.35rem", textAlign: "left" }}>Profession/Trade Name</th>
                 <th style={{ padding: "0.35rem", textAlign: "left" }}>Address</th>
                 <th style={{ padding: "0.35rem", textAlign: "left" }}>Schedule Entry</th>
                 <th style={{ padding: "0.35rem", textAlign: "right" }}>Days Overdue</th>
@@ -819,7 +821,7 @@ function ReportViewContent() {
               <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
                 <th style={{ padding: "0.35rem", textAlign: "left" }}>Notice No</th>
                 <th style={{ padding: "0.35rem", textAlign: "left" }}>Demand Number</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Legal Name</th>
+                <th style={{ padding: "0.35rem", textAlign: "left" }}>Profession/Trade Name</th>
                 <th style={{ padding: "0.35rem", textAlign: "left" }}>Address</th>
                 <th style={{ padding: "0.35rem", textAlign: "right" }}>Amount (PKR)</th>
                 <th style={{ padding: "0.35rem", textAlign: "center" }}>Status</th>
@@ -879,7 +881,7 @@ function ReportViewContent() {
                 <th style={{ padding: "0.35rem", textAlign: "left" }}>Certificate No</th>
                 <th style={{ padding: "0.35rem", textAlign: "left" }}>Issue Date</th>
                 <th style={{ padding: "0.35rem", textAlign: "left" }}>Valid Until</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Legal Name</th>
+                <th style={{ padding: "0.35rem", textAlign: "left" }}>Profession/Trade Name</th>
                 <th style={{ padding: "0.35rem", textAlign: "left" }}>CNIC / NTN</th>
                 <th style={{ padding: "0.35rem", textAlign: "right" }}>Cleared (PKR)</th>
                 <th style={{ padding: "0.35rem", textAlign: "center" }}>Status</th>
@@ -930,7 +932,7 @@ function ReportViewContent() {
               <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
                 <th style={{ padding: "0.35rem", textAlign: "left" }}>Reference No</th>
                 <th style={{ padding: "0.35rem", textAlign: "left" }}>Relief Type</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Legal Name</th>
+                <th style={{ padding: "0.35rem", textAlign: "left" }}>Profession/Trade Name</th>
                 <th style={{ padding: "0.35rem", textAlign: "left" }}>Filing Date</th>
                 <th style={{ padding: "0.35rem", textAlign: "center" }}>Status</th>
                 <th style={{ padding: "0.35rem", textAlign: "right" }}>Relief (PKR)</th>

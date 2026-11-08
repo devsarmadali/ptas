@@ -496,7 +496,15 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
         district: "Vehari",
         circle: "Circle-I",
         financialYear: "2025-2026",
-        headers: ["SR", "PIN", "LEGAL NAME", "DEMAND", "OUTSTANDING", "DAYS OVERDUE", "STAGE"],
+        headers: [
+          "SR",
+          "PIN",
+          "PROFESSION/TRADE NAME",
+          "DEMAND",
+          "OUTSTANDING",
+          "DAYS OVERDUE",
+          "STAGE"
+        ],
         rows: [
           ["1", "PFT-0001", "Al-Madina Cotton", "PKR 4,000", "PKR 4,000", "45 Days", "Show Cause"],
           ["2", "PFT-0002", "Pak Chemical Ltd", "PKR 10,000", "PKR 10,000", "60 Days", "Warrant"]
@@ -517,7 +525,7 @@ describe("Centralized PDF Architecture & Document Lifecycle Engine", () => {
         district: "Vehari",
         circle: "Circle-I",
         financialYear: "2025-2026",
-        headers: ["SR", "DISPATCH NO", "LEGAL NAME", "PIN", "MODE", "DATE", "STATUS"],
+        headers: ["SR", "DISPATCH NO", "PROFESSION/TRADE NAME", "PIN", "MODE", "DATE", "STATUS"],
         rows: (registerData.rows || []).map((e) => [
           String(e.serialNumber),
           e.noticeNumber || "DISP-001",

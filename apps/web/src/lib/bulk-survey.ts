@@ -248,7 +248,13 @@ export function parseCsvContent(text: string): string[][] {
  */
 function normalizeHeaderName(header: string): string {
   const h = header.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (h.includes("legalname") || h === "legal" || h === "businessname" || h === "assessee") {
+  if (
+    h.includes("profession") ||
+    h.includes("legalname") ||
+    h === "legal" ||
+    h === "businessname" ||
+    h === "assessee"
+  ) {
     return "legalName";
   }
   if (h.includes("taxpayername") || h.includes("proprietor")) return "tradeName";

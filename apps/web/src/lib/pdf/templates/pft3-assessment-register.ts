@@ -64,7 +64,7 @@ export async function generatePft3RegisterPdf(
     { header: "Sr.", width: 8, align: "center" },
     { header: "Demand Number", width: 23, align: "left" },
     { header: "PIN", width: 28, align: "left" },
-    { header: "Legal Name / Taxpayer", width: 46, align: "left" },
+    { header: "Profession/Trade Name", width: 46, align: "left" },
     { header: "CNIC / NTN", width: 26, align: "left" },
     { header: "Schedule Entry & Slab", width: 42, align: "left" },
     { header: "Current", width: 18, align: "right" },

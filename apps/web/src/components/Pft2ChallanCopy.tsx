@@ -485,17 +485,17 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           fontSize: "0.7rem"
         }}
       >
-        {/* Legal Name Row (Prominent, High Priority) */}
+        {/* Profession/Trade Name Row (Prominent, High Priority) */}
         <div style={{ display: "flex", alignItems: "baseline" }}>
           <span
             style={{
-              width: "6.8rem",
+              width: "11rem",
               flexShrink: 0,
               fontWeight: 700,
               color: "#334155"
             }}
           >
-            LEGAL NAME:
+            PROFESSION/TRADE NAME:
           </span>
           <span
             style={{

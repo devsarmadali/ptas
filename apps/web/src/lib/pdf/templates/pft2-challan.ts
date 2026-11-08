@@ -416,11 +416,11 @@ export async function generatePft2ChallanPdf(
     const valColX = innerX + labelColW + 1.5;
     const valColW = innerW - (labelColW + 2.5);
 
-    // Row 1: LEGAL NAME (Large, Prominent 10pt)
+    // Row 1: PROFESSION/TRADE NAME (Large, Prominent 10pt)
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.6);
     doc.setTextColor(...C.textDark);
-    doc.text("LEGAL NAME:", innerX + 1.0, curY + 3.4);
+    doc.text("PROFESSION/TRADE NAME:", innerX + 1.0, curY + 3.4);
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10.0);
