@@ -59,13 +59,13 @@ describe("Potential Assessment Register Persistence & Migration Layer", () => {
     localStorage.clear();
   });
 
-  it("correctly applies and cleans the 'Potential-' PIN prefix", () => {
-    const rawPin = "237-0010106110200054-01";
+  it("correctly applies -01 for potential and promotes to -02 for PFT-3", () => {
+    const rawPin = "237-001010611020000054-01";
     const potentialPin = formatPotentialPin(rawPin);
-    expect(potentialPin).toBe("Potential-237-0010106110200054-01");
+    expect(potentialPin).toBe("237-001010611020000054-01");
 
     const cleaned = cleanPotentialPin(potentialPin);
-    expect(cleaned).toBe("237-0010106110200054-01");
+    expect(cleaned).toBe("237-001010611020000054-02");
   });
 
   it("resolves demand number collisions with /1, /2 suffix convention", () => {
@@ -88,7 +88,7 @@ describe("Potential Assessment Register Persistence & Migration Layer", () => {
   it("loads initial seed units and saves to localStorage", () => {
     const units = loadPersistedPotentialUnits();
     expect(units.length).toBeGreaterThanOrEqual(5);
-    expect(units[0]?.pinNumber).toMatch(/^Potential-/);
+    expect(units[0]?.pinNumber).toMatch(/-01$/);
     expect(units[0]?.potentialNumber).toMatch(/^POT-/);
 
     // Persisted in localStorage
@@ -105,7 +105,7 @@ describe("Potential Assessment Register Persistence & Migration Layer", () => {
     const result = importPotentialUnitsCsv(csv, initialUnits, "Inspector Ahmad");
     expect(result.importedUnits).toHaveLength(2);
     expect(result.importedUnits[0]?.legalName).toBe("Burewala Textiles Ltd");
-    expect(result.importedUnits[0]?.pinNumber).toMatch(/^Potential-/);
+    expect(result.importedUnits[0]?.pinNumber).toMatch(/-01$/);
     expect(result.importedUnits[0]?.potentialNumber).toMatch(/^POT-/);
     expect(result.importedUnits[0]?.createdBy).toBe("Inspector Ahmad");
     expect(result.importedUnits[0]?.openingArrears).toBe(2000);
@@ -383,7 +383,7 @@ SURV-2026-999,Vehari,Vehari Circle I (City / Commercial),Vehari,City Zone,"Shop 
     const migrated = after.find((u) => u.legalName === "Vehari Trading Corp");
     expect(migrated).toBeDefined();
     expect(migrated?.potentialNumber).toMatch(/^POT-/);
-    expect(migrated?.pinNumber).toBe("Potential-237-0010106110200100-01");
+    expect(migrated?.pinNumber).toBe("237-0010106110200100-01");
     expect(migrated?.openingArrears).toBe(0); // STRICT DOMAIN RULE: zero arrears
     expect(migrated?.annualRatePkr).toBe(10000);
     expect(migrated?.status).toBe("ACTIVE");

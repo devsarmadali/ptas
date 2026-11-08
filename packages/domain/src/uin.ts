@@ -46,13 +46,15 @@ export interface ClassificationBlock {
   readonly tertiaryCode: string;
 }
 
+export type PinVersionCode = "01" | "02";
+
 export interface UinComponents {
   readonly jurisdiction: JurisdictionCodes;
   readonly classification: ClassificationBlock;
-  /** 5-digit circle-scoped sequential number (e.g. "00001") */
+  /** 7-digit province-wide sequential number (up to 10M capacity) */
   readonly sequence: string;
-  /** 2-digit version number (e.g. "01") */
-  readonly version: string;
+  /** Statutory register version: "01" = Potential Register, "02" = Form PFT-3 Register */
+  readonly version: PinVersionCode;
 }
 
 // ---------------------------------------------------------------------------
@@ -245,9 +247,10 @@ export function computeClassificationBlock(
 // ---------------------------------------------------------------------------
 
 /**
- * Generates a formatted Provincial UIN string from its components.
+ * Generates a formatted Provincial UIN / PIN string from its components.
+ * Uniform 25-character statutory format: DDD-TTTCCSSUURRNNNNNNN-VV
  *
- * @returns UIN in format "DDD-TTT-CC-SS-UU-RR-NNNNN-VV"
+ * @returns PIN in format "DDD-TTTCCSSUURRNNNNNNN-VV"
  */
 export function generateUin(components: UinComponents): string {
   const { jurisdiction, classification, sequence, version } = components;
@@ -271,21 +274,23 @@ export function generateUin(components: UinComponents): string {
   if (classification.tertiaryCode.length !== 2) {
     throw new Error(`Tertiary code must be 2 digits, got "${classification.tertiaryCode}"`);
   }
-  if (sequence.length !== 5 && sequence.length !== 6) {
-    throw new Error(`Sequence must be 5 or 6 digits, got "${sequence}"`);
+  if (sequence.length !== 7) {
+    throw new Error(`Sequence must be 7 digits (up to 10M capacity), got "${sequence}"`);
   }
-  if (version.length !== 2) {
-    throw new Error(`Version must be 2 digits, got "${version}"`);
+  if (version !== "01" && version !== "02") {
+    throw new Error(
+      `Version must be "01" (Potential) or "02" (PFT-3 Registered), got "${version}"`
+    );
   }
 
-  // 3 grouped parts: DDD - TTTCCSSUURRNNNNNN - VV (e.g. 237-00101061001000005-01)
+  // 3 grouped parts: DDD - TTTCCSSUURRNNNNNNN - VV (e.g. 237-0010106100100000005-02)
   const middleGroup = `${jurisdiction.tehsilCode}${jurisdiction.circleCode}${classification.classCode}${classification.subclassCode}${classification.tertiaryCode}${sequence}`;
   return `${jurisdiction.districtCode}-${middleGroup}-${version}`;
 }
 
 /**
  * Generates the compact (no-dash) form of the PIN for machine processing.
- * 22-digit numeric string with 6-digit sequence (3+3+2+2+2+2+6+2) or 21-digit with legacy 5-digit sequence.
+ * 23-digit numeric string with 7-digit sequence (3+3+2+2+2+2+7+2).
  */
 export function generateCompactUin(components: UinComponents): string {
   return generateUin(components).replace(/-/g, "");
@@ -295,30 +300,25 @@ export function generateCompactUin(components: UinComponents): string {
 // PIN Parsing
 // ---------------------------------------------------------------------------
 
-/** 3-group PIN format regex: DDD-TTTCCSSUURRNNNNNN-VV (supports 6-digit sequence and legacy 5-digit) */
-const PIN_3GROUP_FORMAT = /^(\d{3})-(\d{3})(\d{2})(\d{2})(\d{2})(\d{2})(\d{5,6})-(\d{2})$/;
+/** Standard 25-character PIN format regex: DDD-TTTCCSSUURRNNNNNNN-VV */
+const PIN_FORMAT = /^(\d{3})-(\d{3})(\d{2})(\d{2})(\d{2})(\d{2})(\d{7})-(01|02)$/;
 
-/** Legacy 8-group format regex: DDD-TTT-CC-SS-UU-RR-NNNNNN-VV */
-const UIN_8GROUP_FORMAT = /^(\d{3})-(\d{3})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{5,6})-(\d{2})$/;
-
-/** Compact PIN format regex: 21 or 22 contiguous digits */
-const UIN_COMPACT_FORMAT = /^(\d{3})(\d{3})(\d{2})(\d{2})(\d{2})(\d{2})(\d{5,6})(\d{2})$/;
+/** Compact PIN format regex: 23 contiguous digits */
+const UIN_COMPACT_FORMAT = /^(\d{3})(\d{3})(\d{2})(\d{2})(\d{2})(\d{2})(\d{7})(01|02)$/;
 
 /**
- * Parses a PIN / UIN string (3-group, 8-group, or compact) into its components.
+ * Parses a PIN / UIN string into its statutory components.
+ * Strict standard parsing: accepts 25-character formatted or 23-digit compact form.
  *
  * @throws Error if the format is invalid
  */
 export function parseUin(uin: string): UinComponents {
   const trimmed = uin.trim();
-  const match =
-    PIN_3GROUP_FORMAT.exec(trimmed) ??
-    UIN_8GROUP_FORMAT.exec(trimmed) ??
-    UIN_COMPACT_FORMAT.exec(trimmed);
+  const match = PIN_FORMAT.exec(trimmed) ?? UIN_COMPACT_FORMAT.exec(trimmed);
 
   if (!match) {
     throw new Error(
-      `Invalid PIN / UIN format: "${uin}". Expected 3-group DDD-TTTCCSSUURRNNNNNN-VV or compact form.`
+      `Invalid PIN / UIN format: "${uin}". Expected standard 25-character DDD-TTTCCSSUURRNNNNNNN-VV or 23-digit compact form.`
     );
   }
 
@@ -334,7 +334,7 @@ export function parseUin(uin: string): UinComponents {
       tertiaryCode: match[6]!
     },
     sequence: match[7]!,
-    version: match[8]!
+    version: match[8]! as PinVersionCode
   };
 }
 
@@ -343,16 +343,12 @@ export function parseUin(uin: string): UinComponents {
 // ---------------------------------------------------------------------------
 
 /**
- * Validates that a string is a well-formed PIN / UIN (3-group, legacy 8-group, or compact).
+ * Validates that a string is a well-formed statutory PIN / UIN (25-character formatted or 23-digit compact).
  * Does NOT verify that the district/classification codes exist — only format.
  */
 export function validateUin(uin: string): boolean {
   const trimmed = uin.trim();
-  return (
-    PIN_3GROUP_FORMAT.test(trimmed) ||
-    UIN_8GROUP_FORMAT.test(trimmed) ||
-    UIN_COMPACT_FORMAT.test(trimmed)
-  );
+  return PIN_FORMAT.test(trimmed) || UIN_COMPACT_FORMAT.test(trimmed);
 }
 
 /**
@@ -387,12 +383,11 @@ export function generateUinForUnit(params: {
   readonly rule: StatutoryRuleDefinition;
   readonly allRules: readonly StatutoryRuleDefinition[];
   readonly sequenceNumber: number;
-  readonly sequenceDigits?: 5 | 6;
-  readonly version?: number;
+  readonly version?: PinVersionCode;
 }): string {
   const classification = computeClassificationBlock(params.rule, params.allRules);
-  const sequence = String(params.sequenceNumber).padStart(params.sequenceDigits ?? 6, "0");
-  const version = String(params.version ?? 1).padStart(2, "0");
+  const sequence = String(params.sequenceNumber).padStart(7, "0");
+  const version: PinVersionCode = params.version ?? "02";
 
   return generateUin({
     jurisdiction: params.jurisdiction,
@@ -400,6 +395,41 @@ export function generateUinForUnit(params: {
     sequence,
     version
   });
+}
+
+/**
+ * Returns true if the PIN belongs to the Potential Assessment Register (-01).
+ */
+export function isPotentialPin(pin: string): boolean {
+  return pin.endsWith("-01") || pin.endsWith("01");
+}
+
+/**
+ * Returns true if the PIN belongs to the Form PFT-3 Register (-02).
+ */
+export function isPft3Pin(pin: string): boolean {
+  return pin.endsWith("-02") || pin.endsWith("02");
+}
+
+/**
+ * Promotes a Potential Register PIN (-01) to a Form PFT-3 Register PIN (-02).
+ */
+export function promotePinToPft3(potentialPin: string): string {
+  return potentialPin.replace(/-01$/, "-02");
+}
+
+/**
+ * Reverts a Form PFT-3 Register PIN (-02) back to a Potential Register PIN (-01).
+ */
+export function revertPinToPotential(pft3Pin: string): string {
+  return pft3Pin.replace(/-02$/, "-01");
+}
+
+/**
+ * Extracts the 22-character immutable base PIN (DDD-TTTCCSSUURRNNNNNNN) without version suffix.
+ */
+export function getBasePin(pin: string): string {
+  return pin.replace(/-(01|02)$/, "");
 }
 
 /**

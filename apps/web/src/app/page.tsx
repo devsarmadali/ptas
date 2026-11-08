@@ -1260,7 +1260,8 @@ export default function HomePage({
         },
         rule: potSelectedStatutoryRule,
         allRules,
-        sequenceNumber: potentialUnits.length + 1
+        sequenceNumber: potentialUnits.length + 1,
+        version: "01"
       });
       return formatPotentialPin(basePin);
     } catch {
@@ -4631,10 +4632,18 @@ export default function HomePage({
     const potNum = `POT-${nextSeq.toString().padStart(4, "0")}`;
     const tehCode = getTehsilCode(potNewTehsil);
     const cirCode = getCircleCode(potNewCircleName);
-    const basePin = `237-${tehCode}${cirCode}061102${nextSeq.toString().padStart(4, "0")}-01`;
-    const pinNumber = formatPotentialPin(basePin);
-
     const rule = potSelectedStatutoryRule || getAllStatutoryRules()[0]!;
+    const pinNumber = generateUinForUnit({
+      jurisdiction: {
+        districtCode: "237",
+        tehsilCode: tehCode,
+        circleCode: cirCode
+      },
+      rule,
+      allRules,
+      sequenceNumber: nextSeq,
+      version: "01"
+    });
 
     const matchedCircle = DISTRICT_VEHARI_CIRCLES.find(
       (c) => c.name === normalizeCircleName(potNewCircleName) || c.id === potNewCircleName

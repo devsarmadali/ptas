@@ -13,7 +13,12 @@ import {
   getTehsilsByDistrict,
   parseUin,
   validateUin,
-  validateUinDistrict
+  validateUinDistrict,
+  isPotentialPin,
+  isPft3Pin,
+  promotePinToPft3,
+  revertPinToPotential,
+  getBasePin
 } from "../src/uin.js";
 import { getAllStatutoryRules, getStatutoryRuleById } from "../src/statutory-rules.js";
 
@@ -25,7 +30,7 @@ const VEHARI_JURISDICTION: JurisdictionCodes = {
   circleCode: "01"
 };
 
-describe("Provincial UIN (Unique Identification Number)", () => {
+describe("Provincial UIN (Unique Identification Number) / Statutory PIN", () => {
   describe("PBS District Registry", () => {
     it("contains all 37 standard Punjab districts from PBS coding", () => {
       expect(PBS_PUNJAB_DISTRICTS.length).toBe(37);
@@ -113,38 +118,60 @@ describe("Provincial UIN (Unique Identification Number)", () => {
   });
 
   describe("UIN / PIN Generation", () => {
-    it("generates a correctly formatted 3-group PIN with dashes (6 digits)", () => {
+    it("generates a correctly formatted 25-character PIN with dashes and 7-digit sequence", () => {
       const components: UinComponents = {
         jurisdiction: VEHARI_JURISDICTION,
         classification: { classCode: "03", subclassCode: "01", tertiaryCode: "02" },
-        sequence: "000001",
+        sequence: "0000001",
+        version: "02"
+      };
+      const uin = generateUin(components);
+      expect(uin).toBe("237-001010301020000001-02");
+      expect(uin).toHaveLength(25);
+    });
+
+    it("generates Potential Register PIN with version -01", () => {
+      const components: UinComponents = {
+        jurisdiction: VEHARI_JURISDICTION,
+        classification: { classCode: "06", subclassCode: "11", tertiaryCode: "02" },
+        sequence: "0000042",
         version: "01"
       };
       const uin = generateUin(components);
-      expect(uin).toBe("237-00101030102000001-01");
-      expect(uin).toHaveLength(24);
+      expect(uin).toBe("237-001010611020000042-01");
+      expect(uin).toHaveLength(25);
+      expect(isPotentialPin(uin)).toBe(true);
+      expect(isPft3Pin(uin)).toBe(false);
     });
 
-    it("generates a compact 22-digit UIN without dashes", () => {
+    it("generates a compact 23-digit UIN without dashes", () => {
       const components: UinComponents = {
         jurisdiction: VEHARI_JURISDICTION,
         classification: { classCode: "03", subclassCode: "01", tertiaryCode: "02" },
-        sequence: "000001",
-        version: "01"
+        sequence: "0000001",
+        version: "02"
       };
       const compact = generateCompactUin(components);
-      expect(compact).toBe("2370010103010200000101");
-      expect(compact).toHaveLength(22);
+      expect(compact).toBe("23700101030102000000102");
+      expect(compact).toHaveLength(23);
     });
 
-    it("rejects invalid component widths", () => {
-      const bad: UinComponents = {
+    it("rejects invalid component widths or version", () => {
+      const badDistrict: UinComponents = {
         jurisdiction: { districtCode: "23", tehsilCode: "001", circleCode: "01" },
         classification: { classCode: "03", subclassCode: "01", tertiaryCode: "02" },
-        sequence: "00001",
+        sequence: "0000001",
         version: "01"
       };
-      expect(() => generateUin(bad)).toThrow("District code must be 3 digits");
+      expect(() => generateUin(badDistrict)).toThrow("District code must be 3 digits");
+
+      const badSeq: UinComponents = {
+        jurisdiction: VEHARI_JURISDICTION,
+        classification: { classCode: "03", subclassCode: "01", tertiaryCode: "02" },
+        sequence: "0001", // only 4 digits
+        version: "01"
+      };
+      expect(() => generateUin(badSeq)).toThrow("Sequence must be 7 digits");
     });
   });
 
@@ -153,8 +180,8 @@ describe("Provincial UIN (Unique Identification Number)", () => {
       const original: UinComponents = {
         jurisdiction: VEHARI_JURISDICTION,
         classification: { classCode: "06", subclassCode: "03", tertiaryCode: "01" },
-        sequence: "00042",
-        version: "01"
+        sequence: "0000042",
+        version: "02"
       };
       const uin = generateUin(original);
       const parsed = parseUin(uin);
@@ -165,7 +192,7 @@ describe("Provincial UIN (Unique Identification Number)", () => {
       const original: UinComponents = {
         jurisdiction: VEHARI_JURISDICTION,
         classification: { classCode: "10", subclassCode: "00", tertiaryCode: "00" },
-        sequence: "00005",
+        sequence: "0000005",
         version: "01"
       };
       const compact = generateCompactUin(original);
@@ -176,38 +203,67 @@ describe("Provincial UIN (Unique Identification Number)", () => {
     it("throws on malformed UIN strings", () => {
       expect(() => parseUin("INVALID")).toThrow("Invalid PIN / UIN format");
       expect(() => parseUin("237-001-01")).toThrow("Invalid PIN / UIN format");
+      expect(() => parseUin("237-001010611020000001-03")).toThrow("Invalid PIN / UIN format");
       expect(() => parseUin("")).toThrow("Invalid PIN / UIN format");
     });
   });
 
   describe("UIN Validation", () => {
-    it("validates well-formed formatted PINs (both 3-group and legacy 8-group)", () => {
-      expect(validateUin("237-0010103010200001-01")).toBe(true);
-      expect(validateUin("237-001-01-03-01-02-00001-01")).toBe(true);
-      expect(validateUin("218-002-05-06-10-03-99999-02")).toBe(true);
+    it("validates well-formed 25-character formatted PINs (-01 and -02)", () => {
+      expect(validateUin("237-001010301020000001-01")).toBe(true);
+      expect(validateUin("237-001010301020000001-02")).toBe(true);
+      expect(validateUin("218-002050610030099999-02")).toBe(true);
     });
 
-    it("validates well-formed compact PINs (21 digits)", () => {
-      expect(validateUin("2370010103010200001" + "01")).toBe(true);
+    it("validates well-formed compact PINs (23 digits)", () => {
+      expect(validateUin("23700101030102000000101")).toBe(true);
+      expect(validateUin("23700101030102000000102")).toBe(true);
     });
 
-    it("rejects malformed strings", () => {
+    it("rejects malformed strings or invalid versions", () => {
       expect(validateUin("INVALID")).toBe(false);
       expect(validateUin("237-001-01")).toBe(false);
-      expect(validateUin("237-001-01-03-01-02-00001-0X")).toBe(false);
+      expect(validateUin("237-001010301020000001-03")).toBe(false);
+      expect(validateUin("237-001010301020000001-0X")).toBe(false);
     });
 
     it("validates district code against PBS registry", () => {
-      expect(validateUinDistrict("237-0010103010200001-01")).toBeNull();
-      expect(validateUinDistrict("237-001-01-03-01-02-00001-01")).toBeNull();
-      expect(validateUinDistrict("999-001-01-03-01-02-00001-01")).toBe(
-        "Unknown district code: 999"
-      );
+      expect(validateUinDistrict("237-001010301020000001-01")).toBeNull();
+      expect(validateUinDistrict("237-001010301020000001-02")).toBeNull();
+      expect(validateUinDistrict("999-001010301020000001-01")).toBe("Unknown district code: 999");
+    });
+  });
+
+  describe("Register Transition Helpers", () => {
+    it("promotes Potential PIN (-01) to Form PFT-3 PIN (-02)", () => {
+      const potPin = "237-001010611020000001-01";
+      expect(isPotentialPin(potPin)).toBe(true);
+      expect(isPft3Pin(potPin)).toBe(false);
+
+      const pft3Pin = promotePinToPft3(potPin);
+      expect(pft3Pin).toBe("237-001010611020000001-02");
+      expect(isPft3Pin(pft3Pin)).toBe(true);
+      expect(isPotentialPin(pft3Pin)).toBe(false);
+    });
+
+    it("reverts Form PFT-3 PIN (-02) back to Potential PIN (-01)", () => {
+      const pft3Pin = "237-001010611020000001-02";
+      const potPin = revertPinToPotential(pft3Pin);
+      expect(potPin).toBe("237-001010611020000001-01");
+      expect(isPotentialPin(potPin)).toBe(true);
+    });
+
+    it("extracts immutable base PIN identical for both registers", () => {
+      const potPin = "237-001010611020000001-01";
+      const pft3Pin = "237-001010611020000001-02";
+      expect(getBasePin(potPin)).toBe("237-001010611020000001");
+      expect(getBasePin(pft3Pin)).toBe("237-001010611020000001");
+      expect(getBasePin(potPin)).toBe(getBasePin(pft3Pin));
     });
   });
 
   describe("High-level generateUinForUnit", () => {
-    it("generates a valid UIN for a Category 3(i)(b) unit in Vehari", () => {
+    it("generates a valid Form PFT-3 PIN by default (-02) with 7-digit sequence", () => {
       const rule = getStatutoryRuleById("PFT-3.i.b")!;
       const uin = generateUinForUnit({
         jurisdiction: VEHARI_PILOT_JURISDICTION,
@@ -221,24 +277,26 @@ describe("Provincial UIN (Unique Identification Number)", () => {
       expect(parsed.jurisdiction.districtCode).toBe("237");
       expect(parsed.jurisdiction.tehsilCode).toBe("001");
       expect(parsed.classification.classCode).toBe("03");
-      expect(parsed.sequence).toBe("000001");
-      expect(parsed.version).toBe("01");
+      expect(parsed.sequence).toBe("0000001");
+      expect(parsed.version).toBe("02");
     });
 
-    it("generates a valid UIN for a direct Category 10 unit", () => {
+    it("generates a valid Potential PIN when version '01' is requested", () => {
       const rule = getStatutoryRuleById("PFT-10")!;
       const uin = generateUinForUnit({
         jurisdiction: VEHARI_PILOT_JURISDICTION,
         rule,
         allRules,
-        sequenceNumber: 42
+        sequenceNumber: 42,
+        version: "01"
       });
 
       const parsed = parseUin(uin);
       expect(parsed.classification.classCode).toBe("10");
       expect(parsed.classification.subclassCode).toBe("00");
       expect(parsed.classification.tertiaryCode).toBe("00");
-      expect(parsed.sequence).toBe("000042");
+      expect(parsed.sequence).toBe("0000042");
+      expect(parsed.version).toBe("01");
     });
 
     it("generates distinct UINs for different sequence numbers", () => {
@@ -256,19 +314,6 @@ describe("Provincial UIN (Unique Identification Number)", () => {
         sequenceNumber: 2
       });
       expect(uin1).not.toBe(uin2);
-    });
-
-    it("increments version for reclassification tracking", () => {
-      const rule = getStatutoryRuleById("PFT-3.i.b")!;
-      const uin = generateUinForUnit({
-        jurisdiction: VEHARI_PILOT_JURISDICTION,
-        rule,
-        allRules,
-        sequenceNumber: 1,
-        version: 2
-      });
-      const parsed = parseUin(uin);
-      expect(parsed.version).toBe("02");
     });
   });
 });

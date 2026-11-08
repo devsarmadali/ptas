@@ -72,18 +72,26 @@ export interface PotentialUnitRecord {
 }
 
 /**
- * Generate a statutory potential PIN with the mandatory "Potential-" prefix.
+ * Generate a statutory potential PIN with the -01 version suffix.
+ * Strips any legacy "Potential-" prefix and ensures the statutory -01 suffix.
  */
 export function formatPotentialPin(rawUinOrPin: string): string {
-  const cleaned = rawUinOrPin.replace(/^Potential-/i, "").trim();
-  return `Potential-${cleaned}`;
+  const cleaned = rawUinOrPin
+    .replace(/^Potential-/i, "")
+    .replace(/-(01|02)$/, "")
+    .trim();
+  return `${cleaned}-01`;
 }
 
 /**
- * Strip the "Potential-" prefix to restore clean statutory PIN upon PFT-3 migration.
+ * Promotes a potential PIN (-01) to Form PFT-3 statutory PIN with -02 suffix.
  */
 export function cleanPotentialPin(potentialPin: string): string {
-  return potentialPin.replace(/^Potential-/i, "").trim();
+  const cleaned = potentialPin
+    .replace(/^Potential-/i, "")
+    .replace(/-(01|02)$/, "")
+    .trim();
+  return `${cleaned}-02`;
 }
 
 /**
@@ -360,8 +368,8 @@ export function createInitialPotentialUnits(): PotentialUnitRecord[] {
   return seeds.map((s) => {
     const rule = resolveRule(s.ruleCode, s.subclassificationCode);
     const potNum = `POT-${s.seq.toString().padStart(4, "0")}`;
-    const basePin = `237-00101061102000${s.seq.toString().padStart(2, "0")}-01`;
-    const pinNumber = formatPotentialPin(basePin);
+    const basePin = `237-00101061102${s.seq.toString().padStart(7, "0")}`;
+    const pinNumber = `${basePin}-01`;
     const annualRate = rule.annual_rate_pkr ?? 4000;
 
     return {
