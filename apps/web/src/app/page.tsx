@@ -7423,18 +7423,22 @@ export default function HomePage({
                   <table className="gov-table" style={{ width: "100%" }}>
                     <thead>
                       <tr>
-                        <th style={{ whiteSpace: "nowrap" }}>Assessment No.</th>
-                        <th style={{ whiteSpace: "nowrap" }}>Demand Number</th>
-                        <th style={{ whiteSpace: "nowrap" }}>PIN</th>
-                        <th style={{ maxWidth: "13rem" }}>
+                        <th className="cell-fit">Assessment No.</th>
+                        <th className="cell-fit">Demand Number</th>
+                        <th className="cell-fit">PIN</th>
+                        <th className="cell-wrap-text">
                           Profession/Trade Name &amp; Taxpayer / Proprietor
                         </th>
-                        <th style={{ whiteSpace: "nowrap" }}>CNIC / NTN</th>
-                        <th style={{ maxWidth: "15rem" }}>Second Schedule Classification</th>
-                        <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Statutory Rate</th>
-                        <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Status</th>
-                        <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Ledger Balance</th>
-                        <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Actions</th>
+                        <th className="cell-fit">CNIC / NTN</th>
+                        <th className="cell-wrap-text">Second Schedule Classification</th>
+                        <th className="cell-currency">Statutory Rate</th>
+                        <th className="cell-fit" style={{ textAlign: "center" }}>
+                          Status
+                        </th>
+                        <th className="cell-currency">Ledger Balance</th>
+                        <th className="col-actions" style={{ textAlign: "right" }}>
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -7469,11 +7473,11 @@ export default function HomePage({
                           const balance = computeLedgerBalance(u.ledgerEntries);
                           return (
                             <tr key={u.id}>
-                              <td style={{ whiteSpace: "nowrap" }}>
+                              <td className="cell-fit">
                                 <span
                                   style={{
                                     fontFamily: "monospace",
-                                    fontSize: "0.75rem",
+                                    fontSize: "0.8125rem",
                                     color: "#0f766e",
                                     fontWeight: 600
                                   }}
@@ -7481,16 +7485,16 @@ export default function HomePage({
                                   {u.assessmentNumber || "— Not assigned"}
                                 </span>
                               </td>
-                              <td style={{ whiteSpace: "nowrap" }}>
+                              <td className="cell-fit">
                                 {u.demandNumber || u.demandUnit.permanentDemandNo ? (
-                                  <strong style={{ fontSize: "0.78rem" }}>
+                                  <strong style={{ fontSize: "0.8125rem" }}>
                                     {u.demandNumber || u.demandUnit.permanentDemandNo}
                                   </strong>
                                 ) : (
                                   <span
                                     style={{
                                       color: "#94a3b8",
-                                      fontSize: "0.72rem",
+                                      fontSize: "0.75rem",
                                       fontStyle: "italic"
                                     }}
                                   >
@@ -7498,12 +7502,12 @@ export default function HomePage({
                                   </span>
                                 )}
                               </td>
-                              <td style={{ whiteSpace: "nowrap" }}>
+                              <td className="cell-fit">
                                 {u.pinNumber || u.provincialUin ? (
                                   <span
                                     style={{
                                       fontFamily: "monospace",
-                                      fontSize: "0.75rem",
+                                      fontSize: "0.8125rem",
                                       color: "#1d4ed8",
                                       fontWeight: 600
                                     }}
@@ -7514,7 +7518,7 @@ export default function HomePage({
                                   <span
                                     style={{
                                       color: "#94a3b8",
-                                      fontSize: "0.72rem",
+                                      fontSize: "0.75rem",
                                       fontStyle: "italic"
                                     }}
                                   >
@@ -7522,13 +7526,13 @@ export default function HomePage({
                                   </span>
                                 )}
                               </td>
-                              <td style={{ maxWidth: "12rem" }}>
-                                <strong style={{ fontSize: "0.78rem" }}>{u.legalName}</strong>
+                              <td className="cell-wrap-text">
+                                <strong style={{ fontSize: "0.8125rem" }}>{u.legalName}</strong>
                                 {u.tradeName && u.tradeName !== u.legalName && (
                                   <span
                                     style={{
                                       display: "block",
-                                      fontSize: "0.7rem",
+                                      fontSize: "0.75rem",
                                       color: "#64748b"
                                     }}
                                   >
@@ -7539,55 +7543,66 @@ export default function HomePage({
                                   <span
                                     style={{
                                       display: "inline-block",
-                                      fontSize: "0.65rem",
+                                      fontSize: "0.7rem",
                                       backgroundColor: "#f0fdf4",
                                       color: "#166534",
                                       border: "1px solid #bbf7d0",
                                       borderRadius: "3px",
-                                      padding: "0px 3px",
-                                      marginTop: "1px"
+                                      padding: "1px 4px",
+                                      marginTop: "2px"
                                     }}
                                   >
                                     📍 {u.locality}
                                   </span>
                                 )}
                               </td>
-                              <td style={{ whiteSpace: "nowrap" }}>
+                              <td className="cell-fit">
                                 <span
+                                  className="cell-token"
                                   style={{
-                                    fontFamily: "monospace",
-                                    fontSize: "0.72rem",
-                                    display: "block"
+                                    fontSize: "0.75rem",
+                                    display: "block",
+                                    background: "#f1f5f9",
+                                    padding: "0.15rem 0.4rem",
+                                    borderRadius: "4px",
+                                    border: "1px solid #e2e8f0"
                                   }}
                                 >
                                   {u.identifierValue}
                                 </span>
-                                <span style={{ fontSize: "0.65rem", color: "#64748b" }}>
+                                <span
+                                  style={{
+                                    fontSize: "0.7rem",
+                                    color: "#64748b",
+                                    display: "block",
+                                    marginTop: "2px"
+                                  }}
+                                >
                                   {u.identifierType}
                                 </span>
                               </td>
-                              <td style={{ maxWidth: "14rem" }}>
-                                <span className="badge badge-draft" style={{ fontSize: "0.68rem" }}>
+                              <td className="cell-wrap-text">
+                                <span className="badge badge-draft" style={{ fontSize: "0.75rem" }}>
                                   Class {u.statutoryRule.rule_code}
                                 </span>
                                 <span
                                   style={{
                                     display: "block",
-                                    fontSize: "0.7rem",
+                                    fontSize: "0.75rem",
                                     color: "#475569",
-                                    marginTop: "0.1rem",
-                                    lineHeight: 1.25
+                                    marginTop: "0.15rem",
+                                    lineHeight: 1.3
                                   }}
                                 >
                                   {u.statutoryRule.category}
                                 </span>
                               </td>
-                              <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                                <strong style={{ color: "#0d3822", fontSize: "0.8rem" }}>
+                              <td className="cell-currency">
+                                <strong style={{ color: "#0d3822", fontSize: "0.8125rem" }}>
                                   PKR {u.statutoryRule.annual_rate_pkr.toLocaleString()}
                                 </strong>
                               </td>
-                              <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                              <td className="cell-fit" style={{ textAlign: "center" }}>
                                 <span
                                   className={`badge badge-${
                                     rawStatus === "APPROVED"
@@ -7598,24 +7613,22 @@ export default function HomePage({
                                           ? "returned"
                                           : "draft"
                                   }`}
-                                  style={{ fontSize: "0.68rem" }}
+                                  style={{ fontSize: "0.75rem" }}
                                 >
                                   {rawStatus === "DRAFT" ? "FEEDED" : rawStatus}
                                 </span>
                               </td>
-                              <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                              <td className="cell-currency">
                                 <strong
                                   style={{
                                     color: balance > 0 ? "#b91c1c" : "#15803d",
-                                    fontSize: "0.8rem"
+                                    fontSize: "0.8125rem"
                                   }}
                                 >
                                   PKR {balance.toLocaleString()}
                                 </strong>
                               </td>
-                              <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                                {renderSurveyUnitActions(u)}
-                              </td>
+                              <td className="col-actions">{renderSurveyUnitActions(u)}</td>
                             </tr>
                           );
                         })
@@ -8015,12 +8028,16 @@ export default function HomePage({
                         aria-label="Select all units"
                       />
                     </th>
-                    <th style={{ maxWidth: "16rem" }}>Taxpayer Unit</th>
-                    <th style={{ width: "7.5rem", whiteSpace: "nowrap" }}>Financial Year</th>
-                    <th style={{ maxWidth: "18rem" }}>Statutory Rule &amp; Slab</th>
-                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Tax Amount</th>
-                    <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Workflow Status</th>
-                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Statutory Action</th>
+                    <th className="cell-wrap-text">Taxpayer Unit</th>
+                    <th className="cell-fit">Financial Year</th>
+                    <th className="cell-wrap-text">Statutory Rule &amp; Slab</th>
+                    <th className="cell-currency">Tax Amount</th>
+                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                      Workflow Status
+                    </th>
+                    <th className="col-actions" style={{ textAlign: "right" }}>
+                      Statutory Action
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -8074,8 +8091,10 @@ export default function HomePage({
                               aria-label={`Select unit ${u.legalName}`}
                             />
                           </td>
-                          <td style={{ maxWidth: "16rem" }}>
-                            <strong>{u.legalName}</strong>
+                          <td className="cell-wrap-text">
+                            <strong style={{ fontSize: "0.8125rem", color: "#0f172a" }}>
+                              {u.legalName}
+                            </strong>
                             {u.tradeName && u.tradeName !== u.legalName && (
                               <span
                                 style={{ display: "block", fontSize: "0.75rem", color: "#475569" }}
@@ -8086,7 +8105,7 @@ export default function HomePage({
                             <span
                               style={{
                                 display: "block",
-                                fontSize: "0.725rem",
+                                fontSize: "0.75rem",
                                 color: "#64748b",
                                 marginTop: "0.15rem"
                               }}
@@ -8104,22 +8123,22 @@ export default function HomePage({
                                 : ""}
                             </span>
                             <span
-                              style={{ display: "block", fontSize: "0.7rem", color: "#94a3b8" }}
+                              style={{ display: "block", fontSize: "0.75rem", color: "#94a3b8" }}
                             >
                               📍 {u.address} &bull; {u.circleName || "Circle-Vehari"}
                             </span>
                           </td>
-                          <td style={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
+                          <td className="cell-fit" style={{ fontSize: "0.8125rem" }}>
                             {currentAsm?.financialYearId ?? FINANCIAL_YEAR_2026_27}
                           </td>
-                          <td style={{ maxWidth: "18rem" }}>
-                            <strong>
+                          <td className="cell-wrap-text">
+                            <strong style={{ fontSize: "0.8125rem" }}>
                               Class {u.statutoryRule.rule_code} ({u.statutoryRule.category})
                             </strong>
                             <span
                               style={{
                                 display: "block",
-                                fontSize: "0.725rem",
+                                fontSize: "0.75rem",
                                 color: "#64748b",
                                 marginTop: "0.15rem",
                                 lineHeight: 1.25
@@ -8133,19 +8152,19 @@ export default function HomePage({
                                     : "Direct Category Rate"))}
                             </span>
                           </td>
-                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                            <strong style={{ fontSize: "0.95rem", color: "#0d3822" }}>
+                          <td className="cell-currency">
+                            <strong style={{ fontSize: "0.875rem", color: "#0d3822" }}>
                               PKR {displayAmount.toLocaleString()}
                             </strong>
                             {u.openingArrears !== undefined && u.openingArrears > 0 && (
                               <span
-                                style={{ display: "block", fontSize: "0.7rem", color: "#b45309" }}
+                                style={{ display: "block", fontSize: "0.75rem", color: "#b45309" }}
                               >
                                 + Arrears PKR {u.openingArrears.toLocaleString()}
                               </span>
                             )}
                           </td>
-                          <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                          <td className="cell-fit" style={{ textAlign: "center" }}>
                             <span
                               className={`badge badge-${
                                 isClosed
@@ -8158,12 +8177,12 @@ export default function HomePage({
                                         ? "returned"
                                         : "draft"
                               }`}
-                              style={{ fontSize: "0.72rem" }}
+                              style={{ fontSize: "0.75rem" }}
                             >
                               {isClosed ? "CLOSED" : status === "DRAFT" ? "FEEDED" : status}
                             </span>
                           </td>
-                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          <td className="col-actions">
                             {isClosed ? (
                               <div
                                 style={{
@@ -8904,7 +8923,8 @@ export default function HomePage({
                 <thead>
                   <tr>
                     <th
-                      style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+                      className="cell-fit"
+                      style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Potential No."
                     >
                       <div
@@ -8990,7 +9010,8 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
-                      style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+                      className="cell-fit"
+                      style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by PIN"
                     >
                       <div
@@ -9068,6 +9089,7 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
+                      className="cell-wrap-text"
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Profession/Trade Name"
                     >
@@ -9148,6 +9170,7 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
+                      className="cell-wrap-text"
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Taxpayer / Assessee"
                     >
@@ -9230,6 +9253,7 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
+                      className="cell-fit"
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Identifier"
                     >
@@ -9316,6 +9340,7 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
+                      className="cell-wrap-text"
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Location & Locality"
                     >
@@ -9396,6 +9421,7 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
+                      className="cell-wrap-text"
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Classification"
                     >
@@ -9478,7 +9504,8 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
-                      style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
+                      className="cell-currency"
+                      style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Annual Rate"
                     >
                       <div
@@ -9563,7 +9590,8 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
-                      style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
+                      className="cell-currency"
+                      style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Arrears"
                     >
                       <div
@@ -9646,7 +9674,8 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
-                      style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
+                      className="cell-currency"
+                      style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Total Demand"
                     >
                       <div
@@ -9725,6 +9754,7 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
+                      className="cell-fit"
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Pipeline Status"
                     >
@@ -9802,7 +9832,9 @@ export default function HomePage({
                         )}
                       </div>
                     </th>
-                    <th style={{ textAlign: "right" }}>Actions</th>
+                    <th className="col-actions" style={{ textAlign: "right" }}>
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -9819,111 +9851,93 @@ export default function HomePage({
                   ) : (
                     paginatedPotentialUnits.map((u) => (
                       <tr key={u.id}>
-                        <td style={{ whiteSpace: "nowrap" }}>
+                        <td className="cell-fit">
                           <span
                             style={{
                               fontWeight: 800,
                               color: "#b45309",
                               fontFamily: "monospace",
-                              fontSize: "0.88rem"
+                              fontSize: "0.8125rem"
                             }}
                           >
                             {u.potentialNumber}
                           </span>
                         </td>
-                        <td style={{ whiteSpace: "nowrap" }}>
+                        <td className="cell-fit">
                           <span
                             style={{
-                              fontSize: "0.78rem",
+                              fontSize: "0.8125rem",
                               color: "#334155",
-                              fontFamily: "monospace"
+                              fontFamily: "monospace",
+                              fontWeight: 600
                             }}
                           >
                             {u.pinNumber}
                           </span>
                         </td>
-                        <td>
-                          <strong style={{ color: "#0f172a" }}>{u.legalName}</strong>
+                        <td className="cell-wrap-text">
+                          <strong style={{ color: "#0f172a", fontSize: "0.8125rem" }}>
+                            {u.legalName}
+                          </strong>
                         </td>
-                        <td>
-                          <span style={{ color: "#475569" }}>
+                        <td className="cell-wrap-text">
+                          <span style={{ color: "#475569", fontSize: "0.8125rem" }}>
                             {u.taxpayerName || u.tradeName || "—"}
                           </span>
                         </td>
-                        <td>
+                        <td className="cell-fit">
                           <span
+                            className="cell-token"
                             style={{
-                              fontFamily: "monospace",
-                              fontSize: "0.82rem",
+                              fontSize: "0.75rem",
                               background: "#f1f5f9",
                               padding: "0.15rem 0.4rem",
-                              borderRadius: "4px"
+                              borderRadius: "4px",
+                              border: "1px solid #e2e8f0"
                             }}
                           >
                             {u.identifierType}: {u.identifierValue}
                           </span>
                         </td>
-                        <td>
-                          <div style={{ fontSize: "0.8rem", color: "#1e293b" }}>{u.address}</div>
-                          <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                        <td className="cell-wrap-text">
+                          <div style={{ fontSize: "0.8125rem", color: "#1e293b" }}>{u.address}</div>
+                          <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
                             {u.locality} &bull; {u.circleName || "Circle-Vehari"}
                           </div>
                         </td>
-                        <td>
-                          <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "#0d3822" }}>
+                        <td className="cell-wrap-text">
+                          <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "#0d3822" }}>
                             {u.categoryName}
                           </div>
                           {u.subclassificationName && (
-                            <div style={{ fontSize: "0.72rem", color: "#475569" }}>
+                            <div style={{ fontSize: "0.75rem", color: "#475569" }}>
                               {u.subclassificationName} ({u.subclassificationCode})
                             </div>
                           )}
                         </td>
-                        <td style={{ textAlign: "right" }}>
+                        <td className="cell-currency">
                           <div style={{ fontWeight: 700, color: "#166534" }}>
                             PKR {u.annualRatePkr.toLocaleString()}
                           </div>
                         </td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        <td className="cell-currency">
                           PKR {(u.openingArrears ?? 0).toLocaleString()}
                         </td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap", fontWeight: 700 }}>
+                        <td className="cell-currency" style={{ fontWeight: 700 }}>
                           PKR {(u.annualRatePkr + (u.openingArrears ?? 0)).toLocaleString()}
                         </td>
-                        <td>
+                        <td className="cell-fit">
                           {u.status === "ACTIVE" ? (
-                            <span
-                              style={{
-                                display: "inline-block",
-                                padding: "0.2rem 0.55rem",
-                                borderRadius: "9999px",
-                                fontSize: "0.72rem",
-                                fontWeight: 700,
-                                background: "#fef3c7",
-                                color: "#92400e",
-                                border: "1px solid #fde68a"
-                              }}
-                            >
-                              ⚡ Unassessed Prospect
+                            <span className="badge badge-submitted" style={{ fontSize: "0.75rem" }}>
+                              ⚡ Prospect
                             </span>
                           ) : (
-                            <span
-                              style={{
-                                display: "inline-block",
-                                padding: "0.2rem 0.55rem",
-                                borderRadius: "9999px",
-                                fontSize: "0.72rem",
-                                fontWeight: 700,
-                                background: "#dcfce7",
-                                color: "#166534",
-                                border: "1px solid #bbf7d0"
-                              }}
-                            >
-                              ✓ Migrated to PFT-3 ({u.migratedToDemandNo})
+                            <span className="badge badge-approved" style={{ fontSize: "0.75rem" }}>
+                              ✓ Migrated ({u.migratedToDemandNo})
                             </span>
                           )}
                         </td>
-                        <td style={{ textAlign: "right" }}>{renderPotentialUnitActions(u)}</td>
+                        <td className="col-actions">{renderPotentialUnitActions(u)}</td>
                       </tr>
                     ))
                   )}
@@ -10519,7 +10533,8 @@ export default function HomePage({
                   <thead>
                     <tr>
                       <th
-                        style={{ userSelect: "none", whiteSpace: "nowrap" }}
+                        className="cell-fit"
+                        style={{ userSelect: "none" }}
                         title="Click to sort by Demand No."
                       >
                         <div
@@ -10609,7 +10624,8 @@ export default function HomePage({
                         </div>
                       </th>
                       <th
-                        style={{ userSelect: "none", whiteSpace: "nowrap" }}
+                        className="cell-fit"
+                        style={{ userSelect: "none" }}
                         title="Click to sort by PIN"
                       >
                         <div
@@ -10693,7 +10709,8 @@ export default function HomePage({
                         </div>
                       </th>
                       <th
-                        style={{ userSelect: "none", maxWidth: "16rem" }}
+                        className="cell-wrap-text"
+                        style={{ userSelect: "none" }}
                         title="Click to sort by Profession/Trade Name"
                       >
                         <div
@@ -10777,7 +10794,8 @@ export default function HomePage({
                         </div>
                       </th>
                       <th
-                        style={{ userSelect: "none", maxWidth: "14rem" }}
+                        className="cell-wrap-text"
+                        style={{ userSelect: "none" }}
                         title="Click to sort by Taxpayer / Assessee"
                       >
                         <div
@@ -10861,7 +10879,8 @@ export default function HomePage({
                         </div>
                       </th>
                       <th
-                        style={{ userSelect: "none", maxWidth: "18rem" }}
+                        className="cell-wrap-text"
+                        style={{ userSelect: "none" }}
                         title="Click to sort by Statutory Class"
                       >
                         <div
@@ -10945,7 +10964,8 @@ export default function HomePage({
                         </div>
                       </th>
                       <th
-                        style={{ textAlign: "right", userSelect: "none", whiteSpace: "nowrap" }}
+                        className="cell-currency"
+                        style={{ userSelect: "none" }}
                         title="Click to sort by Assessed Tax"
                       >
                         <div
@@ -11039,7 +11059,8 @@ export default function HomePage({
                         </div>
                       </th>
                       <th
-                        style={{ textAlign: "right", userSelect: "none", whiteSpace: "nowrap" }}
+                        className="cell-currency"
+                        style={{ userSelect: "none" }}
                         title="Click to sort by Arrears"
                       >
                         <div
@@ -11124,7 +11145,8 @@ export default function HomePage({
                         </div>
                       </th>
                       <th
-                        style={{ textAlign: "right", userSelect: "none", whiteSpace: "nowrap" }}
+                        className="cell-currency"
+                        style={{ userSelect: "none" }}
                         title="Click to sort by Total Demand"
                       >
                         <div
@@ -11209,7 +11231,8 @@ export default function HomePage({
                         </div>
                       </th>
                       <th
-                        style={{ textAlign: "right", userSelect: "none", whiteSpace: "nowrap" }}
+                        className="cell-currency"
+                        style={{ userSelect: "none" }}
                         title="Click to sort by Paid Amount"
                       >
                         <div
@@ -11294,7 +11317,8 @@ export default function HomePage({
                         </div>
                       </th>
                       <th
-                        style={{ textAlign: "right", userSelect: "none", whiteSpace: "nowrap" }}
+                        className="cell-currency"
+                        style={{ userSelect: "none" }}
                         title="Click to sort by Balance"
                       >
                         <div
@@ -11387,7 +11411,9 @@ export default function HomePage({
                           )}
                         </div>
                       </th>
-                      <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Actions</th>
+                      <th className="col-actions" style={{ textAlign: "right" }}>
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -11403,42 +11429,48 @@ export default function HomePage({
                     ) : (
                       paginatedFormPFT3Rows.map((row) => (
                         <tr key={row.sourceUnitId}>
-                          <td style={{ whiteSpace: "nowrap" }}>
+                          <td className="cell-fit">
                             <strong
                               style={{
                                 color: "#0f172a",
                                 fontFamily: "monospace",
-                                fontSize: "0.88rem"
+                                fontSize: "0.8125rem"
                               }}
                             >
                               {row.permanentDemandNo}
                             </strong>
                           </td>
-                          <td style={{ whiteSpace: "nowrap" }}>
+                          <td className="cell-fit">
                             <span
                               style={{
-                                fontSize: "0.78rem",
+                                fontSize: "0.8125rem",
                                 color: "#334155",
-                                fontFamily: "monospace"
+                                fontFamily: "monospace",
+                                fontWeight: 600
                               }}
                             >
                               {row.provincialUin || "— Not assigned"}
                             </span>
                           </td>
-                          <td style={{ maxWidth: "16rem" }}>
-                            <strong>{row.legalName}</strong>
+                          <td className="cell-wrap-text">
+                            <strong style={{ color: "#0f172a", fontSize: "0.8125rem" }}>
+                              {row.legalName}
+                            </strong>
                           </td>
-                          <td style={{ maxWidth: "14rem", color: "#334155" }}>
+                          <td
+                            className="cell-wrap-text"
+                            style={{ color: "#334155", fontSize: "0.8125rem" }}
+                          >
                             {row.tradeName || "—"}
                           </td>
-                          <td style={{ maxWidth: "18rem" }}>
-                            <span className="badge badge-draft" style={{ fontSize: "0.7rem" }}>
+                          <td className="cell-wrap-text">
+                            <span className="badge badge-draft" style={{ fontSize: "0.75rem" }}>
                               {row.scheduleEntry}
                             </span>
                             <span
                               style={{
                                 display: "block",
-                                fontSize: "0.725rem",
+                                fontSize: "0.75rem",
                                 color: "#64748b",
                                 marginTop: "0.15rem",
                                 lineHeight: 1.3
@@ -11447,10 +11479,10 @@ export default function HomePage({
                               {row.categoryName}
                             </span>
                           </td>
-                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          <td className="cell-currency">
                             <strong>{row.assessedCurrentTax.toLocaleString()}</strong>
                           </td>
-                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          <td className="cell-currency">
                             <span
                               style={{
                                 color: row.arrears > 0 ? "#b45309" : "#64748b",
@@ -11460,17 +11492,17 @@ export default function HomePage({
                               {row.arrears.toLocaleString()}
                             </span>
                           </td>
-                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          <td className="cell-currency">
                             <strong style={{ color: "#0f172a" }}>
                               {row.totalDemand.toLocaleString()}
                             </strong>
                           </td>
-                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          <td className="cell-currency">
                             <strong style={{ color: "#166534" }}>
                               {row.totalPaid.toLocaleString()}
                             </strong>
                           </td>
-                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          <td className="cell-currency">
                             <strong
                               style={{
                                 color: row.outstandingBalance > 0 ? "#b91c1c" : "#166534"
@@ -11479,7 +11511,7 @@ export default function HomePage({
                               {row.outstandingBalance.toLocaleString()}
                             </strong>
                           </td>
-                          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          <td className="col-actions">
                             {(() => {
                               const targetUnit = units.find(
                                 (u) => u.demandUnit.permanentDemandNo === row.permanentDemandNo
@@ -11864,14 +11896,20 @@ export default function HomePage({
               <table className="gov-table" style={{ width: "100%" }}>
                 <thead>
                   <tr>
-                    <th>Demand No &amp; Assessee</th>
-                    <th>Category &amp; Rule</th>
-                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Assessed Tax</th>
-                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Penalty</th>
-                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Total Outstanding</th>
-                    <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Days Overdue</th>
-                    <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Statutory Status</th>
-                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Statutory Actions</th>
+                    <th className="cell-wrap-text">Demand No &amp; Assessee</th>
+                    <th className="cell-wrap-text">Category &amp; Rule</th>
+                    <th className="cell-currency">Assessed Tax</th>
+                    <th className="cell-currency">Penalty</th>
+                    <th className="cell-currency">Total Outstanding</th>
+                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                      Days Overdue
+                    </th>
+                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                      Statutory Status
+                    </th>
+                    <th className="col-actions" style={{ textAlign: "right" }}>
+                      Statutory Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -11892,21 +11930,24 @@ export default function HomePage({
 
                       return (
                         <tr key={u.id}>
-                          <td>
-                            <strong>{u.legalName}</strong>
+                          <td className="cell-wrap-text">
+                            <strong style={{ fontSize: "0.8125rem", color: "#0f172a" }}>
+                              {u.legalName}
+                            </strong>
                             {u.tradeName && (
                               <span
-                                style={{ display: "block", fontSize: "0.8rem", color: "#64748b" }}
+                                style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
                               >
                                 {u.tradeName}
                               </span>
                             )}
                             <span
+                              className="cell-token"
                               style={{
                                 display: "block",
-                                fontFamily: "monospace",
                                 fontSize: "0.75rem",
-                                color: "#0369a1"
+                                color: "#0369a1",
+                                marginTop: "0.125rem"
                               }}
                             >
                               {u.demandUnit.permanentDemandNo}
@@ -11914,44 +11955,52 @@ export default function HomePage({
                               {u.identifierValue}
                             </span>
                           </td>
-                          <td>
-                            <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>
+                          <td className="cell-wrap-text">
+                            <span
+                              style={{ fontSize: "0.8125rem", fontWeight: 600, color: "#1e293b" }}
+                            >
                               {u.statutoryRule.subclassification_code
                                 ? `Class ${u.statutoryRule.subclassification_code}`
                                 : `Class ${u.statutoryRule.category_code}`}
                             </span>
                             <span
-                              style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                              style={{
+                                display: "block",
+                                fontSize: "0.75rem",
+                                color: "#64748b",
+                                marginTop: "0.125rem"
+                              }}
                             >
                               {u.statutoryRule.category}
                             </span>
                           </td>
-                          <td>
-                            <strong>PKR {assessedTax.toLocaleString()}</strong>
+                          <td className="cell-currency">
+                            <span>PKR {assessedTax.toLocaleString()}</span>
                           </td>
-                          <td>
+                          <td className="cell-currency">
                             {aging.penaltyDemand > 0 ? (
-                              <strong style={{ color: "#dc2626" }}>
+                              <span style={{ color: "#dc2626", fontWeight: 700 }}>
                                 PKR {aging.penaltyDemand.toLocaleString()}
-                              </strong>
+                              </span>
                             ) : (
                               <span style={{ color: "#94a3b8" }}>—</span>
                             )}
                           </td>
-                          <td>
-                            <strong
+                          <td className="cell-currency">
+                            <span
                               style={{
                                 color: "#b91c1c",
-                                fontSize: "1rem"
+                                fontWeight: 700
                               }}
                             >
                               PKR {aging.remainingBalance.toLocaleString()}
-                            </strong>
+                            </span>
                           </td>
-                          <td>
+                          <td className="cell-fit" style={{ textAlign: "center" }}>
                             <span
                               style={{
                                 fontWeight: 700,
+                                fontSize: "0.8125rem",
                                 color:
                                   aging.daysOverdue > 30
                                     ? "#dc2626"
@@ -11963,12 +12012,12 @@ export default function HomePage({
                               {aging.daysOverdue} days
                             </span>
                             <span
-                              style={{ display: "block", fontSize: "0.7rem", color: "#64748b" }}
+                              style={{ display: "block", fontSize: "0.6875rem", color: "#64748b" }}
                             >
                               Due: 31/08/2026
                             </span>
                           </td>
-                          <td>
+                          <td className="cell-fit" style={{ textAlign: "center" }}>
                             <span
                               className={`badge ${
                                 aging.status === "RECOVERY_CERTIFIED"
@@ -11996,13 +12045,15 @@ export default function HomePage({
                                       : aging.status === "PENALTY_ELIGIBLE"
                                         ? "#dc2626"
                                         : "#b45309",
-                                borderColor: "transparent"
+                                borderColor: "transparent",
+                                fontSize: "0.6875rem",
+                                padding: "0.15rem 0.5rem"
                               }}
                             >
                               {aging.status.replace(/_/g, " ")}
                             </span>
                           </td>
-                          <td style={{ textAlign: "right" }}>
+                          <td className="col-actions" style={{ textAlign: "right" }}>
                             <RowActionMenu
                               align="right"
                               actions={[
@@ -12302,14 +12353,20 @@ export default function HomePage({
               <table className="gov-table" style={{ width: "100%" }}>
                 <thead>
                   <tr>
-                    <th>Appeal No &amp; Filing Date</th>
-                    <th>Appellant &amp; Trade Name</th>
-                    <th>Impugned Demand &amp; Notice</th>
-                    <th>Ground of Appeal</th>
-                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Undisputed Paid</th>
-                    <th>Hearing Date</th>
-                    <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Status</th>
-                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Statutory Actions</th>
+                    <th className="cell-fit">Appeal No &amp; Filing Date</th>
+                    <th className="cell-wrap-text">Appellant &amp; Profession/Trade Name</th>
+                    <th className="cell-wrap-text">Impugned Demand &amp; Notice</th>
+                    <th className="cell-wrap-text">Ground of Appeal</th>
+                    <th className="cell-currency">Undisputed Paid</th>
+                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                      Hearing Date
+                    </th>
+                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                      Status
+                    </th>
+                    <th className="col-actions" style={{ textAlign: "right" }}>
+                      Statutory Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -12361,68 +12418,89 @@ export default function HomePage({
 
                       return (
                         <tr key={appeal.id}>
-                          <td>
-                            <strong>{appeal.appealNumber}</strong>
+                          <td className="cell-fit">
+                            <strong
+                              className="cell-token"
+                              style={{ fontSize: "0.8125rem", color: "#0f172a" }}
+                            >
+                              {appeal.appealNumber}
+                            </strong>
                             <span
                               style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
                             >
                               Filed: {appeal.filingDate}
                             </span>
                           </td>
-                          <td>
-                            <strong>{appeal.appellantName}</strong>
+                          <td className="cell-wrap-text">
+                            <strong style={{ fontSize: "0.8125rem", color: "#0f172a" }}>
+                              {appeal.appellantName}
+                            </strong>
                             {appeal.appellantTradeName && (
                               <span
-                                style={{ display: "block", fontSize: "0.8rem", color: "#64748b" }}
+                                style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
                               >
                                 {appeal.appellantTradeName}
                               </span>
                             )}
                             <span
-                              style={{ display: "block", fontSize: "0.7rem", color: "#94a3b8" }}
+                              className="cell-token"
+                              style={{ display: "block", fontSize: "0.75rem", color: "#94a3b8" }}
                             >
                               {appeal.appellantCnic}
                             </span>
                           </td>
-                          <td>
-                            <span>PFT-1/VEH/2026/{appeal.unitId.slice(-4)}</span>
+                          <td className="cell-wrap-text">
+                            <span
+                              className="cell-token"
+                              style={{ fontSize: "0.75rem", color: "#0369a1" }}
+                            >
+                              PFT-1/VEH/2026/{appeal.unitId.slice(-4)}
+                            </span>
                             <span
                               style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
                             >
                               Demand: PKR {originalTax.toLocaleString()}
                             </span>
                           </td>
-                          <td style={{ maxWidth: "240px", fontSize: "0.82rem" }}>
+                          <td className="cell-wrap-text" style={{ fontSize: "0.8125rem" }}>
                             {appeal.groundOfAppeal}
                           </td>
-                          <td>
-                            <span style={{ fontWeight: "bold", color: "#166534" }}>
+                          <td className="cell-currency">
+                            <span style={{ fontWeight: 700, color: "#166534" }}>
                               PKR {appeal.undisputedPaid.toLocaleString()}
                             </span>
                             <span
-                              style={{ display: "block", fontSize: "0.7rem", color: "#64748b" }}
+                              style={{ display: "block", fontSize: "0.6875rem", color: "#64748b" }}
                             >
                               Rule 13(2) Compliant
                             </span>
                           </td>
-                          <td>
+                          <td className="cell-fit" style={{ textAlign: "center" }}>
                             {appeal.hearingDate ? (
-                              <span style={{ fontWeight: "500", color: "#1e40af" }}>
+                              <span
+                                style={{ fontWeight: 600, color: "#1e40af", fontSize: "0.8125rem" }}
+                              >
                                 {appeal.hearingDate}
                               </span>
                             ) : (
-                              <span style={{ color: "#94a3b8", fontStyle: "italic" }}>
+                              <span
+                                style={{
+                                  color: "#94a3b8",
+                                  fontStyle: "italic",
+                                  fontSize: "0.75rem"
+                                }}
+                              >
                                 Not scheduled
                               </span>
                             )}
                           </td>
-                          <td>
+                          <td className="cell-fit" style={{ textAlign: "center" }}>
                             <span
                               style={{
                                 display: "inline-block",
                                 padding: "0.2rem 0.5rem",
                                 borderRadius: "4px",
-                                fontSize: "0.75rem",
+                                fontSize: "0.6875rem",
                                 fontWeight: "600",
                                 background: statusBadgeBg,
                                 color: statusBadgeColor
@@ -12431,7 +12509,7 @@ export default function HomePage({
                               {statusText}
                             </span>
                           </td>
-                          <td style={{ textAlign: "right" }}>
+                          <td className="col-actions" style={{ textAlign: "right" }}>
                             <RowActionMenu
                               align="right"
                               actions={[
@@ -12628,12 +12706,16 @@ export default function HomePage({
               <table className="gov-table">
                 <thead>
                   <tr>
-                    <th>Demand No.</th>
-                    <th>Assessee Legal &amp; Trade Name</th>
-                    <th>Category &amp; Rule</th>
-                    <th>Ledger Outstanding Balance</th>
-                    <th>Statutory Clearance Status</th>
-                    <th style={{ textAlign: "right" }}>Statutory Actions</th>
+                    <th className="cell-fit">Demand No.</th>
+                    <th className="cell-wrap-text">Assessee Profession/Trade Name</th>
+                    <th className="cell-wrap-text">Category &amp; Rule</th>
+                    <th className="cell-currency">Ledger Outstanding Balance</th>
+                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                      Statutory Clearance Status
+                    </th>
+                    <th className="col-actions" style={{ textAlign: "right" }}>
+                      Statutory Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -12644,14 +12726,19 @@ export default function HomePage({
 
                     return (
                       <tr key={u.id}>
-                        <td>
-                          <strong>{u.demandUnit.permanentDemandNo}</strong>
+                        <td className="cell-fit">
+                          <strong
+                            className="cell-token"
+                            style={{ fontSize: "0.8125rem", color: "#0f172a" }}
+                          >
+                            {u.demandUnit.permanentDemandNo}
+                          </strong>
                           {u.provincialUin && (
                             <span
+                              className="cell-token"
                               style={{
                                 display: "block",
-                                fontFamily: "monospace",
-                                fontSize: "0.725rem",
+                                fontSize: "0.75rem",
                                 color: "#1d4ed8",
                                 fontWeight: 600,
                                 marginTop: "2px"
@@ -12665,8 +12752,10 @@ export default function HomePage({
                             {u.circleName || "Vehari Circle I (City / Commercial)"}
                           </span>
                         </td>
-                        <td>
-                          <strong>{u.legalName}</strong>
+                        <td className="cell-wrap-text">
+                          <strong style={{ fontSize: "0.8125rem", color: "#0f172a" }}>
+                            {u.legalName}
+                          </strong>
                           {u.tradeName && u.tradeName !== u.legalName && (
                             <span
                               style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
@@ -12674,12 +12763,17 @@ export default function HomePage({
                               Trading as: {u.tradeName}
                             </span>
                           )}
-                          <span style={{ display: "block", fontSize: "0.75rem", color: "#94a3b8" }}>
+                          <span
+                            className="cell-token"
+                            style={{ display: "block", fontSize: "0.75rem", color: "#94a3b8" }}
+                          >
                             {u.identifierType}: {u.identifierValue}
                           </span>
                         </td>
-                        <td>
-                          <strong>{u.statutoryRule.category}</strong>
+                        <td className="cell-wrap-text">
+                          <strong style={{ fontSize: "0.8125rem", color: "#1e293b" }}>
+                            {u.statutoryRule.category}
+                          </strong>
                           <span style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}>
                             {u.statutoryRule.subclassification_code
                               ? `Class ${u.statutoryRule.subclassification_code}`
@@ -12687,10 +12781,10 @@ export default function HomePage({
                             (PKR {u.statutoryRule.annual_rate_pkr.toLocaleString()})
                           </span>
                         </td>
-                        <td>
+                        <td className="cell-currency">
                           <strong
                             style={{
-                              fontSize: "0.95rem",
+                              fontSize: "0.875rem",
                               color: isZeroBalance ? "#166534" : "#dc2626"
                             }}
                           >
@@ -12698,26 +12792,28 @@ export default function HomePage({
                           </strong>
                           {balance > 0 ? (
                             <span
-                              style={{ display: "block", fontSize: "0.7rem", color: "#dc2626" }}
+                              style={{ display: "block", fontSize: "0.6875rem", color: "#dc2626" }}
                             >
                               Arrears outstanding
                             </span>
                           ) : (
                             <span
-                              style={{ display: "block", fontSize: "0.7rem", color: "#166534" }}
+                              style={{ display: "block", fontSize: "0.6875rem", color: "#166534" }}
                             >
                               Nil balance
                             </span>
                           )}
                         </td>
-                        <td>
+                        <td className="cell-fit" style={{ textAlign: "center" }}>
                           {isZeroBalance ? (
                             <span
                               className="badge badge-approved"
                               style={{
                                 background: "#ecfdf5",
                                 color: "#065f46",
-                                border: "1px solid #a7f3d0"
+                                border: "1px solid #a7f3d0",
+                                fontSize: "0.6875rem",
+                                padding: "0.15rem 0.5rem"
                               }}
                             >
                               ✓ ELIGIBLE (NIL ARREARS)
@@ -12728,7 +12824,9 @@ export default function HomePage({
                               style={{
                                 background: "#fff1f2",
                                 color: "#9f1239",
-                                border: "1px solid #fecdd3"
+                                border: "1px solid #fecdd3",
+                                fontSize: "0.6875rem",
+                                padding: "0.15rem 0.5rem"
                               }}
                             >
                               ✕ INELIGIBLE (ARREARS PENDING)
@@ -12736,19 +12834,19 @@ export default function HomePage({
                           )}
                           {certRecord && (
                             <span
+                              className="cell-token"
                               style={{
                                 display: "block",
-                                fontSize: "0.7rem",
+                                fontSize: "0.6875rem",
                                 color: "#065f46",
-                                marginTop: "0.25rem",
-                                fontFamily: "monospace"
+                                marginTop: "0.25rem"
                               }}
                             >
                               Cert: {certRecord.certificateNumber}
                             </span>
                           )}
                         </td>
-                        <td style={{ textAlign: "right" }}>
+                        <td className="col-actions" style={{ textAlign: "right" }}>
                           <RowActionMenu
                             align="right"
                             actions={[
@@ -12894,12 +12992,16 @@ export default function HomePage({
                 <table className="gov-table">
                   <thead>
                     <tr>
-                      <th>Notice Reference</th>
-                      <th>Taxpayer Unit</th>
-                      <th>Discontinuance Date &amp; Reason</th>
-                      <th>Inspector Field Inspection</th>
-                      <th>Status</th>
-                      <th style={{ textAlign: "right" }}>Statutory Actions</th>
+                      <th className="cell-fit">Notice Reference</th>
+                      <th className="cell-wrap-text">Assessee Unit</th>
+                      <th className="cell-wrap-text">Discontinuance Date &amp; Reason</th>
+                      <th className="cell-wrap-text">Inspector Field Inspection</th>
+                      <th className="cell-fit" style={{ textAlign: "center" }}>
+                        Status
+                      </th>
+                      <th className="col-actions" style={{ textAlign: "right" }}>
+                        Statutory Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -12921,38 +13023,45 @@ export default function HomePage({
 
                         return (
                           <tr key={disc.id}>
-                            <td>
-                              <strong>{disc.noticeNumber}</strong>
+                            <td className="cell-fit">
+                              <strong
+                                className="cell-token"
+                                style={{ fontSize: "0.8125rem", color: "#0f172a" }}
+                              >
+                                {disc.noticeNumber}
+                              </strong>
                               <span
                                 style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
                               >
                                 Filed: {new Date(disc.filedAt).toLocaleDateString()}
                               </span>
                             </td>
-                            <td>
-                              <strong>{disc.assesseeLegalName}</strong>
+                            <td className="cell-wrap-text">
+                              <strong style={{ fontSize: "0.8125rem", color: "#0f172a" }}>
+                                {disc.assesseeLegalName}
+                              </strong>
                               <span
+                                className="cell-token"
                                 style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
                               >
                                 {disc.cnicOrNtn}
                               </span>
                             </td>
-                            <td>
-                              <strong style={{ color: "#b91c1c" }}>
+                            <td className="cell-wrap-text">
+                              <strong style={{ color: "#b91c1c", fontSize: "0.8125rem" }}>
                                 Effective: {disc.discontinuanceDate}
                               </strong>
                               <span
                                 style={{
                                   display: "block",
                                   fontSize: "0.75rem",
-                                  color: "#475569",
-                                  maxWidth: "18rem"
+                                  color: "#475569"
                                 }}
                               >
                                 {disc.reason}
                               </span>
                             </td>
-                            <td>
+                            <td className="cell-wrap-text">
                               {disc.inspectorReport ? (
                                 <div>
                                   <span
@@ -12968,8 +13077,7 @@ export default function HomePage({
                                     style={{
                                       display: "block",
                                       fontSize: "0.725rem",
-                                      color: "#64748b",
-                                      maxWidth: "18rem"
+                                      color: "#64748b"
                                     }}
                                   >
                                     {disc.inspectorReport}
@@ -12981,7 +13089,7 @@ export default function HomePage({
                                 </span>
                               )}
                             </td>
-                            <td>
+                            <td className="cell-fit" style={{ textAlign: "center" }}>
                               <span
                                 className={`badge ${
                                   isClosed
@@ -12992,16 +13100,17 @@ export default function HomePage({
                                         ? "badge-pending"
                                         : "badge-returned"
                                 }`}
+                                style={{ fontSize: "0.6875rem", padding: "0.15rem 0.5rem" }}
                               >
                                 {disc.status.replace(/_/g, " ")}
                               </span>
                               {disc.etoOrderNumber && (
                                 <span
+                                  className="cell-token"
                                   style={{
                                     display: "block",
-                                    fontSize: "0.7rem",
+                                    fontSize: "0.6875rem",
                                     color: "#64748b",
-                                    fontFamily: "monospace",
                                     marginTop: "0.2rem"
                                   }}
                                 >
@@ -13009,7 +13118,7 @@ export default function HomePage({
                                 </span>
                               )}
                             </td>
-                            <td style={{ textAlign: "right" }}>
+                            <td className="col-actions" style={{ textAlign: "right" }}>
                               <RowActionMenu
                                 align="right"
                                 actions={[
@@ -13158,12 +13267,16 @@ export default function HomePage({
                 <table className="gov-table">
                   <thead>
                     <tr>
-                      <th>Application No.</th>
-                      <th>Taxpayer Unit</th>
-                      <th>Relief Type &amp; Amount</th>
-                      <th>Legal Grounds &amp; Evidence</th>
-                      <th>Status &amp; Ledger Posting</th>
-                      <th style={{ textAlign: "right" }}>Statutory Actions</th>
+                      <th className="cell-fit">Application No.</th>
+                      <th className="cell-wrap-text">Assessee Unit</th>
+                      <th className="cell-currency">Relief Type &amp; Amount</th>
+                      <th className="cell-wrap-text">Legal Grounds &amp; Evidence</th>
+                      <th className="cell-fit" style={{ textAlign: "center" }}>
+                        Status &amp; Ledger Posting
+                      </th>
+                      <th className="col-actions" style={{ textAlign: "right" }}>
+                        Statutory Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -13183,48 +13296,60 @@ export default function HomePage({
 
                         return (
                           <tr key={ref.id}>
-                            <td>
-                              <strong>{ref.applicationNumber}</strong>
+                            <td className="cell-fit">
+                              <strong
+                                className="cell-token"
+                                style={{ fontSize: "0.8125rem", color: "#0f172a" }}
+                              >
+                                {ref.applicationNumber}
+                              </strong>
                               <span
                                 style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
                               >
                                 Filed: {new Date(ref.filedAt).toLocaleDateString()}
                               </span>
                             </td>
-                            <td>
-                              <strong>{ref.assesseeLegalName}</strong>
+                            <td className="cell-wrap-text">
+                              <strong style={{ fontSize: "0.8125rem", color: "#0f172a" }}>
+                                {ref.assesseeLegalName}
+                              </strong>
                               <span
+                                className="cell-token"
                                 style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
                               >
                                 {ref.cnicOrNtn}
                               </span>
                             </td>
-                            <td>
-                              <strong style={{ color: "#1e3a8a" }}>
+                            <td className="cell-currency">
+                              <strong style={{ color: "#1e3a8a", fontSize: "0.875rem" }}>
                                 PKR {ref.amount.toLocaleString()}
                               </strong>
                               <span
-                                style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                                style={{
+                                  display: "block",
+                                  fontSize: "0.6875rem",
+                                  color: "#64748b"
+                                }}
                               >
                                 Type: {ref.type.replace(/_/g, " ")}
                               </span>
                             </td>
-                            <td>
+                            <td className="cell-wrap-text">
                               <span
                                 style={{
                                   display: "block",
-                                  fontSize: "0.8rem",
-                                  color: "#334155",
-                                  maxWidth: "20rem"
+                                  fontSize: "0.8125rem",
+                                  color: "#334155"
                                 }}
                               >
                                 {ref.grounds}
                               </span>
                               {ref.evidenceReference && (
                                 <span
+                                  className="cell-token"
                                   style={{
                                     display: "block",
-                                    fontSize: "0.725rem",
+                                    fontSize: "0.6875rem",
                                     color: "#64748b",
                                     marginTop: "0.2rem"
                                   }}
@@ -13233,7 +13358,7 @@ export default function HomePage({
                                 </span>
                               )}
                             </td>
-                            <td>
+                            <td className="cell-fit" style={{ textAlign: "center" }}>
                               <span
                                 className={`badge ${
                                   isApproved
@@ -13242,6 +13367,7 @@ export default function HomePage({
                                       ? "badge-pending"
                                       : "badge-returned"
                                 }`}
+                                style={{ fontSize: "0.6875rem", padding: "0.15rem 0.5rem" }}
                               >
                                 {ref.status.replace(/_/g, " ")}
                               </span>
@@ -13249,17 +13375,17 @@ export default function HomePage({
                                 <span
                                   style={{
                                     display: "block",
-                                    fontSize: "0.7rem",
+                                    fontSize: "0.6875rem",
                                     color: "#166534",
                                     fontWeight: 600,
                                     marginTop: "0.25rem"
                                   }}
                                 >
-                                  ✓ Posted to Demand Ledger
+                                  ✓ Posted to Ledger
                                 </span>
                               )}
                             </td>
-                            <td style={{ textAlign: "right" }}>
+                            <td className="col-actions" style={{ textAlign: "right" }}>
                               <RowActionMenu
                                 align="right"
                                 actions={[
@@ -13746,14 +13872,22 @@ export default function HomePage({
               <table className="gov-table">
                 <thead>
                   <tr>
-                    <th>Challan &amp; Notice Ref</th>
-                    <th>Verification PIN</th>
-                    <th>Taxpayer Details</th>
-                    <th>Classification &amp; Type</th>
-                    <th style={{ textAlign: "right" }}>Amount Payable</th>
-                    <th>Due Date</th>
-                    <th>Status</th>
-                    <th style={{ textAlign: "right" }}>Actions</th>
+                    <th className="cell-fit">Challan &amp; Notice Ref</th>
+                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                      Verification PIN
+                    </th>
+                    <th className="cell-wrap-text">Assessee Profession/Trade Name</th>
+                    <th className="cell-wrap-text">Classification &amp; Type</th>
+                    <th className="cell-currency">Amount Payable</th>
+                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                      Due Date
+                    </th>
+                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                      Status
+                    </th>
+                    <th className="col-actions" style={{ textAlign: "right" }}>
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -13858,13 +13992,18 @@ export default function HomePage({
 
                       return (
                         <tr key={challan.id}>
-                          <td>
-                            <strong>{challan.challanNumber}</strong>
+                          <td className="cell-fit">
+                            <strong
+                              className="cell-token"
+                              style={{ fontSize: "0.8125rem", color: "#0f172a" }}
+                            >
+                              {challan.challanNumber}
+                            </strong>
                             <span
+                              className="cell-token"
                               style={{
                                 display: "block",
                                 fontSize: "0.75rem",
-                                fontFamily: "monospace",
                                 color: "#1e3a8a",
                                 fontWeight: 700,
                                 marginTop: "0.15rem",
@@ -13885,7 +14024,7 @@ export default function HomePage({
                             <span
                               style={{
                                 display: "block",
-                                fontSize: "0.7rem",
+                                fontSize: "0.6875rem",
                                 color: "#64748b",
                                 marginTop: "0.15rem"
                               }}
@@ -13893,19 +14032,19 @@ export default function HomePage({
                               Demand: {challan.demandNumber} &bull; Issued: {challan.issueDate}
                             </span>
                           </td>
-                          <td>
+                          <td className="cell-fit" style={{ textAlign: "center" }}>
                             <span
+                              className="cell-token"
                               style={{
                                 display: "inline-block",
-                                padding: "0.25rem 0.55rem",
+                                padding: "0.2rem 0.5rem",
                                 borderRadius: "6px",
-                                fontFamily: "monospace",
                                 fontWeight: 800,
-                                fontSize: "0.85rem",
+                                fontSize: "0.8125rem",
                                 background: "#e0f2fe",
                                 color: "#0369a1",
                                 border: "1px solid #bae6fd",
-                                letterSpacing: "1.5px"
+                                letterSpacing: "1px"
                               }}
                               title="Official 6-digit Verification PIN"
                             >
@@ -13926,8 +14065,10 @@ export default function HomePage({
                               Verification PIN
                             </span>
                           </td>
-                          <td>
-                            <strong>{challan.legalName}</strong>
+                          <td className="cell-wrap-text">
+                            <strong style={{ fontSize: "0.8125rem", color: "#0f172a" }}>
+                              {challan.legalName}
+                            </strong>
                             {challan.tradeName && (
                               <span
                                 style={{ display: "block", fontSize: "0.75rem", color: "#065f46" }}
@@ -13936,13 +14077,16 @@ export default function HomePage({
                               </span>
                             )}
                             <span
+                              className="cell-token"
                               style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
                             >
                               {challan.identifierType}: {challan.identifierValue}
                             </span>
                           </td>
-                          <td>
-                            <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#0f172a" }}>
+                          <td className="cell-wrap-text">
+                            <span
+                              style={{ fontSize: "0.8125rem", fontWeight: 600, color: "#0f172a" }}
+                            >
                               Class {challan.subclassificationCode ?? challan.category}
                             </span>
                             <span
@@ -14014,22 +14158,22 @@ export default function HomePage({
                               </div>
                             )}
                           </td>
-                          <td style={{ textAlign: "right" }}>
+                          <td className="cell-currency">
                             <strong
                               style={{
-                                fontSize: "0.95rem",
+                                fontSize: "0.875rem",
                                 color: isReceived ? "#166534" : "#0d3822"
                               }}
                             >
                               PKR {challan.amountPayable.toLocaleString()}
                             </strong>
                           </td>
-                          <td>
-                            <span style={{ fontSize: "0.85rem", color: "#334155" }}>
+                          <td className="cell-fit" style={{ textAlign: "center" }}>
+                            <span style={{ fontSize: "0.8125rem", color: "#334155" }}>
                               {challan.dueDate}
                             </span>
                           </td>
-                          <td>
+                          <td className="cell-fit" style={{ textAlign: "center" }}>
                             <span
                               className={`badge ${
                                 isReceived
@@ -14038,6 +14182,7 @@ export default function HomePage({
                                     ? "badge-returned"
                                     : "badge-pending"
                               }`}
+                              style={{ fontSize: "0.6875rem", padding: "0.15rem 0.5rem" }}
                             >
                               {isReceived && "✓ RECEIVED"}
                               {isIssued && "⏳ ISSUED"}
@@ -14045,9 +14190,10 @@ export default function HomePage({
                             </span>
                             {isReceived && challan.receiptNumber && (
                               <span
+                                className="cell-token"
                                 style={{
                                   display: "block",
-                                  fontSize: "0.7rem",
+                                  fontSize: "0.6875rem",
                                   color: "#166534",
                                   fontWeight: 600,
                                   marginTop: "0.25rem"
@@ -14060,7 +14206,7 @@ export default function HomePage({
                               <span
                                 style={{
                                   display: "block",
-                                  fontSize: "0.7rem",
+                                  fontSize: "0.6875rem",
                                   color: "#991b1b",
                                   maxWidth: "12rem",
                                   marginTop: "0.25rem"
@@ -14070,7 +14216,7 @@ export default function HomePage({
                               </span>
                             )}
                           </td>
-                          <td style={{ textAlign: "right" }}>
+                          <td className="col-actions" style={{ textAlign: "right" }}>
                             {isCancelled ? (
                               <span
                                 style={{
@@ -14255,14 +14401,20 @@ export default function HomePage({
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Challan No.</th>
-                    <th>Potential No. &amp; PIN</th>
-                    <th>Assessee &amp; Business Name</th>
-                    <th>Statutory Classification</th>
-                    <th style={{ textAlign: "right" }}>Payable Amount</th>
-                    <th>Issue &amp; Due Date</th>
-                    <th>Status</th>
-                    <th style={{ textAlign: "right" }}>Actions</th>
+                    <th className="cell-fit">Challan No.</th>
+                    <th className="cell-fit">Potential No. &amp; PIN</th>
+                    <th className="cell-wrap-text">Assessee Profession/Trade Name</th>
+                    <th className="cell-wrap-text">Statutory Classification</th>
+                    <th className="cell-currency">Payable Amount</th>
+                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                      Issue &amp; Due Date
+                    </th>
+                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                      Status
+                    </th>
+                    <th className="col-actions" style={{ textAlign: "right" }}>
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -14283,78 +14435,84 @@ export default function HomePage({
                     }
                     return provChallans.map((challan) => (
                       <tr key={challan.id}>
-                        <td>
+                        <td className="cell-fit">
                           <span
+                            className="cell-token"
                             style={{
-                              fontWeight: 800,
+                              fontWeight: 700,
                               color: "#166534",
-                              fontFamily: "monospace"
+                              fontSize: "0.8125rem"
                             }}
                           >
                             {challan.challanNumber}
                           </span>
                         </td>
-                        <td>
+                        <td className="cell-fit">
                           <div
+                            className="cell-token"
                             style={{
                               fontWeight: 700,
                               color: "#b45309",
-                              fontFamily: "monospace"
+                              fontSize: "0.8125rem"
                             }}
                           >
                             {challan.potentialNumber || challan.demandNumber}
                           </div>
                           <div
+                            className="cell-token"
                             style={{
-                              fontSize: "0.72rem",
-                              color: "#475569",
-                              fontFamily: "monospace"
+                              fontSize: "0.75rem",
+                              color: "#475569"
                             }}
                           >
                             {challan.pin}
                           </div>
                         </td>
-                        <td>
-                          <div style={{ fontWeight: 700 }}>{challan.legalName}</div>
+                        <td className="cell-wrap-text">
+                          <strong style={{ fontSize: "0.8125rem", color: "#0f172a" }}>
+                            {challan.legalName}
+                          </strong>
                           {challan.tradeName && (
-                            <div style={{ fontSize: "0.78rem", color: "#475569" }}>
+                            <div style={{ fontSize: "0.75rem", color: "#475569" }}>
                               {challan.tradeName}
                             </div>
                           )}
                         </td>
-                        <td>
-                          <div style={{ fontSize: "0.8rem" }}>{challan.category}</div>
+                        <td className="cell-wrap-text">
+                          <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "#1e293b" }}>
+                            {challan.category}
+                          </div>
                           {challan.subclassificationCode && (
-                            <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                            <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
                               Subclass: {challan.subclassificationCode}
                             </div>
                           )}
                         </td>
-                        <td
-                          style={{
-                            textAlign: "right",
-                            fontWeight: 800,
-                            color: "#166534"
-                          }}
-                        >
-                          PKR {challan.amountPayable.toLocaleString()}
+                        <td className="cell-currency">
+                          <strong
+                            style={{
+                              fontSize: "0.875rem",
+                              color: "#166534"
+                            }}
+                          >
+                            PKR {challan.amountPayable.toLocaleString()}
+                          </strong>
                         </td>
-                        <td>
-                          <div style={{ fontSize: "0.8rem" }}>Issue: {challan.issueDate}</div>
-                          <div style={{ fontSize: "0.75rem", color: "#dc2626" }}>
+                        <td className="cell-fit" style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: "0.8125rem", color: "#334155" }}>
+                            Issue: {challan.issueDate}
+                          </div>
+                          <div style={{ fontSize: "0.75rem", color: "#dc2626", fontWeight: 600 }}>
                             Due: {challan.dueDate}
                           </div>
                         </td>
-                        <td>
+                        <td className="cell-fit" style={{ textAlign: "center" }}>
                           {challan.status === "ISSUED" && (
                             <span
+                              className="badge badge-pending"
                               style={{
-                                padding: "0.2rem 0.5rem",
-                                borderRadius: "9999px",
-                                fontSize: "0.72rem",
-                                fontWeight: 700,
-                                background: "#fef3c7",
-                                color: "#92400e"
+                                fontSize: "0.6875rem",
+                                padding: "0.15rem 0.5rem"
                               }}
                             >
                               ACTIVE (ISSUED)
@@ -14362,13 +14520,10 @@ export default function HomePage({
                           )}
                           {challan.status === "RECEIVED" && (
                             <span
+                              className="badge badge-approved"
                               style={{
-                                padding: "0.2rem 0.5rem",
-                                borderRadius: "9999px",
-                                fontSize: "0.72rem",
-                                fontWeight: 700,
-                                background: "#dcfce7",
-                                color: "#166534"
+                                fontSize: "0.6875rem",
+                                padding: "0.15rem 0.5rem"
                               }}
                             >
                               REALIZED &amp; CREDITED
@@ -14376,20 +14531,17 @@ export default function HomePage({
                           )}
                           {challan.status === "CANCELLED" && (
                             <span
+                              className="badge badge-returned"
                               style={{
-                                padding: "0.2rem 0.5rem",
-                                borderRadius: "9999px",
-                                fontSize: "0.72rem",
-                                fontWeight: 700,
-                                background: "#fee2e2",
-                                color: "#991b1b"
+                                fontSize: "0.6875rem",
+                                padding: "0.15rem 0.5rem"
                               }}
                             >
                               CANCELLED
                             </span>
                           )}
                         </td>
-                        <td style={{ textAlign: "right" }}>
+                        <td className="col-actions" style={{ textAlign: "right" }}>
                           <RowActionMenu
                             align="right"
                             actions={
@@ -14815,16 +14967,22 @@ export default function HomePage({
               <table className="gov-table" style={{ width: "100%" }}>
                 <thead>
                   <tr>
-                    <th style={{ whiteSpace: "nowrap" }}>Receipt # &amp; Date</th>
-                    <th style={{ whiteSpace: "nowrap" }}>Challan &amp; Demand #</th>
-                    <th style={{ maxWidth: "12rem" }}>Assessee Details</th>
-                    <th style={{ maxWidth: "12rem" }}>Classification &amp; Slab</th>
-                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Amount Discharged</th>
-                    <th style={{ maxWidth: "11rem" }}>Treasury Channel &amp; CPR</th>
-                    <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Demand Type</th>
-                    <th style={{ textAlign: "center", whiteSpace: "nowrap" }}>Payment Source</th>
-                    <th style={{ maxWidth: "10rem" }}>Receiving Officer</th>
-                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Actions</th>
+                    <th className="cell-fit">Receipt # &amp; Date</th>
+                    <th className="cell-fit">Challan &amp; Demand #</th>
+                    <th className="cell-wrap-text">Assessee Profession/Trade Name</th>
+                    <th className="cell-wrap-text">Classification &amp; Slab</th>
+                    <th className="cell-currency">Amount Discharged</th>
+                    <th className="cell-wrap-text">Treasury Channel &amp; CPR</th>
+                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                      Demand Type
+                    </th>
+                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                      Payment Source
+                    </th>
+                    <th className="cell-fit">Receiving Officer</th>
+                    <th className="col-actions" style={{ textAlign: "right" }}>
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -14889,12 +15047,12 @@ export default function HomePage({
 
                     return filtered.map((rec) => (
                       <tr key={rec.id}>
-                        <td style={{ whiteSpace: "nowrap" }}>
+                        <td className="cell-fit">
                           <strong
+                            className="cell-token"
                             style={{
                               color: "#065f46",
                               fontSize: "0.75rem",
-                              fontFamily: "monospace",
                               display: "block"
                             }}
                           >
@@ -14903,7 +15061,7 @@ export default function HomePage({
                           <span
                             style={{
                               display: "block",
-                              fontSize: "0.68rem",
+                              fontSize: "0.6875rem",
                               color: "#065f46",
                               fontWeight: 600
                             }}
@@ -14919,17 +15077,20 @@ export default function HomePage({
                               : rec.timeOfReceipt || rec.dateOfReceipt}
                           </span>
                         </td>
-                        <td style={{ whiteSpace: "nowrap" }}>
+                        <td className="cell-fit">
                           <strong
+                            className="cell-token"
                             style={{
                               fontSize: "0.75rem",
-                              fontFamily: "monospace",
                               display: "block"
                             }}
                           >
                             {rec.challanNumber.replace(/^PB\/ET\/VHR\/CIR-1\//, "")}
                           </strong>
-                          <span style={{ display: "block", fontSize: "0.68rem", color: "#64748b" }}>
+                          <span
+                            className="cell-token"
+                            style={{ display: "block", fontSize: "0.6875rem", color: "#64748b" }}
+                          >
                             PDN: {rec.demandNumber}
                           </span>
                           {(rec.challanIssueDate || rec.challanDueDate) && (
@@ -14941,34 +15102,36 @@ export default function HomePage({
                             </span>
                           )}
                         </td>
-                        <td style={{ maxWidth: "12rem" }}>
-                          <strong style={{ fontSize: "0.8rem" }}>{rec.assesseeLegalName}</strong>
+                        <td className="cell-wrap-text">
+                          <strong style={{ fontSize: "0.8125rem", color: "#0f172a" }}>
+                            {rec.assesseeLegalName}
+                          </strong>
                           {rec.assesseeTradeName && (
                             <span
-                              style={{ display: "block", fontSize: "0.725rem", color: "#0d3822" }}
+                              style={{ display: "block", fontSize: "0.75rem", color: "#0d3822" }}
                             >
                               {rec.assesseeTradeName}
                             </span>
                           )}
                           <span
+                            className="cell-token"
                             style={{
                               display: "block",
-                              fontSize: "0.7rem",
-                              color: "#64748b",
-                              fontFamily: "monospace"
+                              fontSize: "0.75rem",
+                              color: "#64748b"
                             }}
                           >
                             {rec.identifierType}: {rec.identifierValue}
                           </span>
                         </td>
-                        <td style={{ maxWidth: "12rem" }}>
-                          <span className="badge badge-draft" style={{ fontSize: "0.68rem" }}>
+                        <td className="cell-wrap-text">
+                          <span className="badge badge-draft" style={{ fontSize: "0.6875rem" }}>
                             Class {rec.subclassificationCode}
                           </span>
                           <span
                             style={{
                               display: "block",
-                              fontSize: "0.7rem",
+                              fontSize: "0.75rem",
                               color: "#475569",
                               marginTop: "0.1rem",
                               lineHeight: 1.2
@@ -14977,23 +15140,23 @@ export default function HomePage({
                             {rec.statutoryCategory}
                           </span>
                         </td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                          <strong style={{ fontSize: "0.9rem", color: "#15803d" }}>
+                        <td className="cell-currency">
+                          <strong style={{ fontSize: "0.875rem", color: "#15803d" }}>
                             PKR {rec.amountPaidPkr.toLocaleString()}
                           </strong>
                           <span style={{ display: "block", fontSize: "0.65rem", color: "#166534" }}>
                             ✓ FULLY CREDITED
                           </span>
                         </td>
-                        <td style={{ maxWidth: "10rem" }}>
-                          <strong style={{ fontSize: "0.75rem" }}>
+                        <td className="cell-wrap-text">
+                          <strong style={{ fontSize: "0.8125rem", color: "#1e293b" }}>
                             {rec.paymentChannel.replace(/ \(Digital Bank Transfer\)/, "")}
                           </strong>
                           {rec.bankBranch && (
                             <span
                               style={{
                                 display: "block",
-                                fontSize: "0.68rem",
+                                fontSize: "0.6875rem",
                                 color: "#065f46",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
@@ -15005,10 +15168,10 @@ export default function HomePage({
                             </span>
                           )}
                           <span
+                            className="cell-token"
                             style={{
                               display: "block",
-                              fontSize: "0.68rem",
-                              fontFamily: "monospace",
+                              fontSize: "0.6875rem",
                               color: "#1e3a8a",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
@@ -15019,7 +15182,7 @@ export default function HomePage({
                             Ref: {rec.bankScrollRef}
                           </span>
                         </td>
-                        <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                        <td className="cell-fit" style={{ textAlign: "center" }}>
                           {(() => {
                             const cat = getReceiptCategory(rec);
                             const isProvisional = cat === "PROVISIONAL_POTENTIAL";
@@ -15027,9 +15190,9 @@ export default function HomePage({
                               <span
                                 style={{
                                   display: "inline-block",
-                                  padding: "0.18rem 0.5rem",
+                                  padding: "0.15rem 0.45rem",
                                   borderRadius: "9999px",
-                                  fontSize: "0.68rem",
+                                  fontSize: "0.6875rem",
                                   fontWeight: 700,
                                   background: "#fef3c7",
                                   color: "#92400e",
@@ -15044,9 +15207,9 @@ export default function HomePage({
                               <span
                                 style={{
                                   display: "inline-block",
-                                  padding: "0.18rem 0.5rem",
+                                  padding: "0.15rem 0.45rem",
                                   borderRadius: "9999px",
-                                  fontSize: "0.68rem",
+                                  fontSize: "0.6875rem",
                                   fontWeight: 700,
                                   background: "#dcfce7",
                                   color: "#166534",
@@ -15060,7 +15223,7 @@ export default function HomePage({
                             );
                           })()}
                         </td>
-                        <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                        <td className="cell-fit" style={{ textAlign: "center" }}>
                           {(() => {
                             const srcKey = rec.paymentSource ?? "ISSUED_PFT2";
                             const cfg =
@@ -15070,7 +15233,7 @@ export default function HomePage({
                               <span
                                 className={`badge ${cfg.badgeClass}`}
                                 style={{
-                                  fontSize: "0.68rem",
+                                  fontSize: "0.6875rem",
                                   padding: "0.15rem 0.35rem",
                                   whiteSpace: "nowrap"
                                 }}
@@ -15085,15 +15248,24 @@ export default function HomePage({
                             );
                           })()}
                         </td>
-                        <td style={{ maxWidth: "9rem", whiteSpace: "nowrap" }}>
-                          <span style={{ fontSize: "0.8rem", fontWeight: 600, display: "block" }}>
+                        <td className="cell-fit">
+                          <span
+                            style={{
+                              fontSize: "0.8125rem",
+                              fontWeight: 600,
+                              display: "block",
+                              color: "#1e293b"
+                            }}
+                          >
                             {rec.receivingOfficerName}
                           </span>
-                          <span style={{ display: "block", fontSize: "0.7rem", color: "#64748b" }}>
+                          <span
+                            style={{ display: "block", fontSize: "0.6875rem", color: "#64748b" }}
+                          >
                             {rec.receivingOfficerTitle}
                           </span>
                         </td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        <td className="col-actions" style={{ textAlign: "right" }}>
                           <RowActionMenu
                             align="right"
                             actions={[
@@ -15182,21 +15354,23 @@ export default function HomePage({
               <table className="gov-table">
                 <thead>
                   <tr>
-                    <th>Timestamp</th>
-                    <th>Event Type</th>
-                    <th>Actor &amp; Role</th>
-                    <th>Target Unit</th>
-                    <th>Correlation ID</th>
-                    <th>Details</th>
+                    <th className="cell-fit">Timestamp</th>
+                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                      Event Type
+                    </th>
+                    <th className="cell-wrap-text">Actor &amp; Role</th>
+                    <th className="cell-wrap-text">Target Unit</th>
+                    <th className="cell-fit">Correlation ID</th>
+                    <th className="cell-wrap-text">Details</th>
                   </tr>
                 </thead>
                 <tbody>
                   {auditLogs.map((log) => (
                     <tr key={log.id}>
-                      <td style={{ fontSize: "0.75rem", color: "#64748b", whiteSpace: "nowrap" }}>
+                      <td className="cell-fit" style={{ fontSize: "0.75rem", color: "#64748b" }}>
                         {new Date(log.timestamp).toLocaleString()}
                       </td>
-                      <td>
+                      <td className="cell-fit" style={{ textAlign: "center" }}>
                         <span
                           className={`badge ${
                             log.eventType.includes("APPROVED") || log.eventType.includes("MATCH")
@@ -15206,27 +15380,38 @@ export default function HomePage({
                                 ? "badge-returned"
                                 : "badge-draft"
                           }`}
+                          style={{ fontSize: "0.6875rem", padding: "0.15rem 0.5rem" }}
                         >
                           {log.eventType}
                         </span>
                       </td>
-                      <td>
-                        <strong>{log.actorName}</strong>
+                      <td className="cell-wrap-text">
+                        <strong style={{ fontSize: "0.8125rem", color: "#0f172a" }}>
+                          {log.actorName}
+                        </strong>
                         <span style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}>
                           {log.actorRole}
                         </span>
                       </td>
-                      <td>
-                        <strong>{log.target}</strong>
+                      <td className="cell-wrap-text">
+                        <strong style={{ fontSize: "0.8125rem", color: "#1e293b" }}>
+                          {log.target}
+                        </strong>
                       </td>
-                      <td>
+                      <td className="cell-fit">
                         <span
-                          style={{ fontFamily: "monospace", fontSize: "0.75rem", color: "#64748b" }}
+                          className="cell-token"
+                          style={{ fontSize: "0.75rem", color: "#64748b" }}
                         >
                           {log.correlationId}
                         </span>
                       </td>
-                      <td style={{ fontSize: "0.85rem", color: "#334155" }}>{log.details}</td>
+                      <td
+                        className="cell-wrap-text"
+                        style={{ fontSize: "0.8125rem", color: "#334155" }}
+                      >
+                        {log.details}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -23612,7 +23797,7 @@ export default function HomePage({
                         <tr>
                           <th style={{ width: "2.5rem" }}>#</th>
                           <th style={{ width: "5.5rem" }}>Status</th>
-                          <th>Legal &amp; Trade Name</th>
+                          <th>Profession/Trade Name</th>
                           <th>Identifier (CNIC/NTN)</th>
                           <th>Commercial Address</th>
                           <th>Statutory Rule</th>
@@ -29385,7 +29570,7 @@ export default function HomePage({
                         <tr>
                           <th style={{ width: "2.5rem" }}>#</th>
                           <th style={{ width: "5.5rem" }}>Status</th>
-                          <th>Legal &amp; Trade Name</th>
+                          <th>Profession/Trade Name</th>
                           <th>Identifier (CNIC/NTN)</th>
                           <th>Commercial Address &amp; Circle</th>
                           <th>Statutory Rule</th>
