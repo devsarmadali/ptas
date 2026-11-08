@@ -113,27 +113,28 @@ describe("Provincial UIN (Unique Identification Number)", () => {
   });
 
   describe("UIN / PIN Generation", () => {
-    it("generates a correctly formatted 3-group PIN with dashes", () => {
+    it("generates a correctly formatted 3-group PIN with dashes (6 digits)", () => {
       const components: UinComponents = {
         jurisdiction: VEHARI_JURISDICTION,
         classification: { classCode: "03", subclassCode: "01", tertiaryCode: "02" },
-        sequence: "00001",
+        sequence: "000001",
         version: "01"
       };
       const uin = generateUin(components);
-      expect(uin).toBe("237-0010103010200001-01");
+      expect(uin).toBe("237-00101030102000001-01");
+      expect(uin).toHaveLength(24);
     });
 
-    it("generates a compact 21-digit UIN without dashes", () => {
+    it("generates a compact 22-digit UIN without dashes", () => {
       const components: UinComponents = {
         jurisdiction: VEHARI_JURISDICTION,
         classification: { classCode: "03", subclassCode: "01", tertiaryCode: "02" },
-        sequence: "00001",
+        sequence: "000001",
         version: "01"
       };
       const compact = generateCompactUin(components);
-      expect(compact).toBe("237001010301020000101");
-      expect(compact).toHaveLength(21);
+      expect(compact).toBe("2370010103010200000101");
+      expect(compact).toHaveLength(22);
     });
 
     it("rejects invalid component widths", () => {
@@ -220,7 +221,7 @@ describe("Provincial UIN (Unique Identification Number)", () => {
       expect(parsed.jurisdiction.districtCode).toBe("237");
       expect(parsed.jurisdiction.tehsilCode).toBe("001");
       expect(parsed.classification.classCode).toBe("03");
-      expect(parsed.sequence).toBe("00001");
+      expect(parsed.sequence).toBe("000001");
       expect(parsed.version).toBe("01");
     });
 
@@ -237,7 +238,7 @@ describe("Provincial UIN (Unique Identification Number)", () => {
       expect(parsed.classification.classCode).toBe("10");
       expect(parsed.classification.subclassCode).toBe("00");
       expect(parsed.classification.tertiaryCode).toBe("00");
-      expect(parsed.sequence).toBe("00042");
+      expect(parsed.sequence).toBe("000042");
     });
 
     it("generates distinct UINs for different sequence numbers", () => {

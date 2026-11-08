@@ -271,21 +271,21 @@ export function generateUin(components: UinComponents): string {
   if (classification.tertiaryCode.length !== 2) {
     throw new Error(`Tertiary code must be 2 digits, got "${classification.tertiaryCode}"`);
   }
-  if (sequence.length !== 5) {
-    throw new Error(`Sequence must be 5 digits, got "${sequence}"`);
+  if (sequence.length !== 5 && sequence.length !== 6) {
+    throw new Error(`Sequence must be 5 or 6 digits, got "${sequence}"`);
   }
   if (version.length !== 2) {
     throw new Error(`Version must be 2 digits, got "${version}"`);
   }
 
-  // 3 grouped parts: DDD - TTTCCSSUURRNNNNN - VV (e.g. 237-0010106100100005-01)
+  // 3 grouped parts: DDD - TTTCCSSUURRNNNNNN - VV (e.g. 237-00101061001000005-01)
   const middleGroup = `${jurisdiction.tehsilCode}${jurisdiction.circleCode}${classification.classCode}${classification.subclassCode}${classification.tertiaryCode}${sequence}`;
   return `${jurisdiction.districtCode}-${middleGroup}-${version}`;
 }
 
 /**
  * Generates the compact (no-dash) form of the PIN for machine processing.
- * 21-digit numeric string (3+3+2+2+2+2+5+2).
+ * 22-digit numeric string with 6-digit sequence (3+3+2+2+2+2+6+2) or 21-digit with legacy 5-digit sequence.
  */
 export function generateCompactUin(components: UinComponents): string {
   return generateUin(components).replace(/-/g, "");
@@ -295,14 +295,14 @@ export function generateCompactUin(components: UinComponents): string {
 // PIN Parsing
 // ---------------------------------------------------------------------------
 
-/** 3-group PIN format regex: DDD-TTTCCSSUURRNNNNN-VV (e.g. 237-0010106100100005-01) */
-const PIN_3GROUP_FORMAT = /^(\d{3})-(\d{3})(\d{2})(\d{2})(\d{2})(\d{2})(\d{5})-(\d{2})$/;
+/** 3-group PIN format regex: DDD-TTTCCSSUURRNNNNNN-VV (supports 6-digit sequence and legacy 5-digit) */
+const PIN_3GROUP_FORMAT = /^(\d{3})-(\d{3})(\d{2})(\d{2})(\d{2})(\d{2})(\d{5,6})-(\d{2})$/;
 
-/** Legacy 8-group format regex: DDD-TTT-CC-SS-UU-RR-NNNNN-VV */
-const UIN_8GROUP_FORMAT = /^(\d{3})-(\d{3})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{5})-(\d{2})$/;
+/** Legacy 8-group format regex: DDD-TTT-CC-SS-UU-RR-NNNNNN-VV */
+const UIN_8GROUP_FORMAT = /^(\d{3})-(\d{3})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{5,6})-(\d{2})$/;
 
-/** Compact PIN format regex: 21 contiguous digits */
-const UIN_COMPACT_FORMAT = /^(\d{3})(\d{3})(\d{2})(\d{2})(\d{2})(\d{2})(\d{5})(\d{2})$/;
+/** Compact PIN format regex: 21 or 22 contiguous digits */
+const UIN_COMPACT_FORMAT = /^(\d{3})(\d{3})(\d{2})(\d{2})(\d{2})(\d{2})(\d{5,6})(\d{2})$/;
 
 /**
  * Parses a PIN / UIN string (3-group, 8-group, or compact) into its components.
@@ -318,7 +318,7 @@ export function parseUin(uin: string): UinComponents {
 
   if (!match) {
     throw new Error(
-      `Invalid PIN / UIN format: "${uin}". Expected 3-group DDD-TTTCCSSUURRNNNNN-VV or 21-digit compact form.`
+      `Invalid PIN / UIN format: "${uin}". Expected 3-group DDD-TTTCCSSUURRNNNNNN-VV or compact form.`
     );
   }
 
@@ -387,10 +387,11 @@ export function generateUinForUnit(params: {
   readonly rule: StatutoryRuleDefinition;
   readonly allRules: readonly StatutoryRuleDefinition[];
   readonly sequenceNumber: number;
+  readonly sequenceDigits?: 5 | 6;
   readonly version?: number;
 }): string {
   const classification = computeClassificationBlock(params.rule, params.allRules);
-  const sequence = String(params.sequenceNumber).padStart(5, "0");
+  const sequence = String(params.sequenceNumber).padStart(params.sequenceDigits ?? 6, "0");
   const version = String(params.version ?? 1).padStart(2, "0");
 
   return generateUin({

@@ -1250,15 +1250,23 @@ export default function HomePage({
   const potPreviewPin = useMemo(() => {
     if (!potSelectedStatutoryRule) return "";
     try {
-      const seq = potentialUnits.length + 1;
       const tehCode = getTehsilCode(potNewTehsil);
       const cirCode = getCircleCode(potNewCircleName);
-      const basePin = `237-${tehCode}${cirCode}061102${seq.toString().padStart(4, "0")}-01`;
+      const basePin = generateUinForUnit({
+        jurisdiction: {
+          districtCode: "237",
+          tehsilCode: tehCode,
+          circleCode: cirCode
+        },
+        rule: potSelectedStatutoryRule,
+        allRules,
+        sequenceNumber: potentialUnits.length + 1
+      });
       return formatPotentialPin(basePin);
     } catch {
       return "";
     }
-  }, [potSelectedStatutoryRule, potentialUnits.length, potNewTehsil, potNewCircleName]);
+  }, [potSelectedStatutoryRule, allRules, potentialUnits.length, potNewTehsil, potNewCircleName]);
 
   // Circle Localities dynamically extracted from system database for each circle
   const circleLocalities = useMemo(() => {
