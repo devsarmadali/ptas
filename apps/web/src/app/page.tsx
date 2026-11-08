@@ -151,6 +151,7 @@ import {
   generatePotentialCsvTemplate,
   formatPotentialPin,
   getNextCircleDemandNumber,
+  getNextCirclePotentialNumber,
   submitPotentialUnitToPft3,
   migratePotentialUnitToPft3,
   updatePotentialUnitParticulars,
@@ -4622,6 +4623,11 @@ export default function HomePage({
       return;
     }
 
+    const matchedCircle = DISTRICT_VEHARI_CIRCLES.find(
+      (c) => c.name === normalizeCircleName(potNewCircleName) || c.id === potNewCircleName
+    );
+    const circleId = matchedCircle?.id || "00000000-0000-4000-8000-000000000004";
+
     const nextSeq =
       potentialUnits.reduce((max, u) => {
         const match = u.potentialNumber.match(/\d+/);
@@ -4629,7 +4635,7 @@ export default function HomePage({
         return Math.max(max, val);
       }, 0) + 1;
 
-    const potNum = `POT-${nextSeq.toString().padStart(4, "0")}`;
+    const potNum = getNextCirclePotentialNumber(circleId, potentialUnits);
     const tehCode = getTehsilCode(potNewTehsil);
     const cirCode = getCircleCode(potNewCircleName);
     const rule = potSelectedStatutoryRule || getAllStatutoryRules()[0]!;
@@ -4644,11 +4650,6 @@ export default function HomePage({
       sequenceNumber: nextSeq,
       version: "01"
     });
-
-    const matchedCircle = DISTRICT_VEHARI_CIRCLES.find(
-      (c) => c.name === normalizeCircleName(potNewCircleName) || c.id === potNewCircleName
-    );
-    const circleId = matchedCircle?.id || "00000000-0000-4000-8000-000000000004";
 
     if (editingPotentialUnitId) {
       const existing = potentialUnits.find((p) => p.id === editingPotentialUnitId);
@@ -7911,11 +7912,11 @@ export default function HomePage({
                     marginBottom: "0.25rem"
                   }}
                 >
-                  Search Assessee / PIN / POT
+                  Search Assessee / PIN / Potential No.
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. POT-0001, PIN, Trade Name..."
+                  placeholder="e.g. 1, 320, PIN, Trade Name..."
                   value={potentialSearchQuery}
                   onChange={(e) => {
                     setPotentialSearchQuery(e.target.value);
@@ -8085,7 +8086,8 @@ export default function HomePage({
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Potential No &amp; PIN</th>
+                    <th style={{ whiteSpace: "nowrap" }}>Potential No.</th>
+                    <th style={{ whiteSpace: "nowrap" }}>PIN</th>
                     <th>Legal Name / Trade Name</th>
                     <th>Taxpayer / Assessee</th>
                     <th>Identifier (CNIC/NTN)</th>
@@ -8102,7 +8104,7 @@ export default function HomePage({
                   {paginatedPotentialUnits.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={11}
+                        colSpan={12}
                         style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
                       >
                         No prospective units found matching filter criteria. Click &quot;Add
@@ -8112,28 +8114,28 @@ export default function HomePage({
                   ) : (
                     paginatedPotentialUnits.map((u) => (
                       <tr key={u.id}>
-                        <td>
-                          <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
-                            <span
-                              style={{
-                                fontWeight: 800,
-                                color: "#b45309",
-                                fontFamily: "monospace",
-                                fontSize: "0.88rem"
-                              }}
-                            >
-                              {u.potentialNumber}
-                            </span>
-                            <span
-                              style={{
-                                fontSize: "0.72rem",
-                                color: "#475569",
-                                fontFamily: "monospace"
-                              }}
-                            >
-                              {u.pinNumber}
-                            </span>
-                          </div>
+                        <td style={{ whiteSpace: "nowrap" }}>
+                          <span
+                            style={{
+                              fontWeight: 800,
+                              color: "#b45309",
+                              fontFamily: "monospace",
+                              fontSize: "0.88rem"
+                            }}
+                          >
+                            {u.potentialNumber}
+                          </span>
+                        </td>
+                        <td style={{ whiteSpace: "nowrap" }}>
+                          <span
+                            style={{
+                              fontSize: "0.78rem",
+                              color: "#334155",
+                              fontFamily: "monospace"
+                            }}
+                          >
+                            {u.pinNumber}
+                          </span>
                         </td>
                         <td>
                           <strong style={{ color: "#0f172a" }}>{u.legalName}</strong>
@@ -8778,6 +8780,7 @@ export default function HomePage({
                   <thead>
                     <tr>
                       <th style={{ whiteSpace: "nowrap" }}>Demand No.</th>
+                      <th style={{ whiteSpace: "nowrap" }}>PIN</th>
                       <th style={{ maxWidth: "16rem" }}>Legal Name / Trade Name</th>
                       <th style={{ maxWidth: "14rem" }}>Taxpayer / Assessee</th>
                       <th style={{ maxWidth: "18rem" }}>Statutory Class</th>
@@ -8795,7 +8798,7 @@ export default function HomePage({
                     {filteredFormPFT3Rows.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={10}
+                          colSpan={11}
                           style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
                         >
                           No assessed units match the selected search or filter criteria.
@@ -8805,7 +8808,26 @@ export default function HomePage({
                       paginatedFormPFT3Rows.map((row) => (
                         <tr key={row.sourceUnitId}>
                           <td style={{ whiteSpace: "nowrap" }}>
-                            <strong>{row.permanentDemandNo}</strong>
+                            <strong
+                              style={{
+                                color: "#0f172a",
+                                fontFamily: "monospace",
+                                fontSize: "0.88rem"
+                              }}
+                            >
+                              {row.permanentDemandNo}
+                            </strong>
+                          </td>
+                          <td style={{ whiteSpace: "nowrap" }}>
+                            <span
+                              style={{
+                                fontSize: "0.78rem",
+                                color: "#334155",
+                                fontFamily: "monospace"
+                              }}
+                            >
+                              {row.provincialUin || "— Not assigned"}
+                            </span>
                           </td>
                           <td style={{ maxWidth: "16rem" }}>
                             <strong>{row.legalName}</strong>

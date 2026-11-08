@@ -133,6 +133,41 @@ export function getNextCircleDemandNumber(
 }
 
 /**
+ * Calculates the next sequential pure numeric potential number for a specific circle in the Potential Register.
+ * Finds the maximum existing integer potential number in that circle and returns max + 1 as string.
+ */
+export function getNextCirclePotentialNumber(
+  circleIdOrName: string | undefined | null,
+  existingUnits: readonly PotentialUnitRecord[]
+): string {
+  let maxPotential = 0;
+  const target = (circleIdOrName ?? "").trim().toLowerCase();
+
+  for (const u of existingUnits) {
+    const uCircleId = (u.circleId ?? "").trim().toLowerCase();
+    const uCircleName = (u.circleName ?? "").trim().toLowerCase();
+    const isSameCircle =
+      !target ||
+      uCircleId === target ||
+      uCircleName === target ||
+      uCircleName.includes(target) ||
+      target.includes(uCircleName);
+
+    if (isSameCircle) {
+      const cleanNum = u.potentialNumber.replace(/^POT-0*/i, "").replace(/[^0-9]/g, "");
+      if (cleanNum && /^[0-9]+$/.test(cleanNum)) {
+        const val = parseInt(cleanNum, 10);
+        if (val > maxPotential) {
+          maxPotential = val;
+        }
+      }
+    }
+  }
+
+  return String(maxPotential + 1);
+}
+
+/**
  * Resolve collision if a converted demand number already exists in Form PFT-3.
  * Follows Rule: collision marked as Demand-1, Demand-2, etc. (hyphenated numeric).
  */
@@ -367,7 +402,7 @@ export function createInitialPotentialUnits(): PotentialUnitRecord[] {
 
   return seeds.map((s) => {
     const rule = resolveRule(s.ruleCode, s.subclassificationCode);
-    const potNum = `POT-${s.seq.toString().padStart(4, "0")}`;
+    const potNum = s.seq.toString();
     const basePin = `237-00101061102${s.seq.toString().padStart(7, "0")}`;
     const pinNumber = `${basePin}-01`;
     const annualRate = rule.annual_rate_pkr ?? 4000;
@@ -1152,7 +1187,7 @@ export function migrateVDemandUnitsToPotentialRegister(surveyUnits: readonly Sto
     let potNum: string;
     do {
       maxSeq++;
-      potNum = `POT-${maxSeq.toString().padStart(4, "0")}`;
+      potNum = maxSeq.toString();
     } while (existingPotNos.has(potNum));
 
     existingPotNos.add(potNum);
@@ -1776,11 +1811,16 @@ export function parseBulkPotentialUnits(
     let parsedUnit: PotentialUnitRecord | undefined;
     if (isValid) {
       const suppliedSurveyNo = (rowMap["surveyNo"] || "").trim();
-      const potNum = suppliedSurveyNo
-        ? suppliedSurveyNo
-        : `POT-${currentSequence.toString().padStart(4, "0")}`;
+      let potNum = "";
+      if (suppliedSurveyNo) {
+        const cleaned = suppliedSurveyNo.replace(/^POT-0*/i, "").replace(/^0+/, "");
+        potNum = cleaned || suppliedSurveyNo;
+      }
+      if (!potNum) {
+        potNum = currentSequence.toString();
+      }
       const pinNumber = formatPotentialPin(
-        `237-00101061102${currentSequence.toString().padStart(4, "0")}-01`
+        `237-00101061102${currentSequence.toString().padStart(7, "0")}-01`
       );
       const arrearsValue = rowMap["arrears"]
         ? Math.max(0, Math.round(Number(rowMap["arrears"]) || 0))
