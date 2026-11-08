@@ -1424,7 +1424,8 @@ export function createInitialPilotUnits(): StoredUnit[] {
         jurisdiction: VEHARI_PILOT_JURISDICTION,
         rule: rule3ib,
         allRules,
-        sequenceNumber: 3
+        sequenceNumber: 3,
+        version: "02"
       }),
       demandUnit: demandUnit3,
       assessments: [u3AsmSub],

@@ -46,14 +46,34 @@ export interface ClassificationBlock {
   readonly tertiaryCode: string;
 }
 
-export type PinVersionCode = "01" | "02";
+/**
+ * Statutory PIN Lifecycle Version Code (2-digit suffix):
+ * - "01": Form P.F.T-3 Approved (Enrolled / Assessed Taxpayer)
+ * - "02": Submitted for ETO Approval (Awaiting Assessment Determination)
+ * - "03": Feeded (Draft in Survey / Assessment Pipeline)
+ * - "04": Potential Register (Prospective Unenrolled Unit)
+ * - "05": Rejected / Returned (Returned by ETO for field inquiry or rejected)
+ * - "06": Inactive / Archived (Discontinued, closed, or dormant)
+ * - "07": Deleted (Soft-deleted / de-registered)
+ */
+export type PinVersionCode = "01" | "02" | "03" | "04" | "05" | "06" | "07";
+
+export const PIN_VERSIONS = {
+  PFT3_APPROVED: "01",
+  SUBMITTED: "02",
+  FEEDED: "03",
+  POTENTIAL: "04",
+  REJECTED_RETURNED: "05",
+  INACTIVE_ARCHIVED: "06",
+  DELETED: "07"
+} as const;
 
 export interface UinComponents {
   readonly jurisdiction: JurisdictionCodes;
   readonly classification: ClassificationBlock;
   /** 7-digit province-wide sequential number (up to 10M capacity) */
   readonly sequence: string;
-  /** Statutory register version: "01" = Potential Register, "02" = Form PFT-3 Register */
+  /** Statutory lifecycle version code ("01" to "07") */
   readonly version: PinVersionCode;
 }
 
@@ -277,13 +297,14 @@ export function generateUin(components: UinComponents): string {
   if (sequence.length !== 7) {
     throw new Error(`Sequence must be 7 digits (up to 10M capacity), got "${sequence}"`);
   }
-  if (version !== "01" && version !== "02") {
+  const validVersions: readonly PinVersionCode[] = ["01", "02", "03", "04", "05", "06", "07"];
+  if (!validVersions.includes(version)) {
     throw new Error(
-      `Version must be "01" (Potential) or "02" (PFT-3 Registered), got "${version}"`
+      `Version must be one of "01" (PFT-3 Approved), "02" (Submitted), "03" (Feeded), "04" (Potential), "05" (Rejected/Returned), "06" (Inactive/Archived), "07" (Deleted), got "${version}"`
     );
   }
 
-  // 3 grouped parts: DDD - TTTCCSSUURRNNNNNNN - VV (e.g. 237-0010106100100000005-02)
+  // 3 grouped parts: DDD - TTTCCSSUURRNNNNNNN - VV (e.g. 237-0010106100100000005-01)
   const middleGroup = `${jurisdiction.tehsilCode}${jurisdiction.circleCode}${classification.classCode}${classification.subclassCode}${classification.tertiaryCode}${sequence}`;
   return `${jurisdiction.districtCode}-${middleGroup}-${version}`;
 }
@@ -300,11 +321,11 @@ export function generateCompactUin(components: UinComponents): string {
 // PIN Parsing
 // ---------------------------------------------------------------------------
 
-/** Standard 25-character PIN format regex: DDD-TTTCCSSUURRNNNNNNN-VV */
-const PIN_FORMAT = /^(\d{3})-(\d{3})(\d{2})(\d{2})(\d{2})(\d{2})(\d{7})-(01|02)$/;
+/** Standard 25-character PIN format regex: DDD-TTTCCSSUURRNNNNNNN-VV ("01" through "07") */
+const PIN_FORMAT = /^(\d{3})-(\d{3})(\d{2})(\d{2})(\d{2})(\d{2})(\d{7})-(0[1-7])$/;
 
-/** Compact PIN format regex: 23 contiguous digits */
-const UIN_COMPACT_FORMAT = /^(\d{3})(\d{3})(\d{2})(\d{2})(\d{2})(\d{2})(\d{7})(01|02)$/;
+/** Compact PIN format regex: 23 contiguous digits ("01" through "07") */
+const UIN_COMPACT_FORMAT = /^(\d{3})(\d{3})(\d{2})(\d{2})(\d{2})(\d{2})(\d{7})(0[1-7])$/;
 
 /**
  * Parses a PIN / UIN string into its statutory components.
@@ -387,7 +408,7 @@ export function generateUinForUnit(params: {
 }): string {
   const classification = computeClassificationBlock(params.rule, params.allRules);
   const sequence = String(params.sequenceNumber).padStart(7, "0");
-  const version: PinVersionCode = params.version ?? "02";
+  const version: PinVersionCode = params.version ?? "01";
 
   return generateUin({
     jurisdiction: params.jurisdiction,
@@ -398,38 +419,125 @@ export function generateUinForUnit(params: {
 }
 
 /**
- * Returns true if the PIN belongs to the Potential Assessment Register (-01).
+ * Returns true if the PIN belongs to the Form PFT-3 Approved Register (-01).
  */
-export function isPotentialPin(pin: string): boolean {
+export function isPft3Pin(pin: string): boolean {
   return pin.endsWith("-01") || pin.endsWith("01");
 }
 
 /**
- * Returns true if the PIN belongs to the Form PFT-3 Register (-02).
+ * Returns true if the PIN belongs to Assessment Submitted (-02).
  */
-export function isPft3Pin(pin: string): boolean {
+export function isSubmittedPin(pin: string): boolean {
   return pin.endsWith("-02") || pin.endsWith("02");
 }
 
 /**
- * Promotes a Potential Register PIN (-01) to a Form PFT-3 Register PIN (-02).
+ * Returns true if the PIN belongs to Feeded Draft in Pipeline (-03).
  */
-export function promotePinToPft3(potentialPin: string): string {
-  return potentialPin.replace(/-01$/, "-02");
+export function isFeededPin(pin: string): boolean {
+  return pin.endsWith("-03") || pin.endsWith("03");
 }
 
 /**
- * Reverts a Form PFT-3 Register PIN (-02) back to a Potential Register PIN (-01).
+ * Returns true if the PIN belongs to the Potential Assessment Register (-04).
  */
-export function revertPinToPotential(pft3Pin: string): string {
-  return pft3Pin.replace(/-02$/, "-01");
+export function isPotentialPin(pin: string): boolean {
+  return pin.endsWith("-04") || pin.endsWith("04");
+}
+
+/**
+ * Returns true if the PIN belongs to Rejected / Returned (-05).
+ */
+export function isReturnedPin(pin: string): boolean {
+  return pin.endsWith("-05") || pin.endsWith("05");
+}
+
+/**
+ * Returns true if the PIN belongs to Inactive / Archived (-06).
+ */
+export function isArchivedPin(pin: string): boolean {
+  return pin.endsWith("-06") || pin.endsWith("06");
+}
+
+/**
+ * Returns true if the PIN belongs to Deleted (-07).
+ */
+export function isDeletedPin(pin: string): boolean {
+  return pin.endsWith("-07") || pin.endsWith("07");
+}
+
+/**
+ * Extracts the 2-digit statutory version code from a PIN.
+ */
+export function getPinVersion(pin: string): PinVersionCode | undefined {
+  const match = /-(0[1-7])$/.exec(pin.trim());
+  return match ? (match[1] as PinVersionCode) : undefined;
 }
 
 /**
  * Extracts the 22-character immutable base PIN (DDD-TTTCCSSUURRNNNNNNN) without version suffix.
  */
 export function getBasePin(pin: string): string {
-  return pin.replace(/-(01|02)$/, "");
+  return pin.replace(/-(0[1-7])$/, "");
+}
+
+/**
+ * Updates the 2-digit version suffix on a PIN while keeping the 22-character base strictly immutable.
+ */
+export function setPinVersion(pin: string, newVersion: PinVersionCode): string {
+  const base = getBasePin(pin);
+  return `${base}-${newVersion}`;
+}
+
+/**
+ * Maps an operational or assessment status to its statutory PIN lifecycle version code:
+ * - "01": Form P.F.T-3 Approved
+ * - "02": Submitted for ETO Approval
+ * - "03": Feeded (Draft in assessment pipeline)
+ * - "04": Potential Register
+ * - "05": Rejected / Returned
+ * - "06": Inactive / Archived / Discontinued
+ * - "07": Deleted / Cancelled
+ */
+export function mapStatusToPinVersion(status: string): PinVersionCode {
+  const s = status.toUpperCase().trim();
+  if (s === "APPROVED" || s === "ENROLLED" || s === "PFT3_REGISTERED" || s === "ACTIVE_PFT3") {
+    return "01";
+  }
+  if (s === "SUBMITTED" || s === "PENDING_APPROVAL" || s === "IN_REVIEW") {
+    return "02";
+  }
+  if (s === "FEEDED" || s === "DRAFT" || s === "PENDING" || s === "SURVEYED") {
+    return "03";
+  }
+  if (s === "POTENTIAL" || s === "PROSPECTIVE" || s === "POTENTIAL_ACTIVE") {
+    return "04";
+  }
+  if (s === "REJECTED" || s === "RETURNED" || s === "RETURNED_FOR_INQUIRY") {
+    return "05";
+  }
+  if (s === "DISCONTINUED" || s === "INACTIVE" || s === "ARCHIVED" || s === "CLOSED") {
+    return "06";
+  }
+  if (s === "DELETED" || s === "CANCELLED" || s === "VOID") {
+    return "07";
+  }
+  return "03";
+}
+
+/**
+ * Promotes any PIN to a Form PFT-3 Register PIN (-01).
+ */
+export function promotePinToPft3(pin: string): string {
+  return setPinVersion(pin, "01");
+}
+
+/**
+ * Reverts any PIN back to a Potential Register PIN (-04).
+ */
+export function revertPinToPotential(pin: string): string {
+  return setPinVersion(pin, "04");
 }
 
 /**

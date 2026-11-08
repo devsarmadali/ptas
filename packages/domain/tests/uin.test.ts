@@ -16,6 +16,14 @@ import {
   validateUinDistrict,
   isPotentialPin,
   isPft3Pin,
+  isSubmittedPin,
+  isFeededPin,
+  isReturnedPin,
+  isArchivedPin,
+  isDeletedPin,
+  setPinVersion,
+  getPinVersion,
+  mapStatusToPinVersion,
   promotePinToPft3,
   revertPinToPotential,
   getBasePin
@@ -130,15 +138,15 @@ describe("Provincial UIN (Unique Identification Number) / Statutory PIN", () => 
       expect(uin).toHaveLength(25);
     });
 
-    it("generates Potential Register PIN with version -01", () => {
+    it("generates Potential Register PIN with version -04", () => {
       const components: UinComponents = {
         jurisdiction: VEHARI_JURISDICTION,
         classification: { classCode: "06", subclassCode: "11", tertiaryCode: "02" },
         sequence: "0000042",
-        version: "01"
+        version: "04"
       };
       const uin = generateUin(components);
-      expect(uin).toBe("237-001010611020000042-01");
+      expect(uin).toBe("237-001010611020000042-04");
       expect(uin).toHaveLength(25);
       expect(isPotentialPin(uin)).toBe(true);
       expect(isPft3Pin(uin)).toBe(false);
@@ -203,59 +211,112 @@ describe("Provincial UIN (Unique Identification Number) / Statutory PIN", () => 
     it("throws on malformed UIN strings", () => {
       expect(() => parseUin("INVALID")).toThrow("Invalid PIN / UIN format");
       expect(() => parseUin("237-001-01")).toThrow("Invalid PIN / UIN format");
-      expect(() => parseUin("237-001010611020000001-03")).toThrow("Invalid PIN / UIN format");
+      expect(() => parseUin("237-001010611020000001-08")).toThrow("Invalid PIN / UIN format");
       expect(() => parseUin("")).toThrow("Invalid PIN / UIN format");
     });
   });
 
   describe("UIN Validation", () => {
-    it("validates well-formed 25-character formatted PINs (-01 and -02)", () => {
-      expect(validateUin("237-001010301020000001-01")).toBe(true);
-      expect(validateUin("237-001010301020000001-02")).toBe(true);
-      expect(validateUin("218-002050610030099999-02")).toBe(true);
+    it("validates well-formed 25-character formatted PINs across all statutory versions (-01 through -07)", () => {
+      expect(validateUin("237-001010301020000001-01")).toBe(true); // PFT-3 Approved
+      expect(validateUin("237-001010301020000001-02")).toBe(true); // Submitted
+      expect(validateUin("237-001010301020000001-03")).toBe(true); // Feeded
+      expect(validateUin("237-001010301020000001-04")).toBe(true); // Potential
+      expect(validateUin("237-001010301020000001-05")).toBe(true); // Rejected/Returned
+      expect(validateUin("237-001010301020000001-06")).toBe(true); // Inactive/Archived
+      expect(validateUin("237-001010301020000001-07")).toBe(true); // Deleted
+      expect(validateUin("218-002050610030099999-01")).toBe(true);
     });
 
     it("validates well-formed compact PINs (23 digits)", () => {
       expect(validateUin("23700101030102000000101")).toBe(true);
-      expect(validateUin("23700101030102000000102")).toBe(true);
+      expect(validateUin("23700101030102000000104")).toBe(true);
     });
 
     it("rejects malformed strings or invalid versions", () => {
       expect(validateUin("INVALID")).toBe(false);
       expect(validateUin("237-001-01")).toBe(false);
-      expect(validateUin("237-001010301020000001-03")).toBe(false);
+      expect(validateUin("237-001010301020000001-00")).toBe(false);
+      expect(validateUin("237-001010301020000001-08")).toBe(false);
       expect(validateUin("237-001010301020000001-0X")).toBe(false);
     });
 
     it("validates district code against PBS registry", () => {
       expect(validateUinDistrict("237-001010301020000001-01")).toBeNull();
-      expect(validateUinDistrict("237-001010301020000001-02")).toBeNull();
+      expect(validateUinDistrict("237-001010301020000001-04")).toBeNull();
       expect(validateUinDistrict("999-001010301020000001-01")).toBe("Unknown district code: 999");
     });
   });
 
-  describe("Register Transition Helpers", () => {
-    it("promotes Potential PIN (-01) to Form PFT-3 PIN (-02)", () => {
-      const potPin = "237-001010611020000001-01";
+  describe("Register Transition Helpers & Lifecycle Versions", () => {
+    it("identifies all statutory PIN lifecycle states correctly", () => {
+      const pin01 = "237-001010611020000001-01";
+      const pin02 = "237-001010611020000001-02";
+      const pin03 = "237-001010611020000001-03";
+      const pin04 = "237-001010611020000001-04";
+      const pin05 = "237-001010611020000001-05";
+      const pin06 = "237-001010611020000001-06";
+      const pin07 = "237-001010611020000001-07";
+
+      expect(isPft3Pin(pin01)).toBe(true);
+      expect(isSubmittedPin(pin02)).toBe(true);
+      expect(isFeededPin(pin03)).toBe(true);
+      expect(isPotentialPin(pin04)).toBe(true);
+      expect(isReturnedPin(pin05)).toBe(true);
+      expect(isArchivedPin(pin06)).toBe(true);
+      expect(isDeletedPin(pin07)).toBe(true);
+
+      expect(getPinVersion(pin01)).toBe("01");
+      expect(getPinVersion(pin04)).toBe("04");
+    });
+
+    it("maps operational assessment statuses to statutory PIN versions", () => {
+      expect(mapStatusToPinVersion("APPROVED")).toBe("01");
+      expect(mapStatusToPinVersion("SUBMITTED")).toBe("02");
+      expect(mapStatusToPinVersion("FEEDED")).toBe("03");
+      expect(mapStatusToPinVersion("DRAFT")).toBe("03");
+      expect(mapStatusToPinVersion("POTENTIAL")).toBe("04");
+      expect(mapStatusToPinVersion("RETURNED")).toBe("05");
+      expect(mapStatusToPinVersion("REJECTED")).toBe("05");
+      expect(mapStatusToPinVersion("DISCONTINUED")).toBe("06");
+      expect(mapStatusToPinVersion("DELETED")).toBe("07");
+    });
+
+    it("promotes any PIN to Form PFT-3 PIN (-01)", () => {
+      const potPin = "237-001010611020000001-04";
       expect(isPotentialPin(potPin)).toBe(true);
       expect(isPft3Pin(potPin)).toBe(false);
 
       const pft3Pin = promotePinToPft3(potPin);
-      expect(pft3Pin).toBe("237-001010611020000001-02");
+      expect(pft3Pin).toBe("237-001010611020000001-01");
       expect(isPft3Pin(pft3Pin)).toBe(true);
       expect(isPotentialPin(pft3Pin)).toBe(false);
     });
 
-    it("reverts Form PFT-3 PIN (-02) back to Potential PIN (-01)", () => {
-      const pft3Pin = "237-001010611020000001-02";
+    it("reverts Form PFT-3 PIN (-01) back to Potential PIN (-04)", () => {
+      const pft3Pin = "237-001010611020000001-01";
       const potPin = revertPinToPotential(pft3Pin);
-      expect(potPin).toBe("237-001010611020000001-01");
+      expect(potPin).toBe("237-001010611020000001-04");
       expect(isPotentialPin(potPin)).toBe(true);
+      expect(isPft3Pin(potPin)).toBe(false);
     });
 
-    it("extracts immutable base PIN identical for both registers", () => {
-      const potPin = "237-001010611020000001-01";
-      const pft3Pin = "237-001010611020000001-02";
+    it("updates PIN versions with setPinVersion while keeping the base immutable", () => {
+      const base = "237-001010611020000001";
+      const draftPin = `${base}-03`;
+      const submittedPin = setPinVersion(draftPin, "02");
+      const approvedPin = setPinVersion(submittedPin, "01");
+
+      expect(submittedPin).toBe(`${base}-02`);
+      expect(approvedPin).toBe(`${base}-01`);
+      expect(getBasePin(draftPin)).toBe(base);
+      expect(getBasePin(submittedPin)).toBe(base);
+      expect(getBasePin(approvedPin)).toBe(base);
+    });
+
+    it("extracts immutable base PIN identical for all lifecycle versions", () => {
+      const potPin = "237-001010611020000001-04";
+      const pft3Pin = "237-001010611020000001-01";
       expect(getBasePin(potPin)).toBe("237-001010611020000001");
       expect(getBasePin(pft3Pin)).toBe("237-001010611020000001");
       expect(getBasePin(potPin)).toBe(getBasePin(pft3Pin));
@@ -263,7 +324,7 @@ describe("Provincial UIN (Unique Identification Number) / Statutory PIN", () => 
   });
 
   describe("High-level generateUinForUnit", () => {
-    it("generates a valid Form PFT-3 PIN by default (-02) with 7-digit sequence", () => {
+    it("generates a valid Form PFT-3 PIN by default (-01) with 7-digit sequence", () => {
       const rule = getStatutoryRuleById("PFT-3.i.b")!;
       const uin = generateUinForUnit({
         jurisdiction: VEHARI_PILOT_JURISDICTION,
@@ -278,17 +339,17 @@ describe("Provincial UIN (Unique Identification Number) / Statutory PIN", () => 
       expect(parsed.jurisdiction.tehsilCode).toBe("001");
       expect(parsed.classification.classCode).toBe("03");
       expect(parsed.sequence).toBe("0000001");
-      expect(parsed.version).toBe("02");
+      expect(parsed.version).toBe("01");
     });
 
-    it("generates a valid Potential PIN when version '01' is requested", () => {
+    it("generates a valid Potential PIN when version '04' is requested", () => {
       const rule = getStatutoryRuleById("PFT-10")!;
       const uin = generateUinForUnit({
         jurisdiction: VEHARI_PILOT_JURISDICTION,
         rule,
         allRules,
         sequenceNumber: 42,
-        version: "01"
+        version: "04"
       });
 
       const parsed = parseUin(uin);
@@ -296,7 +357,7 @@ describe("Provincial UIN (Unique Identification Number) / Statutory PIN", () => 
       expect(parsed.classification.subclassCode).toBe("00");
       expect(parsed.classification.tertiaryCode).toBe("00");
       expect(parsed.sequence).toBe("0000042");
-      expect(parsed.version).toBe("01");
+      expect(parsed.version).toBe("04");
     });
 
     it("generates distinct UINs for different sequence numbers", () => {

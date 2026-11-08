@@ -32,7 +32,8 @@ import {
   computeContentSha256,
   VEHARI_PILOT_JURISDICTION,
   returnAssessmentVersion,
-  submitAssessmentVersion
+  submitAssessmentVersion,
+  setPinVersion
 } from "@ptas/domain";
 import {
   CIRCLE_VEHARI_ID,
@@ -1819,7 +1820,8 @@ export default function HomePage({
         },
         rule: selectedStatutoryRule,
         allRules,
-        sequenceNumber: units.length + 1
+        sequenceNumber: units.length + 1,
+        version: "03"
       });
     } catch {
       return "";
@@ -1923,7 +1925,7 @@ export default function HomePage({
         rule: potSelectedStatutoryRule,
         allRules,
         sequenceNumber: potentialUnits.length + 1,
-        version: "01"
+        version: "04"
       });
       return formatPotentialPin(basePin);
     } catch {
@@ -2200,8 +2202,14 @@ export default function HomePage({
 
       await refreshOperationalSurveyUnits();
 
+      const targetPin = target.provincialUin || target.pinNumber || "";
+      const currentPin = isApprovedUnit ? setPinVersion(targetPin, "02") : targetPin;
+
       const updatedUnit: StoredUnit = {
         ...target,
+        pinNumber: currentPin,
+        provincialUin: currentPin,
+        pft3Registered: isApprovedUnit ? false : target.pft3Registered,
         legalName: newLegalName.trim(),
         tradeName: newTradeName.trim() || undefined,
         identifierType: newIdentifierType,
@@ -2325,8 +2333,14 @@ export default function HomePage({
         currentVersion
       );
 
+      const targetPin = targetUnit.provincialUin || targetUnit.pinNumber || "";
+      const updatedPin = setPinVersion(targetPin, "02");
+
       const updatedUnit: StoredUnit = {
         ...targetUnit,
+        pinNumber: updatedPin,
+        provincialUin: updatedPin,
+        pft3Registered: false,
         assessments: [submittedAsm, ...targetUnit.assessments.slice(1)],
         assessmentVersions: [submittedVer, ...targetUnit.assessmentVersions.slice(1)]
       };
@@ -2386,8 +2400,14 @@ export default function HomePage({
         reason: `Resubmitted by Inspector ${officer.name} with updated field verification particulars.`
       };
 
+      const targetPin = targetUnit.provincialUin || targetUnit.pinNumber || "";
+      const updatedPin = setPinVersion(targetPin, "02");
+
       const updatedUnit: StoredUnit = {
         ...targetUnit,
+        pinNumber: updatedPin,
+        provincialUin: updatedPin,
+        pft3Registered: false,
         assessments: [submittedAsm, ...targetUnit.assessments.slice(1)],
         assessmentVersions: [submittedVer, ...targetUnit.assessmentVersions.slice(1)]
       };
@@ -2436,6 +2456,10 @@ export default function HomePage({
     approvedAsm: Assessment,
     approvedVer: AssessmentVersion<StoredUnitSnapshot>
   ): StoredUnit => {
+    const approvedPin = setPinVersion(
+      pinNo || targetUnit.provincialUin || targetUnit.pinNumber || "",
+      "01"
+    );
     return {
       id: targetUnit.id,
       legalName: targetUnit.legalName,
@@ -2458,8 +2482,8 @@ export default function HomePage({
         targetUnit.assessmentNumber ||
         `ASM-2026-${String(units.indexOf(targetUnit) + 1).padStart(4, "0")}`,
       demandNumber: demandNo,
-      pinNumber: pinNo,
-      provincialUin: targetUnit.provincialUin || pinNo,
+      pinNumber: approvedPin,
+      provincialUin: approvedPin,
       pft3Registered: true,
       demandUnit: {
         ...targetUnit.demandUnit,
@@ -2659,8 +2683,14 @@ export default function HomePage({
           etoActor
         );
 
+        const targetPin = targetUnit.provincialUin || targetUnit.pinNumber || "";
+        const updatedPin = setPinVersion(targetPin, "05");
+
         const updatedUnit: StoredUnit = {
           ...targetUnit,
+          pinNumber: updatedPin,
+          provincialUin: updatedPin,
+          pft3Registered: false,
           assessments: [returnedAsm, ...targetUnit.assessments.slice(1)],
           assessmentVersions: [returnedVer, ...targetUnit.assessmentVersions.slice(1)]
         };
@@ -2879,8 +2909,14 @@ export default function HomePage({
             : currentVersion.reason
         };
 
+        const targetPin = targetUnit.provincialUin || targetUnit.pinNumber || "";
+        const updatedPin = setPinVersion(targetPin, "02");
+
         const updatedUnit: StoredUnit = {
           ...targetUnit,
+          pinNumber: updatedPin,
+          provincialUin: updatedPin,
+          pft3Registered: false,
           assessments: [submittedAsm, ...targetUnit.assessments.slice(1)],
           assessmentVersions: [submittedVer, ...targetUnit.assessmentVersions.slice(1)]
         };
@@ -3265,7 +3301,23 @@ export default function HomePage({
     return units.filter((unit) => {
       // Isolate mock prospective potential units that strictly belong to Potential Register
       if (activePotentialIds.has(unit.id)) return false;
-      return true;
+      // Form P.F.T-3 strictly displays statutory APPROVED units under Rule 5 & 11
+      const latestVer = unit.assessmentVersions[0];
+      const latestAsm = unit.assessments[0];
+      const isUnapproved =
+        latestVer?.status === "DRAFT" ||
+        latestVer?.status === "SUBMITTED" ||
+        latestVer?.status === "RETURNED" ||
+        latestAsm?.status === "DRAFT" ||
+        latestAsm?.status === "SUBMITTED" ||
+        latestAsm?.status === "RETURNED";
+      if (isUnapproved) return false;
+
+      const isApproved =
+        latestVer?.status === "APPROVED" ||
+        latestAsm?.status === "APPROVED" ||
+        (unit.pft3Registered === true && !latestVer && !latestAsm);
+      return isApproved;
     });
   }, [units, activePotentialIds]);
 
@@ -3506,6 +3558,7 @@ export default function HomePage({
   // Assessment Queue Filtered Rows & Metric Counts
   const filteredAssessmentUnits = useMemo(() => {
     return units.filter((u) => {
+      if (activePotentialIds.has(u.id)) return false;
       const currentAsm = u.assessments[0];
       const status = currentAsm?.status ?? "DRAFT";
       const isClosed = Boolean(u.isDiscontinued || status === "WITHDRAWN");
@@ -3544,8 +3597,11 @@ export default function HomePage({
       submitted = 0,
       returned = 0,
       approved = 0,
-      closed = 0;
+      closed = 0,
+      totalNonPotential = 0;
     for (const u of units) {
+      if (activePotentialIds.has(u.id)) continue;
+      totalNonPotential++;
       const isClosed = Boolean(u.isDiscontinued || u.assessments[0]?.status === "WITHDRAWN");
       if (isClosed) {
         closed++;
@@ -3557,8 +3613,8 @@ export default function HomePage({
         else if (s === "APPROVED") approved++;
       }
     }
-    return { all: units.length, feeded, submitted, returned, approved, closed };
-  }, [units]);
+    return { all: totalNonPotential, feeded, submitted, returned, approved, closed };
+  }, [units, activePotentialIds]);
 
   const selectedAssessmentUnits = useMemo(() => {
     return units.filter((u) => selectedAssessmentIds.has(u.id));
@@ -5026,17 +5082,20 @@ export default function HomePage({
       adjudicatedBy: officer.id
     };
 
-    const updatedUnits = units.map((u) =>
-      u.id === targetUnit.id
-        ? {
-            ...u,
-            isDiscontinued: decision === "APPROVED",
-            discontinuanceStatus: (decision === "APPROVED"
-              ? "DISCONTINUED"
-              : "ACTIVE") as StoredUnit["discontinuanceStatus"]
-          }
-        : u
-    );
+    const updatedUnits = units.map((u) => {
+      if (u.id !== targetUnit.id) return u;
+      const targetPin = u.provincialUin || u.pinNumber || "";
+      const updatedPin = decision === "APPROVED" ? setPinVersion(targetPin, "06") : targetPin;
+      return {
+        ...u,
+        pinNumber: updatedPin,
+        provincialUin: updatedPin,
+        isDiscontinued: decision === "APPROVED",
+        discontinuanceStatus: (decision === "APPROVED"
+          ? "DISCONTINUED"
+          : "ACTIVE") as StoredUnit["discontinuanceStatus"]
+      };
+    });
 
     const auditItem: PilotAuditItem = {
       id: `audit-${Date.now()}`,
@@ -5422,17 +5481,19 @@ export default function HomePage({
     const tehCode = getTehsilCode(potNewTehsil);
     const cirCode = getCircleCode(potNewCircleName);
     const rule = potSelectedStatutoryRule || getAllStatutoryRules()[0]!;
-    const pinNumber = generateUinForUnit({
-      jurisdiction: {
-        districtCode: "237",
-        tehsilCode: tehCode,
-        circleCode: cirCode
-      },
-      rule,
-      allRules,
-      sequenceNumber: nextSeq,
-      version: "01"
-    });
+    const pinNumber = formatPotentialPin(
+      generateUinForUnit({
+        jurisdiction: {
+          districtCode: "237",
+          tehsilCode: tehCode,
+          circleCode: cirCode
+        },
+        rule,
+        allRules,
+        sequenceNumber: nextSeq,
+        version: "04"
+      })
+    );
 
     if (editingPotentialUnitId) {
       const existing = potentialUnits.find((p) => p.id === editingPotentialUnitId);
@@ -7664,6 +7725,14 @@ export default function HomePage({
               <div
                 style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}
               >
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  onClick={() => switchTab("UNITS")}
+                  title="Switch to Field Survey & Tax Units Pipeline"
+                >
+                  🏢 Survey &amp; Tax Units ↗
+                </button>
                 {officer.role === "INSPECTOR" && (
                   <button
                     type="button"

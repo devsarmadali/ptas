@@ -5,7 +5,8 @@ import {
   getAllStatutoryRules,
   normalizeIdentifier,
   maskIdentifier,
-  SURVEY_IMPORT_HEADERS
+  SURVEY_IMPORT_HEADERS,
+  setPinVersion
 } from "@ptas/domain";
 import type { StoredUnit, MockOfficer } from "./pilot-store";
 import { DISTRICT_VEHARI_CIRCLES } from "./pilot-store";
@@ -72,26 +73,26 @@ export interface PotentialUnitRecord {
 }
 
 /**
- * Generate a statutory potential PIN with the -01 version suffix.
- * Strips any legacy "Potential-" prefix and ensures the statutory -01 suffix.
+ * Generate a statutory potential PIN with the -04 version suffix.
+ * Strips any legacy "Potential-" prefix and ensures the statutory -04 suffix.
  */
 export function formatPotentialPin(rawUinOrPin: string): string {
   const cleaned = rawUinOrPin
     .replace(/^Potential-/i, "")
-    .replace(/-(01|02)$/, "")
+    .replace(/-(0[1-7])$/, "")
     .trim();
-  return `${cleaned}-01`;
+  return `${cleaned}-04`;
 }
 
 /**
- * Promotes a potential PIN (-01) to Form PFT-3 statutory PIN with -02 suffix.
+ * Promotes a potential PIN (-04) to Form PFT-3 statutory PIN with -01 suffix.
  */
 export function cleanPotentialPin(potentialPin: string): string {
   const cleaned = potentialPin
     .replace(/^Potential-/i, "")
-    .replace(/-(01|02)$/, "")
+    .replace(/-(0[1-7])$/, "")
     .trim();
-  return `${cleaned}-02`;
+  return `${cleaned}-01`;
 }
 
 /**
@@ -404,7 +405,7 @@ export function createInitialPotentialUnits(): PotentialUnitRecord[] {
     const rule = resolveRule(s.ruleCode, s.subclassificationCode);
     const potNum = s.seq.toString();
     const basePin = `237-00101061102${s.seq.toString().padStart(7, "0")}`;
-    const pinNumber = `${basePin}-01`;
+    const pinNumber = `${basePin}-04`;
     const annualRate = rule.annual_rate_pkr ?? 4000;
 
     return {
@@ -765,8 +766,10 @@ export function migratePotentialUnitToPft3(
   );
   const assignedDemandNo = resolveDemandNumberCollision(candidateDemandNo, existingUnits);
 
-  // Clean the PIN by stripping the "Potential-" prefix
-  const cleanPin = cleanPotentialPin(potentialUnit.pinNumber || potentialUnit.provincialUin || "");
+  // Approved migration directly to PFT-3 Register assigns lifecycle version -01 (APPROVED)
+  const approvedPin = cleanPotentialPin(
+    potentialUnit.pinNumber || potentialUnit.provincialUin || ""
+  );
 
   const unitId = `migrated-${Date.now()}-${assignedDemandNo.replace(/[^a-zA-Z0-9]/g, "")}`;
   const nowIso = new Date().toISOString();
@@ -850,8 +853,8 @@ export function migratePotentialUnitToPft3(
     statutoryRule: potentialUnit.statutoryRule,
     assessmentNumber: `ASM-${assignedDemandNo}`,
     demandNumber: assignedDemandNo,
-    pinNumber: cleanPin,
-    provincialUin: cleanPin,
+    pinNumber: approvedPin,
+    provincialUin: approvedPin,
     pft3Registered: true,
     demandUnit: {
       id: `dem-${unitId}`,
@@ -898,7 +901,7 @@ export function migratePotentialUnitToPft3(
 
   savePersistedMigratedUnit(migratedUnit);
 
-  return { migratedUnit, assignedDemandNo, cleanPin };
+  return { migratedUnit, assignedDemandNo, cleanPin: approvedPin };
 }
 
 /**
@@ -921,8 +924,11 @@ export function submitPotentialUnitToPft3(
   );
   const assignedDemandNo = resolveDemandNumberCollision(candidateDemandNo, existingUnits);
 
-  // Clean the PIN by stripping the "Potential-" prefix
-  const cleanPin = cleanPotentialPin(potentialUnit.pinNumber || potentialUnit.provincialUin || "");
+  // When submitted from Potential Register for statutory ETO review, assign lifecycle version -02 (SUBMITTED)
+  const submittedPin = setPinVersion(
+    potentialUnit.pinNumber || potentialUnit.provincialUin || "",
+    "02"
+  );
 
   const unitId = `migrated-${Date.now()}-${assignedDemandNo.replace(/[^a-zA-Z0-9]/g, "")}`;
   const nowIso = new Date().toISOString();
@@ -989,9 +995,9 @@ export function submitPotentialUnitToPft3(
     statutoryRule: potentialUnit.statutoryRule,
     assessmentNumber: `ASM-${assignedDemandNo}`,
     demandNumber: assignedDemandNo,
-    pinNumber: cleanPin,
-    provincialUin: cleanPin,
-    pft3Registered: true,
+    pinNumber: submittedPin,
+    provincialUin: submittedPin,
+    pft3Registered: false,
     demandUnit: {
       id: `dem-${unitId}`,
       taxpayerId: `tax-${unitId}`,
@@ -1035,7 +1041,7 @@ export function submitPotentialUnitToPft3(
 
   savePersistedMigratedUnit(migratedUnit);
 
-  return { migratedUnit, assignedDemandNo, cleanPin };
+  return { migratedUnit, assignedDemandNo, cleanPin: submittedPin };
 }
 
 /**
@@ -1821,7 +1827,7 @@ export function parseBulkPotentialUnits(
         potNum = currentSequence.toString();
       }
       const pinNumber = formatPotentialPin(
-        `237-00101061102${currentSequence.toString().padStart(7, "0")}-01`
+        `237-00101061102${currentSequence.toString().padStart(7, "0")}-04`
       );
       const arrearsValue = rowMap["arrears"]
         ? Math.max(0, Math.round(Number(rowMap["arrears"]) || 0))

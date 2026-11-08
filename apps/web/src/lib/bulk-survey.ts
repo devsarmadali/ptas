@@ -762,7 +762,8 @@ export function convertValidSurveyUnitsToStoredUnits(
       jurisdiction: VEHARI_PILOT_JURISDICTION,
       rule: item.statutoryRule,
       allRules: getAllStatutoryRules(),
-      sequenceNumber
+      sequenceNumber,
+      version: "03"
     });
 
     // Create Draft Assessment under official statutory rule
