@@ -302,24 +302,6 @@ export function getDistrictPbsCode(nameOrAbbr?: string): string {
  *   -03 = Paid
  *   -04 = Cancelled
  */
- * District - Circle - Demand No. - Issued month code - issue date code - form type code - current/arrear code - combined/partial code - amount
- *
- * Digit Codes:
- * - Form Type Code (2 digits):
- *     01 = Standard Challan
- *     02 = Notice-cum-Challan
- *     03 = Arrears Demand Challan
- *     04 = Revised Assessment Challan
- * - Current / Arrear Code (2 digits):
- *     01 = Current Year Demand
- *     02 = Arrears Demand Only
- *     03 = Combined (Current + Arrears)
- * - Combined / Partial Code (2 digits):
- *     01 = Full / Combined Payment
- *     02 = Partial Payment
- *
- * Example: VHR-01-1184-261003010101-2000
- */
 /**
  * Normalizes a demand number to pure numbers (e.g. "5", "65", "876", "187"),
  * preserving sub-demands with hyphen (e.g. "402-5").

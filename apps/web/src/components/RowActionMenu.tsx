@@ -38,6 +38,7 @@ export function RowActionMenu({
 }: RowActionMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close on outside click and Escape key
   useEffect(() => {
@@ -64,6 +65,68 @@ export function RowActionMenu({
       document.removeEventListener("touchstart", handleOutsideClick);
       document.removeEventListener("keydown", handleKeyDown);
     };
+  }, [isOpen]);
+
+  // Elevate parent td and tr stacking contexts while dropdown is open so it stays above subsequent sticky cells
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const container = containerRef.current;
+    const parentTd = container?.closest("td");
+    const parentTr = container?.closest("tr");
+
+    if (parentTd) {
+      parentTd.classList.add("action-menu-active-cell");
+      parentTd.style.zIndex = "120";
+    }
+    if (parentTr) {
+      parentTr.classList.add("action-menu-active-row");
+      parentTr.style.zIndex = "120";
+      parentTr.style.position = "relative";
+    }
+
+    return () => {
+      if (parentTd) {
+        parentTd.classList.remove("action-menu-active-cell");
+        parentTd.style.zIndex = "";
+      }
+      if (parentTr) {
+        parentTr.classList.remove("action-menu-active-row");
+        parentTr.style.zIndex = "";
+        parentTr.style.position = "";
+      }
+    };
+  }, [isOpen]);
+
+  // Auto-scroll to bring the opened dropdown panel completely into view
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const timer = setTimeout(() => {
+      if (!dropdownRef.current) return;
+
+      // 1. Native smooth scrollIntoView (respects scrollMargin)
+      dropdownRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "nearest"
+      });
+
+      // 2. Extra viewport check to ensure at least 28px bottom breathing room
+      const rect = dropdownRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      const margin = 28;
+
+      if (rect.bottom > viewportHeight - margin) {
+        const deltaY = rect.bottom - viewportHeight + margin;
+        window.scrollBy({ top: deltaY, behavior: "smooth" });
+      } else if (rect.top < margin + 60) {
+        const deltaY = rect.top - margin - 60;
+        window.scrollBy({ top: deltaY, behavior: "smooth" });
+      }
+    }, 40);
+
+    return () => clearTimeout(timer);
   }, [isOpen]);
 
   if (actions.length === 0) {
@@ -126,11 +189,12 @@ export function RowActionMenu({
   return (
     <div
       ref={containerRef}
-      className="row-action-menu-container"
+      className={`row-action-menu-container ${isOpen ? "is-open" : ""}`}
       style={{
         position: "relative",
         display: "inline-block",
-        textAlign: "left"
+        textAlign: "left",
+        zIndex: isOpen ? 130 : undefined
       }}
     >
       <button
@@ -151,6 +215,7 @@ export function RowActionMenu({
 
       {isOpen && (
         <div
+          ref={dropdownRef}
           className="row-action-menu-dropdown"
           style={{
             position: "absolute",
@@ -164,7 +229,8 @@ export function RowActionMenu({
             borderRadius: "8px",
             boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.15)",
             padding: "0.35rem 0",
-            overflow: "hidden"
+            overflow: "hidden",
+            scrollMargin: "32px"
           }}
           onClick={(e) => e.stopPropagation()}
           role="menu"

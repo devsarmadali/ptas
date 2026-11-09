@@ -746,6 +746,42 @@ textarea {
   box-shadow: -4px 0 8px -2px rgba(15, 23, 42, 0.08);
 }
 
+/* Elevated Stacking Context for Open Action Popovers - Prevents Dropdown from Going Under Frozen View */
+.gov-table td.col-actions:has(.row-action-menu-dropdown),
+.data-table td.col-actions:has(.row-action-menu-dropdown),
+.table-sticky-actions td:last-child:has(.row-action-menu-dropdown),
+.gov-table td.col-actions.action-menu-active-cell,
+.data-table td.col-actions.action-menu-active-cell,
+td.action-menu-active-cell {
+  z-index: 120 !important;
+}
+
+.gov-table tr:has(.row-action-menu-dropdown),
+.data-table tr:has(.row-action-menu-dropdown),
+.table-sticky-actions tr:has(.row-action-menu-dropdown),
+tr.action-menu-active-row {
+  position: relative;
+  z-index: 120 !important;
+}
+
+.row-action-menu-container {
+  position: relative;
+  display: inline-block;
+  text-align: left;
+}
+
+.row-action-menu-container:has(.row-action-menu-dropdown),
+.row-action-menu-container.is-open {
+  z-index: 130 !important;
+}
+
+.row-action-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  z-index: 10000 !important;
+  scroll-margin: 32px;
+}
+
 .gov-table tr:hover td.col-actions,
 .data-table tr:hover td.col-actions,
 .table-sticky-actions tr:hover td:last-child {

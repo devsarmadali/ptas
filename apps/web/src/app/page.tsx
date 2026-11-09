@@ -8596,89 +8596,6 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
-                      className="cell-wrap-text"
-                      style={{ cursor: "pointer", userSelect: "none" }}
-                      title="Click to sort by Taxpayer / Assessee"
-                    >
-                      <div
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.35rem",
-                          position: "relative"
-                        }}
-                      >
-                        <span onClick={() => handlePotentialSort("taxpayerName")}>
-                          Taxpayer / Assessee
-                        </span>
-                        <span
-                          onClick={() => handlePotentialSort("taxpayerName")}
-                          style={{
-                            fontSize: "0.75rem",
-                            color: potentialSortField === "taxpayerName" ? "#b45309" : "#94a3b8"
-                          }}
-                        >
-                          {potentialSortField === "taxpayerName"
-                            ? potentialSortDirection === "asc"
-                              ? "▲"
-                              : "▼"
-                            : "⇅"}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenPotentialFilterCol(
-                              openPotentialFilterCol === "taxpayerName" ? null : "taxpayerName"
-                            );
-                          }}
-                          style={{
-                            background: potentialColFilters.taxpayerName
-                              ? "#b45309"
-                              : "transparent",
-                            color: potentialColFilters.taxpayerName ? "#ffffff" : "#94a3b8",
-                            border: potentialColFilters.taxpayerName ? "1px solid #b45309" : "none",
-                            borderRadius: "3px",
-                            cursor: "pointer",
-                            padding: "0.1rem 0.25rem",
-                            fontSize: "0.72rem",
-                            lineHeight: 1
-                          }}
-                          title={
-                            potentialColFilters.taxpayerName
-                              ? `Filtered: "${potentialColFilters.taxpayerName}" (Click to edit)`
-                              : "Filter Taxpayer / Assessee"
-                          }
-                        >
-                          🔍
-                        </button>
-                        {openPotentialFilterCol === "taxpayerName" && (
-                          <ColumnFilterPopover
-                            columnLabel="Taxpayer / Assessee"
-                            columnType="text"
-                            currentValue={potentialColFilters.taxpayerName || ""}
-                            onApply={(val) => {
-                              setPotentialColFilters((prev) => ({ ...prev, taxpayerName: val }));
-                              setPotentialCurrentPage(1);
-                              setOpenPotentialFilterCol(null);
-                            }}
-                            onClear={() => {
-                              setPotentialColFilters((prev) => {
-                                const next = { ...prev };
-                                delete next.taxpayerName;
-                                return next;
-                              });
-                              setPotentialCurrentPage(1);
-                              setOpenPotentialFilterCol(null);
-                            }}
-                            onClose={() => setOpenPotentialFilterCol(null)}
-                            align="left"
-                            themeColor="#b45309"
-                          />
-                        )}
-                      </div>
-                    </th>
-                    <th
                       className="cell-fit"
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Identifier"
@@ -9267,7 +9184,7 @@ export default function HomePage({
                   {paginatedPotentialUnits.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={12}
+                        colSpan={11}
                         style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
                       >
                         No prospective units found matching filter criteria. Click &quot;Add
@@ -9305,11 +9222,6 @@ export default function HomePage({
                           <strong style={{ color: "#0f172a", fontSize: "0.8125rem" }}>
                             {u.legalName}
                           </strong>
-                        </td>
-                        <td className="cell-wrap-text">
-                          <span style={{ color: "#475569", fontSize: "0.8125rem" }}>
-                            {u.taxpayerName || u.tradeName || "—"}
-                          </span>
                         </td>
                         <td className="cell-fit">
                           <span
@@ -10222,91 +10134,6 @@ export default function HomePage({
                       <th
                         className="cell-wrap-text"
                         style={{ userSelect: "none" }}
-                        title="Click to sort by Taxpayer / Assessee"
-                      >
-                        <div
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "0.35rem",
-                            position: "relative"
-                          }}
-                        >
-                          <span
-                            onClick={() => handlePft3Sort("tradeName")}
-                            style={{ cursor: "pointer" }}
-                          >
-                            Taxpayer / Assessee
-                          </span>
-                          <span
-                            onClick={() => handlePft3Sort("tradeName")}
-                            style={{
-                              cursor: "pointer",
-                              fontSize: "0.75rem",
-                              color: pft3SortField === "tradeName" ? "#0284c7" : "#94a3b8"
-                            }}
-                          >
-                            {pft3SortField === "tradeName"
-                              ? pft3SortDirection === "asc"
-                                ? "▲"
-                                : "▼"
-                              : "⇅"}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenPft3FilterCol(
-                                openPft3FilterCol === "tradeName" ? null : "tradeName"
-                              );
-                            }}
-                            style={{
-                              background: pft3ColFilters.tradeName ? "#0284c7" : "transparent",
-                              color: pft3ColFilters.tradeName ? "#ffffff" : "#94a3b8",
-                              border: pft3ColFilters.tradeName ? "1px solid #0284c7" : "none",
-                              borderRadius: "3px",
-                              cursor: "pointer",
-                              padding: "0.1rem 0.25rem",
-                              fontSize: "0.72rem",
-                              lineHeight: 1
-                            }}
-                            title={
-                              pft3ColFilters.tradeName
-                                ? `Filtered: "${pft3ColFilters.tradeName}" (Click to edit)`
-                                : "Filter Taxpayer / Assessee"
-                            }
-                          >
-                            🔍
-                          </button>
-                          {openPft3FilterCol === "tradeName" && (
-                            <ColumnFilterPopover
-                              columnLabel="Taxpayer / Assessee"
-                              columnType="text"
-                              currentValue={pft3ColFilters.tradeName || ""}
-                              onApply={(val) => {
-                                setPft3ColFilters((prev) => ({ ...prev, tradeName: val }));
-                                setPft3CurrentPage(1);
-                                setOpenPft3FilterCol(null);
-                              }}
-                              onClear={() => {
-                                setPft3ColFilters((prev) => {
-                                  const next = { ...prev };
-                                  delete next.tradeName;
-                                  return next;
-                                });
-                                setPft3CurrentPage(1);
-                                setOpenPft3FilterCol(null);
-                              }}
-                              onClose={() => setOpenPft3FilterCol(null)}
-                              align="left"
-                              themeColor="#0284c7"
-                            />
-                          )}
-                        </div>
-                      </th>
-                      <th
-                        className="cell-wrap-text"
-                        style={{ userSelect: "none" }}
                         title="Click to sort by Statutory Class"
                       >
                         <div
@@ -10846,7 +10673,7 @@ export default function HomePage({
                     {filteredFormPFT3Rows.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={11}
+                          colSpan={10}
                           style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
                         >
                           No assessed units match the selected search or filter criteria.
@@ -10882,12 +10709,6 @@ export default function HomePage({
                             <strong style={{ color: "#0f172a", fontSize: "0.8125rem" }}>
                               {row.legalName}
                             </strong>
-                          </td>
-                          <td
-                            className="cell-wrap-text"
-                            style={{ color: "#334155", fontSize: "0.8125rem" }}
-                          >
-                            {row.tradeName || "—"}
                           </td>
                           <td className="cell-wrap-text">
                             <span className="badge badge-draft" style={{ fontSize: "0.75rem" }}>
