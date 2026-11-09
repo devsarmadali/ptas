@@ -26,6 +26,7 @@ import type {
   RefundAdjustmentRecord,
   StoredUnit
 } from "./pilot-store";
+import type { PotentialUnitRecord } from "./potential-units-storage";
 
 export interface CategoryYieldSummary {
   readonly categoryCode: string;
@@ -136,6 +137,36 @@ export interface RolePerspectiveMetrics {
   readonly director: DirectorSummaryStats;
 }
 
+export interface ExecutiveMetricsOptions {
+  readonly filterApprovedOnly?: boolean;
+}
+
+export interface SurveyPipelineSummary {
+  readonly totalSurveyUnits: number;
+  readonly draftAssessmentsCount: number;
+  readonly submittedAssessmentsCount: number;
+  readonly totalProspectiveDemand: number;
+  readonly categoryBreakdown: readonly {
+    readonly categoryCode: string;
+    readonly categoryName: string;
+    readonly count: number;
+    readonly prospectiveDemand: number;
+  }[];
+}
+
+export interface PotentialPipelineSummary {
+  readonly totalPotentialUnits: number;
+  readonly verifiedCount: number;
+  readonly pendingVerificationCount: number;
+  readonly totalProjectedDemand: number;
+  readonly categoryBreakdown: readonly {
+    readonly categoryCode: string;
+    readonly categoryName: string;
+    readonly count: number;
+    readonly projectedDemand: number;
+  }[];
+}
+
 export interface ExecutiveMetrics {
   readonly kpis: RevenueKpis;
   readonly categoryYields: readonly CategoryYieldSummary[];
@@ -160,9 +191,14 @@ export function computeExecutiveMetrics(
   appeals: readonly AppealRecord[] = [],
   discontinuances: readonly DiscontinuanceRecord[] = [],
   refundAdjustments: readonly RefundAdjustmentRecord[] = [],
-  clearanceCertificates: readonly ClearanceCertificateRecord[] = []
+  clearanceCertificates: readonly ClearanceCertificateRecord[] = [],
+  options?: ExecutiveMetricsOptions
 ): ExecutiveMetrics {
   const categories: readonly StatutoryCategorySummary[] = getStatutoryCategories();
+  const filterApproved = options?.filterApprovedOnly ?? false;
+  const targetRevenueUnits = filterApproved
+    ? units.filter((u) => u.assessments[0]?.status === "APPROVED")
+    : units;
 
   // Revenue KPI accumulators
   let totalAssessed = 0;
@@ -216,8 +252,8 @@ export function computeExecutiveMetrics(
     slabArrears.set(r.rule_id, 0);
   }
 
-  // Iterate over all registered units
-  for (const u of units) {
+  // Iterate over revenue-eligible units
+  for (const u of targetRevenueUnits) {
     const catCode = u.statutoryRule?.category_code ?? u.categoryCode ?? "1";
     const ruleId = u.statutoryRuleId ?? u.statutoryRule?.rule_id ?? "PFT-1.i";
 
@@ -408,7 +444,7 @@ export function computeExecutiveMetrics(
 
   return {
     kpis: {
-      totalUnitsCount: units.length,
+      totalUnitsCount: targetRevenueUnits.length,
       assessedDemand: totalAssessed,
       penaltyDemand: totalPenalty,
       totalAssessedGross: totalGross,
@@ -877,4 +913,183 @@ export function downloadCsvFile(filename: string, csvContent: string): void {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Computes prospective pipeline metrics across unassessed field survey discovery records.
+ */
+export function computeSurveyPipelineMetrics(
+  surveyUnits: readonly StoredUnit[]
+): SurveyPipelineSummary {
+  let draftCount = 0;
+  let submittedCount = 0;
+  let prospectiveDemand = 0;
+  const catCount = new Map<string, number>();
+  const catDemand = new Map<string, number>();
+
+  for (const u of surveyUnits) {
+    const status = u.assessments[0]?.status ?? "DRAFT";
+    if (status === "SUBMITTED") {
+      submittedCount++;
+    } else {
+      draftCount++;
+    }
+    const rate = u.statutoryRule?.annual_rate_pkr ?? 0;
+    prospectiveDemand += rate;
+    const catCode = u.statutoryRule?.category_code ?? u.categoryCode ?? "1";
+    catCount.set(catCode, (catCount.get(catCode) ?? 0) + 1);
+    catDemand.set(catCode, (catDemand.get(catCode) ?? 0) + rate);
+  }
+
+  const categories = getStatutoryCategories();
+  const categoryBreakdown = categories.map((cat) => ({
+    categoryCode: cat.category_code,
+    categoryName: cat.category_name,
+    count: catCount.get(cat.category_code) ?? 0,
+    prospectiveDemand: catDemand.get(cat.category_code) ?? 0
+  }));
+
+  return {
+    totalSurveyUnits: surveyUnits.length,
+    draftAssessmentsCount: draftCount,
+    submittedAssessmentsCount: submittedCount,
+    totalProspectiveDemand: round2(prospectiveDemand),
+    categoryBreakdown
+  };
+}
+
+/**
+ * Computes projected prospective pipeline metrics across potential register records.
+ */
+export function computePotentialPipelineMetrics(
+  potentialUnits: readonly PotentialUnitRecord[]
+): PotentialPipelineSummary {
+  let verifiedCount = 0;
+  let pendingCount = 0;
+  let totalProjected = 0;
+  const catCount = new Map<string, number>();
+  const catDemand = new Map<string, number>();
+
+  for (const p of potentialUnits) {
+    if (p.status === "ACTIVE") {
+      verifiedCount++;
+    } else {
+      pendingCount++;
+    }
+    const rate = p.statutoryRule?.annual_rate_pkr ?? p.annualRatePkr ?? 0;
+    totalProjected += rate;
+    const catCode = p.categoryCode || "1";
+    catCount.set(catCode, (catCount.get(catCode) ?? 0) + 1);
+    catDemand.set(catCode, (catDemand.get(catCode) ?? 0) + rate);
+  }
+
+  const categories = getStatutoryCategories();
+  const categoryBreakdown = categories.map((cat) => ({
+    categoryCode: cat.category_code,
+    categoryName: cat.category_name,
+    count: catCount.get(cat.category_code) ?? 0,
+    projectedDemand: catDemand.get(cat.category_code) ?? 0
+  }));
+
+  return {
+    totalPotentialUnits: potentialUnits.length,
+    verifiedCount,
+    pendingVerificationCount: pendingCount,
+    totalProjectedDemand: round2(totalProjected),
+    categoryBreakdown
+  };
+}
+
+/**
+ * Export 6: Form P.F.T-S Field Survey & Operational Discovery Pipeline Register
+ */
+export function exportSurveyPipelineCsv(surveyUnits: readonly StoredUnit[]): string {
+  const headers = [
+    "S.No",
+    "Discovery ID / PIN",
+    "Demand Number",
+    "Profession/Trade Name",
+    "Taxpayer / Proprietor",
+    "CNIC / NTN",
+    "Commercial Address",
+    "Locality",
+    "Proposed Statutory Category",
+    "Proposed Sub-Class Code",
+    "Proposed Tertiary Slab",
+    "Proposed Rate (PKR)",
+    "Survey Status",
+    "Assessment Status",
+    "Surveying Officer"
+  ];
+
+  const rows = surveyUnits.map((u, idx) => [
+    idx + 1,
+    u.provincialUin ?? u.id,
+    u.demandUnit?.permanentDemandNo ?? u.demandNumber ?? "PENDING",
+    u.legalName,
+    u.tradeName ?? "",
+    `${u.identifierType}: ${u.identifierValue}`,
+    u.address,
+    u.locality ?? "Circle I",
+    u.statutoryRule?.category ?? "Unclassified",
+    u.statutoryRule?.subclassification_code ?? "",
+    u.statutoryRule?.statutory_tertiary_classification ?? u.statutoryRule?.subcategory ?? "",
+    u.statutoryRule?.annual_rate_pkr ?? 0,
+    u.serviceStatus ?? "SURVEYED",
+    u.assessments[0]?.status ?? "DRAFT",
+    u.servedBy ?? "Tax Inspector (Vehari Circle I)"
+  ]);
+
+  const lines = [
+    headers.map(escapeCsvCell).join(","),
+    ...rows.map((row) => row.map(escapeCsvCell).join(","))
+  ];
+
+  return lines.join("\r\n");
+}
+
+/**
+ * Export 7: Form P.F.T-P Prospective Potential Commercial Register
+ */
+export function exportPotentialRegisterCsv(potentialUnits: readonly PotentialUnitRecord[]): string {
+  const headers = [
+    "S.No",
+    "Potential ID",
+    "Business / Commercial Name",
+    "Proprietor / Contact Person",
+    "CNIC / NTN",
+    "Commercial Address",
+    "Locality",
+    "Tehsil",
+    "District",
+    "Discovery Mode",
+    "Statutory Category",
+    "Schedule Sub-Class Code",
+    "Projected Rate (PKR)",
+    "Status"
+  ];
+
+  const rows = potentialUnits.map((p, idx) => [
+    idx + 1,
+    p.potentialNumber || p.id,
+    p.legalName,
+    p.tradeName ?? p.taxpayerName ?? "",
+    `${p.identifierType}: ${p.identifierValue}`,
+    p.address,
+    p.locality ?? "",
+    p.tehsil ?? "Vehari",
+    p.districtName ?? "Vehari",
+    "FIELD_DISCOVERY",
+    p.categoryName,
+    p.subclassificationCode ?? "",
+    p.annualRatePkr,
+    p.status
+  ]);
+
+  const lines = [
+    headers.map(escapeCsvCell).join(","),
+    ...rows.map((row) => row.map(escapeCsvCell).join(","))
+  ];
+
+  return lines.join("\r\n");
 }

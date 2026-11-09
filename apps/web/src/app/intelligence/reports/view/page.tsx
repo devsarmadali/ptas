@@ -17,6 +17,11 @@ import {
   computeUnitFinancialSummary,
   computeUnitDefaulterAging
 } from "../../../../lib/statutory-forms";
+import {
+  fetchPotentialAssessmentUnitsFromDatabase,
+  loadPersistedPotentialUnits,
+  type PotentialUnitRecord
+} from "../../../../lib/potential-units-storage";
 
 function ReportViewContent() {
   const searchParams = useSearchParams();
@@ -35,8 +40,21 @@ function ReportViewContent() {
     reportKey = "RELIEF_REGISTER";
   if (rawReportType === "SCHEDULE_2" || rawReportType === "SLABS") reportKey = "SLAB_DISTRIBUTION";
   if (rawReportType === "SUMMARY" || rawReportType === "MIS") reportKey = "EXECUTIVE_MIS_SUMMARY";
+  if (
+    rawReportType === "SURVEY_REGISTER" ||
+    rawReportType === "SURVEY" ||
+    rawReportType === "FIELD_SURVEY"
+  )
+    reportKey = "SURVEY_REGISTER";
+  if (
+    rawReportType === "POTENTIAL_REGISTER" ||
+    rawReportType === "POTENTIAL" ||
+    rawReportType === "PROSPECTIVE"
+  )
+    reportKey = "POTENTIAL_REGISTER";
 
   const [pilotState, setPilotState] = useState<PilotState | null>(null);
+  const [potentialUnits, setPotentialUnits] = useState<PotentialUnitRecord[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -44,9 +62,10 @@ function ReportViewContent() {
     let cancelled = false;
     void Promise.all([
       loadOperationalContext(),
-      loadDurableChallanRegistry().catch(() => ({ challans: [], receipts: [] }))
+      loadDurableChallanRegistry().catch(() => ({ challans: [], receipts: [] })),
+      fetchPotentialAssessmentUnitsFromDatabase().catch(() => null)
     ])
-      .then(([{ officer, units }, durable]) => {
+      .then(([{ officer, units }, durable, dbPotential]) => {
         if (!cancelled) {
           setPilotState({
             ...loadPilotState(),
@@ -55,6 +74,7 @@ function ReportViewContent() {
             pft2Challans: durable.challans ?? [],
             statutoryReceipts: durable.receipts ?? []
           });
+          setPotentialUnits(dbPotential ?? loadPersistedPotentialUnits());
         }
       })
       .catch((error: unknown) => {
@@ -88,13 +108,20 @@ function ReportViewContent() {
       !unit.demandUnit?.permanentDemandNo?.startsWith("V-") &&
       !unit.demandNumber?.startsWith("V-")
   );
+  const surveyUnits = units.filter(
+    (unit) =>
+      unit.assessments[0]?.status !== "APPROVED" ||
+      unit.pft3Registered === false ||
+      unit.demandUnit?.permanentDemandNo?.startsWith("V-") ||
+      unit.demandNumber?.startsWith("V-")
+  );
   const clearanceCertificates = pilotState.clearanceCertificates || [];
   const discontinuances = pilotState.discontinuances || [];
   const refundAdjustments = pilotState.refundAdjustments || [];
   const appeals = pilotState.appeals || [];
   const currentOfficer = pilotState.currentOfficer;
   const misMetrics = computeExecutiveMetrics(
-    units,
+    pft3Units,
     appeals,
     discontinuances,
     refundAdjustments,
@@ -115,6 +142,10 @@ function ReportViewContent() {
         return "STATUTORY RELIEF & ADJUSTMENT REGISTER (RULES 5 & 10)";
       case "SLAB_DISTRIBUTION":
         return "STATUTORY SCHEDULE SUB-CLASS & TERTIARY SLABS DISTRIBUTION REGISTER";
+      case "SURVEY_REGISTER":
+        return "FORM P.F.T-S: FIELD SURVEY & OPERATIONAL PIPELINE REGISTER (RULE 4)";
+      case "POTENTIAL_REGISTER":
+        return "FORM P.F.T-P: PROSPECTIVE POTENTIAL COMMERCIAL REGISTER";
       default:
         return "EXECUTIVE MIS COMPREHENSIVE REVENUE & COMPLIANCE BRIEF";
     }
@@ -134,6 +165,10 @@ function ReportViewContent() {
         return "Statutory_Relief_Adjustments_Log.pdf";
       case "SLAB_DISTRIBUTION":
         return "Schedule2_Rate_Card_Yields.pdf";
+      case "SURVEY_REGISTER":
+        return "Form_PFTS_Survey_Pipeline_Register.pdf";
+      case "POTENTIAL_REGISTER":
+        return "Form_PFTP_Potential_Register.pdf";
       default:
         return "Executive_MIS_Revenue_Brief.pdf";
     }
@@ -1061,6 +1096,452 @@ function ReportViewContent() {
             </tbody>
           </table>
         )}
+
+        {reportKey === "SURVEY_REGISTER" &&
+          (() => {
+            let totalProspective = 0;
+            let draftCount = 0;
+            let submittedCount = 0;
+
+            for (const u of surveyUnits) {
+              totalProspective += u.statutoryRule?.annual_rate_pkr ?? 0;
+              const st = u.assessments[0]?.status;
+              if (st === "SUBMITTED") submittedCount++;
+              else draftCount++;
+            }
+
+            return (
+              <div>
+                {/* Pipeline Summary Banner */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
+                    gap: "0.85rem",
+                    marginBottom: "1.25rem",
+                    fontFamily: "system-ui, -apple-system, sans-serif"
+                  }}
+                >
+                  <div
+                    style={{
+                      background: "#f0f9ff",
+                      border: "1px solid #bae6fd",
+                      padding: "0.85rem",
+                      borderRadius: "6px"
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#0369a1",
+                        fontWeight: 700,
+                        display: "block"
+                      }}
+                    >
+                      DISCOVERY PIPELINE UNITS
+                    </span>
+                    <strong
+                      style={{
+                        fontSize: "1.3rem",
+                        color: "#0c4a6e",
+                        marginTop: "0.2rem",
+                        display: "block"
+                      }}
+                    >
+                      {surveyUnits.length.toLocaleString()} Units
+                    </strong>
+                  </div>
+
+                  <div
+                    style={{
+                      background: "#f8fafc",
+                      border: "1px solid #cbd5e1",
+                      padding: "0.85rem",
+                      borderRadius: "6px"
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#475569",
+                        fontWeight: 700,
+                        display: "block"
+                      }}
+                    >
+                      PROSPECTIVE DEMAND
+                    </span>
+                    <strong
+                      style={{
+                        fontSize: "1.3rem",
+                        color: "#1e293b",
+                        marginTop: "0.2rem",
+                        display: "block"
+                      }}
+                    >
+                      PKR {totalProspective.toLocaleString()}
+                    </strong>
+                  </div>
+
+                  <div
+                    style={{
+                      background: "#fffbeb",
+                      border: "1px solid #fde68a",
+                      padding: "0.85rem",
+                      borderRadius: "6px"
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#b45309",
+                        fontWeight: 700,
+                        display: "block"
+                      }}
+                    >
+                      DRAFT SURVEYS
+                    </span>
+                    <strong
+                      style={{
+                        fontSize: "1.3rem",
+                        color: "#92400e",
+                        marginTop: "0.2rem",
+                        display: "block"
+                      }}
+                    >
+                      {draftCount} Units
+                    </strong>
+                  </div>
+
+                  <div
+                    style={{
+                      background: "#f0fdf4",
+                      border: "1px solid #bbf7d0",
+                      padding: "0.85rem",
+                      borderRadius: "6px"
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#166534",
+                        fontWeight: 700,
+                        display: "block"
+                      }}
+                    >
+                      SUBMITTED FOR APPROVAL
+                    </span>
+                    <strong
+                      style={{
+                        fontSize: "1.3rem",
+                        color: "#14532d",
+                        marginTop: "0.2rem",
+                        display: "block"
+                      }}
+                    >
+                      {submittedCount} Units
+                    </strong>
+                  </div>
+                </div>
+
+                {/* Table */}
+                <table
+                  style={{
+                    width: "100%",
+                    fontSize: "0.75rem",
+                    borderCollapse: "collapse",
+                    marginBottom: "1.25rem"
+                  }}
+                >
+                  <thead>
+                    <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                      <th style={{ padding: "0.4rem", textAlign: "left" }}>S.No</th>
+                      <th style={{ padding: "0.4rem", textAlign: "left" }}>Discovery Ref / PIN</th>
+                      <th style={{ padding: "0.4rem", textAlign: "left" }}>
+                        Profession / Trade Name
+                      </th>
+                      <th style={{ padding: "0.4rem", textAlign: "left" }}>Proprietor</th>
+                      <th style={{ padding: "0.4rem", textAlign: "left" }}>Commercial Address</th>
+                      <th style={{ padding: "0.4rem", textAlign: "left" }}>Proposed Category</th>
+                      <th style={{ padding: "0.4rem", textAlign: "right" }}>Proposed Rate</th>
+                      <th style={{ padding: "0.4rem", textAlign: "center" }}>Pipeline Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {surveyUnits.map((u, idx) => (
+                      <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                        <td style={{ padding: "0.35rem" }}>{idx + 1}</td>
+                        <td
+                          style={{ padding: "0.35rem", fontFamily: "monospace", fontWeight: 700 }}
+                        >
+                          {u.provincialUin ?? u.demandUnit?.permanentDemandNo ?? u.id}
+                        </td>
+                        <td style={{ padding: "0.35rem" }}>
+                          <strong>{u.legalName}</strong>
+                        </td>
+                        <td style={{ padding: "0.35rem" }}>{u.tradeName ?? "—"}</td>
+                        <td style={{ padding: "0.35rem", color: "#475569" }}>{u.address}</td>
+                        <td style={{ padding: "0.35rem" }}>
+                          <span className="badge badge-draft">
+                            Class {u.statutoryRule?.category_code ?? u.categoryCode ?? "1"}
+                          </span>
+                          <span style={{ marginLeft: "0.4rem" }}>
+                            {u.statutoryRule?.category ?? "General"}
+                          </span>
+                        </td>
+                        <td
+                          style={{
+                            padding: "0.35rem",
+                            textAlign: "right",
+                            fontFamily: "monospace",
+                            fontWeight: 700
+                          }}
+                        >
+                          PKR {(u.statutoryRule?.annual_rate_pkr ?? 0).toLocaleString()}
+                        </td>
+                        <td style={{ padding: "0.35rem", textAlign: "center" }}>
+                          <span
+                            className={`badge ${
+                              u.assessments[0]?.status === "SUBMITTED"
+                                ? "badge-pending"
+                                : "badge-draft"
+                            }`}
+                          >
+                            {u.assessments[0]?.status ?? "DRAFT"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+
+        {reportKey === "POTENTIAL_REGISTER" &&
+          (() => {
+            let totalProjected = 0;
+            let verifiedCount = 0;
+            let pendingCount = 0;
+
+            for (const p of potentialUnits) {
+              totalProjected += p.annualRatePkr ?? p.statutoryRule?.annual_rate_pkr ?? 0;
+              if (p.status === "ACTIVE") verifiedCount++;
+              else pendingCount++;
+            }
+
+            return (
+              <div>
+                {/* Potential Summary Banner */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
+                    gap: "0.85rem",
+                    marginBottom: "1.25rem",
+                    fontFamily: "system-ui, -apple-system, sans-serif"
+                  }}
+                >
+                  <div
+                    style={{
+                      background: "#fffbeb",
+                      border: "1px solid #fde68a",
+                      padding: "0.85rem",
+                      borderRadius: "6px"
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#b45309",
+                        fontWeight: 700,
+                        display: "block"
+                      }}
+                    >
+                      POTENTIAL ENTITIES
+                    </span>
+                    <strong
+                      style={{
+                        fontSize: "1.3rem",
+                        color: "#92400e",
+                        marginTop: "0.2rem",
+                        display: "block"
+                      }}
+                    >
+                      {potentialUnits.length.toLocaleString()} Entities
+                    </strong>
+                  </div>
+
+                  <div
+                    style={{
+                      background: "#f8fafc",
+                      border: "1px solid #cbd5e1",
+                      padding: "0.85rem",
+                      borderRadius: "6px"
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#475569",
+                        fontWeight: 700,
+                        display: "block"
+                      }}
+                    >
+                      PROJECTED TAX POTENTIAL
+                    </span>
+                    <strong
+                      style={{
+                        fontSize: "1.3rem",
+                        color: "#1e293b",
+                        marginTop: "0.2rem",
+                        display: "block"
+                      }}
+                    >
+                      PKR {totalProjected.toLocaleString()}
+                    </strong>
+                  </div>
+
+                  <div
+                    style={{
+                      background: "#f0fdf4",
+                      border: "1px solid #bbf7d0",
+                      padding: "0.85rem",
+                      borderRadius: "6px"
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#166534",
+                        fontWeight: 700,
+                        display: "block"
+                      }}
+                    >
+                      VERIFIED FOR ONBOARDING
+                    </span>
+                    <strong
+                      style={{
+                        fontSize: "1.3rem",
+                        color: "#14532d",
+                        marginTop: "0.2rem",
+                        display: "block"
+                      }}
+                    >
+                      {verifiedCount} Entities
+                    </strong>
+                  </div>
+
+                  <div
+                    style={{
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      padding: "0.85rem",
+                      borderRadius: "6px"
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#b91c1c",
+                        fontWeight: 700,
+                        display: "block"
+                      }}
+                    >
+                      PENDING VERIFICATION
+                    </span>
+                    <strong
+                      style={{
+                        fontSize: "1.3rem",
+                        color: "#991b1b",
+                        marginTop: "0.2rem",
+                        display: "block"
+                      }}
+                    >
+                      {pendingCount} Entities
+                    </strong>
+                  </div>
+                </div>
+
+                {/* Table */}
+                <table
+                  style={{
+                    width: "100%",
+                    fontSize: "0.75rem",
+                    borderCollapse: "collapse",
+                    marginBottom: "1.25rem"
+                  }}
+                >
+                  <thead>
+                    <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                      <th style={{ padding: "0.4rem", textAlign: "left" }}>S.No</th>
+                      <th style={{ padding: "0.4rem", textAlign: "left" }}>Potential ID</th>
+                      <th style={{ padding: "0.4rem", textAlign: "left" }}>Commercial Name</th>
+                      <th style={{ padding: "0.4rem", textAlign: "left" }}>Proprietor</th>
+                      <th style={{ padding: "0.4rem", textAlign: "left" }}>CNIC / NTN</th>
+                      <th style={{ padding: "0.4rem", textAlign: "left" }}>Commercial Address</th>
+                      <th style={{ padding: "0.4rem", textAlign: "left" }}>Category</th>
+                      <th style={{ padding: "0.4rem", textAlign: "right" }}>Projected Rate</th>
+                      <th style={{ padding: "0.4rem", textAlign: "center" }}>Verification</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {potentialUnits.map((p, idx) => (
+                      <tr key={p.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                        <td style={{ padding: "0.35rem" }}>{idx + 1}</td>
+                        <td
+                          style={{ padding: "0.35rem", fontFamily: "monospace", fontWeight: 700 }}
+                        >
+                          {p.potentialNumber || p.id}
+                        </td>
+                        <td style={{ padding: "0.35rem" }}>
+                          <strong>{p.legalName}</strong>
+                        </td>
+                        <td style={{ padding: "0.35rem" }}>
+                          {p.tradeName ?? p.taxpayerName ?? "—"}
+                        </td>
+                        <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                          {p.identifierType}: {p.identifierValue}
+                        </td>
+                        <td style={{ padding: "0.35rem", color: "#475569" }}>
+                          {p.address} {p.locality ? `(${p.locality})` : ""}
+                        </td>
+                        <td style={{ padding: "0.35rem" }}>
+                          <span className="badge badge-draft">Class {p.categoryCode || "1"}</span>
+                          <span style={{ marginLeft: "0.4rem" }}>
+                            {p.categoryName || "Commercial"}
+                          </span>
+                        </td>
+                        <td
+                          style={{
+                            padding: "0.35rem",
+                            textAlign: "right",
+                            fontFamily: "monospace",
+                            fontWeight: 700
+                          }}
+                        >
+                          PKR{" "}
+                          {(
+                            p.annualRatePkr ??
+                            p.statutoryRule?.annual_rate_pkr ??
+                            0
+                          ).toLocaleString()}
+                        </td>
+                        <td style={{ padding: "0.35rem", textAlign: "center" }}>
+                          <span
+                            className={`badge ${
+                              p.status === "ACTIVE" ? "badge-approved" : "badge-draft"
+                            }`}
+                          >
+                            {p.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
 
         {/* Official Authentication Footer */}
         <div

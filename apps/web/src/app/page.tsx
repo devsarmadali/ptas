@@ -60,8 +60,11 @@ import {
   RECEIPT_SOURCE_CONFIG,
   getReceiptCategory,
   getPakistanCurrentDate,
-  getPakistanCurrentTimestamp
+  getPakistanCurrentTimestamp,
+  loadPersistedAuditLogs,
+  savePersistedAuditLogs
 } from "../lib/pilot-store";
+import { fetchAuditLogsFromDatabase } from "../lib/supabase-sync";
 import { buildVerificationUrl } from "../lib/site-url";
 import { computeFileSha256, uploadReceiptScan } from "../lib/storage";
 import {
@@ -116,7 +119,9 @@ import {
   exportNoticeDispatchCsv,
   exportPft3RegisterCsv,
   exportReliefAdjustmentsCsv,
-  exportStatutorySlabDistributionCsv
+  exportStatutorySlabDistributionCsv,
+  exportSurveyPipelineCsv,
+  exportPotentialRegisterCsv
 } from "../lib/mis-analytics";
 import { StatutoryQrCode } from "../components/StatutoryQrCode";
 import { Pft2ChallanDocument } from "../components/Pft2ChallanDocument";
@@ -966,7 +971,7 @@ export default function HomePage({
     "CHECKING"
   );
   const [units, setUnits] = useState<StoredUnit[]>([]);
-  const [auditLogs, setAuditLogs] = useState<PilotAuditItem[]>([]);
+  const [auditLogs, setAuditLogs] = useState<PilotAuditItem[]>(() => loadPersistedAuditLogs());
   const [isLoadingOperationalUnits, setIsLoadingOperationalUnits] = useState(true);
   const [operationalUnitsError, setOperationalUnitsError] = useState<string | null>(null);
 
@@ -1518,6 +1523,21 @@ export default function HomePage({
       setAppealUnitId(firstId);
       setDiscUnitId(firstId);
       setRefUnitId(firstId);
+
+      // Synchronize audit logs from database if available, merging with local persisted logs
+      try {
+        const cloudAudits = await fetchAuditLogsFromDatabase();
+        if (cloudAudits && cloudAudits.length > 0) {
+          setAuditLogs((prev) => {
+            const existingIds = new Set(cloudAudits.map((a) => a.id));
+            const merged = [...cloudAudits, ...prev.filter((p) => !existingIds.has(p.id))];
+            savePersistedAuditLogs(merged);
+            return merged;
+          });
+        }
+      } catch {
+        // Fallback to local persisted audit logs
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to load operational units";
       setUnits([]);
@@ -1538,7 +1558,11 @@ export default function HomePage({
     const handleAuditEvent = (event: Event) => {
       const customEvent = event as CustomEvent<PilotAuditItem>;
       if (customEvent.detail) {
-        setAuditLogs((prev) => [customEvent.detail, ...prev]);
+        setAuditLogs((prev) => {
+          const next = [customEvent.detail, ...prev];
+          savePersistedAuditLogs(next);
+          return next;
+        });
       }
     };
 
@@ -1673,7 +1697,10 @@ export default function HomePage({
     updatedReceipts?: StatutoryReceiptRecord[]
   ) => {
     if (updatedUnits) setUnits(updatedUnits);
-    if (updatedAudits) setAuditLogs(updatedAudits);
+    if (updatedAudits) {
+      setAuditLogs(updatedAudits);
+      savePersistedAuditLogs(updatedAudits);
+    }
     if (updatedOfficer) setOfficer(updatedOfficer);
     if (updatedAppeals) setAppeals(updatedAppeals);
     if (updatedDiscontinuances) setDiscontinuances(updatedDiscontinuances);
@@ -3372,6 +3399,17 @@ export default function HomePage({
     });
   }, [units, activePotentialIds]);
 
+  const surveyProspectiveDemand = useMemo(() => {
+    return surveyPendingUnits.reduce((sum, u) => sum + (u.statutoryRule?.annual_rate_pkr ?? 0), 0);
+  }, [surveyPendingUnits]);
+
+  const potentialProjectedDemand = useMemo(() => {
+    return potentialUnits.reduce(
+      (sum, p) => sum + (p.annualRatePkr ?? p.statutoryRule?.annual_rate_pkr ?? 0),
+      0
+    );
+  }, [potentialUnits]);
+
   const formPFT3Rows = useMemo(() => {
     return generateFormPFT3Rows(pft3EnrolledUnits);
   }, [pft3EnrolledUnits]);
@@ -3989,6 +4027,8 @@ export default function HomePage({
       | "CLEARANCE_LOG"
       | "RELIEF_REGISTER"
       | "SLAB_DISTRIBUTION"
+      | "SURVEY_REGISTER"
+      | "POTENTIAL_REGISTER"
   ) => {
     switch (schedule) {
       case "PFT3_REGISTER": {
@@ -4034,6 +4074,20 @@ export default function HomePage({
         );
         showToast("success", "Statutory Slabs & Tertiary Distribution CSV downloaded.");
         break;
+      case "SURVEY_REGISTER":
+        downloadCsvFile(
+          "Form_PFTS_Survey_Pipeline_Register_Vehari_2026.csv",
+          exportSurveyPipelineCsv(surveyPendingUnits)
+        );
+        showToast("success", "Form P.F.T-S Survey Discovery Register CSV downloaded.");
+        break;
+      case "POTENTIAL_REGISTER":
+        downloadCsvFile(
+          "Form_PFTP_Potential_Register_Vehari_2026.csv",
+          exportPotentialRegisterCsv(potentialUnits)
+        );
+        showToast("success", "Form P.F.T-P Potential Register CSV downloaded.");
+        break;
     }
   };
 
@@ -4045,6 +4099,8 @@ export default function HomePage({
       | "CLEARANCE_LOG"
       | "RELIEF_REGISTER"
       | "SLAB_DISTRIBUTION"
+      | "SURVEY_REGISTER"
+      | "POTENTIAL_REGISTER"
   ) => {
     switch (schedule) {
       case "PFT3_REGISTER": {
@@ -4251,6 +4307,69 @@ export default function HomePage({
           defaultFilename: "Second_Schedule_Slab_Yield_Gazette.pdf"
         });
         showToast("success", "Statutory Slabs & Tertiary Distribution PDF downloaded.");
+        break;
+      }
+      case "SURVEY_REGISTER": {
+        const rows = surveyPendingUnits.map((u, i) => [
+          i + 1,
+          u.provincialUin || u.demandUnit?.permanentDemandNo || u.id,
+          u.legalName,
+          u.statutoryRule?.category || "Commercial",
+          `PKR ${(u.statutoryRule?.annual_rate_pkr ?? 0).toLocaleString()}`,
+          u.assessments[0]?.status || "DRAFT"
+        ]);
+        downloadOfficialPdf({
+          type: "STATUTORY_REPORT",
+          documentIdOrData: {
+            schedule: "SURVEY_REGISTER",
+            reportTitle: "FORM P.F.T-S: FIELD SURVEY & DISCOVERY PIPELINE REGISTER",
+            statutoryReference:
+              "(Maintained under Rule 4 of Punjab Professions & Trades Tax Rules 1977)",
+            columns: [
+              { header: "Sr.", width: 8, align: "center" as const },
+              { header: "Discovery ID", width: 35, align: "left" as const },
+              { header: "Profession/Trade Name", width: 75, align: "left" as const },
+              { header: "Category", width: 50, align: "left" as const },
+              { header: "Proposed Rate", width: 30, align: "right" as const },
+              { header: "Status", width: 30, align: "center" as const }
+            ],
+            rows: rows,
+            officialSha256: "sha256-survey-register"
+          },
+          defaultFilename: "Form_PFTS_Survey_Pipeline_Register.pdf"
+        });
+        showToast("success", "Form P.F.T-S Survey Discovery Register PDF downloaded.");
+        break;
+      }
+      case "POTENTIAL_REGISTER": {
+        const rows = potentialUnits.map((p, i) => [
+          i + 1,
+          p.potentialNumber || p.id,
+          p.legalName,
+          p.categoryName || "Commercial",
+          `PKR ${(p.annualRatePkr ?? p.statutoryRule?.annual_rate_pkr ?? 0).toLocaleString()}`,
+          p.status
+        ]);
+        downloadOfficialPdf({
+          type: "STATUTORY_REPORT",
+          documentIdOrData: {
+            schedule: "POTENTIAL_REGISTER",
+            reportTitle: "FORM P.F.T-P: PROSPECTIVE POTENTIAL COMMERCIAL REGISTER",
+            statutoryReference: "(Secondary Commercial Entity Onboarding Register)",
+            columns: [
+              { header: "Sr.", width: 8, align: "center" as const },
+              { header: "Potential ID", width: 35, align: "left" as const },
+              { header: "Business Name", width: 75, align: "left" as const },
+              { header: "Category", width: 50, align: "left" as const },
+              { header: "Projected Rate", width: 30, align: "right" as const },
+              { header: "Verification", width: 30, align: "center" as const }
+            ],
+            rows: rows,
+            officialSha256: "sha256-potential-register"
+          },
+          defaultFilename: "Form_PFTP_Potential_Register.pdf"
+        });
+        showToast("success", "Form P.F.T-P Potential Register PDF downloaded.");
         break;
       }
     }
@@ -16401,6 +16520,187 @@ export default function HomePage({
                 </div>
               </div>
             </div>
+
+            {/* Field Discovery & Survey Pipeline Intelligence Sub-Panel */}
+            <div
+              style={{
+                background: "#ffffff",
+                border: "1px solid #cbd5e1",
+                borderRadius: "8px",
+                padding: "1.25rem",
+                marginTop: "1.5rem",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.03)"
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "1rem",
+                  flexWrap: "wrap",
+                  gap: "0.5rem"
+                }}
+              >
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ fontSize: "1.25rem" }}>🔍</span>
+                    <h4
+                      style={{ margin: 0, fontSize: "1.05rem", color: "#0d3822", fontWeight: 700 }}
+                    >
+                      Field Discovery &amp; Survey Pipeline Intelligence (Secondary Sub-Reports)
+                    </h4>
+                    <span className="badge badge-submitted" style={{ fontSize: "0.7rem" }}>
+                      Pipeline Only &bull; Non-Demand
+                    </span>
+                  </div>
+                  <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                    Prospective discovery units and potential commercial entities isolated from
+                    statutory demand until formal ETO assessment approval.
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <Link
+                    href={asRoute("/intelligence/reports/view?report=survey-register")}
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem", textDecoration: "none" }}
+                  >
+                    View Survey Register →
+                  </Link>
+                  <Link
+                    href={asRoute("/intelligence/reports/view?report=potential-register")}
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem", textDecoration: "none" }}
+                  >
+                    View Potential Register →
+                  </Link>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                  gap: "1rem"
+                }}
+              >
+                <div
+                  style={{
+                    background: "#f0f9ff",
+                    border: "1px solid #bae6fd",
+                    borderRadius: "6px",
+                    padding: "0.85rem"
+                  }}
+                >
+                  <span style={{ fontSize: "0.75rem", color: "#0369a1", fontWeight: 700 }}>
+                    SURVEY DISCOVERY UNITS
+                  </span>
+                  <div
+                    style={{
+                      fontSize: "1.4rem",
+                      fontWeight: 800,
+                      color: "#0c4a6e",
+                      marginTop: "0.2rem"
+                    }}
+                  >
+                    {surveyPendingUnits.length} Units
+                  </div>
+                  <span style={{ fontSize: "0.75rem", color: "#0284c7" }}>
+                    Prospective: PKR {surveyProspectiveDemand.toLocaleString()}
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    background: "#fffbeb",
+                    border: "1px solid #fde68a",
+                    borderRadius: "6px",
+                    padding: "0.85rem"
+                  }}
+                >
+                  <span style={{ fontSize: "0.75rem", color: "#b45309", fontWeight: 700 }}>
+                    POTENTIAL COMMERCIAL ENTITIES
+                  </span>
+                  <div
+                    style={{
+                      fontSize: "1.4rem",
+                      fontWeight: 800,
+                      color: "#92400e",
+                      marginTop: "0.2rem"
+                    }}
+                  >
+                    {potentialUnits.length} Entities
+                  </div>
+                  <span style={{ fontSize: "0.75rem", color: "#d97706" }}>
+                    Projected: PKR {potentialProjectedDemand.toLocaleString()}
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    background: "#f8fafc",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "6px",
+                    padding: "0.85rem"
+                  }}
+                >
+                  <span style={{ fontSize: "0.75rem", color: "#475569", fontWeight: 700 }}>
+                    ETO ASSESSMENT READINESS
+                  </span>
+                  <div
+                    style={{
+                      fontSize: "1.4rem",
+                      fontWeight: 800,
+                      color: "#1e293b",
+                      marginTop: "0.2rem"
+                    }}
+                  >
+                    {
+                      surveyPendingUnits.filter((u) => u.assessments[0]?.status === "SUBMITTED")
+                        .length
+                    }{" "}
+                    Submitted
+                  </div>
+                  <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                    {
+                      surveyPendingUnits.filter(
+                        (u) => !u.assessments[0] || u.assessments[0]?.status === "DRAFT"
+                      ).length
+                    }{" "}
+                    Drafts Awaiting Field Submission
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    background: "#f0fdf4",
+                    border: "1px solid #bbf7d0",
+                    borderRadius: "6px",
+                    padding: "0.85rem"
+                  }}
+                >
+                  <span style={{ fontSize: "0.75rem", color: "#166534", fontWeight: 700 }}>
+                    STATUTORY ENROLLMENT RATIO
+                  </span>
+                  <div
+                    style={{
+                      fontSize: "1.4rem",
+                      fontWeight: 800,
+                      color: "#14532d",
+                      marginTop: "0.2rem"
+                    }}
+                  >
+                    {units.length > 0
+                      ? Math.round((pft3EnrolledUnits.length / units.length) * 100)
+                      : 100}
+                    %
+                  </div>
+                  <span style={{ fontSize: "0.75rem", color: "#15803d" }}>
+                    {pft3EnrolledUnits.length} Approved of {units.length} Registered Units
+                  </span>
+                </div>
+              </div>
+            </div>
           </section>
         )}
 
@@ -16572,7 +16872,7 @@ export default function HomePage({
                   >
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "#64748b" }}>Assessed Units:</span>
-                      <strong style={{ color: "#0f172a" }}>{units.length} Units</strong>
+                      <strong style={{ color: "#0f172a" }}>{pft3EnrolledUnits.length} Units</strong>
                     </div>
                     <div
                       style={{
@@ -16708,7 +17008,8 @@ export default function HomePage({
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "#991b1b" }}>Active Defaulters:</span>
                       <strong style={{ color: "#991b1b" }}>
-                        {units.filter((u) => computeUnitBalance(u) > 0).length} Assessees
+                        {pft3EnrolledUnits.filter((u) => computeUnitBalance(u) > 0).length}{" "}
+                        Assessees
                       </strong>
                     </div>
                     <div
@@ -17226,6 +17527,230 @@ export default function HomePage({
                   >
                     Yield Desk ↗
                   </a>
+                </div>
+              </div>
+
+              {/* Schedule 7: Form P.F.T-S Field Survey & Discovery Pipeline Register */}
+              <div
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "1.25rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "0.5rem"
+                    }}
+                  >
+                    <span style={{ fontSize: "1.2rem" }}>🔍</span>
+                    <span className="badge badge-draft" style={{ fontSize: "0.7rem" }}>
+                      Rule 4 Survey Register
+                    </span>
+                  </div>
+                  <h4
+                    style={{
+                      margin: "0 0 0.35rem",
+                      fontSize: "1rem",
+                      color: "#0369a1",
+                      fontWeight: 700
+                    }}
+                  >
+                    Form P.F.T-S Field Survey Register
+                  </h4>
+                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
+                    Secondary operational pipeline register of unassessed commercial establishments
+                    discovered during field surveys, pending ETO assessment.
+                  </p>
+                  <div
+                    style={{
+                      background: "#f0f9ff",
+                      padding: "0.5rem 0.75rem",
+                      borderRadius: "6px",
+                      marginBottom: "1rem",
+                      fontSize: "0.8rem"
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#0369a1" }}>Survey Units:</span>
+                      <strong style={{ color: "#0c4a6e" }}>
+                        {surveyPendingUnits.length} Units
+                      </strong>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginTop: "0.25rem"
+                      }}
+                    >
+                      <span style={{ color: "#0369a1" }}>Prospective Demand:</span>
+                      <strong style={{ color: "#0c4a6e", fontFamily: "monospace" }}>
+                        PKR {surveyProspectiveDemand.toLocaleString()}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    flexWrap: "wrap",
+                    borderTop: "1px solid #f1f5f9",
+                    paddingTop: "0.75rem"
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleExportScheduleCsv("SURVEY_REGISTER")}
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    ⬇ Export CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadScheduleReport("SURVEY_REGISTER")}
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    📥 Download PDF
+                  </button>
+                  <Link
+                    href={asRoute("/intelligence/reports/view?report=survey-register")}
+                    className="btn-primary btn-sm"
+                    style={{
+                      fontSize: "0.75rem",
+                      backgroundColor: "#0369a1",
+                      borderColor: "#0369a1",
+                      marginLeft: "auto",
+                      textDecoration: "none",
+                      display: "inline-flex",
+                      alignItems: "center"
+                    }}
+                  >
+                    View Register →
+                  </Link>
+                </div>
+              </div>
+
+              {/* Schedule 8: Form P.F.T-P Prospective Potential Commercial Register */}
+              <div
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "1.25rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "0.5rem"
+                    }}
+                  >
+                    <span style={{ fontSize: "1.2rem" }}>⚡</span>
+                    <span className="badge badge-submitted" style={{ fontSize: "0.7rem" }}>
+                      Potential Register
+                    </span>
+                  </div>
+                  <h4
+                    style={{
+                      margin: "0 0 0.35rem",
+                      fontSize: "1rem",
+                      color: "#b45309",
+                      fontWeight: 700
+                    }}
+                  >
+                    Form P.F.T-P Potential Register
+                  </h4>
+                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
+                    Secondary register of prospective third-party commercial entities earmarked for
+                    circle field verification and taxpayer onboarding.
+                  </p>
+                  <div
+                    style={{
+                      background: "#fffbeb",
+                      padding: "0.5rem 0.75rem",
+                      borderRadius: "6px",
+                      marginBottom: "1rem",
+                      fontSize: "0.8rem"
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#b45309" }}>Potential Entities:</span>
+                      <strong style={{ color: "#92400e" }}>{potentialUnits.length} Entities</strong>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginTop: "0.25rem"
+                      }}
+                    >
+                      <span style={{ color: "#b45309" }}>Projected Demand:</span>
+                      <strong style={{ color: "#92400e", fontFamily: "monospace" }}>
+                        PKR {potentialProjectedDemand.toLocaleString()}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    flexWrap: "wrap",
+                    borderTop: "1px solid #f1f5f9",
+                    paddingTop: "0.75rem"
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleExportScheduleCsv("POTENTIAL_REGISTER")}
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    ⬇ Export CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadScheduleReport("POTENTIAL_REGISTER")}
+                    className="btn-secondary btn-sm"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    📥 Download PDF
+                  </button>
+                  <Link
+                    href={asRoute("/intelligence/reports/view?report=potential-register")}
+                    className="btn-primary btn-sm"
+                    style={{
+                      fontSize: "0.75rem",
+                      backgroundColor: "#b45309",
+                      borderColor: "#b45309",
+                      marginLeft: "auto",
+                      textDecoration: "none",
+                      display: "inline-flex",
+                      alignItems: "center"
+                    }}
+                  >
+                    View Register →
+                  </Link>
                 </div>
               </div>
             </div>

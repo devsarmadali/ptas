@@ -2056,6 +2056,34 @@ export function savePersistedUserAuditLogs(logs: UserManagementAuditRecord[]): v
   }
 }
 
+export const AUDIT_LOGS_STORAGE_KEY = "ptas_audit_logs_v1";
+
+export function loadPersistedAuditLogs(): PilotAuditItem[] {
+  if (typeof window === "undefined") return createInitialAuditLogs();
+  try {
+    const raw = localStorage.getItem(AUDIT_LOGS_STORAGE_KEY);
+    if (!raw) return createInitialAuditLogs();
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0
+      ? (parsed.filter(
+          (item): item is PilotAuditItem =>
+            isSafePersistedRecord(item) && typeof item.id === "string"
+        ) as PilotAuditItem[])
+      : createInitialAuditLogs();
+  } catch {
+    return createInitialAuditLogs();
+  }
+}
+
+export function savePersistedAuditLogs(logs: PilotAuditItem[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(AUDIT_LOGS_STORAGE_KEY, JSON.stringify(logs));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
 export const APPEALS_STORAGE_KEY = "ptas_enforcement_appeals_v1";
 export const DISCONTINUANCES_STORAGE_KEY = "ptas_enforcement_discontinuances_v1";
 export const REFUNDS_STORAGE_KEY = "ptas_enforcement_refunds_v1";
@@ -2186,7 +2214,10 @@ export function ensureEnforcementRecordsForUnits(units: StoredUnit[]): {
 
 export function loadPilotState(): PilotState {
   if (typeof window !== "undefined") localStorage.removeItem(STORAGE_KEY);
-  return createEmptyOperationalState();
+  return {
+    ...createEmptyOperationalState(),
+    auditLogs: loadPersistedAuditLogs()
+  };
 }
 
 export function savePilotState(state: PilotState): void {

@@ -1,7 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { loadOperationalSurveyUnits } from "../../../lib/operational-survey";
+import {
+  fetchPotentialAssessmentUnitsFromDatabase,
+  loadPersistedPotentialUnits,
+  convertPotentialUnitToStoredUnit,
+  type PotentialUnitRecord
+} from "../../../lib/potential-units-storage";
 import {
   computeExecutiveMetrics,
   type ExecutiveMetrics,
@@ -9,18 +15,30 @@ import {
   type SlabYieldSummary,
   exportStatutorySlabDistributionCsv
 } from "../../../lib/mis-analytics";
+import type { StoredUnit } from "../../../lib/pilot-store";
+
+export type RegisterSource = "PFT3" | "SURVEY" | "POTENTIAL";
 
 export default function StatutoryCategoryYieldPage() {
-  const [metrics, setMetrics] = useState<ExecutiveMetrics | null>(null);
+  const [operationalUnits, setOperationalUnits] = useState<StoredUnit[]>([]);
+  const [potentialUnits, setPotentialUnits] = useState<PotentialUnitRecord[]>([]);
+  const [registerSource, setRegisterSource] = useState<RegisterSource>("PFT3");
   const [selectedCategoryCode, setSelectedCategoryCode] = useState<string>("ALL");
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    void loadOperationalSurveyUnits()
-      .then((units) => {
-        if (!cancelled) setMetrics(computeExecutiveMetrics(units));
+    void Promise.all([
+      loadOperationalSurveyUnits(),
+      fetchPotentialAssessmentUnitsFromDatabase().catch(() => null)
+    ])
+      .then(([units, dbPotential]) => {
+        if (!cancelled) {
+          setOperationalUnits(units);
+          const resolvedPotential = dbPotential ?? loadPersistedPotentialUnits();
+          setPotentialUnits(resolvedPotential);
+        }
       })
       .catch((error: unknown) => {
         if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
@@ -33,11 +51,59 @@ export default function StatutoryCategoryYieldPage() {
     };
   }, []);
 
+  // Filter 1: Form P.F.T-3 Statutory Enrolled Units (Rule 11) - strictly approved
+  const pft3Units = useMemo(() => {
+    return operationalUnits.filter(
+      (u) =>
+        u.assessments[0]?.status === "APPROVED" &&
+        u.pft3Registered !== false &&
+        !u.id.startsWith("pot-") &&
+        !u.id.startsWith("pot_unit_") &&
+        !u.demandUnit?.permanentDemandNo?.startsWith("V-") &&
+        !u.demandNumber?.startsWith("V-")
+    );
+  }, [operationalUnits]);
+
+  // Filter 2: Field Survey Discovery Pipeline Units (Rule 4) - unassessed / pending
+  const surveyUnits = useMemo(() => {
+    return operationalUnits.filter(
+      (u) =>
+        u.assessments[0]?.status !== "APPROVED" ||
+        u.pft3Registered === false ||
+        u.demandUnit?.permanentDemandNo?.startsWith("V-") ||
+        u.demandNumber?.startsWith("V-")
+    );
+  }, [operationalUnits]);
+
+  // Filter 3: Potential Register Units - converted to stored unit representation
+  const convertedPotentialUnits = useMemo(() => {
+    return potentialUnits.map(convertPotentialUnitToStoredUnit);
+  }, [potentialUnits]);
+
+  // Determine active units pool based on user-selected register source
+  const activeUnits = useMemo(() => {
+    switch (registerSource) {
+      case "PFT3":
+        return pft3Units;
+      case "SURVEY":
+        return surveyUnits;
+      case "POTENTIAL":
+        return convertedPotentialUnits;
+      default:
+        return pft3Units;
+    }
+  }, [registerSource, pft3Units, surveyUnits, convertedPotentialUnits]);
+
+  // Derive metrics strictly for active units pool
+  const metrics: ExecutiveMetrics = useMemo(() => {
+    return computeExecutiveMetrics(activeUnits);
+  }, [activeUnits]);
+
   if (loadError) {
     return <div style={{ padding: "3rem", color: "#991b1b" }}>{loadError}</div>;
   }
 
-  if (!isLoaded || !metrics) {
+  if (!isLoaded) {
     return (
       <div style={{ padding: "3rem", textAlign: "center", color: "#64748b" }}>
         Loading Statutory Category Yield Distribution...
@@ -56,7 +122,13 @@ export default function StatutoryCategoryYieldPage() {
   });
 
   const handleExportCsv = () => {
-    exportStatutorySlabDistributionCsv(filteredSlabs, "2026-2027");
+    const filenamePrefix =
+      registerSource === "PFT3"
+        ? "Statutory_PFT3_Category_Yield"
+        : registerSource === "SURVEY"
+          ? "Survey_Pipeline_Category_Yield"
+          : "Potential_Register_Category_Yield";
+    exportStatutorySlabDistributionCsv(filteredSlabs, `2026-2027_${filenamePrefix}`);
   };
 
   return (
@@ -99,6 +171,21 @@ export default function StatutoryCategoryYieldPage() {
             ← Main Dashboard
           </a>
           <a
+            href="/intelligence/reports"
+            style={{
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              padding: "0.3rem 0.65rem",
+              borderRadius: "4px",
+              background: "#f1f5f9",
+              color: "#1e293b",
+              border: "1px solid #cbd5e1",
+              textDecoration: "none"
+            }}
+          >
+            📑 Statutory Reports Studio
+          </a>
+          <a
             href="/verify"
             target="_blank"
             rel="noopener noreferrer"
@@ -115,37 +202,22 @@ export default function StatutoryCategoryYieldPage() {
           >
             🔍 Citizen Verify ↗
           </a>
-          <a
-            href="/admin/user-management"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              fontSize: "0.8rem",
-              fontWeight: 600,
-              padding: "0.3rem 0.65rem",
-              borderRadius: "4px",
-              background: "#f1f5f9",
-              color: "#1e293b",
-              border: "1px solid #cbd5e1",
-              textDecoration: "none"
-            }}
-          >
-            👥 User Management ↗
-          </a>
         </div>
       </div>
 
-      {/* Header */}
+      {/* Main Header Banner */}
       <div
         style={{
           background: "linear-gradient(135deg, #0d3822 0%, #166534 100%)",
           color: "#ffffff",
           padding: "1.5rem",
           borderRadius: "8px",
-          marginBottom: "1.5rem",
+          marginBottom: "1rem",
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center"
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "1rem"
         }}
       >
         <div>
@@ -167,7 +239,7 @@ export default function StatutoryCategoryYieldPage() {
             statutory classes.
           </span>
         </div>
-        <div style={{ display: "flex", gap: "0.75rem" }}>
+        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
           <button
             type="button"
             className="btn-secondary"
@@ -180,10 +252,170 @@ export default function StatutoryCategoryYieldPage() {
             type="button"
             className="btn-secondary"
             style={{ color: "#ffffff", borderColor: "#4ade80" }}
-            onClick={() => (window.location.href = "/?route=intelligence&tab=ANALYTICS")}
+            onClick={() => (window.location.href = "/intelligence")}
           >
             ← Back to Intelligence Hub
           </button>
+        </div>
+      </div>
+
+      {/* Register Source Segmented Control */}
+      <div
+        style={{
+          background: "#ffffff",
+          padding: "0.6rem 0.75rem",
+          borderRadius: "8px",
+          border: "1px solid #cbd5e1",
+          marginBottom: "1rem",
+          display: "flex",
+          gap: "0.5rem",
+          alignItems: "center",
+          flexWrap: "wrap"
+        }}
+      >
+        <span
+          style={{
+            fontSize: "0.75rem",
+            fontWeight: 700,
+            color: "#475569",
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+            marginRight: "0.5rem"
+          }}
+        >
+          Data Origin Scope:
+        </span>
+
+        <button
+          type="button"
+          onClick={() => {
+            setRegisterSource("PFT3");
+            setSelectedCategoryCode("ALL");
+          }}
+          style={{
+            padding: "0.45rem 0.9rem",
+            borderRadius: "6px",
+            fontSize: "0.8rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            border: "1px solid",
+            borderColor: registerSource === "PFT3" ? "#0d3822" : "#cbd5e1",
+            background: registerSource === "PFT3" ? "#0d3822" : "#f8fafc",
+            color: registerSource === "PFT3" ? "#ffffff" : "#1e293b",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.4rem",
+            transition: "all 0.15s ease"
+          }}
+        >
+          <span>🏛️</span>
+          <span>Statutory Form P.F.T-3 Yield (Official Demand — {pft3Units.length} Units)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setRegisterSource("SURVEY");
+            setSelectedCategoryCode("ALL");
+          }}
+          style={{
+            padding: "0.45rem 0.9rem",
+            borderRadius: "6px",
+            fontSize: "0.8rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            border: "1px solid",
+            borderColor: registerSource === "SURVEY" ? "#0369a1" : "#cbd5e1",
+            background: registerSource === "SURVEY" ? "#0369a1" : "#f8fafc",
+            color: registerSource === "SURVEY" ? "#ffffff" : "#1e293b",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.4rem",
+            transition: "all 0.15s ease"
+          }}
+        >
+          <span>🔍</span>
+          <span>Survey Discovery Pipeline Yield (Prospective — {surveyUnits.length} Units)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setRegisterSource("POTENTIAL");
+            setSelectedCategoryCode("ALL");
+          }}
+          style={{
+            padding: "0.45rem 0.9rem",
+            borderRadius: "6px",
+            fontSize: "0.8rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            border: "1px solid",
+            borderColor: registerSource === "POTENTIAL" ? "#b45309" : "#cbd5e1",
+            background: registerSource === "POTENTIAL" ? "#b45309" : "#f8fafc",
+            color: registerSource === "POTENTIAL" ? "#ffffff" : "#1e293b",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.4rem",
+            transition: "all 0.15s ease"
+          }}
+        >
+          <span>⚡</span>
+          <span>
+            Potential Register Projected Yield (Provisional — {potentialUnits.length} Units)
+          </span>
+        </button>
+      </div>
+
+      {/* Contextual Statutory Information Banner */}
+      <div
+        style={{
+          background:
+            registerSource === "PFT3"
+              ? "#f0fdf4"
+              : registerSource === "SURVEY"
+                ? "#f0f9ff"
+                : "#fffbeb",
+          border:
+            registerSource === "PFT3"
+              ? "1px solid #bbf7d0"
+              : registerSource === "SURVEY"
+                ? "1px solid #bae6fd"
+                : "1px solid #fde68a",
+          borderRadius: "8px",
+          padding: "0.75rem 1rem",
+          marginBottom: "1.25rem",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem"
+        }}
+      >
+        <span style={{ fontSize: "1.25rem" }}>
+          {registerSource === "PFT3" ? "🏛️" : registerSource === "SURVEY" ? "🔍" : "⚡"}
+        </span>
+        <div style={{ fontSize: "0.8rem", color: "#1e293b" }}>
+          {registerSource === "PFT3" && (
+            <span>
+              <strong>Official Statutory Demand (Second Schedule &bull; Rule 11):</strong> This view
+              isolates legally approved Form P.F.T-3 assessees representing enforceable demand,
+              binding tax liability, and realized treasury recoveries under Section 3 of the 1977
+              Act.
+            </span>
+          )}
+          {registerSource === "SURVEY" && (
+            <span>
+              <strong>Secondary Operational Discovery Pipeline (Rule 4):</strong> Unassessed
+              commercial establishments discovered during circle surveys. Figures depict prospective
+              demand pending formal statutory assessment and ETO approval.
+            </span>
+          )}
+          {registerSource === "POTENTIAL" && (
+            <span>
+              <strong>Secondary Third-Party Potential Register:</strong> Prospective commercial
+              entities imported from external registers for field verification and taxpayer
+              onboarding.
+            </span>
+          )}
         </div>
       </div>
 
@@ -197,24 +429,59 @@ export default function StatutoryCategoryYieldPage() {
         }}
       >
         <div className="metric-card highlight">
-          <p className="metric-label">Statutory Classes</p>
+          <p className="metric-label">
+            {registerSource === "PFT3"
+              ? "Statutory Classes"
+              : registerSource === "SURVEY"
+                ? "Survey Classes"
+                : "Provisional Classes"}
+          </p>
           <p className="metric-value">11 Categories</p>
           <p className="metric-subtext">Second Schedule, 1977 Act</p>
         </div>
+
         <div className="metric-card success">
-          <p className="metric-label">Total Assessed Demand</p>
+          <p className="metric-label">
+            {registerSource === "PFT3"
+              ? "Total Assessed Demand"
+              : registerSource === "SURVEY"
+                ? "Prospective Pipeline Demand"
+                : "Projected Potential Demand"}
+          </p>
           <p className="metric-value">PKR {metrics.kpis.assessedDemand.toLocaleString()}</p>
-          <p className="metric-subtext">Across All Assessed Slabs</p>
+          <p className="metric-subtext">
+            {registerSource === "PFT3"
+              ? `Across ${pft3Units.length} Approved Units`
+              : registerSource === "SURVEY"
+                ? `Across ${surveyUnits.length} Survey Units`
+                : `Across ${potentialUnits.length} Potential Units`}
+          </p>
         </div>
+
         <div className="metric-card info">
-          <p className="metric-label">Total Realized Revenue</p>
+          <p className="metric-label">
+            {registerSource === "PFT3"
+              ? "Total Realized Revenue"
+              : registerSource === "SURVEY"
+                ? "Settled Pipeline Recoveries"
+                : "Realized Direct Collections"}
+          </p>
           <p className="metric-value">PKR {metrics.kpis.totalRealizedRecovery.toLocaleString()}</p>
           <p className="metric-subtext">Treasury Head B01601</p>
         </div>
+
         <div className="metric-card warning">
-          <p className="metric-label">Recovery Yield Rate</p>
+          <p className="metric-label">
+            {registerSource === "PFT3"
+              ? "Recovery Yield Rate"
+              : registerSource === "SURVEY"
+                ? "Pipeline Conversion Rate"
+                : "Onboarding Realization"}
+          </p>
           <p className="metric-value">{metrics.kpis.recoveryRatePct.toFixed(1)}%</p>
-          <p className="metric-subtext">Current Year Realization</p>
+          <p className="metric-subtext">
+            {registerSource === "PFT3" ? "Current Year Realization" : "Assessed vs Realized Yield"}
+          </p>
         </div>
       </div>
 
@@ -229,7 +496,12 @@ export default function StatutoryCategoryYieldPage() {
         }}
       >
         <h2 style={{ fontSize: "1.05rem", margin: "0 0 1rem", color: "#0d3822" }}>
-          Statutory Category Yield Breakdown (11 Second Schedule Classes)
+          Statutory Category Yield Breakdown (11 Second Schedule Classes) &bull;{" "}
+          {registerSource === "PFT3"
+            ? "Approved Form PFT-3"
+            : registerSource === "SURVEY"
+              ? "Field Survey Pipeline"
+              : "Potential Register"}
         </h2>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
@@ -273,7 +545,7 @@ export default function StatutoryCategoryYieldPage() {
                     </span>
                     <strong style={{ fontSize: "0.9rem" }}>{cat.categoryName}</strong>
                     <span style={{ fontSize: "0.75rem", color: "#64748b", marginLeft: "0.5rem" }}>
-                      ({cat.unitCount} Assessed Units &bull; {cat.ruleCount} Slabs)
+                      ({cat.unitCount} Units &bull; {cat.ruleCount} Slabs)
                     </span>
                   </div>
                   <div style={{ textAlign: "right" }}>

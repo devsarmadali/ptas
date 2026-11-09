@@ -128,3 +128,39 @@ export async function pushPilotStateToSupabase(
     };
   }
 }
+
+/**
+ * Fetches recent audit events from Supabase PostgreSQL if online.
+ */
+export async function fetchAuditLogsFromDatabase(): Promise<PilotAuditItem[] | null> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from("audit_events")
+      .select("*")
+      .order("occurred_at", { ascending: false })
+      .limit(100);
+
+    if (error || !data) return null;
+
+    return data.map((row) => {
+      const payload =
+        row.payload && typeof row.payload === "object"
+          ? (row.payload as Record<string, unknown>)
+          : {};
+
+      return {
+        id: String(row.id),
+        eventType: String(row.event_type || "SYSTEM_AUDIT"),
+        actorName: String(row.actor_id || "Authorized Officer"),
+        actorRole: String(row.actor_role || "SYSTEM"),
+        target: String(payload.target ?? row.aggregate_id ?? "Tax Administration Unit"),
+        timestamp: String(row.occurred_at || new Date().toISOString()),
+        correlationId: String(row.correlation_id || "corr-audit"),
+        details: String(payload.details ?? "Statutory event recorded.")
+      };
+    });
+  } catch {
+    return null;
+  }
+}
