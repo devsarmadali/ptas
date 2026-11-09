@@ -1256,7 +1256,7 @@ export default function HomePage({
   const [potNewCategoryCode, setPotNewCategoryCode] = useState("1");
   const [potNewSubclassCode, setPotNewSubclassCode] = useState("1(i)");
   const [potNewTertiaryCode, setPotNewTertiaryCode] = useState("");
-  const [potNewRuleId, setPotNewRuleId] = useState("PFT-1-01");
+  const [potNewRuleId, setPotNewRuleId] = useState("PFT-1.i");
   const [potNewCircleName, setPotNewCircleName] = useState("Circle 1");
   const [potNewTehsil, setPotNewTehsil] = useState("Vehari");
 
@@ -1802,8 +1802,19 @@ export default function HomePage({
   };
 
   const selectedStatutoryRule = useMemo(() => {
-    return getStatutoryRuleById(newRuleId) ?? availableRulesForCategory[0];
-  }, [newRuleId, availableRulesForCategory]);
+    return (
+      getStatutoryRuleById(newRuleId) ??
+      availableTertiaryRules.find((r) => r.statutory_tertiary_code === newTertiaryCode) ??
+      availableRulesForCategory.find((r) => r.subclassification_code === newSubclassCode) ??
+      availableRulesForCategory[0]
+    );
+  }, [
+    newRuleId,
+    availableTertiaryRules,
+    newTertiaryCode,
+    availableRulesForCategory,
+    newSubclassCode
+  ]);
 
   const previewUin = useMemo(() => {
     if (!selectedStatutoryRule) return "";
@@ -1850,8 +1861,19 @@ export default function HomePage({
   }, [potAvailableRulesForCategory, potNewSubclassCode]);
 
   const potSelectedStatutoryRule = useMemo(() => {
-    return getStatutoryRuleById(potNewRuleId) ?? potAvailableRulesForCategory[0];
-  }, [potNewRuleId, potAvailableRulesForCategory]);
+    return (
+      getStatutoryRuleById(potNewRuleId) ??
+      potAvailableTertiaryRules.find((r) => r.statutory_tertiary_code === potNewTertiaryCode) ??
+      potAvailableRulesForCategory.find((r) => r.subclassification_code === potNewSubclassCode) ??
+      potAvailableRulesForCategory[0]
+    );
+  }, [
+    potNewRuleId,
+    potAvailableTertiaryRules,
+    potNewTertiaryCode,
+    potAvailableRulesForCategory,
+    potNewSubclassCode
+  ]);
 
   const handlePotCategoryChange = (catCode: string) => {
     setPotNewCategoryCode(catCode);
@@ -2043,7 +2065,12 @@ export default function HomePage({
       return;
     }
 
-    const rule = getStatutoryRuleById(newRuleId);
+    const rule =
+      getStatutoryRuleById(newRuleId) ??
+      availableTertiaryRules.find((r) => r.statutory_tertiary_code === newTertiaryCode) ??
+      availableRulesForCategory.find((r) => r.subclassification_code === newSubclassCode) ??
+      availableRulesForCategory[0] ??
+      selectedStatutoryRule;
     if (!rule) {
       showToast("error", "Invalid statutory rule selected");
       return;
@@ -5413,7 +5440,7 @@ export default function HomePage({
     setNewCategoryCode("1");
     setNewSubclassCode("1(i)");
     setNewTertiaryCode("");
-    setNewRuleId("PFT-1-01");
+    setNewRuleId("PFT-1.i");
     setNewOpeningArrears(0);
     setShowAddUnitModal(true);
   };
@@ -5433,7 +5460,7 @@ export default function HomePage({
     setPotNewCategoryCode("1");
     setPotNewSubclassCode("1(i)");
     setPotNewTertiaryCode("");
-    setPotNewRuleId("PFT-1-01");
+    setPotNewRuleId("PFT-1.i");
     setPotNewOpeningArrears(0);
     setShowAddPotentialModal(true);
   };
