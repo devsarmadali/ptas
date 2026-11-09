@@ -523,7 +523,24 @@ export function verifyStatutoryDocument(
     trimmed.startsWith("PTAS-PUNJAB:PFT-2") ||
     trimmed.toUpperCase().includes("PFT-2") ||
     trimmed.toUpperCase().includes("PFT2") ||
-    trimmed.toUpperCase().includes("CHALLAN");
+    trimmed.toUpperCase().includes("CHALLAN") ||
+    /^\d{3}-2\d{10,12}-\d{2}$/.test(trimmed) ||
+    challans.some(
+      (c) =>
+        (c.noticeNumber && c.noticeNumber === trimmed) ||
+        c.challanNumber === trimmed ||
+        (c.noticeNumber && normalizeQuery(c.noticeNumber) === normalized) ||
+        normalizeQuery(c.challanNumber) === normalized
+    ) ||
+    units.some((u) => {
+      const doc = generateFormPFT2(u);
+      return (
+        doc.challanNumber === trimmed ||
+        doc.noticeNumber === trimmed ||
+        normalizeQuery(doc.challanNumber) === normalized ||
+        normalizeQuery(doc.noticeNumber) === normalized
+      );
+    });
 
   if (isPft2) {
     // Check issued challans registry
@@ -608,13 +625,19 @@ export function verifyStatutoryDocument(
   }
 
   // 4. Check for Form P.F.T-1 (Notice of Tax Demand under Rule 6) or general PDN lookup
+  const isPft1Qr = trimmed.startsWith("PTAS-PUNJAB:PFT-1");
   const matchingUnit = units.find((u) => {
     const pft1 = generateFormPFT1(u);
+    const pdn = u.demandUnit?.permanentDemandNo || "";
     return (
+      (isPft1Qr &&
+        (trimmed === pft1.qrPayload ||
+          trimmed.includes(`:${pdn}:`) ||
+          trimmed.includes(`:${u.id}:`))) ||
       normalizeQuery(pft1.noticeNumber) === normalized ||
-      normalizeQuery(u.demandUnit.permanentDemandNo) === normalized ||
+      normalizeQuery(pdn) === normalized ||
       normalizeQuery(u.identifierValue) === normalized ||
-      trimmed.includes(u.demandUnit.permanentDemandNo) ||
+      (trimmed.length <= 10 && pdn && trimmed.includes(pdn)) ||
       trimmed.includes(pft1.noticeNumber)
     );
   });

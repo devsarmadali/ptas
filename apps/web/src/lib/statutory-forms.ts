@@ -1083,6 +1083,7 @@ export function generateFormPFT1(
 
 export interface GenerateFormPFT2Options {
   readonly challanNumber?: string | undefined;
+  readonly monthlySequence?: number | string | undefined;
   readonly customAmount?: number | undefined;
   readonly isPartial?: boolean | undefined;
   readonly remainingBalance?: number | undefined;
@@ -1221,10 +1222,13 @@ export function generateFormPFT2(
   const locality = unit.locality || "";
   const headOfAccount = "B01601 (Punjab Professional Tax)";
 
+  const fallbackSeq = demandNo ? parseInt(demandNo.replace(/\D/g, ""), 10) : undefined;
   const noticeNumber =
     opts.noticeNumber ||
     generatePft2NoticeNumber({
       demandNumber: demandNo,
+      monthlySequence:
+        opts.monthlySequence ?? (fallbackSeq && !isNaN(fallbackSeq) ? fallbackSeq : undefined),
       issueDate,
       districtCode: unit.districtName,
       formTypeCode: formType,

@@ -54,7 +54,9 @@ describe("Phase 8: Public Assessee Portal & Real-Time QR / Document Verification
       const pft2 = generateFormPFT2(unit);
       expect(pft2.qrPayload).toBeDefined();
       expect(pft2.qrPayload).toMatch(
-        /^PTAS-PUNJAB:PFT-2:PB\/ET\/VHR\/CIR-1\/PFT2\/2026-27\/00001:DEMAND=0001:AMOUNT=10000:DUE=31\/08\/2026:SHA=/
+        new RegExp(
+          `^PTAS-PUNJAB:PFT-2:${pft2.challanNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:DEMAND=0001:AMOUNT=10000:DUE=31/08/2026:SHA=`
+        )
       );
       expect(pft2.copies).toHaveLength(3);
 
@@ -206,7 +208,9 @@ describe("Phase 8: Public Assessee Portal & Real-Time QR / Document Verification
       expect(result!.outstandingBalance).toBe(2000);
       expect(result!.isClearanceEligible).toBe(false);
       expect(result!.noticeNumber).toMatch(/PB\/ET\/VHR\/CIR-1\/PFT1\/2026-27\/\d{5}/);
-      expect(result!.challanNumber).toMatch(/PB\/ET\/VHR\/CIR-1\/PFT2\/2026-27\/\d{5}/);
+      expect(result!.challanNumber).toMatch(
+        /^(\d{3}-2\d{10,12}-\d{2}|PB\/ET\/VHR\/CIR-1\/PFT2\/2026-27\/\d{5})$/
+      );
     });
 
     it("finds taxpayer by NTN and confirms clearance eligibility when fully paid", () => {

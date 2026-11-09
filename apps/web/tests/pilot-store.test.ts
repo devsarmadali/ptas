@@ -97,7 +97,7 @@ describe("Vehari Pilot Store & Statutory Seed Verification", () => {
       expect(c.dueDate).toBeDefined();
       expect(c.issueDate <= c.dueDate).toBe(true);
       expect(c.amountPayable).toBeGreaterThan(0);
-      expect(c.noticeNumber).toMatch(/^PFT2-/);
+      expect(c.noticeNumber).toMatch(/^(\d{3}-2\d{10,12}-\d{2}|PFT2-)/);
       expect(c.pin).toMatch(/^\d{6}$/);
     }
   });

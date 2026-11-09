@@ -2059,19 +2059,19 @@ export function savePersistedUserAuditLogs(logs: UserManagementAuditRecord[]): v
 export const AUDIT_LOGS_STORAGE_KEY = "ptas_audit_logs_v1";
 
 export function loadPersistedAuditLogs(): PilotAuditItem[] {
-  if (typeof window === "undefined") return createInitialAuditLogs();
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(AUDIT_LOGS_STORAGE_KEY);
-    if (!raw) return createInitialAuditLogs();
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) && parsed.length > 0
       ? (parsed.filter(
           (item): item is PilotAuditItem =>
             isSafePersistedRecord(item) && typeof item.id === "string"
         ) as PilotAuditItem[])
-      : createInitialAuditLogs();
+      : [];
   } catch {
-    return createInitialAuditLogs();
+    return [];
   }
 }
 
