@@ -988,6 +988,13 @@ export default function HomePage({
     }
   }, [pathname, router]);
 
+  // Synchronize register filter if navigating to potential challans route
+  useEffect(() => {
+    if (activeTab === "POTENTIAL_PFT2" || pathname === "/revenue/potential-challans") {
+      setPft2RegisterFilter("PROVISIONAL");
+    }
+  }, [activeTab, pathname]);
+
   // Compatible setter for all child handlers
   const setActiveTab = (tab: TabId) => {
     switchTab(tab);
@@ -1366,6 +1373,17 @@ export default function HomePage({
   const [pft2StatusFilter, setPft2StatusFilter] = useState<
     "ALL" | "ISSUED" | "RECEIVED" | "CANCELLED"
   >("ALL");
+  const [pft2RegisterFilter, setPft2RegisterFilter] = useState<"ALL" | "REGULAR" | "PROVISIONAL">(
+    () => {
+      if (
+        typeof window !== "undefined" &&
+        window.location.pathname.includes("potential-challans")
+      ) {
+        return "PROVISIONAL";
+      }
+      return initialTab === "POTENTIAL_PFT2" ? "PROVISIONAL" : "ALL";
+    }
+  );
   const [pft2SearchQuery, setPft2SearchQuery] = useState("");
   const [pft2CategoryFilter, setPft2CategoryFilter] = useState("ALL");
   const [showReceivePft2Modal, setShowReceivePft2Modal] = useState(false);
@@ -6461,6 +6479,7 @@ export default function HomePage({
   };
 
   const handlePrintPft2Challan = (challan: Pft2ChallanRecord) => {
+    const noticeNo = (challan.noticeNumber || challan.challanNumber).replace(/[/\s]/g, "_");
     downloadOfficialPdf({
       type: "FORM_PFT2_CHALLAN",
       documentIdOrData: {
@@ -6473,7 +6492,7 @@ export default function HomePage({
         district: "Vehari",
         circle: "Circle-Vehari"
       },
-      defaultFilename: `Form_PFT2_Challan_${challan.challanNumber.replace(/\//g, "_")}.pdf`
+      defaultFilename: `Form_PFT2_Challan_${noticeNo}.pdf`
     }).catch((err) =>
       showToast("error", `Failed to generate Form PFT-2 Challan: ${(err as Error).message}`)
     );
@@ -7241,17 +7260,18 @@ export default function HomePage({
             <>
               <Link
                 href={asRoute("/revenue")}
-                className={`subtab-btn ${pathname === "/revenue" || activeTab === "PFT2" ? "active" : ""}`}
+                className={`subtab-btn ${
+                  pathname === "/revenue" ||
+                  pathname === "/revenue/challans" ||
+                  pathname === "/revenue/potential-challans" ||
+                  activeTab === "PFT2" ||
+                  activeTab === "POTENTIAL_PFT2"
+                    ? "active"
+                    : ""
+                }`}
                 style={{ textDecoration: "none" }}
               >
-                📑 Form PFT-2 Challans ({pft2Challans.filter((c) => !c.isProvisional).length})
-              </Link>
-              <Link
-                href={asRoute("/revenue/potential-challans")}
-                className={`subtab-btn ${pathname === "/revenue/potential-challans" || activeTab === "POTENTIAL_PFT2" ? "active" : ""}`}
-                style={{ textDecoration: "none" }}
-              >
-                ⚡ Potential Challans ({pft2Challans.filter((c) => c.isProvisional).length})
+                📑 Form PFT-2 Challans Desk ({pft2Challans.length})
               </Link>
               <Link
                 href={asRoute("/revenue/receipts")}
@@ -12906,16 +12926,15 @@ export default function HomePage({
           </section>
         )}
 
-        {/* TAB: FORM P.F.T-2 CHALLAN MANAGEMENT (RULE 9) */}
-        {activeTab === "PFT2" && (
+        {/* TAB: CONSOLIDATED FORM P.F.T-2 CHALLANS DESK (RULE 9) */}
+        {(activeTab === "PFT2" || activeTab === "POTENTIAL_PFT2") && (
           <section className="content-panel" aria-label="Form PFT-2 Challan Management Desk">
             <div className="panel-header">
               <div>
-                <h2>Form P.F.T-2 Challan Management Desk (Rule 9)</h2>
+                <h2>Form P.F.T-2 Challans Desk (Rule 9)</h2>
                 <p>
-                  Comprehensive lifecycle registry of all issued, cancelled, and received Form
-                  P.F.T-2 payment challans. Inspectors can verify bank payment scrolls and
-                  acknowledge deposits to convert challans into official Statutory Receipts.
+                  Unified statutory payment instrument and collection registry. Consolidates both
+                  Regular Form P.F.T-3 assessments and ⚡ Potential Register provisional challans.
                 </p>
               </div>
               <div
@@ -12972,10 +12991,52 @@ export default function HomePage({
               </div>
             </div>
 
+            {/* Register Source Segmented Control */}
+            <div
+              style={{
+                display: "flex",
+                gap: "0.5rem",
+                marginBottom: "1.25rem",
+                borderBottom: "1px solid #e2e8f0",
+                paddingBottom: "0.75rem",
+                flexWrap: "wrap"
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setPft2RegisterFilter("ALL")}
+                className={`btn-sm ${pft2RegisterFilter === "ALL" ? "btn-primary" : "btn-secondary"}`}
+                style={{ borderRadius: "20px", padding: "0.35rem 0.9rem", fontWeight: 600 }}
+              >
+                📑 All Challans ({pft2Challans.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setPft2RegisterFilter("REGULAR")}
+                className={`btn-sm ${pft2RegisterFilter === "REGULAR" ? "btn-primary" : "btn-secondary"}`}
+                style={{ borderRadius: "20px", padding: "0.35rem 0.9rem", fontWeight: 600 }}
+              >
+                🏛️ Regular Form P.F.T-3 ({pft2Challans.filter((c) => !c.isProvisional).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setPft2RegisterFilter("PROVISIONAL")}
+                className={`btn-sm ${pft2RegisterFilter === "PROVISIONAL" ? "btn-primary" : "btn-secondary"}`}
+                style={{ borderRadius: "20px", padding: "0.35rem 0.9rem", fontWeight: 600 }}
+              >
+                ⚡ Potential Register ({pft2Challans.filter((c) => c.isProvisional).length})
+              </button>
+            </div>
+
             {/* Lifecycle KPI Cards */}
             {(() => {
-              const standardChallans = pft2Challans.filter((c) => !c.isProvisional);
-              const summary = calculatePft2ExecutiveSummary(standardChallans);
+              const scopeChallans =
+                pft2RegisterFilter === "REGULAR"
+                  ? pft2Challans.filter((c) => !c.isProvisional)
+                  : pft2RegisterFilter === "PROVISIONAL"
+                    ? pft2Challans.filter((c) => c.isProvisional)
+                    : pft2Challans;
+              const summary = calculatePft2ExecutiveSummary(scopeChallans);
               return (
                 <div
                   style={{
@@ -12986,7 +13047,13 @@ export default function HomePage({
                   }}
                 >
                   <div className="metric-card highlight">
-                    <p className="metric-label">Total Challans</p>
+                    <p className="metric-label">
+                      {pft2RegisterFilter === "PROVISIONAL"
+                        ? "Potential Challans"
+                        : pft2RegisterFilter === "REGULAR"
+                          ? "Regular Challans"
+                          : "Total Challans"}
+                    </p>
                     <p className="metric-value">{summary.total}</p>
                     <p className="metric-subtext">
                       PKR {summary.totalDemandPkr.toLocaleString()} Assessed Demand
@@ -13039,37 +13106,45 @@ export default function HomePage({
             >
               {/* Lifecycle Status Pills */}
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                {(["ALL", "ISSUED", "RECEIVED", "CANCELLED"] as const).map((st) => {
-                  const count =
-                    st === "ALL"
-                      ? pft2Challans.length
-                      : pft2Challans.filter((c) => c.status === st).length;
-                  const isActive = pft2StatusFilter === st;
-                  return (
-                    <button
-                      key={st}
-                      type="button"
-                      onClick={() => setPft2StatusFilter(st)}
-                      style={{
-                        padding: "0.4rem 0.85rem",
-                        borderRadius: "20px",
-                        border: "1px solid",
-                        borderColor: isActive ? "#0d3822" : "#cbd5e1",
-                        background: isActive ? "#0d3822" : "#ffffff",
-                        color: isActive ? "#ffffff" : "#334155",
-                        fontWeight: 600,
-                        fontSize: "0.825rem",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease"
-                      }}
-                    >
-                      {st === "ALL" && "All Types"}
-                      {st === "ISSUED" && "⏳ Issued / Pending"}
-                      {st === "RECEIVED" && "✓ Received / Discharged"}
-                      {st === "CANCELLED" && "✕ Cancelled"} ({count})
-                    </button>
-                  );
-                })}
+                {(() => {
+                  const scopeChallans =
+                    pft2RegisterFilter === "REGULAR"
+                      ? pft2Challans.filter((c) => !c.isProvisional)
+                      : pft2RegisterFilter === "PROVISIONAL"
+                        ? pft2Challans.filter((c) => c.isProvisional)
+                        : pft2Challans;
+                  return (["ALL", "ISSUED", "RECEIVED", "CANCELLED"] as const).map((st) => {
+                    const count =
+                      st === "ALL"
+                        ? scopeChallans.length
+                        : scopeChallans.filter((c) => c.status === st).length;
+                    const isActive = pft2StatusFilter === st;
+                    return (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => setPft2StatusFilter(st)}
+                        style={{
+                          padding: "0.4rem 0.85rem",
+                          borderRadius: "20px",
+                          border: "1px solid",
+                          borderColor: isActive ? "#0d3822" : "#cbd5e1",
+                          background: isActive ? "#0d3822" : "#ffffff",
+                          color: isActive ? "#ffffff" : "#334155",
+                          fontWeight: 600,
+                          fontSize: "0.825rem",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease"
+                        }}
+                      >
+                        {st === "ALL" && "All Statuses"}
+                        {st === "ISSUED" && "⏳ Issued / Pending"}
+                        {st === "RECEIVED" && "✓ Received / Discharged"}
+                        {st === "CANCELLED" && "✕ Cancelled"} ({count})
+                      </button>
+                    );
+                  });
+                })()}
               </div>
 
               {/* Search & Category Filter */}
@@ -13085,7 +13160,7 @@ export default function HomePage({
               >
                 <input
                   type="text"
-                  placeholder="Search Challan #, Demand #, Taxpayer, CNIC..."
+                  placeholder="Search Notice #, Demand #, Taxpayer, CNIC..."
                   className="form-control"
                   style={{ maxWidth: "20rem", fontSize: "0.85rem" }}
                   value={pft2SearchQuery}
@@ -13128,16 +13203,17 @@ export default function HomePage({
               <table className="gov-table">
                 <thead>
                   <tr>
-                    <th className="cell-fit">Challan &amp; Notice Ref</th>
+                    <th className="cell-fit">Notice / Challan No.</th>
+                    <th className="cell-fit">Demand / Pot. No.</th>
                     <th className="cell-fit" style={{ textAlign: "center" }}>
-                      Verification PIN
+                      Issue Date
                     </th>
-                    <th className="cell-wrap-text">Assessee Profession/Trade Name</th>
-                    <th className="cell-wrap-text">Classification &amp; Type</th>
-                    <th className="cell-currency">Amount Payable</th>
                     <th className="cell-fit" style={{ textAlign: "center" }}>
                       Due Date
                     </th>
+                    <th className="cell-wrap-text">Profession / Trade Name</th>
+                    <th className="cell-wrap-text">Statutory Classification</th>
+                    <th className="cell-currency">Amount Payable</th>
                     <th className="cell-fit" style={{ textAlign: "center" }}>
                       Status
                     </th>
@@ -13148,36 +13224,36 @@ export default function HomePage({
                 </thead>
                 <tbody>
                   {(() => {
-                    const filtered = pft2Challans
-                      .filter((c) => !c.isProvisional)
-                      .filter((c) => {
-                        if (pft2StatusFilter !== "ALL" && c.status !== pft2StatusFilter)
-                          return false;
-                        if (
-                          pft2CategoryFilter !== "ALL" &&
-                          !c.category.toLowerCase().includes(pft2CategoryFilter.toLowerCase())
-                        )
-                          return false;
-                        if (pft2SearchQuery.trim()) {
-                          const q = pft2SearchQuery.toLowerCase();
-                          const match =
-                            c.challanNumber.toLowerCase().includes(q) ||
-                            c.demandNumber.toLowerCase().includes(q) ||
-                            (c.noticeNumber && c.noticeNumber.toLowerCase().includes(q)) ||
-                            (c.pin && c.pin.includes(q)) ||
-                            c.legalName.toLowerCase().includes(q) ||
-                            (c.tradeName && c.tradeName.toLowerCase().includes(q)) ||
-                            c.identifierValue.toLowerCase().includes(q);
-                          if (!match) return false;
-                        }
-                        return true;
-                      });
+                    const filtered = pft2Challans.filter((c) => {
+                      if (pft2RegisterFilter === "REGULAR" && c.isProvisional) return false;
+                      if (pft2RegisterFilter === "PROVISIONAL" && !c.isProvisional) return false;
+                      if (pft2StatusFilter !== "ALL" && c.status !== pft2StatusFilter) return false;
+                      if (
+                        pft2CategoryFilter !== "ALL" &&
+                        !c.category.toLowerCase().includes(pft2CategoryFilter.toLowerCase())
+                      )
+                        return false;
+                      if (pft2SearchQuery.trim()) {
+                        const q = pft2SearchQuery.toLowerCase();
+                        const match =
+                          c.challanNumber.toLowerCase().includes(q) ||
+                          c.demandNumber.toLowerCase().includes(q) ||
+                          (c.potentialNumber && c.potentialNumber.toLowerCase().includes(q)) ||
+                          (c.noticeNumber && c.noticeNumber.toLowerCase().includes(q)) ||
+                          (c.pin && c.pin.includes(q)) ||
+                          c.legalName.toLowerCase().includes(q) ||
+                          (c.tradeName && c.tradeName.toLowerCase().includes(q)) ||
+                          c.identifierValue.toLowerCase().includes(q);
+                        if (!match) return false;
+                      }
+                      return true;
+                    });
 
                     if (filtered.length === 0) {
                       return (
                         <tr>
                           <td
-                            colSpan={8}
+                            colSpan={9}
                             style={{
                               textAlign: "center",
                               padding: "3rem 1.5rem",
@@ -13205,8 +13281,8 @@ export default function HomePage({
                                 }}
                               >
                                 {pft2Challans.length === 0
-                                  ? "Payment challans can be issued for any establishment with an approved statutory assessment."
-                                  : "Try changing your status filter or search keyword to locate the desired challan record."}
+                                  ? "Payment challans can be issued for any establishment with an approved statutory assessment or potential record."
+                                  : "Try changing your register view, status filter, or search keyword to locate the desired challan record."}
                               </p>
                               {pft2Challans.length === 0 ? (
                                 <button
@@ -13227,6 +13303,7 @@ export default function HomePage({
                                   type="button"
                                   className="btn-secondary"
                                   onClick={() => {
+                                    setPft2RegisterFilter("ALL");
                                     setPft2StatusFilter("ALL");
                                     setPft2CategoryFilter("ALL");
                                     setPft2SearchQuery("");
@@ -13245,39 +13322,75 @@ export default function HomePage({
                       const isIssued = challan.status === "ISSUED";
                       const isReceived = challan.status === "RECEIVED";
                       const isCancelled = challan.status === "CANCELLED";
+                      const effectiveNoticeNo =
+                        challan.noticeNumber ||
+                        challan.challanNumber ||
+                        generatePft2NoticeNumber({
+                          issueDate: challan.issueDate,
+                          formTypeCode: challan.formType,
+                          demandScope: challan.demandScope,
+                          paymentScope: challan.paymentScope,
+                          amount: challan.amountPayable,
+                          isProvisional:
+                            challan.challanType === "PROVISIONAL" || challan.isProvisional,
+                          monthlySequence: idx + 1
+                        });
+                      const unitPin = challan.isProvisional
+                        ? challan.pin
+                        : getUnitPin(challan.unitId) || challan.pin;
 
                       return (
                         <tr key={challan.id}>
+                          {/* Column 1: Notice / Challan No. (Single, Clean Reference with Type Badge) */}
                           <td className="cell-fit">
                             <strong
                               className="cell-token"
                               style={{ fontSize: "0.8125rem", color: "#0f172a" }}
                             >
-                              {challan.challanNumber}
+                              {effectiveNoticeNo}
                             </strong>
+                            <div style={{ marginTop: "0.2rem" }}>
+                              {challan.isProvisional || challan.challanType === "PROVISIONAL" ? (
+                                <span
+                                  className="badge"
+                                  style={{
+                                    fontSize: "0.625rem",
+                                    padding: "0.1rem 0.4rem",
+                                    background: "#fef3c7",
+                                    color: "#92400e",
+                                    border: "1px solid #fde68a"
+                                  }}
+                                >
+                                  ⚡ PROVISIONAL
+                                </span>
+                              ) : (
+                                <span
+                                  className="badge"
+                                  style={{
+                                    fontSize: "0.625rem",
+                                    padding: "0.1rem 0.4rem",
+                                    background: "#dcfce7",
+                                    color: "#166534",
+                                    border: "1px solid #bbf7d0"
+                                  }}
+                                >
+                                  REGULAR (PFT-3)
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Column 2: Demand / Pot. No. */}
+                          <td className="cell-fit">
                             <span
                               className="cell-token"
                               style={{
-                                display: "block",
-                                fontSize: "0.75rem",
-                                color: "#1e3a8a",
                                 fontWeight: 700,
-                                marginTop: "0.15rem",
-                                wordBreak: "break-all"
+                                fontSize: "0.8125rem",
+                                color: challan.isProvisional ? "#b45309" : "#166534"
                               }}
-                              title="Statutory Form P.F.T-2 Notice Number"
                             >
-                              {challan.noticeNumber ??
-                                generatePft2NoticeNumber({
-                                  issueDate: challan.issueDate,
-                                  formTypeCode: challan.formType,
-                                  demandScope: challan.demandScope,
-                                  paymentScope: challan.paymentScope,
-                                  amount: challan.amountPayable,
-                                  isProvisional:
-                                    challan.challanType === "PROVISIONAL" || challan.isProvisional,
-                                  monthlySequence: idx + 1
-                                })}
+                              {challan.potentialNumber || challan.demandNumber}
                             </span>
                             <span
                               style={{
@@ -13287,63 +13400,75 @@ export default function HomePage({
                                 marginTop: "0.15rem"
                               }}
                             >
-                              Demand: {challan.demandNumber} &bull; Issued: {challan.issueDate}
+                              {challan.isProvisional ? "Potential Ref" : "Assessed Demand"}
                             </span>
                           </td>
+
+                          {/* Column 3: Issue Date */}
                           <td className="cell-fit" style={{ textAlign: "center" }}>
+                            <span
+                              style={{
+                                fontSize: "0.8125rem",
+                                color: "#334155",
+                                fontWeight: 500
+                              }}
+                            >
+                              {challan.issueDate || "—"}
+                            </span>
+                          </td>
+
+                          {/* Column 4: Due Date */}
+                          <td className="cell-fit" style={{ textAlign: "center" }}>
+                            <span
+                              style={{
+                                fontSize: "0.8125rem",
+                                fontWeight: 600,
+                                color: "#b91c1c"
+                              }}
+                            >
+                              {challan.dueDate}
+                            </span>
+                          </td>
+
+                          {/* Column 5: Profession / Trade Name (Clean Standardized Header) */}
+                          <td className="cell-wrap-text">
+                            <strong style={{ fontSize: "0.8125rem", color: "#0f172a" }}>
+                              {challan.tradeName || challan.legalName}
+                            </strong>
+                            {challan.tradeName &&
+                              challan.legalName &&
+                              challan.tradeName !== challan.legalName && (
+                                <span
+                                  style={{
+                                    display: "block",
+                                    fontSize: "0.75rem",
+                                    color: "#475569"
+                                  }}
+                                >
+                                  {challan.legalName}
+                                </span>
+                              )}
                             <span
                               className="cell-token"
                               style={{
-                                display: "inline-block",
-                                padding: "0.2rem 0.5rem",
-                                borderRadius: "6px",
-                                fontWeight: 800,
-                                fontSize: "0.8125rem",
-                                background: "#e0f2fe",
-                                color: "#0369a1",
-                                border: "1px solid #bae6fd",
-                                letterSpacing: "1px"
-                              }}
-                              title="Official 6-digit Verification PIN"
-                            >
-                              🔐{" "}
-                              {challan.pin ??
-                                (challan.noticeNumber
-                                  ? generateDocumentPin(challan.noticeNumber)
-                                  : "—")}
-                            </span>
-                            <span
-                              style={{
                                 display: "block",
-                                fontSize: "0.65rem",
+                                fontSize: "0.72rem",
                                 color: "#64748b",
                                 marginTop: "0.15rem"
                               }}
                             >
-                              Verification PIN
-                            </span>
-                          </td>
-                          <td className="cell-wrap-text">
-                            <strong style={{ fontSize: "0.8125rem", color: "#0f172a" }}>
-                              {challan.legalName}
-                            </strong>
-                            {challan.tradeName && (
-                              <span
-                                style={{ display: "block", fontSize: "0.75rem", color: "#065f46" }}
-                              >
-                                {challan.tradeName}
-                              </span>
-                            )}
-                            <span
-                              className="cell-token"
-                              style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
-                            >
                               {challan.identifierType}: {challan.identifierValue}
                             </span>
                           </td>
+
+                          {/* Column 6: Statutory Classification */}
                           <td className="cell-wrap-text">
                             <span
-                              style={{ fontSize: "0.8125rem", fontWeight: 600, color: "#0f172a" }}
+                              style={{
+                                fontSize: "0.8125rem",
+                                fontWeight: 600,
+                                color: "#0f172a"
+                              }}
                             >
                               Class {challan.subclassificationCode ?? challan.category}
                             </span>
@@ -13416,6 +13541,8 @@ export default function HomePage({
                               </div>
                             )}
                           </td>
+
+                          {/* Column 7: Amount Payable */}
                           <td className="cell-currency">
                             <strong
                               style={{
@@ -13426,11 +13553,8 @@ export default function HomePage({
                               PKR {challan.amountPayable.toLocaleString()}
                             </strong>
                           </td>
-                          <td className="cell-fit" style={{ textAlign: "center" }}>
-                            <span style={{ fontSize: "0.8125rem", color: "#334155" }}>
-                              {challan.dueDate}
-                            </span>
-                          </td>
+
+                          {/* Column 8: Status */}
                           <td className="cell-fit" style={{ textAlign: "center" }}>
                             <span
                               className={`badge ${
@@ -13474,6 +13598,8 @@ export default function HomePage({
                               </span>
                             )}
                           </td>
+
+                          {/* Column 9: Actions */}
                           <td className="col-actions" style={{ textAlign: "right" }}>
                             {isCancelled ? (
                               <span
@@ -13491,48 +13617,6 @@ export default function HomePage({
                                 actions={
                                   isReceived
                                     ? [
-                                        {
-                                          id: "view-details",
-                                          label: "View Assessee Dossier",
-                                          icon: "📋",
-                                          href: `/units/${getUnitPin(challan.unitId)}/details`,
-                                          target: "_blank"
-                                        },
-                                        {
-                                          id: "view-pft1",
-                                          label: "View Form P.F.T-1 (Assessment Notice ↗)",
-                                          icon: "📄",
-                                          href: `/documents/pft1?pin=${getUnitPin(challan.unitId)}`,
-                                          target: "_blank"
-                                        },
-                                        {
-                                          id: "issue-pft2-desk",
-                                          label: "Open Form PFT-2 Issuance Desk ↗",
-                                          icon: "🏛️",
-                                          href: `/documents/pf2/new?pin=${getUnitPin(challan.unitId)}`,
-                                          target: "_blank"
-                                        },
-                                        {
-                                          id: "view-details",
-                                          label: "View Assessee Dossier",
-                                          icon: "📋",
-                                          href: `/units/${getUnitPin(challan.unitId)}/details`,
-                                          target: "_blank"
-                                        },
-                                        {
-                                          id: "view-pft1",
-                                          label: "View Form P.F.T-1 (Assessment Notice ↗)",
-                                          icon: "📄",
-                                          href: `/documents/pft1?pin=${getUnitPin(challan.unitId)}`,
-                                          target: "_blank"
-                                        },
-                                        {
-                                          id: "issue-pft2-desk",
-                                          label: "Open Form PFT-2 Issuance Desk ↗",
-                                          icon: "🏛️",
-                                          href: `/documents/pf2/new?pin=${getUnitPin(challan.unitId)}`,
-                                          target: "_blank"
-                                        },
                                         {
                                           id: "download-pdf",
                                           label: "Download Challan PDF",
@@ -13557,6 +13641,20 @@ export default function HomePage({
                                               );
                                             }
                                           }
+                                        },
+                                        {
+                                          id: "view-details",
+                                          label: "View Assessee Dossier",
+                                          icon: "📋",
+                                          href: `/units/${unitPin}/details`,
+                                          target: "_blank"
+                                        },
+                                        {
+                                          id: "view-pft1",
+                                          label: "View Form P.F.T-1 Notice ↗",
+                                          icon: "📄",
+                                          href: `/documents/pft1?pin=${unitPin}`,
+                                          target: "_blank"
                                         }
                                       ]
                                     : [
@@ -13569,8 +13667,15 @@ export default function HomePage({
                                         {
                                           id: "receive-pft2",
                                           label: "Receive Bank Payment",
-                                          icon: "📥",
+                                          icon: "💳",
                                           onClick: () => handleOpenReceivePft2(challan)
+                                        },
+                                        {
+                                          id: "view-details",
+                                          label: "View Assessee Dossier",
+                                          icon: "📋",
+                                          href: `/units/${unitPin}/details`,
+                                          target: "_blank"
                                         },
                                         {
                                           id: "cancel-pft2",
@@ -13587,271 +13692,6 @@ export default function HomePage({
                         </tr>
                       );
                     });
-                  })()}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
-
-        {/* TAB: POTENTIAL FORM P.F.T-2 CHALLANS (PROVISIONAL CHALLANS) */}
-        {activeTab === "POTENTIAL_PFT2" && (
-          <section className="content-panel" aria-label="Potential Form PFT-2 Challan Desk">
-            <div className="panel-header">
-              <div>
-                <h2>⚡ Potential Form P.F.T-2 Challans (Provisional)</h2>
-                <p>
-                  Provisional Form P.F.T-2 payment instruments issued against prospective assessees
-                  in the Potential Register. Upon payment realization at the authorized treasury
-                  counter (National Bank of Pakistan), these units automatically migrate to the Form
-                  P.F.T-3 Assessment Register with permanent PDN and PIN.
-                </p>
-              </div>
-            </div>
-
-            {/* Lifecycle KPI Cards for Potential Challans */}
-            {(() => {
-              const provChallans = pft2Challans.filter((c) => c.isProvisional);
-              const summary = calculatePft2ExecutiveSummary(provChallans);
-              return (
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
-                    gap: "1rem",
-                    marginBottom: "1.5rem"
-                  }}
-                >
-                  <div className="metric-card highlight">
-                    <p className="metric-label">Total Potential Challans</p>
-                    <p className="metric-value">{summary.total}</p>
-                    <p className="metric-subtext">
-                      PKR {summary.totalDemandPkr.toLocaleString()} Provisional Demand
-                    </p>
-                  </div>
-                  <div className="metric-card success">
-                    <p className="metric-label">Received / Realized</p>
-                    <p className="metric-value">{summary.receivedCount}</p>
-                    <p className="metric-subtext">
-                      PKR {summary.receivedAmountPkr.toLocaleString()} Realized &amp; Migrated
-                    </p>
-                  </div>
-                  <div className="metric-card warning">
-                    <p className="metric-label">Pending / Active</p>
-                    <p className="metric-value">{summary.issuedCount}</p>
-                    <p className="metric-subtext">
-                      PKR {summary.pendingAmountPkr.toLocaleString()} Outstanding
-                    </p>
-                  </div>
-                  <div className="metric-card danger">
-                    <p className="metric-label">Cancelled / Superseded</p>
-                    <p className="metric-value">{summary.cancelledCount}</p>
-                    <p className="metric-subtext">
-                      PKR {summary.cancelledAmountPkr.toLocaleString()} Superseded
-                    </p>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Provisional Challans Table */}
-            <div className="table-responsive">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th className="cell-fit">Challan No.</th>
-                    <th className="cell-fit">Potential No. &amp; PIN</th>
-                    <th className="cell-wrap-text">Assessee Profession/Trade Name</th>
-                    <th className="cell-wrap-text">Statutory Classification</th>
-                    <th className="cell-currency">Payable Amount</th>
-                    <th className="cell-fit" style={{ textAlign: "center" }}>
-                      Issue &amp; Due Date
-                    </th>
-                    <th className="cell-fit" style={{ textAlign: "center" }}>
-                      Status
-                    </th>
-                    <th className="col-actions" style={{ textAlign: "right" }}>
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(() => {
-                    const provChallans = pft2Challans.filter((c) => c.isProvisional);
-                    if (provChallans.length === 0) {
-                      return (
-                        <tr>
-                          <td
-                            colSpan={8}
-                            style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
-                          >
-                            No provisional Form P.F.T-2 challans currently issued. Issue challans
-                            from the Potential Register in the Demand Desk.
-                          </td>
-                        </tr>
-                      );
-                    }
-                    return provChallans.map((challan) => (
-                      <tr key={challan.id}>
-                        <td className="cell-fit">
-                          <span
-                            className="cell-token"
-                            style={{
-                              fontWeight: 700,
-                              color: "#166534",
-                              fontSize: "0.8125rem"
-                            }}
-                          >
-                            {challan.challanNumber}
-                          </span>
-                        </td>
-                        <td className="cell-fit">
-                          <div
-                            className="cell-token"
-                            style={{
-                              fontWeight: 700,
-                              color: "#b45309",
-                              fontSize: "0.8125rem"
-                            }}
-                          >
-                            {challan.potentialNumber || challan.demandNumber}
-                          </div>
-                          <div
-                            className="cell-token"
-                            style={{
-                              fontSize: "0.75rem",
-                              color: "#475569"
-                            }}
-                          >
-                            {challan.pin}
-                          </div>
-                        </td>
-                        <td className="cell-wrap-text">
-                          <strong style={{ fontSize: "0.8125rem", color: "#0f172a" }}>
-                            {challan.legalName}
-                          </strong>
-                          {challan.tradeName && (
-                            <div style={{ fontSize: "0.75rem", color: "#475569" }}>
-                              {challan.tradeName}
-                            </div>
-                          )}
-                        </td>
-                        <td className="cell-wrap-text">
-                          <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "#1e293b" }}>
-                            {challan.category}
-                          </div>
-                          {challan.subclassificationCode && (
-                            <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                              Subclass: {challan.subclassificationCode}
-                            </div>
-                          )}
-                        </td>
-                        <td className="cell-currency">
-                          <strong
-                            style={{
-                              fontSize: "0.875rem",
-                              color: "#166534"
-                            }}
-                          >
-                            PKR {challan.amountPayable.toLocaleString()}
-                          </strong>
-                        </td>
-                        <td className="cell-fit" style={{ textAlign: "center" }}>
-                          <div style={{ fontSize: "0.8125rem", color: "#334155" }}>
-                            Issue: {challan.issueDate}
-                          </div>
-                          <div style={{ fontSize: "0.75rem", color: "#dc2626", fontWeight: 600 }}>
-                            Due: {challan.dueDate}
-                          </div>
-                        </td>
-                        <td className="cell-fit" style={{ textAlign: "center" }}>
-                          {challan.status === "ISSUED" && (
-                            <span
-                              className="badge badge-pending"
-                              style={{
-                                fontSize: "0.6875rem",
-                                padding: "0.15rem 0.5rem"
-                              }}
-                            >
-                              ACTIVE (ISSUED)
-                            </span>
-                          )}
-                          {challan.status === "RECEIVED" && (
-                            <span
-                              className="badge badge-approved"
-                              style={{
-                                fontSize: "0.6875rem",
-                                padding: "0.15rem 0.5rem"
-                              }}
-                            >
-                              REALIZED &amp; CREDITED
-                            </span>
-                          )}
-                          {challan.status === "CANCELLED" && (
-                            <span
-                              className="badge badge-returned"
-                              style={{
-                                fontSize: "0.6875rem",
-                                padding: "0.15rem 0.5rem"
-                              }}
-                            >
-                              CANCELLED
-                            </span>
-                          )}
-                        </td>
-                        <td className="col-actions" style={{ textAlign: "right" }}>
-                          <RowActionMenu
-                            align="right"
-                            actions={
-                              challan.status === "ISSUED"
-                                ? [
-                                    {
-                                      id: "receive-pft2",
-                                      label: "Receive Bank Payment (Realize)",
-                                      icon: "💳",
-                                      onClick: () => handleOpenReceivePft2(challan)
-                                    },
-                                    {
-                                      id: "print-pft2",
-                                      label: "Print 3-Copy Challan",
-                                      icon: "🖨️",
-                                      onClick: () => handlePrintPft2Challan(challan)
-                                    },
-                                    {
-                                      id: "view-dossier",
-                                      label: "View Assessee Dossier",
-                                      icon: "📋",
-                                      href: `/units/${challan.pin}/details`,
-                                      target: "_blank"
-                                    }
-                                  ]
-                                : [
-                                    {
-                                      id: "print-pft2",
-                                      label: "Print 3-Copy Challan",
-                                      icon: "🖨️",
-                                      onClick: () => handlePrintPft2Challan(challan)
-                                    },
-                                    {
-                                      id: "view-receipt",
-                                      label: "View Statutory Receipt",
-                                      icon: "🧾",
-                                      disabled: !challan.receiptNumber,
-                                      onClick: () => {
-                                        const rec = statutoryReceipts.find(
-                                          (r) => r.receiptNumber === challan.receiptNumber
-                                        );
-                                        if (rec) {
-                                          handleOpenReceiptDocument(rec);
-                                        }
-                                      }
-                                    }
-                                  ]
-                            }
-                          />
-                        </td>
-                      </tr>
-                    ));
                   })()}
                 </tbody>
               </table>

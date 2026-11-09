@@ -1053,6 +1053,7 @@ export function generateFormPFT1(
 }
 
 export interface GenerateFormPFT2Options {
+  readonly challanNumber?: string | undefined;
   readonly customAmount?: number | undefined;
   readonly isPartial?: boolean | undefined;
   readonly remainingBalance?: number | undefined;
@@ -1174,10 +1175,6 @@ export function generateFormPFT2(
         : 0;
 
   const totalPayableWords = numberToWordsPkr(totalPayable);
-  const challanSerial = unit.demandUnit?.permanentDemandNo
-    ? unit.demandUnit.permanentDemandNo.replace(/[^0-9]/g, "").slice(-4)
-    : unit.id.slice(-4);
-  const challanNumber = formatStandardDocNumber({ docCode: "PFT2", sequence: challanSerial });
   const demandNo = formatDemandNumber(unit.demandUnit?.permanentDemandNo);
   const dueDate = opts.dueDate || "31/08/2026";
   const issueDate = opts.issueDate || "2026-07-01";
@@ -1200,11 +1197,13 @@ export function generateFormPFT2(
     generatePft2NoticeNumber({
       demandNumber: demandNo,
       issueDate,
+      districtCode: unit.districtName,
       formTypeCode: formType,
       demandScope,
       paymentScope,
       amount: totalPayable
     });
+  const challanNumber = opts.challanNumber || opts.noticeNumber || noticeNumber;
 
   const pin = opts.pin || generateDocumentPin(noticeNumber || challanNumber);
   const securityCode =

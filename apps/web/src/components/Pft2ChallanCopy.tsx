@@ -477,7 +477,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "8.2rem 1fr",
+          gridTemplateColumns: "10.5rem 1fr",
           columnGap: "0.5rem",
           rowGap: "0.25rem",
           fontSize: "0.7rem",

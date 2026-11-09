@@ -81,10 +81,20 @@ export async function downloadOfficialPdf(params: DownloadPdfParams): Promise<bo
       browserActor ? { ...params.options, officer: browserActor.officer } : params.options
     );
 
-    const filename =
-      params.defaultFilename ??
-      params.options?.filename ??
-      `${params.type.toLowerCase().replace(/_/g, "-")}.pdf`;
+    let fallbackFilename = `${params.type.toLowerCase().replace(/_/g, "-")}.pdf`;
+    if (
+      params.type === "FORM_PFT2_CHALLAN" &&
+      typeof params.documentIdOrData === "object" &&
+      params.documentIdOrData !== null
+    ) {
+      const p = params.documentIdOrData as { noticeNumber?: string; challanNumber?: string };
+      const ref = p.noticeNumber || p.challanNumber;
+      if (ref) {
+        fallbackFilename = `Form_PFT2_Challan_${ref.replace(/[/\s]/g, "_")}.pdf`;
+      }
+    }
+
+    const filename = params.defaultFilename ?? params.options?.filename ?? fallbackFilename;
 
     const safeFilename = filename.endsWith(".pdf") ? filename : `${filename}.pdf`;
 

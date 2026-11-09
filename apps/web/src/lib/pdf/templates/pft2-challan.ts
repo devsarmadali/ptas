@@ -74,9 +74,10 @@ export async function generatePft2ChallanPdf(
   challan: FormPFT2Model,
   options?: DocumentGenerationOptions | undefined
 ): Promise<jsPDF> {
+  const effectiveNoticeNo = challan.noticeNumber || challan.challanNumber;
   const doc = createBasePdf({
     orientation: "landscape",
-    title: `Challan Form P.F.T-2 - ${challan.challanNumber}`,
+    title: `Challan Form P.F.T-2 — ${effectiveNoticeNo}`,
     subject: "Statutory Professional Tax Payment Instrument (Rule 9)",
     isProvisional: options?.isProvisional
   });
@@ -416,11 +417,11 @@ export async function generatePft2ChallanPdf(
 
     // ══════════════════════════════════════════════════════════════════════════
     // SECTION 3 — TAXPAYER DETAILS (UNIFIED 2-COLUMN GRID, ZERO ENCROACHMENT)
-    // All labels left-aligned at innerX + 1.2; all values left-aligned at innerX + 31.0;
-    // Guaranteed 2.5mm+ whitespace after colons; proper line wrapping and vertical indentation.
+    // All labels left-aligned at innerX + 1.2; all values left-aligned at innerX + 34.0;
+    // Guaranteed 5.0mm+ whitespace after colons; proper line wrapping and vertical indentation.
     // ══════════════════════════════════════════════════════════════════════════
     const S3_LABEL_X = innerX + 1.2;
-    const S3_VAL_X = innerX + 31.0; // Guaranteed >= 2.6mm clearance after longest label (27.2mm at 6.8pt)
+    const S3_VAL_X = innerX + 34.0; // Guaranteed >= 5.0mm clearance after longest label (27.8mm at 6.4pt)
 
     const renderTaxpayerField = (
       label: string,
@@ -435,13 +436,12 @@ export async function generatePft2ChallanPdf(
     ): void => {
       // 1. Draw Label
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(6.8);
+      doc.setFontSize(6.4);
       doc.setTextColor(...C.textDark);
       doc.text(label, S3_LABEL_X, curY + cfg.lineH * 0.72);
 
-      // 2. Safe Value Coordinate (enforces minimum 2.5mm clearance after colon)
-      const labelActualW = doc.getTextWidth(label);
-      const safeX = Math.max(S3_VAL_X, S3_LABEL_X + labelActualW + 2.5);
+      // 2. Uniform Value Column Coordinate (guarantees straight vertical alignment across all rows)
+      const safeX = S3_VAL_X;
       const usableW = innerX + innerW - 1.5 - safeX;
 
       // 3. Draw Value with clean line wrapping and vertical indentation
