@@ -120,7 +120,7 @@ import {
 import { StatutoryQrCode } from "../components/StatutoryQrCode";
 import { Pft2ChallanDocument } from "../components/Pft2ChallanDocument";
 import { QrScannerModal } from "../components/QrScannerModal";
-import { RowActionMenu, type RowAction } from "../components/RowActionMenu";
+import { RowActionMenu } from "../components/RowActionMenu";
 import { downloadOfficialPdf } from "../lib/pdf-export";
 import {
   exportPft2ChallansCsv,
@@ -234,7 +234,7 @@ export const TAB_TO_HUB: Record<TabId, RouteHubId> = {
 
 export const HUB_DEFAULT_TABS: Record<RouteHubId, TabId> = {
   demand: "REGISTER_PFT3",
-  assessment: "UNITS",
+  assessment: "ASSESSMENTS",
   enforcement: "DEFAULTERS",
   revenue: "PFT2",
   intelligence: "ANALYTICS",
@@ -244,8 +244,8 @@ export const HUB_DEFAULT_TABS: Record<RouteHubId, TabId> = {
 export const TAB_TO_CANONICAL_PATH: Record<TabId, string> = {
   REGISTER_PFT3: "/demand/pft3",
   REGISTER_POTENTIAL: "/demand/potential",
-  UNITS: "/assessment/survey",
-  ASSESSMENTS: "/assessment/queue",
+  UNITS: "/assessment",
+  ASSESSMENTS: "/assessment",
   DEFAULTERS: "/enforcement",
   APPEALS: "/enforcement/appeals",
   RELIEF_DESK: "/enforcement/adjustments",
@@ -265,10 +265,10 @@ export const PATH_TO_TAB: Record<string, { hub: RouteHubId; tab: TabId }> = {
   "/demand": { hub: "demand", tab: "REGISTER_PFT3" },
   "/demand/pft3": { hub: "demand", tab: "REGISTER_PFT3" },
   "/demand/potential": { hub: "demand", tab: "REGISTER_POTENTIAL" },
-  "/assessment": { hub: "assessment", tab: "UNITS" },
+  "/assessment": { hub: "assessment", tab: "ASSESSMENTS" },
   "/assessment/pft3": { hub: "demand", tab: "REGISTER_PFT3" },
-  "/assessment/survey": { hub: "assessment", tab: "UNITS" },
-  "/assessment/units": { hub: "assessment", tab: "UNITS" },
+  "/assessment/survey": { hub: "assessment", tab: "ASSESSMENTS" },
+  "/assessment/units": { hub: "assessment", tab: "ASSESSMENTS" },
   "/assessment/queue": { hub: "assessment", tab: "ASSESSMENTS" },
   "/enforcement": { hub: "enforcement", tab: "DEFAULTERS" },
   "/enforcement/defaulters": { hub: "enforcement", tab: "DEFAULTERS" },
@@ -1358,12 +1358,8 @@ export default function HomePage({
     loadPersistedStatutoryReceipts()
   );
 
-  // Tax Units & Survey Filters
-  const [unitsSearchQuery, setUnitsSearchQuery] = useState("");
-  const [unitsStatusFilter, setUnitsStatusFilter] = useState<
-    "ALL" | "DRAFT" | "SUBMITTED" | "RETURNED" | "APPROVED"
-  >("ALL");
-  const [unitsSubclassFilter, setUnitsSubclassFilter] = useState("ALL");
+  // Assessment & Field Survey Filters
+  const [assessmentSubclassFilter, setAssessmentSubclassFilter] = useState("ALL");
 
   // PFT-2 Filters & Modals
   const [pft2StatusFilter, setPft2StatusFilter] = useState<
@@ -3555,6 +3551,16 @@ export default function HomePage({
     setPft3SearchExecuted(false);
   };
 
+  const assessmentAvailableSubclasses = useMemo(() => {
+    return Array.from(
+      new Set(
+        units
+          .map((u) => u.subclassificationCode || u.statutoryRule?.subclassification_code)
+          .filter((c): c is string => Boolean(c))
+      )
+    ).sort();
+  }, [units]);
+
   // Assessment Queue Filtered Rows & Metric Counts
   const filteredAssessmentUnits = useMemo(() => {
     return units.filter((u) => {
@@ -3575,6 +3581,11 @@ export default function HomePage({
 
       if (assessmentCircleFilter !== "ALL" && u.circleId !== assessmentCircleFilter) return false;
 
+      if (assessmentSubclassFilter !== "ALL") {
+        const uSubclass = u.subclassificationCode || u.statutoryRule?.subclassification_code;
+        if (uSubclass !== assessmentSubclassFilter) return false;
+      }
+
       if (assessmentSearchQuery.trim()) {
         const q = assessmentSearchQuery.trim().toLowerCase();
         const matchName =
@@ -3590,7 +3601,14 @@ export default function HomePage({
 
       return true;
     });
-  }, [units, assessmentStatusFilter, assessmentCircleFilter, assessmentSearchQuery]);
+  }, [
+    units,
+    activePotentialIds,
+    assessmentStatusFilter,
+    assessmentCircleFilter,
+    assessmentSubclassFilter,
+    assessmentSearchQuery
+  ]);
 
   const assessmentCounts = useMemo(() => {
     let feeded = 0,
@@ -6529,144 +6547,6 @@ export default function HomePage({
   void setClearanceCertificates;
   void setAppeals;
 
-  // Row actions for Survey Register (UNITS tab) with complete statutory workflow actions
-  const renderSurveyUnitActions = (targetUnit: StoredUnit) => {
-    const latestAsm = targetUnit.assessments[0];
-    const status = latestAsm?.status ?? "DRAFT";
-    const isClosed = Boolean(targetUnit.isDiscontinued || status === "WITHDRAWN");
-
-    const actions: RowAction[] = [
-      {
-        id: "view-details",
-        label: "View Unit Dossier",
-        icon: "📋",
-        href: `/units/${targetUnit.provincialUin}/details`,
-        target: "_blank"
-      }
-    ];
-
-    if (isClosed) {
-      actions.push({
-        id: "view-trace",
-        label: "View Closure Audit Trace",
-        icon: "👁️",
-        onClick: () => handleOpenAuditTraceModal(targetUnit)
-      });
-      return <RowActionMenu align="right" actions={actions} />;
-    }
-
-    if (status === "DRAFT") {
-      if (officer.role === "INSPECTOR") {
-        actions.push(
-          {
-            id: "submit-to-eto",
-            label: "Submit for ETO Review",
-            icon: "📤",
-            onClick: () => void handleSubmitAssessment(targetUnit.id)
-          },
-          {
-            id: "edit-survey",
-            label: "Edit Survey Particulars",
-            icon: "✏️",
-            onClick: () => handleOpenEditSurveyUnit(targetUnit)
-          },
-          {
-            id: "close-unit",
-            label: "Close / Discard Unit",
-            icon: "✕",
-            onClick: () => handleOpenCloseModal(targetUnit.id)
-          }
-        );
-      } else {
-        actions.push({
-          id: "view-survey",
-          label: "View Survey Particulars",
-          icon: "👁️",
-          onClick: () => handleOpenEditSurveyUnit(targetUnit)
-        });
-      }
-    } else if (status === "SUBMITTED") {
-      if (officer.role === "ETO") {
-        actions.push(
-          {
-            id: "approve-assessment",
-            label: "Grant Statutory Approval (PFT-3)",
-            icon: "✓",
-            onClick: () => void handleApproveAssessment(targetUnit.id)
-          },
-          {
-            id: "return-assessment",
-            label: "Return with Statutory Observations",
-            icon: "↩",
-            onClick: () => handleOpenReturnModal(targetUnit.id)
-          },
-          {
-            id: "close-unit",
-            label: "Close Unit",
-            icon: "✕",
-            onClick: () => handleOpenCloseModal(targetUnit.id)
-          }
-        );
-      } else {
-        actions.push({
-          id: "view-submitted",
-          label: "Pending ETO Review (Locked)",
-          icon: "🔒",
-          onClick: () => {
-            showToast(
-              "info",
-              `Unit '${targetUnit.legalName}' is currently SUBMITTED for statutory ETO review. Editing is restricted until ETO grants approval or returns for review.`
-            );
-          }
-        });
-      }
-    } else if (status === "RETURNED") {
-      if (officer.role === "INSPECTOR") {
-        actions.push(
-          {
-            id: "update-resubmit",
-            label: "Update & Resubmit to ETO",
-            icon: "✏️",
-            onClick: () => handleOpenEditSurveyUnit(targetUnit)
-          },
-          {
-            id: "resubmit-direct",
-            label: "Resubmit to ETO Queue",
-            icon: "📤",
-            onClick: () => void handleResubmitAssessment(targetUnit.id)
-          },
-          {
-            id: "close-unit",
-            label: "Close Unviable Unit",
-            icon: "✕",
-            onClick: () => handleOpenCloseModal(targetUnit.id)
-          }
-        );
-      } else {
-        actions.push({
-          id: "view-returned",
-          label: "Returned to Inspector (View)",
-          icon: "↩",
-          onClick: () => handleOpenEditSurveyUnit(targetUnit)
-        });
-      }
-    } else if (status === "APPROVED") {
-      actions.push({
-        id: "view-in-pft3",
-        label: "View in Form P.F.T-3 Register ↗",
-        icon: "📑",
-        onClick: () => {
-          setPft3SearchQuery(targetUnit.demandNumber || targetUnit.demandUnit.permanentDemandNo);
-          setPft3SearchExecuted(true);
-          setPft3CurrentPage(1);
-          switchTab("REGISTER_PFT3");
-        }
-      });
-    }
-
-    return <RowActionMenu align="right" actions={actions} />;
-  };
-
   // Row actions strictly for Form P.F.T-3 Assessment & Demand Register (REGISTER_PFT3)
   const renderPft3UnitActions = (targetUnit: StoredUnit) => {
     return (
@@ -7068,20 +6948,13 @@ export default function HomePage({
           {activeRouteHub === "assessment" && (
             <>
               <Link
-                href={asRoute("/assessment/survey")}
-                className={`subtab-btn ${pathname === "/assessment/survey" || activeTab === "UNITS" ? "active" : ""}`}
+                href={asRoute("/assessment")}
+                className="subtab-btn active"
                 style={{ textDecoration: "none" }}
               >
-                🏢 Tax Units &amp; Survey ({surveyPendingUnits.length})
-              </Link>
-              <Link
-                href={asRoute("/assessment/queue")}
-                className={`subtab-btn ${pathname === "/assessment/queue" || activeTab === "ASSESSMENTS" ? "active" : ""}`}
-                style={{ textDecoration: "none" }}
-              >
-                ⚖️ Assessment Queue
+                ⚖️ Assessment &amp; Survey Queue ({surveyPendingUnits.length})
                 {metrics.pendingApprovals > 0 && (
-                  <span className="subtab-badge">{metrics.pendingApprovals}</span>
+                  <span className="subtab-badge">{metrics.pendingApprovals} Pending</span>
                 )}
               </Link>
               <Link
@@ -7263,446 +7136,8 @@ export default function HomePage({
           )}
         </div>
 
-        {/* TAB 1: TAX UNITS & REGISTRATION */}
-        {activeTab === "UNITS" &&
-          (() => {
-            const draftUnitsCount = surveyPendingUnits.filter(
-              (u) => (u.assessments[0]?.status ?? "DRAFT") === "DRAFT"
-            ).length;
-
-            const surveyAvailableSubclasses = Array.from(
-              new Set(
-                surveyPendingUnits
-                  .map((u) => u.subclassificationCode || u.statutoryRule?.subclassification_code)
-                  .filter((c): c is string => Boolean(c))
-              )
-            ).sort();
-
-            const filteredSurveyUnits = surveyPendingUnits.filter((u) => {
-              const currentStatus = u.assessments[0]?.status ?? "DRAFT";
-              if (unitsStatusFilter !== "ALL" && currentStatus !== unitsStatusFilter) return false;
-              if (unitsSubclassFilter !== "ALL") {
-                const uSubclass =
-                  u.subclassificationCode || u.statutoryRule?.subclassification_code;
-                if (uSubclass !== unitsSubclassFilter) return false;
-              }
-              if (unitsSearchQuery.trim()) {
-                const q = unitsSearchQuery.toLowerCase();
-                const match =
-                  u.legalName.toLowerCase().includes(q) ||
-                  (u.tradeName && u.tradeName.toLowerCase().includes(q)) ||
-                  u.identifierValue.toLowerCase().includes(q) ||
-                  u.address.toLowerCase().includes(q) ||
-                  (u.assessmentNumber && u.assessmentNumber.toLowerCase().includes(q)) ||
-                  (u.demandNumber && u.demandNumber.toLowerCase().includes(q)) ||
-                  (u.pinNumber && u.pinNumber.toLowerCase().includes(q)) ||
-                  (u.provincialUin && u.provincialUin.toLowerCase().includes(q)) ||
-                  (u.demandUnit?.permanentDemandNo && u.demandUnit.permanentDemandNo.includes(q));
-                if (!match) return false;
-              }
-              return true;
-            });
-
-            return (
-              <section className="content-panel">
-                <div className="panel-header">
-                  <div>
-                    <h2>{officer.jurisdictionName} Taxpayer Units (Survey Pipeline)</h2>
-                    <p>
-                      Official field survey registry of prospective establishments undergoing
-                      verification. Units officially approved and enrolled in the Form P.F.T-3
-                      Register are isolated to the Demand Register.
-                    </p>
-                  </div>
-                  <div
-                    className="panel-actions"
-                    style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
-                  >
-                    {officer.role === "INSPECTOR" && (
-                      <button
-                        type="button"
-                        onClick={() => handleOpenAddSurveyUnit()}
-                        className="btn-primary"
-                        title="Add one field-survey unit to the database"
-                      >
-                        ➕ Add Individual Unit
-                      </button>
-                    )}
-                    {(officer.role === "INSPECTOR" || officer.role === "ETO") && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowBulkSurveyModal(true);
-                          void refreshActionableSurveyImportBatches();
-                        }}
-                        className="btn-secondary"
-                        style={{
-                          backgroundColor: "#065f46",
-                          color: "#ffffff",
-                          borderColor: "#047857"
-                        }}
-                        title="Import field survey records within the assigned Circle or ETO District/Zone"
-                      >
-                        📥 Bulk Import Survey
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => switchTab("ASSESSMENTS")}
-                      className="btn-primary"
-                      style={{
-                        backgroundColor: "#1e3a8a",
-                        color: "#ffffff",
-                        borderColor: "#1e40af"
-                      }}
-                      title="Open Statutory Assessment Queue with Multi-Select Bulk Actions"
-                    >
-                      ⚖️ Assessment Queue (Bulk Process) ↗
-                    </button>
-                  </div>
-                </div>
-
-                {/* Search & Filter Toolbar */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "0.75rem",
-                    marginBottom: "1rem",
-                    alignItems: "center",
-                    background: "#f8fafc",
-                    padding: "0.75rem 1rem",
-                    borderRadius: "6px",
-                    border: "1px solid #e2e8f0"
-                  }}
-                >
-                  <div style={{ flex: "1 1 16rem" }}>
-                    <input
-                      type="text"
-                      placeholder="Search by Profession/Trade Name, Taxpayer / Proprietor, CNIC, NTN, PIN, or Demand Number..."
-                      value={unitsSearchQuery}
-                      onChange={(e) => setUnitsSearchQuery(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "0.45rem 0.75rem",
-                        borderRadius: "6px",
-                        border: "1px solid #cbd5e1",
-                        fontSize: "0.85rem"
-                      }}
-                    />
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
-                      Status:
-                    </label>
-                    <select
-                      value={unitsStatusFilter}
-                      onChange={(e) =>
-                        setUnitsStatusFilter(
-                          e.target.value as "ALL" | "DRAFT" | "SUBMITTED" | "RETURNED" | "APPROVED"
-                        )
-                      }
-                      style={{
-                        padding: "0.45rem 0.75rem",
-                        borderRadius: "6px",
-                        border: "1px solid #cbd5e1",
-                        fontSize: "0.85rem",
-                        backgroundColor: "#ffffff"
-                      }}
-                    >
-                      <option value="ALL">All Survey Pipeline ({surveyPendingUnits.length})</option>
-                      <option value="DRAFT">Feeded / Updated ({draftUnitsCount})</option>
-                      <option value="SUBMITTED">
-                        Submitted (
-                        {
-                          surveyPendingUnits.filter((u) => u.assessments[0]?.status === "SUBMITTED")
-                            .length
-                        }
-                        )
-                      </option>
-                      <option value="RETURNED">
-                        Returned (
-                        {
-                          surveyPendingUnits.filter((u) => u.assessments[0]?.status === "RETURNED")
-                            .length
-                        }
-                        )
-                      </option>
-                      <option value="APPROVED">
-                        Approved (
-                        {
-                          surveyPendingUnits.filter((u) => u.assessments[0]?.status === "APPROVED")
-                            .length
-                        }
-                        )
-                      </option>
-                    </select>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "#475569" }}>
-                      Sub-Class:
-                    </label>
-                    <select
-                      aria-label="Filter by Sub-Class"
-                      value={unitsSubclassFilter}
-                      onChange={(e) => setUnitsSubclassFilter(e.target.value)}
-                      style={{
-                        padding: "0.45rem 0.75rem",
-                        borderRadius: "6px",
-                        border: "1px solid #cbd5e1",
-                        fontSize: "0.85rem",
-                        backgroundColor: "#ffffff"
-                      }}
-                    >
-                      <option value="ALL">All Sub-Classes</option>
-                      {surveyAvailableSubclasses.map((code) => (
-                        <option key={code} value={code}>
-                          {formatFullSubclassCode(code)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {(unitsSearchQuery ||
-                    unitsStatusFilter !== "ALL" ||
-                    unitsSubclassFilter !== "ALL") && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setUnitsSearchQuery("");
-                        setUnitsStatusFilter("ALL");
-                        setUnitsSubclassFilter("ALL");
-                      }}
-                      className="btn-secondary btn-sm"
-                      style={{ fontSize: "0.75rem" }}
-                    >
-                      Clear Filters
-                    </button>
-                  )}
-                </div>
-
-                <div className="table-container">
-                  <table className="gov-table" style={{ width: "100%" }}>
-                    <thead>
-                      <tr>
-                        <th className="cell-fit">Assessment No.</th>
-                        <th className="cell-fit">Demand Number</th>
-                        <th className="cell-fit">PIN</th>
-                        <th className="cell-wrap-text">
-                          Profession/Trade Name &amp; Taxpayer / Proprietor
-                        </th>
-                        <th className="cell-fit">CNIC / NTN</th>
-                        <th className="cell-wrap-text">Second Schedule Classification</th>
-                        <th className="cell-currency">Statutory Rate</th>
-                        <th className="cell-fit" style={{ textAlign: "center" }}>
-                          Status
-                        </th>
-                        <th className="cell-currency">Ledger Balance</th>
-                        <th className="col-actions" style={{ textAlign: "right" }}>
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {isLoadingOperationalUnits ? (
-                        <tr>
-                          <td colSpan={10} style={{ textAlign: "center", padding: "2.5rem" }}>
-                            Loading authorized survey units…
-                          </td>
-                        </tr>
-                      ) : operationalUnitsError ? (
-                        <tr>
-                          <td
-                            colSpan={10}
-                            style={{ textAlign: "center", padding: "2.5rem", color: "#991b1b" }}
-                          >
-                            {operationalUnitsError}
-                          </td>
-                        </tr>
-                      ) : filteredSurveyUnits.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={10}
-                            style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
-                          >
-                            No taxpayer units match the selected search or filter criteria.
-                          </td>
-                        </tr>
-                      ) : (
-                        filteredSurveyUnits.map((u) => {
-                          const latestAsm = u.assessments[0];
-                          const rawStatus = latestAsm?.status ?? "DRAFT";
-                          const balance = computeLedgerBalance(u.ledgerEntries);
-                          return (
-                            <tr key={u.id}>
-                              <td className="cell-fit">
-                                <span
-                                  style={{
-                                    fontFamily: "monospace",
-                                    fontSize: "0.8125rem",
-                                    color: "#0f766e",
-                                    fontWeight: 600
-                                  }}
-                                >
-                                  {u.assessmentNumber || "— Not assigned"}
-                                </span>
-                              </td>
-                              <td className="cell-fit">
-                                {u.demandNumber || u.demandUnit.permanentDemandNo ? (
-                                  <strong style={{ fontSize: "0.8125rem" }}>
-                                    {u.demandNumber || u.demandUnit.permanentDemandNo}
-                                  </strong>
-                                ) : (
-                                  <span
-                                    style={{
-                                      color: "#94a3b8",
-                                      fontSize: "0.75rem",
-                                      fontStyle: "italic"
-                                    }}
-                                  >
-                                    — Not assigned
-                                  </span>
-                                )}
-                              </td>
-                              <td className="cell-fit">
-                                {u.pinNumber || u.provincialUin ? (
-                                  <span
-                                    style={{
-                                      fontFamily: "monospace",
-                                      fontSize: "0.8125rem",
-                                      color: "#1d4ed8",
-                                      fontWeight: 600
-                                    }}
-                                  >
-                                    {u.pinNumber || u.provincialUin}
-                                  </span>
-                                ) : (
-                                  <span
-                                    style={{
-                                      color: "#94a3b8",
-                                      fontSize: "0.75rem",
-                                      fontStyle: "italic"
-                                    }}
-                                  >
-                                    — Not assigned
-                                  </span>
-                                )}
-                              </td>
-                              <td className="cell-wrap-text">
-                                <strong style={{ fontSize: "0.8125rem" }}>{u.legalName}</strong>
-                                {u.tradeName && u.tradeName !== u.legalName && (
-                                  <span
-                                    style={{
-                                      display: "block",
-                                      fontSize: "0.75rem",
-                                      color: "#64748b"
-                                    }}
-                                  >
-                                    Taxpayer / Proprietor: {u.tradeName}
-                                  </span>
-                                )}
-                                {u.locality && (
-                                  <span
-                                    style={{
-                                      display: "inline-block",
-                                      fontSize: "0.7rem",
-                                      backgroundColor: "#f0fdf4",
-                                      color: "#166534",
-                                      border: "1px solid #bbf7d0",
-                                      borderRadius: "3px",
-                                      padding: "1px 4px",
-                                      marginTop: "2px"
-                                    }}
-                                  >
-                                    📍 {u.locality}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="cell-fit">
-                                <span
-                                  className="cell-token"
-                                  style={{
-                                    fontSize: "0.75rem",
-                                    display: "block",
-                                    background: "#f1f5f9",
-                                    padding: "0.15rem 0.4rem",
-                                    borderRadius: "4px",
-                                    border: "1px solid #e2e8f0"
-                                  }}
-                                >
-                                  {u.identifierValue}
-                                </span>
-                                <span
-                                  style={{
-                                    fontSize: "0.7rem",
-                                    color: "#64748b",
-                                    display: "block",
-                                    marginTop: "2px"
-                                  }}
-                                >
-                                  {u.identifierType}
-                                </span>
-                              </td>
-                              <td className="cell-wrap-text">
-                                <span className="badge badge-draft" style={{ fontSize: "0.75rem" }}>
-                                  Class {u.statutoryRule.rule_code}
-                                </span>
-                                <span
-                                  style={{
-                                    display: "block",
-                                    fontSize: "0.75rem",
-                                    color: "#475569",
-                                    marginTop: "0.15rem",
-                                    lineHeight: 1.3
-                                  }}
-                                >
-                                  {u.statutoryRule.category}
-                                </span>
-                              </td>
-                              <td className="cell-currency">
-                                <strong style={{ color: "#0d3822", fontSize: "0.8125rem" }}>
-                                  PKR {u.statutoryRule.annual_rate_pkr.toLocaleString()}
-                                </strong>
-                              </td>
-                              <td className="cell-fit" style={{ textAlign: "center" }}>
-                                <span
-                                  className={`badge badge-${
-                                    rawStatus === "APPROVED"
-                                      ? "approved"
-                                      : rawStatus === "SUBMITTED"
-                                        ? "submitted"
-                                        : rawStatus === "RETURNED"
-                                          ? "returned"
-                                          : "draft"
-                                  }`}
-                                  style={{ fontSize: "0.75rem" }}
-                                >
-                                  {rawStatus === "DRAFT" ? "FEEDED" : rawStatus}
-                                </span>
-                              </td>
-                              <td className="cell-currency">
-                                <strong
-                                  style={{
-                                    color: balance > 0 ? "#b91c1c" : "#15803d",
-                                    fontSize: "0.8125rem"
-                                  }}
-                                >
-                                  PKR {balance.toLocaleString()}
-                                </strong>
-                              </td>
-                              <td className="col-actions">{renderSurveyUnitActions(u)}</td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            );
-          })()}
-
-        {/* TAB 2: STATUTORY ASSESSMENT QUEUE */}
-        {activeTab === "ASSESSMENTS" && (
+        {/* STATUTORY ASSESSMENT & FIELD SURVEY QUEUE (CONSOLIDATED) */}
+        {(activeTab === "ASSESSMENTS" || activeTab === "UNITS") && (
           <section className="content-panel" aria-label="Statutory Assessment & Approval Queue">
             <div
               className="panel-header"
@@ -7715,24 +7150,16 @@ export default function HomePage({
               }}
             >
               <div>
-                <h2>⚖️ Statutory Assessment &amp; Approval Queue</h2>
+                <h2>⚖️ Statutory Assessment &amp; Survey Queue</h2>
                 <p>
-                  Maker-Checker workflow under Rules 4, 5 &amp; 11. Inspectors submit field survey
-                  records; the assigned Assessing Authority (ETO) reviews, returns, or approves
-                  assessments into permanent Register Form P.F.T-3.
+                  Maker-Checker workflow under Rules 4, 5 &amp; 11. Inspectors feed and submit field
+                  survey records; the assigned Assessing Authority (ETO) reviews, returns, or
+                  approves assessments into permanent Register Form P.F.T-3.
                 </p>
               </div>
               <div
                 style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}
               >
-                <button
-                  type="button"
-                  className="btn-secondary btn-sm"
-                  onClick={() => switchTab("UNITS")}
-                  title="Switch to Field Survey & Tax Units Pipeline"
-                >
-                  🏢 Survey &amp; Tax Units ↗
-                </button>
                 {officer.role === "INSPECTOR" && (
                   <button
                     type="button"
@@ -7950,6 +7377,22 @@ export default function HomePage({
                   <option value="30000000-0000-0000-0000-000000000007">Mailsi Circle</option>
                 </select>
 
+                <select
+                  value={assessmentSubclassFilter}
+                  onChange={(e) => {
+                    setAssessmentSubclassFilter(e.target.value);
+                  }}
+                  className="form-control"
+                  style={{ fontSize: "0.8rem", padding: "0.35rem 0.5rem", height: "auto" }}
+                >
+                  <option value="ALL">All Subclasses / Slabs</option>
+                  {assessmentAvailableSubclasses.map((code) => (
+                    <option key={code} value={code}>
+                      Class {code}
+                    </option>
+                  ))}
+                </select>
+
                 <input
                   type="text"
                   placeholder="🔍 Search name, CNIC, PDN, address…"
@@ -7965,6 +7408,25 @@ export default function HomePage({
                     height: "auto"
                   }}
                 />
+
+                {(assessmentSearchQuery ||
+                  assessmentStatusFilter !== "ALL" ||
+                  assessmentCircleFilter !== "ALL" ||
+                  assessmentSubclassFilter !== "ALL") && (
+                  <button
+                    type="button"
+                    className="btn-outline btn-xs"
+                    onClick={() => {
+                      setAssessmentSearchQuery("");
+                      setAssessmentStatusFilter("ALL");
+                      setAssessmentCircleFilter("ALL");
+                      setAssessmentSubclassFilter("ALL");
+                    }}
+                    style={{ fontSize: "0.75rem", padding: "0.3rem 0.5rem" }}
+                  >
+                    ✕ Reset
+                  </button>
+                )}
               </div>
             </div>
 
@@ -17840,7 +17302,7 @@ export default function HomePage({
                     📥 Download PDF
                   </button>
                   <Link
-                    href={asRoute("/assessment/queue")}
+                    href={asRoute("/assessment")}
                     className="btn-primary btn-sm"
                     style={{
                       fontSize: "0.75rem",
