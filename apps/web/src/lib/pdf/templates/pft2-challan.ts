@@ -417,11 +417,11 @@ export async function generatePft2ChallanPdf(
 
     // ══════════════════════════════════════════════════════════════════════════
     // SECTION 3 — TAXPAYER DETAILS (UNIFIED 2-COLUMN GRID, ZERO ENCROACHMENT)
-    // All labels left-aligned at innerX + 1.2; all values left-aligned at innerX + 34.0;
-    // Guaranteed 5.0mm+ whitespace after colons; proper line wrapping and vertical indentation.
+    // All labels left-aligned at innerX + 1.2; all values left-aligned at innerX + 35.0;
+    // Guaranteed 4.5mm+ whitespace after colons; proper line wrapping and vertical indentation.
     // ══════════════════════════════════════════════════════════════════════════
     const S3_LABEL_X = innerX + 1.2;
-    const S3_VAL_X = innerX + 34.0; // Guaranteed >= 5.0mm clearance after longest label (27.8mm at 6.4pt)
+    const S3_VAL_X = innerX + 35.0;
 
     const renderTaxpayerField = (
       label: string,
@@ -434,15 +434,16 @@ export async function generatePft2ChallanPdf(
         gapAfter: number;
       }
     ): void => {
-      // 1. Draw Label
+      // 1. Draw Label with strict 6.0pt bold typography
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(6.4);
+      doc.setFontSize(6.0);
       doc.setTextColor(...C.textDark);
       doc.text(label, S3_LABEL_X, curY + cfg.lineH * 0.72);
 
-      // 2. Uniform Value Column Coordinate (guarantees straight vertical alignment across all rows)
-      const safeX = S3_VAL_X;
-      const usableW = innerX + innerW - 1.5 - safeX;
+      // 2. Uniform Value Column Coordinate with guaranteed minimum clearance
+      const labelW = doc.getTextWidth(label);
+      const safeX = Math.max(S3_VAL_X, S3_LABEL_X + labelW + 3.0);
+      const usableW = Math.max(20.0, innerX + innerW - 1.5 - safeX);
 
       // 3. Draw Value with clean line wrapping and vertical indentation
       doc.setFont("helvetica", cfg.valFont ?? "normal");

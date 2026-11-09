@@ -230,8 +230,37 @@ export function formatSubclassOption(
 }
 
 export function cleanCircleName(circle?: string): string {
-  if (!circle) return "Vehari Circle I";
-  return circle
+  if (!circle) return "VHR-1";
+  const trimmed = circle.trim();
+  // Check if it's already a permanent circle code like VHR-1 or MTN-2
+  const permMatch = trimmed.match(/^([A-Z]{3}-\d+)/i);
+  if (permMatch && permMatch[1]) {
+    return permMatch[1].toUpperCase();
+  }
+  // Convert legacy names like "Circle 1" or "Vehari Circle 1" or "Vehari Circle I"
+  const legacyVehMatch = trimmed.match(
+    /(?:vehari\s+)?circle\s*[-–—:]?\s*(\d+|I{1,3}|IV|V|VI|VII|VIII|IX|X)\b/i
+  );
+  if (legacyVehMatch && legacyVehMatch[1]) {
+    const rawNum = legacyVehMatch[1].toUpperCase();
+    const romanMap: Record<string, number> = {
+      I: 1,
+      II: 2,
+      III: 3,
+      IV: 4,
+      V: 5,
+      VI: 6,
+      VII: 7,
+      VIII: 8,
+      IX: 9,
+      X: 10
+    };
+    const num = romanMap[rawNum] ?? parseInt(rawNum, 10);
+    if (!isNaN(num) && num >= 1 && num <= 10) {
+      return `VHR-${num}`;
+    }
+  }
+  return trimmed
     .replace(/^CIRCLE\s*[-:]?\s*/i, "")
     .replace(/\s*\([^)]*(City|Commercial|Rural|Industrial|Grain Market)[^)]*\)/gi, "")
     .trim();
