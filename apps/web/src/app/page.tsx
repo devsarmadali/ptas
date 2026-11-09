@@ -2344,6 +2344,7 @@ export default function HomePage({
         circle_id: matchedCircle?.id,
         circle_name: newCircleName,
         tehsil: newTehsil,
+        financial_year_id: "2026-2027",
         statutory_rule_id: rule.rule_id,
         opening_arrears: sanitizedArrears
       },

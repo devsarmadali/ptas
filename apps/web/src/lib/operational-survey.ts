@@ -151,7 +151,9 @@ export function mapOperationalUnit(value: unknown): StoredUnit {
   const rule = mapRule(row.classification);
   const unitId = asString(row.id);
   const taxpayerId = asString(row.taxpayer_id);
-  const financialYearId = asString(row.financial_year_id);
+  const rawFinancialYearId = asString(row.financial_year_id);
+  const financialYearId =
+    rawFinancialYearId === "2021-2022" || !rawFinancialYearId ? "2026-2027" : rawFinancialYearId;
   const createdAt = asString(row.created_at);
   const assessmentStatus = mapAssessmentStatus(assessmentRow.status, surveyState);
   const assessmentId = asString(assessmentRow.id, `pending-assessment:${unitId}`);
