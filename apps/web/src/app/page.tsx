@@ -5385,6 +5385,7 @@ export default function HomePage({
         provincialUin: unit.pinNumber,
         formType: "PROVISIONAL",
         isProvisional: true,
+        challanType: "PROVISIONAL",
         demandScope: (unit.openingArrears ?? 0) > 0 ? "COMBINED" : "CURRENT",
         paymentScope: "FULL",
         fullAssessedAmount: payableAmount,
@@ -6423,6 +6424,7 @@ export default function HomePage({
       issueDate: issuePft2IssueDate,
       dueDate: issuePft2DueDate,
       status: "ISSUED",
+      challanType: "REGULAR",
       officialSha256: computeContentSha256(
         `PTAS:PFT2:${noticeNumber}:${pin}:${amountPayable}:${issuePft2DueDate}`
       ),

@@ -291,8 +291,12 @@ export function normalizeDemandNumber(demand: string | number | undefined | null
   if (demand === undefined || demand === null) return "";
   let str = String(demand).trim();
   if (!str) return "";
-  if (/^[0-9]{3}-[0-9]{13,}/.test(str) || str.startsWith("POT-") || str.startsWith("Potential-")) {
+  if (/^[0-9]{3}-[0-9]{13,}/.test(str)) {
     return "";
+  }
+  const potMatch = str.match(/^(?:POT|Potential)[-_]?([0-9]+)/i);
+  if (potMatch && potMatch[1]) {
+    return potMatch[1].replace(/^0+/, "") || "0";
   }
 
   // 1. Format: V-01-87 or V-09-163 -> 187, 9163

@@ -314,6 +314,7 @@ function DocumentIssuanceContent() {
         dueDate,
         status: "ISSUED",
         isProvisional,
+        challanType: isProvisional ? "PROVISIONAL" : "REGULAR",
         potentialNumber: isProvisional ? freshUnit.demandUnit?.permanentDemandNo : undefined,
         officialSha256: computeContentSha256(
           `${noticeNumber}|${freshUnit.id}|${effectivePayableAmount}|${systemIssueDate}|${dueDate}`

@@ -735,6 +735,7 @@ export interface Pft2ChallanRecord {
   readonly bankScrollRef?: string | undefined;
   readonly paymentChannel?: string | undefined;
   readonly isProvisional?: boolean | undefined;
+  readonly challanType?: "REGULAR" | "PROVISIONAL" | undefined;
   readonly potentialNumber?: string | undefined;
   readonly district?: string | undefined;
   readonly bankBranch?: string | undefined;
