@@ -32,6 +32,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
   const isProvisionalChallan = Boolean(
     copy.isProvisional ||
     copy.pft2TypeLabel === "PROVISIONAL" ||
+    (copy.noticeNumber && copy.noticeNumber.includes("-22")) ||
     copy.assessmentInfo.demandNo?.startsWith("POT-") ||
     copy.pin?.startsWith("Potential-") ||
     copy.taxpayerInfo.provincialUin?.startsWith("Potential-")
@@ -361,11 +362,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
         {/* Row 2: Demand Number | Tax Year */}
         <div style={{ display: "flex", alignItems: "baseline" }}>
           <span style={{ width: "6.8rem", flexShrink: 0, fontWeight: 700, color: "#334155" }}>
-            {copy.assessmentInfo.demandNo?.startsWith("POT-") ||
-            copy.pft2TypeLabel === "PROVISIONAL" ||
-            copy.pin?.startsWith("Potential-")
-              ? "POTENTIAL NO."
-              : "DEMAND NO."}
+            DEMAND NO.
           </span>
           <span
             style={{
@@ -476,201 +473,176 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
         </div>
       </div>
 
-      {/* ── SECTION 3: TAXPAYER DETAILS ──────────────────────────────── */}
+      {/* ── SECTION 3: TAXPAYER DETAILS (UNIFIED 2-COLUMN GRID, ZERO ENCROACHMENT) ── */}
       <div
         style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.25rem",
-          fontSize: "0.7rem"
+          display: "grid",
+          gridTemplateColumns: "8.2rem 1fr",
+          columnGap: "0.5rem",
+          rowGap: "0.25rem",
+          fontSize: "0.7rem",
+          alignItems: "baseline"
         }}
       >
         {/* Profession/Trade Name Row (Prominent, High Priority) */}
-        <div style={{ display: "flex", alignItems: "baseline" }}>
-          <span
-            style={{
-              width: "11rem",
-              flexShrink: 0,
-              fontWeight: 700,
-              color: "#334155"
-            }}
-          >
-            PROFESSION/TRADE NAME:
-          </span>
-          <span
-            style={{
-              flex: 1,
-              minWidth: 0,
-              fontWeight: 800,
-              fontSize: "0.78rem",
-              color: "#0f172a",
-              lineHeight: 1.3,
-              wordBreak: "break-word",
-              overflowWrap: "anywhere",
-              whiteSpace: "normal"
-            }}
-          >
-            {copy.taxpayerInfo.legalName}
-          </span>
-        </div>
+        <span
+          style={{
+            fontWeight: 700,
+            color: "#334155",
+            fontSize: "0.68rem"
+          }}
+        >
+          PROFESSION/TRADE NAME:
+        </span>
+        <span
+          style={{
+            fontWeight: 800,
+            fontSize: "0.78rem",
+            color: "#0f172a",
+            lineHeight: 1.3,
+            wordBreak: "break-word",
+            overflowWrap: "anywhere",
+            whiteSpace: "normal"
+          }}
+        >
+          {copy.taxpayerInfo.legalName}
+        </span>
 
         {/* Taxpayer / Proprietor Row */}
-        <div style={{ display: "flex", alignItems: "baseline" }}>
-          <span
-            style={{
-              width: "6.8rem",
-              flexShrink: 0,
-              fontWeight: 700,
-              color: "#334155",
-              fontSize: "0.68rem",
-              lineHeight: 1.2
-            }}
-          >
-            TAXPAYER / PROPRIETOR:
-          </span>
-          <span
-            style={{
-              flex: 1,
-              minWidth: 0,
-              fontWeight: 700,
-              color: "#1e3a8a",
-              fontSize: "0.74rem",
-              lineHeight: 1.3,
-              wordBreak: "break-word",
-              overflowWrap: "anywhere",
-              whiteSpace: "normal"
-            }}
-          >
-            {copy.taxpayerInfo.tradeName || copy.taxpayerInfo.legalName}
-          </span>
-        </div>
+        <span
+          style={{
+            fontWeight: 700,
+            color: "#334155",
+            fontSize: "0.68rem"
+          }}
+        >
+          TAXPAYER / PROPRIETOR:
+        </span>
+        <span
+          style={{
+            fontWeight: 700,
+            color: "#1e3a8a",
+            fontSize: "0.74rem",
+            lineHeight: 1.3,
+            wordBreak: "break-word",
+            overflowWrap: "anywhere",
+            whiteSpace: "normal"
+          }}
+        >
+          {copy.taxpayerInfo.tradeName || copy.taxpayerInfo.legalName}
+        </span>
 
-        {/* Class Row (Full horizontal space, prefix "Class 3(ii) -" removed) */}
-        <div style={{ display: "flex", alignItems: "baseline" }}>
-          <span
-            style={{
-              width: "4.5rem",
-              flexShrink: 0,
-              fontWeight: 700,
-              color: "#334155"
-            }}
-          >
-            CLASS:
-          </span>
-          <span
-            style={{
-              flex: 1,
-              minWidth: 0,
-              color: "#1e293b",
-              fontSize: "0.72rem",
-              lineHeight: 1.3,
-              wordBreak: "break-word",
-              overflowWrap: "anywhere",
-              whiteSpace: "normal"
-            }}
-          >
-            {(() => {
-              let cleanClass = (copy.taxpayerInfo.categoryName || "").trim();
-              if (!cleanClass) {
-                cleanClass = (copy.taxpayerInfo.classification || "")
-                  .replace(/^Class\s+[0-9a-zA-Z().\s]+[-–—]\s*/i, "")
-                  .replace(/^Class\s+\d+\s*[-–—]?\s*/i, "")
-                  .trim();
-              }
-              return cleanClass || "Contractors, Suppliers and Consultants";
-            })()}
-          </span>
-        </div>
+        {/* Class Row */}
+        <span
+          style={{
+            fontWeight: 700,
+            color: "#334155",
+            fontSize: "0.68rem"
+          }}
+        >
+          CLASS:
+        </span>
+        <span
+          style={{
+            color: "#1e293b",
+            fontSize: "0.72rem",
+            lineHeight: 1.3,
+            wordBreak: "break-word",
+            overflowWrap: "anywhere",
+            whiteSpace: "normal"
+          }}
+        >
+          {(() => {
+            let cleanClass = (copy.taxpayerInfo.categoryName || "").trim();
+            if (!cleanClass) {
+              cleanClass = (copy.taxpayerInfo.classification || "")
+                .replace(/^Class\s+[0-9a-zA-Z().\s]+[-–—]\s*/i, "")
+                .replace(/^Class\s+\d+\s*[-–—]?\s*/i, "")
+                .trim();
+            }
+            return cleanClass || "Contractors, Suppliers and Consultants";
+          })()}
+        </span>
 
-        {/* Sub-Class Row (Code preserved + Tertiary Class Values with Separator) */}
-        <div style={{ display: "flex", alignItems: "baseline" }}>
-          <span
-            style={{
-              width: "5.5rem",
-              flexShrink: 0,
-              fontWeight: 700,
-              color: "#334155"
-            }}
-          >
-            SUB-CLASS:
-          </span>
-          <span
-            style={{
-              flex: 1,
-              minWidth: 0,
-              color: "#166534",
-              fontWeight: 700,
-              fontSize: "0.72rem",
-              lineHeight: 1.35,
-              wordBreak: "break-word",
-              overflowWrap: "anywhere",
-              whiteSpace: "normal"
-            }}
-          >
-            {(() => {
-              const rawSubCode = copy.taxpayerInfo.subclassificationCode?.trim();
-              const catCode =
-                copy.taxpayerInfo.categoryCode ||
-                copy.taxpayerInfo.classification?.split("-")[0]?.replace(/[^0-9]/g, "");
-              const tertiary = copy.taxpayerInfo.tertiarySlab?.trim();
-              const tertCode = copy.taxpayerInfo.statutoryTertiaryCode?.trim();
-              const resolvedCode = formatFullSubclassCode(
-                rawSubCode,
-                catCode,
-                copy.taxpayerInfo.statutoryRuleId,
-                copy.taxpayerInfo.statutoryTertiaryCode
-              );
-              const sCode = resolvedCode.replace(/^Code\s+/i, "").trim();
-              const subLabel = copy.taxpayerInfo.subclassificationLabel?.trim();
-              const baseSub =
-                sCode && sCode !== "1" && sCode !== "undefined"
-                  ? `Code ${sCode}${subLabel ? ` — ${subLabel}` : ""}`
-                  : subLabel && subLabel !== "1"
-                    ? subLabel
-                    : "General / Standard Class";
+        {/* Sub-Class Row */}
+        <span
+          style={{
+            fontWeight: 700,
+            color: "#334155",
+            fontSize: "0.68rem"
+          }}
+        >
+          SUB-CLASS:
+        </span>
+        <span
+          style={{
+            color: "#166534",
+            fontWeight: 700,
+            fontSize: "0.72rem",
+            lineHeight: 1.35,
+            wordBreak: "break-word",
+            overflowWrap: "anywhere",
+            whiteSpace: "normal"
+          }}
+        >
+          {(() => {
+            const rawSubCode = copy.taxpayerInfo.subclassificationCode?.trim();
+            const catCode =
+              copy.taxpayerInfo.categoryCode ||
+              copy.taxpayerInfo.classification?.split("-")[0]?.replace(/[^0-9]/g, "");
+            const tertiary = copy.taxpayerInfo.tertiarySlab?.trim();
+            const tertCode = copy.taxpayerInfo.statutoryTertiaryCode?.trim();
+            const resolvedCode = formatFullSubclassCode(
+              rawSubCode,
+              catCode,
+              copy.taxpayerInfo.statutoryRuleId,
+              copy.taxpayerInfo.statutoryTertiaryCode
+            );
+            const sCode = resolvedCode.replace(/^Code\s+/i, "").trim();
+            const subLabel = copy.taxpayerInfo.subclassificationLabel?.trim();
+            const baseSub =
+              sCode && sCode !== "1" && sCode !== "undefined"
+                ? `Code ${sCode}${subLabel ? ` — ${subLabel}` : ""}`
+                : subLabel && subLabel !== "1"
+                  ? subLabel
+                  : "General / Standard Class";
 
-              let tertDisplay = "";
-              if (tertiary && tertiary !== baseSub && tertiary !== subLabel) {
-                tertDisplay =
-                  tertCode && !tertiary.includes(tertCode) ? `${tertCode} — ${tertiary}` : tertiary;
-              } else if (tertCode && tertCode !== sCode) {
-                tertDisplay = tertCode;
-              }
+            let tertDisplay = "";
+            if (tertiary && tertiary !== baseSub && tertiary !== subLabel) {
+              tertDisplay =
+                tertCode && !tertiary.includes(tertCode) ? `${tertCode} — ${tertiary}` : tertiary;
+            } else if (tertCode && tertCode !== sCode) {
+              tertDisplay = tertCode;
+            }
 
-              return tertDisplay
-                ? `${baseSub}  |  ${tertDisplay.startsWith("Tertiary:") ? tertDisplay : `Tertiary: ${tertDisplay}`}`
-                : baseSub;
-            })()}
-          </span>
-        </div>
+            return tertDisplay
+              ? `${baseSub}  |  ${tertDisplay.startsWith("Tertiary:") ? tertDisplay : `Tertiary: ${tertDisplay}`}`
+              : baseSub;
+          })()}
+        </span>
 
         {/* Address Row */}
-        <div style={{ display: "flex", alignItems: "baseline" }}>
-          <span
-            style={{
-              width: "6.8rem",
-              flexShrink: 0,
-              fontWeight: 700,
-              color: "#334155"
-            }}
-          >
-            ADDRESS:
-          </span>
-          <span
-            style={{
-              flex: 1,
-              minWidth: 0,
-              color: "#475569",
-              fontSize: "0.7rem",
-              lineHeight: 1.3,
-              wordBreak: "break-word",
-              overflowWrap: "anywhere",
-              whiteSpace: "normal"
-            }}
-          >
-            {copy.taxpayerInfo.address}
-          </span>
-        </div>
+        <span
+          style={{
+            fontWeight: 700,
+            color: "#334155",
+            fontSize: "0.68rem"
+          }}
+        >
+          ADDRESS:
+        </span>
+        <span
+          style={{
+            color: "#475569",
+            fontSize: "0.7rem",
+            lineHeight: 1.3,
+            wordBreak: "break-word",
+            overflowWrap: "anywhere",
+            whiteSpace: "normal"
+          }}
+        >
+          {copy.taxpayerInfo.address}
+        </span>
       </div>
 
       {/* ── SECTION 4: DETAIL OF TAX PAYABLE TABLE ─────────────────────── */}

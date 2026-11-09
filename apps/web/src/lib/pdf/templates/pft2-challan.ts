@@ -188,39 +188,48 @@ export async function generatePft2ChallanPdf(
     doc.setTextColor(...C.textDark);
     doc.text("PUNJAB PROFESSIONS & TRADES TAX", deptCX, curY + 15.6, { align: "center" });
 
-    // 5. PFT2 • PAYMENT CHALLAN
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.6);
-    doc.setTextColor(...C.primary);
-    doc.text("PFT2 \u2022 PAYMENT CHALLAN", deptCX, curY + 19.4, { align: "center" });
-
+    // 5. PFT2 • PAYMENT CHALLAN (Unified & Standardized with clear provisional badge)
     const isProvisional = Boolean(
       copy.isProvisional ||
       challan.isProvisional ||
-      copy.pft2TypeLabel === "PROVISIONAL" ||
-      challan.pft2TypeLabel === "PROVISIONAL" ||
+      copy.pft2TypeLabel?.includes("PROVISIONAL") ||
+      challan.pft2TypeLabel?.includes("PROVISIONAL") ||
+      (copy.noticeNumber && copy.noticeNumber.includes("-22")) ||
+      (challan.noticeNumber && challan.noticeNumber.includes("-22")) ||
       copy.assessmentInfo?.demandNo?.startsWith("POT-") ||
       challan.copies?.[0]?.assessmentInfo?.demandNo?.startsWith("POT-") ||
       copy.pin?.startsWith("Potential-") ||
       challan.pin?.startsWith("Potential-") ||
       copy.taxpayerInfo?.provincialUin?.startsWith("Potential-")
     );
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(isProvisional ? 8.2 : 8.6);
+    doc.setTextColor(...(isProvisional ? C.amberDark : C.primary));
+    doc.text(
+      isProvisional ? "PFT2 \u2022 PROVISIONAL PAYMENT CHALLAN" : "PFT2 \u2022 PAYMENT CHALLAN",
+      deptCX,
+      curY + 19.4,
+      { align: "center" }
+    );
+
     const rawScope = cleanChallanScope(copy.pft2TypeLabel || copy.demandScope || "CURRENT");
-    const cleanScope = rawScope.includes("PROVISIONAL")
-      ? rawScope
-      : isProvisional
-        ? `PROVISIONAL \u2014 ${rawScope}`
-        : rawScope;
-    const scopeColor = cleanScope.includes("ARREAR")
+    const cleanScope = rawScope.replace(/PROVISIONAL\s*[-–—]?\s*/gi, "").trim() || "CURRENT";
+    const scopeDisplay = isProvisional
+      ? `Rule 9 \u2022 [PROVISIONAL \u2014 ${cleanScope}]`
+      : `Rule 9 \u2022 [${cleanScope}]`;
+    const scopeColor = isProvisional
       ? C.amber
-      : cleanScope.includes("COMBINED")
-        ? C.blueDeep
-        : C.primaryLight;
+      : cleanScope.includes("ARREAR")
+        ? C.amber
+        : cleanScope.includes("COMBINED")
+          ? C.blueDeep
+          : C.primaryLight;
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.2);
     doc.setTextColor(...scopeColor);
-    doc.text(`Rule 9 \u2022 [${cleanScope}]`, deptCX, curY + 23.0, { align: "center" });
+    doc.text(scopeDisplay, deptCX, curY + 23.0, { align: "center" });
 
     // 7. Head of Account (Prominent 6.9pt bold with multi-line wrap support)
     doc.setFont("helvetica", "bold");
@@ -305,11 +314,7 @@ export async function generatePft2ChallanPdf(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(LABEL_FS);
     doc.setTextColor(...C.textDark);
-    const isPotential =
-      copy.assessmentInfo.demandNo?.startsWith("POT-") ||
-      copy.pft2TypeLabel === "PROVISIONAL" ||
-      copy.pin?.startsWith("Potential-");
-    doc.text(isPotential ? "POTENTIAL NO." : "DEMAND NO.", metaL, mY + META_ROW_H * 0.72);
+    doc.text("DEMAND NO.", metaL, mY + META_ROW_H * 0.72);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.4);
     doc.setTextColor(...C.primaryLight);
@@ -410,57 +415,69 @@ export async function generatePft2ChallanPdf(
     curY += metaBoxH + 3.4;
 
     // ══════════════════════════════════════════════════════════════════════════
-    // SECTION 3 — TAXPAYER DETAILS (PROMINENT, LARGE TYPOGRAPHY, ZERO CLIPPING)
+    // SECTION 3 — TAXPAYER DETAILS (UNIFIED 2-COLUMN GRID, ZERO ENCROACHMENT)
+    // All labels left-aligned at innerX + 1.2; all values left-aligned at innerX + 31.0;
+    // Guaranteed 2.5mm+ whitespace after colons; proper line wrapping and vertical indentation.
     // ══════════════════════════════════════════════════════════════════════════
-    const labelColW = 32.0;
-    const valColX = innerX + labelColW + 1.5;
-    const valColW = innerW - (labelColW + 2.5);
+    const S3_LABEL_X = innerX + 1.2;
+    const S3_VAL_X = innerX + 31.0; // Guaranteed >= 2.6mm clearance after longest label (27.2mm at 6.8pt)
 
-    // Row 1: PROFESSION/TRADE NAME (Large, Prominent 10pt)
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.6);
-    doc.setTextColor(...C.textDark);
-    doc.text("PROFESSION/TRADE NAME:", innerX + 1.0, curY + 3.4);
+    const renderTaxpayerField = (
+      label: string,
+      valText: string,
+      cfg: {
+        valFont?: "bold" | "normal";
+        valSize: number;
+        valColor: [number, number, number];
+        lineH: number;
+        gapAfter: number;
+      }
+    ): void => {
+      // 1. Draw Label
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6.8);
+      doc.setTextColor(...C.textDark);
+      doc.text(label, S3_LABEL_X, curY + cfg.lineH * 0.72);
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10.0);
-    doc.setTextColor(...C.textDark);
-    const legalNameLines = doc.splitTextToSize(copy.taxpayerInfo.legalName, valColW);
-    doc.text(legalNameLines[0] ?? "", valColX, curY + 3.4);
-    for (let lIdx = 1; lIdx < legalNameLines.length; lIdx++) {
-      curY += 4.0;
-      doc.text(legalNameLines[lIdx] ?? "", valColX, curY + 3.4);
-    }
-    curY += 5.0;
+      // 2. Safe Value Coordinate (enforces minimum 2.5mm clearance after colon)
+      const labelActualW = doc.getTextWidth(label);
+      const safeX = Math.max(S3_VAL_X, S3_LABEL_X + labelActualW + 2.5);
+      const usableW = innerX + innerW - 1.5 - safeX;
 
-    // Row 2: TAXPAYER / PROPRIETOR (Bold 8.8pt)
-    const tradeVal = copy.taxpayerInfo.tradeName || copy.taxpayerInfo.legalName;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.0);
-    doc.setTextColor(...C.textDark);
-    doc.text("TAXPAYER / PROPRIETOR:", innerX + 1.0, curY + 3.2);
+      // 3. Draw Value with clean line wrapping and vertical indentation
+      doc.setFont("helvetica", cfg.valFont ?? "normal");
+      doc.setFontSize(cfg.valSize);
+      doc.setTextColor(...cfg.valColor);
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.8);
-    doc.setTextColor(...C.blueDeep);
-    const tradeLines = doc.splitTextToSize(tradeVal, valColW);
-    doc.text(tradeLines[0] ?? "", valColX, curY + 3.2);
-    for (let tIdx = 1; tIdx < tradeLines.length; tIdx++) {
-      curY += 3.8;
-      doc.text(tradeLines[tIdx] ?? "", valColX, curY + 3.2);
-    }
-    curY += 4.8;
+      const lines = doc.splitTextToSize(valText, usableW);
+      doc.text(lines[0] ?? "", safeX, curY + cfg.lineH * 0.72);
+      for (let i = 1; i < lines.length; i++) {
+        curY += cfg.lineH;
+        doc.text(lines[i] ?? "", safeX, curY + cfg.lineH * 0.72);
+      }
+      curY += cfg.lineH + cfg.gapAfter;
+    };
 
-    // Row 3: CLASS (Full Horizontal Width, prefix "Class 3(ii) -" removed)
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.4);
-    doc.setTextColor(...C.textDark);
-    doc.text("CLASS:", innerX + 1.0, curY + 3.2);
+    // Row 1: PROFESSION/TRADE NAME (Large, Prominent 9.2pt bold)
+    renderTaxpayerField("PROFESSION/TRADE NAME:", copy.taxpayerInfo.legalName || "—", {
+      valFont: "bold",
+      valSize: 9.2,
+      valColor: C.textDark,
+      lineH: 3.8,
+      gapAfter: 1.4
+    });
 
-    const classLabelW = 12.5;
-    const classValX = innerX + classLabelW + 1.0;
-    const classValW = innerW - (classLabelW + 2.0); // 73.9mm full horizontal space!
+    // Row 2: TAXPAYER / PROPRIETOR (Bold 8.2pt in deep blue)
+    const tradeVal = copy.taxpayerInfo.tradeName || copy.taxpayerInfo.legalName || "—";
+    renderTaxpayerField("TAXPAYER / PROPRIETOR:", tradeVal, {
+      valFont: "bold",
+      valSize: 8.2,
+      valColor: C.blueDeep,
+      lineH: 3.5,
+      gapAfter: 1.4
+    });
 
+    // Row 3: CLASS (Clean statutory category description)
     let cleanClass = (copy.taxpayerInfo.categoryName || "").trim();
     if (!cleanClass) {
       cleanClass = (copy.taxpayerInfo.classification || "")
@@ -471,19 +488,15 @@ export async function generatePft2ChallanPdf(
     if (!cleanClass) {
       cleanClass = "Contractors, Suppliers and Consultants";
     }
+    renderTaxpayerField("CLASS:", cleanClass, {
+      valFont: "normal",
+      valSize: 7.4,
+      valColor: C.textDark,
+      lineH: 3.3,
+      gapAfter: 1.4
+    });
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.2);
-    doc.setTextColor(...C.textDark);
-    const classLines = doc.splitTextToSize(cleanClass, classValW);
-    doc.text(classLines[0] ?? cleanClass, classValX, curY + 3.2);
-    for (let cIdx = 1; cIdx < classLines.length; cIdx++) {
-      curY += 3.6;
-      doc.text(classLines[cIdx] ?? "", classValX, curY + 3.2);
-    }
-    curY += 4.6;
-
-    // Row 3b: SUB-CLASS (Sub-Classification Code & Description + Tertiary Class Values with Separator)
+    // Row 4: SUB-CLASS (Resolved statutory subclass code & description)
     const rawSubCode = copy.taxpayerInfo.subclassificationCode;
     const catCode =
       copy.taxpayerInfo.categoryCode ||
@@ -518,46 +531,22 @@ export async function generatePft2ChallanPdf(
       ? `${baseSub}  |  ${tertDisplay.startsWith("Tertiary:") ? tertDisplay : `Tertiary: ${tertDisplay}`}`
       : baseSub;
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.4);
-    doc.setTextColor(...C.textDark);
-    doc.text("SUB-CLASS:", innerX + 1.0, curY + 3.2);
+    renderTaxpayerField("SUB-CLASS:", subClassText, {
+      valFont: "bold",
+      valSize: 7.4,
+      valColor: C.primaryLight,
+      lineH: 3.3,
+      gapAfter: 1.4
+    });
 
-    const subLabelW = 18.0;
-    const subValX = innerX + subLabelW + 1.0;
-    const subValW = innerW - (subLabelW + 2.0); // 68.4mm!
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.4);
-    doc.setTextColor(...C.primaryLight);
-    const subLines = doc.splitTextToSize(subClassText, subValW);
-    doc.text(subLines[0] ?? subClassText, subValX, curY + 3.2);
-    for (let sIdx = 1; sIdx < subLines.length; sIdx++) {
-      curY += 3.4;
-      doc.text(subLines[sIdx] ?? "", subValX, curY + 3.2);
-    }
-    curY += 4.8;
-
-    // Row 4: ADDRESS (Readable 8.0pt)
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.4);
-    doc.setTextColor(...C.textDark);
-    doc.text("ADDRESS:", innerX + 1.0, curY + 3.2);
-
-    const addrLabelW = 16.0;
-    const addrValX = innerX + addrLabelW + 1.0;
-    const addrValW = innerW - (addrLabelW + 2.0);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.0);
-    doc.setTextColor(...C.textMid);
-    const addrLines = doc.splitTextToSize(copy.taxpayerInfo.address, addrValW);
-    doc.text(addrLines[0] ?? "", addrValX, curY + 3.2);
-    for (let aIdx = 1; aIdx < addrLines.length; aIdx++) {
-      curY += 3.8;
-      doc.text(addrLines[aIdx] ?? "", addrValX, curY + 3.2);
-    }
-    curY += 5.6;
+    // Row 5: ADDRESS (Readable, wrapped commercial address)
+    renderTaxpayerField("ADDRESS:", copy.taxpayerInfo.address || "Vehari", {
+      valFont: "normal",
+      valSize: 7.4,
+      valColor: C.textMid,
+      lineH: 3.3,
+      gapAfter: 2.2
+    });
 
     // ══════════════════════════════════════════════════════════════════════════
     // SECTION 4 — DETAIL OF TAX PAYABLE TABLE (LARGE FONTS, ACCOUNTING GRADE)
@@ -668,9 +657,10 @@ export async function generatePft2ChallanPdf(
     // SECTION 5 — FOR BANK'S USE ONLY (COMPACT, PRACTICAL STATUTORY COUNTERFOIL)
     // ══════════════════════════════════════════════════════════════════════════
     const FOOTER_H = 8.5;
-    const BANK_H = 21.0;
+    const BANK_H = 20.0;
     const footerY = innerBottom - FOOTER_H;
-    const bankY = footerY - BANK_H - 1.2;
+    const targetBankY = footerY - BANK_H - 1.2;
+    const bankY = Math.max(curY + 2.0, targetBankY);
 
     doc.setFillColor(...C.bgBank);
     doc.setDrawColor(...C.borderMed);
