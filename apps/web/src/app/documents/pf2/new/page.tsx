@@ -273,7 +273,6 @@ function DocumentIssuanceContent() {
         freshUnit.demandUnit?.permanentDemandNo?.startsWith("POT-");
 
       const noticeNumber = generatePft2NoticeNumber({
-        demandNumber: freshUnit.demandUnit?.permanentDemandNo || "0001",
         issueDate: systemIssueDate,
         formTypeCode: formType,
         demandScope,
@@ -348,12 +347,15 @@ function DocumentIssuanceContent() {
   const activeNoticeNumber =
     issuedChallan?.noticeNumber ??
     generatePft2NoticeNumber({
-      demandNumber: unit.demandUnit.permanentDemandNo,
       issueDate: systemIssueDate,
       formTypeCode: formType,
       demandScope,
       paymentScope,
       amount: effectivePayableAmount,
+      isProvisional: Boolean(
+        unit.pinNumber?.startsWith("Potential-") ||
+        unit.demandUnit?.permanentDemandNo?.startsWith("POT-")
+      ),
       ...(jurisdictionCodes ?? {})
     });
 

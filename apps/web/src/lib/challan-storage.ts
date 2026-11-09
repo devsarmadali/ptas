@@ -277,7 +277,8 @@ export function ensureChallansAndReceiptsForUnits(units?: readonly StoredUnit[])
           formTypeCode: c.formType,
           demandScope: c.demandScope,
           paymentScope: c.paymentScope,
-          amount: c.amountPayable
+          amount: c.amountPayable,
+          monthlySequence: mergedChallans.indexOf(c) + 1
         });
       const pin = c.pin ?? generateDocumentPin(noticeNo);
 

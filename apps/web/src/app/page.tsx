@@ -80,6 +80,7 @@ import {
   generateShowCausePenaltyNotice,
   generateTaxClearanceCertificate,
   generatePft2NoticeNumber,
+  allocateNextMonthlyNoticeSequence,
   formatStandardDocNumber,
   numberToWordsPkr,
   computeUnitBalance,
@@ -5354,14 +5355,18 @@ export default function HomePage({
     const dueDate = due.toISOString().split("T")[0]!;
     try {
       const jurisdictionCodes = await loadChallanJurisdictionCodes(unit.circleId);
+      const nextSeq = allocateNextMonthlyNoticeSequence(
+        jurisdictionCodes.districtCode,
+        issueDate ? issueDate.replace(/-/g, "").slice(2, 6) : undefined
+      );
       const noticeNumber = generatePft2NoticeNumber({
-        demandNumber: unit.potentialNumber,
         issueDate,
         amount: payableAmount,
         formTypeCode: "01",
         demandScope: (unit.openingArrears ?? 0) > 0 ? "COMBINED" : "CURRENT",
         paymentScope: "FULL",
         isProvisional: true,
+        monthlySequence: Math.max(nextSeq, pft2Challans.length + 1),
         ...jurisdictionCodes
       });
 
@@ -6387,14 +6392,18 @@ export default function HomePage({
       );
       return;
     }
+    const nextSeq = allocateNextMonthlyNoticeSequence(
+      jurisdictionCodes.districtCode,
+      issuePft2IssueDate ? issuePft2IssueDate.replace(/-/g, "").slice(2, 6) : undefined
+    );
     const noticeNumber = generatePft2NoticeNumber({
-      demandNumber: targetUnit.demandUnit.permanentDemandNo,
       issueDate: issuePft2IssueDate,
       formTypeCode: issuePft2FormType,
       demandScope: issuePft2DemandScope,
       paymentScope: issuePft2PaymentScope,
       amount: amountPayable,
       isProvisional: false,
+      monthlySequence: Math.max(nextSeq, pft2Challans.length + 1),
       ...jurisdictionCodes
     });
 
@@ -13232,7 +13241,7 @@ export default function HomePage({
                       );
                     }
 
-                    return filtered.map((challan) => {
+                    return filtered.map((challan, idx) => {
                       const isIssued = challan.status === "ISSUED";
                       const isReceived = challan.status === "RECEIVED";
                       const isCancelled = challan.status === "CANCELLED";
@@ -13260,12 +13269,14 @@ export default function HomePage({
                             >
                               {challan.noticeNumber ??
                                 generatePft2NoticeNumber({
-                                  demandNumber: challan.demandNumber,
                                   issueDate: challan.issueDate,
                                   formTypeCode: challan.formType,
                                   demandScope: challan.demandScope,
                                   paymentScope: challan.paymentScope,
-                                  amount: challan.amountPayable
+                                  amount: challan.amountPayable,
+                                  isProvisional:
+                                    challan.challanType === "PROVISIONAL" || challan.isProvisional,
+                                  monthlySequence: idx + 1
                                 })}
                             </span>
                             <span
@@ -25902,12 +25913,13 @@ export default function HomePage({
                 const liveNoticeNumber = selectedUnit
                   ? issuePft2JurisdictionCodes
                     ? generatePft2NoticeNumber({
-                        demandNumber: selectedUnit.demandUnit.permanentDemandNo,
                         issueDate: issuePft2IssueDate,
                         formTypeCode: issuePft2FormType,
                         demandScope: issuePft2DemandScope,
                         paymentScope: issuePft2PaymentScope,
                         amount: effectiveAmount,
+                        isProvisional: false,
+                        monthlySequence: pft2Challans.length + 1,
                         ...issuePft2JurisdictionCodes
                       })
                     : "District/Circle codes loading…"

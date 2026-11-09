@@ -1701,7 +1701,8 @@ export function createInitialPft2Challans(units: StoredUnit[]): Pft2ChallanRecor
       formTypeCode: "01",
       demandScope: "01",
       paymentScope: "01",
-      amount: amountPayable
+      amount: amountPayable,
+      monthlySequence: i + 1
     });
     const pin = generateDocumentPin(noticeNumber);
 

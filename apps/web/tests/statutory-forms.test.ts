@@ -181,40 +181,38 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
     expect(order.pin).toMatch(/^\d{6}$/);
   });
 
-  it("generates statutory PFT-2 Notice Number containing numeric digit codes instead of text", () => {
+  it("generates statutory PFT-2 Notice Number in canonical format without using demand numbers", () => {
     const noticeNo1 = generatePft2NoticeNumber({
-      demandNumber: "0001",
-      issueDate: "2026-09-20",
-      formTypeCode: "01",
-      demandScope: "01",
-      paymentScope: "01",
-      amount: 5000
-    });
-    // Draft payload prefix is replaced server-side by registered district/circle codes.
-    expect(noticeNo1).toBe("PFT2-0001-260920010101-5000");
-
-    const noticeNo2 = generatePft2NoticeNumber({
-      demandNumber: "0002",
-      issueDate: "2026-09-20",
-      formTypeCode: "NOTICE_CUM_CHALLAN",
-      demandScope: "COMBINED",
-      paymentScope: "PARTIAL",
-      amount: 2500
-    });
-    // Converts text input to 02 (NCUM), 03 (COMB), 02 (PARTIAL).
-    expect(noticeNo2).toBe("PFT2-0002-260920020302-2500");
-
-    const canonicalNoticeNo = generatePft2NoticeNumber({
-      demandNumber: "1184",
-      issueDate: "2026-10-03",
-      districtCode: "VHR",
-      circleCode: "01",
-      formTypeCode: "STANDARD",
+      demandNumber: "412", // Assessee permanent demand number 412
+      issueDate: "2026-11-09",
+      districtCode: "237",
       demandScope: "CURRENT",
-      paymentScope: "FULL",
-      amount: 2000
+      amount: 5000,
+      monthlySequence: 1
     });
-    expect(canonicalNoticeNo).toBe("VHR-01-1184-261003010101-2000");
+    // District 237, PFT2 (2), Regular (1), Current (1), Nov 2026 (2611), Serial (0001), Status Issued (-01)
+    expect(noticeNo1).toBe("237-21126110001-01");
+
+    const noticeNo42 = generatePft2NoticeNumber({
+      demandNumber: "412", // Same demand number 412 must NOT be in the notice serial
+      issueDate: "2026-11-09",
+      districtCode: "237",
+      demandScope: "CURRENT",
+      amount: 10000,
+      monthlySequence: 42
+    });
+    expect(noticeNo42).toBe("237-21126110042-01");
+
+    const provisionalCombined = generatePft2NoticeNumber({
+      issueDate: "2026-11-09",
+      districtCode: "237",
+      demandScope: "COMBINED",
+      isProvisional: true,
+      amount: 8000,
+      monthlySequence: 5
+    });
+    // Provisional (2), Combined (3), Serial (0005)
+    expect(provisionalCombined).toBe("237-22326110005-01");
   });
 
   it("generates Form P.F.T-2 with custom options, partial payment, and document security PIN", () => {
@@ -255,7 +253,7 @@ describe("Statutory Forms Generation (Form P.F.T-1, Form P.F.T-2, Form P.F.T-3)"
 
     const pft2 = generateFormPFT2(alMadinaUnit);
     expect(pft2.pin).toMatch(/^\d{6}$/);
-    expect(pft2.noticeNumber).toMatch(/^PFT2-0003-/);
+    expect(pft2.noticeNumber).toMatch(/^237-211/);
 
     const scn = generateShowCausePenaltyNotice(alMadinaUnit, 30);
     expect(scn.pin).toMatch(/^\d{6}$/);

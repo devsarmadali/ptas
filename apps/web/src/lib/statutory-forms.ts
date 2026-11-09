@@ -250,7 +250,7 @@ export function getScheduleEntryLabel(rule: StatutoryRuleDefinition): string {
 }
 
 export interface Pft2NoticeNumberOptions {
-  demandNumber: string;
+  demandNumber?: string | undefined;
   issueDate: string; // YYYY-MM-DD
   districtCode?: string | undefined;
   circleCode?: string | undefined;
@@ -390,6 +390,53 @@ export function formatDemandNumber(demand: string | number | undefined | null): 
   return normalized;
 }
 
+const inMemoryNoticeSequences: Record<string, number> = {};
+
+/**
+ * Retrieves the current sequential notice counter for a given district and calendar month.
+ * Independent of assessee demand numbers.
+ */
+export function getMonthlyNoticeSequence(districtCode?: string, yearMonth?: string): number {
+  const dist = getDistrictPbsCode(districtCode);
+  const ym = yearMonth || "2611";
+  const key = `ptas_notice_seq_${dist}_${ym}`;
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      const stored = window.localStorage.getItem(key);
+      if (stored) {
+        const val = parseInt(stored, 10);
+        if (!isNaN(val) && val > 0) return val;
+      }
+    } catch {
+      // ignore storage failure
+    }
+  }
+  return inMemoryNoticeSequences[key] || 1;
+}
+
+/**
+ * Atomically increments and returns the next sequential notice counter for a district and month.
+ */
+export function allocateNextMonthlyNoticeSequence(
+  districtCode?: string,
+  yearMonth?: string
+): number {
+  const dist = getDistrictPbsCode(districtCode);
+  const ym = yearMonth || "2611";
+  const key = `ptas_notice_seq_${dist}_${ym}`;
+  const current = getMonthlyNoticeSequence(dist, ym);
+  const next = current + 1;
+  inMemoryNoticeSequences[key] = next;
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      window.localStorage.setItem(key, String(next));
+    } catch {
+      // ignore storage failure
+    }
+  }
+  return current;
+}
+
 export function generatePft2NoticeNumber(params: Pft2NoticeNumberOptions): string {
   const distPbs = getDistrictPbsCode(params.districtCode);
 
@@ -428,8 +475,9 @@ export function generatePft2NoticeNumber(params: Pft2NoticeNumberOptions): strin
   const yearCode = parts.length >= 1 && parts[0] ? parts[0].slice(-2) : "26";
   const monthCode = parts.length >= 2 && parts[1] ? parts[1].padStart(2, "0") : "11";
 
-  // 4-digit sequence: from monthlySequence if provided, or normalized demand/potential sequence
-  let serialCode = "0001";
+  // 4-digit sequence: strictly from monthlySequence if provided, or sequence helper
+  // NEVER derive serialCode from taxpayer demandNumber (e.g. 412 is assessee's ledger demand, not notice count)
+  let serialCode: string;
   if (params.monthlySequence !== undefined && params.monthlySequence !== null) {
     const seqNum =
       typeof params.monthlySequence === "number"
@@ -437,9 +485,8 @@ export function generatePft2NoticeNumber(params: Pft2NoticeNumberOptions): strin
         : parseInt(String(params.monthlySequence), 10);
     serialCode = isNaN(seqNum) ? "0001" : String(seqNum).padStart(4, "0");
   } else {
-    const norm = normalizeDemandNumber(params.demandNumber);
-    const parsed = parseInt(norm.replace(/[^0-9]/g, ""), 10);
-    serialCode = !isNaN(parsed) && parsed > 0 ? String(parsed).padStart(4, "0") : "0001";
+    const seqNum = getMonthlyNoticeSequence(distPbs, `${yearCode}${monthCode}`);
+    serialCode = String(seqNum).padStart(4, "0");
   }
 
   // Status version: '01' (Issued), '02' (Delivered), '03' (Paid), '04' (Cancelled)
