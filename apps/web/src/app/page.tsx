@@ -5361,6 +5361,7 @@ export default function HomePage({
         formTypeCode: "01",
         demandScope: (unit.openingArrears ?? 0) > 0 ? "COMBINED" : "CURRENT",
         paymentScope: "FULL",
+        isProvisional: true,
         ...jurisdictionCodes
       });
 
@@ -6393,6 +6394,7 @@ export default function HomePage({
       demandScope: issuePft2DemandScope,
       paymentScope: issuePft2PaymentScope,
       amount: amountPayable,
+      isProvisional: false,
       ...jurisdictionCodes
     });
 

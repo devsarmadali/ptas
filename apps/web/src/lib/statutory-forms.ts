@@ -258,11 +258,50 @@ export interface Pft2NoticeNumberOptions {
   demandScope?: "01" | "02" | "03" | "CURRENT" | "ARREAR" | "COMBINED" | string | undefined;
   paymentScope?: "01" | "02" | "FULL" | "PARTIAL" | string | undefined;
   amount: number;
+  isProvisional?: boolean | undefined;
+  monthlySequence?: number | string | undefined;
+  statusVersion?: "01" | "02" | "03" | "04" | string | undefined;
+}
+
+export const DISTRICT_PBS_MAP: Record<string, string> = {
+  VHR: "237",
+  VEHARI: "237",
+  MLT: "223",
+  MULTAN: "223",
+  LHR: "218",
+  LAHORE: "218",
+  RWP: "231",
+  RAWALPINDI: "231",
+  FSD: "208",
+  FAISALABAD: "208",
+  GWA: "209",
+  GUJRANWALA: "209",
+  SWL: "232",
+  SAHIWAL: "232",
+  SGD: "233",
+  SARGODHA: "233",
+  DGK: "207",
+  BAHAWALPUR: "203",
+  BWP: "203"
+};
+
+export function getDistrictPbsCode(nameOrAbbr?: string): string {
+  if (!nameOrAbbr) return "237";
+  const clean = nameOrAbbr.trim().toUpperCase();
+  if (/^\d{3}$/.test(clean)) return clean;
+  return DISTRICT_PBS_MAP[clean] || "237";
 }
 
 /**
  * Official Punjab Form P.F.T-2 Notice / Challan Number Generator
- * Follows exact statutory pattern with numeric digit codes (NO text codes):
+ * Implements refined standardized format: [DISTRICT]-[2][REG][SCOPE][YYMM][SERIAL4]-[VV]
+ * Example: 237-21126110042-01 (Vehari, PFT-2 Regular Current, Nov 2026, Serial 42, Status 01: Issued)
+ * Lifecycle Suffix:
+ *   -01 = Issued
+ *   -02 = Delivered
+ *   -03 = Paid
+ *   -04 = Cancelled
+ */
  * District - Circle - Demand No. - Issued month code - issue date code - form type code - current/arrear code - combined/partial code - amount
  *
  * Digit Codes:
@@ -370,92 +409,62 @@ export function formatDemandNumber(demand: string | number | undefined | null): 
 }
 
 export function generatePft2NoticeNumber(params: Pft2NoticeNumberOptions): string {
-  const demandClean = formatDemandNumber(params.demandNumber);
+  const distPbs = getDistrictPbsCode(params.districtCode);
 
-  // Extract 2-digit year, month, and date codes from issueDate (YYYY-MM-DD)
-  const parts = params.issueDate ? params.issueDate.split("-") : [];
-  const yearCode = parts.length >= 1 && parts[0] ? parts[0].slice(-2) : "26";
-  const monthCode = parts.length >= 2 && parts[1] ? parts[1].padStart(2, "0") : "10";
-  const dateCode = parts.length >= 3 && parts[2] ? parts[2].padStart(2, "0") : "03";
+  // Form type code: '2' for Form PFT-2
+  const formCode = "2";
 
-  // Form type digit code (01: Standard, 02: Notice-cum-Challan, 03: Arrears, 04: Revised)
-  const rawForm = (params.formTypeCode || "01").toUpperCase().trim();
-  let formTypeDigit = "01";
-  if (rawForm === "01" || rawForm === "1" || rawForm === "STD" || rawForm === "STANDARD") {
-    formTypeDigit = "01";
-  } else if (
-    rawForm === "02" ||
-    rawForm === "2" ||
-    rawForm === "NCUM" ||
-    rawForm === "NOTICE_CUM_CHALLAN"
-  ) {
-    formTypeDigit = "02";
-  } else if (
-    rawForm === "03" ||
-    rawForm === "3" ||
-    rawForm === "ARR" ||
-    rawForm === "ARREARS_DEMAND"
-  ) {
-    formTypeDigit = "03";
-  } else if (
-    rawForm === "04" ||
-    rawForm === "4" ||
-    rawForm === "REV" ||
-    rawForm === "REVISED_ASSESSMENT"
-  ) {
-    formTypeDigit = "04";
-  } else if (/^\d+$/.test(rawForm)) {
-    formTypeDigit = rawForm.padStart(2, "0");
-  }
+  // Register code: '1' for Regular, '2' for Provisional
+  const isProv =
+    params.isProvisional === true ||
+    (typeof params.demandNumber === "string" &&
+      (params.demandNumber.startsWith("POT-") || params.demandNumber.startsWith("P")));
+  const regCode = isProv ? "2" : "1";
 
-  // Current / Arrear digit code (01: Current, 02: Arrear, 03: Combined)
+  // Demand scope code: '1' Current, '2' Arrears, '3' Combined
   const rawScope = (params.demandScope || "01").toUpperCase().trim();
-  let scopeDigit = "01";
-  if (rawScope === "01" || rawScope === "1" || rawScope === "CUR" || rawScope === "CURRENT") {
-    scopeDigit = "01";
-  } else if (
+  let scopeCode = "1";
+  if (
     rawScope === "02" ||
     rawScope === "2" ||
     rawScope === "ARR" ||
     rawScope === "ARREAR" ||
     rawScope === "ARREARS"
   ) {
-    scopeDigit = "02";
+    scopeCode = "2";
   } else if (
     rawScope === "03" ||
     rawScope === "3" ||
     rawScope === "COMB" ||
     rawScope === "COMBINED"
   ) {
-    scopeDigit = "03";
-  } else if (/^\d+$/.test(rawScope)) {
-    scopeDigit = rawScope.padStart(2, "0");
+    scopeCode = "3";
   }
 
-  const amountInt = Math.round(params.amount || 0);
+  // Extract YYMM from issueDate (YYYY-MM-DD)
+  const parts = params.issueDate ? params.issueDate.split("-") : [];
+  const yearCode = parts.length >= 1 && parts[0] ? parts[0].slice(-2) : "26";
+  const monthCode = parts.length >= 2 && parts[1] ? parts[1].padStart(2, "0") : "11";
 
-  // Full / partial payment digit code (01: Full, 02: Partial)
-  const rawPaymentScope = (params.paymentScope || "01").toUpperCase().trim();
-  let paymentScopeDigit = "01";
-  if (
-    rawPaymentScope === "02" ||
-    rawPaymentScope === "2" ||
-    rawPaymentScope === "PART" ||
-    rawPaymentScope === "PARTIAL"
-  ) {
-    paymentScopeDigit = "02";
-  } else if (/^\d+$/.test(rawPaymentScope)) {
-    paymentScopeDigit = rawPaymentScope.padStart(2, "0");
+  // 4-digit sequence: from monthlySequence if provided, or normalized demand/potential sequence
+  let serialCode = "0001";
+  if (params.monthlySequence !== undefined && params.monthlySequence !== null) {
+    const seqNum =
+      typeof params.monthlySequence === "number"
+        ? params.monthlySequence
+        : parseInt(String(params.monthlySequence), 10);
+    serialCode = isNaN(seqNum) ? "0001" : String(seqNum).padStart(4, "0");
+  } else {
+    const norm = normalizeDemandNumber(params.demandNumber);
+    const parsed = parseInt(norm.replace(/[^0-9]/g, ""), 10);
+    serialCode = !isNaN(parsed) && parsed > 0 ? String(parsed).padStart(4, "0") : "0001";
   }
 
-  const districtCode = params.districtCode?.trim().toUpperCase();
-  const circleCode = params.circleCode?.trim().toUpperCase();
-  const prefix = districtCode && circleCode ? `${districtCode}-${circleCode}` : "PFT2";
+  // Status version: '01' (Issued), '02' (Delivered), '03' (Paid), '04' (Cancelled)
+  const statusSuffix = params.statusVersion ? String(params.statusVersion).padStart(2, "0") : "01";
 
-  // Canonical Notice No. is also the Challan No. across every issuance surface.
-  // PFT2 remains only as a compatibility draft prefix when jurisdiction codes
-  // have not yet been resolved; the database command rejects/prefixes it before issue.
-  return `${prefix}-${demandClean}-${yearCode}${monthCode}${dateCode}${formTypeDigit}${scopeDigit}${paymentScopeDigit}-${amountInt}`;
+  // Canonical format: 237-21126110042-01
+  return `${distPbs}-${formCode}${regCode}${scopeCode}${yearCode}${monthCode}${serialCode}-${statusSuffix}`;
 }
 
 export type StatutoryDocCode =

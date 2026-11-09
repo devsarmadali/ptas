@@ -268,6 +268,10 @@ function DocumentIssuanceContent() {
         return;
       }
 
+      const isProvisional =
+        freshUnit.pinNumber?.startsWith("Potential-") ||
+        freshUnit.demandUnit?.permanentDemandNo?.startsWith("POT-");
+
       const noticeNumber = generatePft2NoticeNumber({
         demandNumber: freshUnit.demandUnit?.permanentDemandNo || "0001",
         issueDate: systemIssueDate,
@@ -275,13 +279,10 @@ function DocumentIssuanceContent() {
         demandScope,
         paymentScope,
         amount: effectivePayableAmount,
+        isProvisional,
         ...jurisdictionCodes
       });
       const pin = generateDocumentPin(noticeNumber);
-
-      const isProvisional =
-        freshUnit.pinNumber?.startsWith("Potential-") ||
-        freshUnit.demandUnit?.permanentDemandNo?.startsWith("POT-");
 
       const newChallan: Pft2ChallanRecord = {
         id: freshUnit.id,
