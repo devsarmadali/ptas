@@ -120,7 +120,7 @@ import {
 import { StatutoryQrCode } from "../components/StatutoryQrCode";
 import { Pft2ChallanDocument } from "../components/Pft2ChallanDocument";
 import { QrScannerModal } from "../components/QrScannerModal";
-import { RowActionMenu } from "../components/RowActionMenu";
+import { RowActionMenu, type RowAction } from "../components/RowActionMenu";
 import { downloadOfficialPdf } from "../lib/pdf-export";
 import {
   exportPft2ChallansCsv,
@@ -3317,9 +3317,13 @@ export default function HomePage({
     });
   }, [units, activePotentialIds]);
 
-  // Clean survey pipeline units excluding mock potential register units
+  // Clean survey pipeline units excluding mock potential register units and approved PFT-3 units
   const surveyPendingUnits = useMemo(() => {
-    return units.filter((u) => !activePotentialIds.has(u.id));
+    return units.filter((u) => {
+      if (activePotentialIds.has(u.id)) return false;
+      const status = u.assessments[0]?.status ?? "DRAFT";
+      return status !== "APPROVED";
+    });
   }, [units, activePotentialIds]);
 
   const formPFT3Rows = useMemo(() => {
@@ -3561,12 +3565,15 @@ export default function HomePage({
     ).sort();
   }, [units]);
 
-  // Assessment Queue Filtered Rows & Metric Counts
+  // Assessment Queue Filtered Rows & Metric Counts (Under-Process Only)
   const filteredAssessmentUnits = useMemo(() => {
     return units.filter((u) => {
       if (activePotentialIds.has(u.id)) return false;
       const currentAsm = u.assessments[0];
       const status = currentAsm?.status ?? "DRAFT";
+      // Exclude approved units: they belong exclusively to Form P.F.T-3 Register
+      if (status === "APPROVED") return false;
+
       const isClosed = Boolean(u.isDiscontinued || status === "WITHDRAWN");
 
       if (assessmentStatusFilter === "CLOSED") {
@@ -3576,7 +3583,6 @@ export default function HomePage({
         if (assessmentStatusFilter === "FEEDED" && status !== "DRAFT") return false;
         if (assessmentStatusFilter === "SUBMITTED" && status !== "SUBMITTED") return false;
         if (assessmentStatusFilter === "RETURNED" && status !== "RETURNED") return false;
-        if (assessmentStatusFilter === "APPROVED" && status !== "APPROVED") return false;
       }
 
       if (assessmentCircleFilter !== "ALL" && u.circleId !== assessmentCircleFilter) return false;
@@ -3614,24 +3620,23 @@ export default function HomePage({
     let feeded = 0,
       submitted = 0,
       returned = 0,
-      approved = 0,
       closed = 0,
-      totalNonPotential = 0;
+      totalUnderProcess = 0;
     for (const u of units) {
       if (activePotentialIds.has(u.id)) continue;
-      totalNonPotential++;
-      const isClosed = Boolean(u.isDiscontinued || u.assessments[0]?.status === "WITHDRAWN");
+      const s = u.assessments[0]?.status ?? "DRAFT";
+      if (s === "APPROVED") continue; // Exclude approved units from under-process counts
+      const isClosed = Boolean(u.isDiscontinued || s === "WITHDRAWN");
       if (isClosed) {
         closed++;
       } else {
-        const s = u.assessments[0]?.status ?? "DRAFT";
+        totalUnderProcess++;
         if (s === "DRAFT") feeded++;
         else if (s === "SUBMITTED") submitted++;
         else if (s === "RETURNED") returned++;
-        else if (s === "APPROVED") approved++;
       }
     }
-    return { all: totalNonPotential, feeded, submitted, returned, approved, closed };
+    return { all: totalUnderProcess, feeded, submitted, returned, closed };
   }, [units, activePotentialIds]);
 
   const selectedAssessmentUnits = useMemo(() => {
@@ -6547,6 +6552,154 @@ export default function HomePage({
   void setClearanceCertificates;
   void setAppeals;
 
+  // Row actions for Statutory Assessment & Survey Queue Desk
+  const renderAssessmentUnitActions = (targetUnit: StoredUnit) => {
+    const currentAsm = targetUnit.assessments[0];
+    const status = currentAsm?.status ?? "DRAFT";
+    const isClosed = Boolean(targetUnit.isDiscontinued || status === "WITHDRAWN");
+    const isInspector = officer.role === "INSPECTOR";
+    const isEto = officer.role === "ETO";
+
+    const actions: RowAction[] = [];
+
+    if (isClosed) {
+      actions.push({
+        id: "view-trace",
+        label: "View Closure Audit Trace",
+        icon: "👁️",
+        onClick: () => handleOpenAuditTraceModal(targetUnit)
+      });
+    } else if (status === "DRAFT") {
+      if (isInspector) {
+        actions.push({
+          id: "submit-assessment",
+          label: "Submit to ETO Review Queue",
+          icon: "📤",
+          variant: "primary",
+          onClick: () => void handleSubmitAssessment(targetUnit.id)
+        });
+      }
+      actions.push({
+        id: "edit-survey-unit",
+        label: isInspector ? "Edit Survey Particulars" : "View Survey Particulars",
+        icon: isInspector ? "✏️" : "👁️",
+        onClick: () => handleOpenEditSurveyUnit(targetUnit)
+      });
+      actions.push({
+        id: "view-dossier",
+        label: "View Assessee Dossier",
+        icon: "📋",
+        href: `/units/${targetUnit.provincialUin || targetUnit.id}/details`,
+        target: "_blank"
+      });
+      actions.push({
+        id: "close-survey-unit",
+        label: "Close / Discard Record",
+        icon: "✕",
+        variant: "danger",
+        onClick: () => handleOpenCloseModal(targetUnit.id)
+      });
+    } else if (status === "SUBMITTED") {
+      if (isEto) {
+        actions.push(
+          {
+            id: "approve-assessment",
+            label: "Approve & Enroll in Form PFT-3",
+            icon: "✓",
+            variant: "success",
+            onClick: () => void handleApproveAssessment(targetUnit.id)
+          },
+          {
+            id: "return-assessment",
+            label: "Return with Observations",
+            icon: "↩",
+            variant: "danger",
+            onClick: () => handleOpenReturnModal(targetUnit.id)
+          }
+        );
+      }
+      actions.push({
+        id: "inspect-survey-unit",
+        label: isEto ? "Edit / Inspect Particulars" : "View Submitted Record",
+        icon: isEto ? "✏️" : "👁️",
+        onClick: () => handleOpenEditSurveyUnit(targetUnit)
+      });
+      actions.push({
+        id: "view-dossier",
+        label: "View Assessee Dossier",
+        icon: "📋",
+        href: `/units/${targetUnit.provincialUin || targetUnit.id}/details`,
+        target: "_blank"
+      });
+      if (isEto) {
+        actions.push({
+          id: "close-survey-unit",
+          label: "Close / Discard Record",
+          icon: "✕",
+          variant: "danger",
+          onClick: () => handleOpenCloseModal(targetUnit.id)
+        });
+      }
+    } else if (status === "RETURNED") {
+      if (isInspector) {
+        actions.push(
+          {
+            id: "resubmit-assessment",
+            label: "Resubmit to ETO Queue",
+            icon: "📤",
+            variant: "primary",
+            onClick: () => void handleResubmitAssessment(targetUnit.id)
+          },
+          {
+            id: "edit-survey-unit",
+            label: "Update & Rectify Particulars",
+            icon: "✏️",
+            onClick: () => handleOpenEditSurveyUnit(targetUnit)
+          }
+        );
+      } else {
+        actions.push({
+          id: "view-survey-unit",
+          label: "View Returned Record",
+          icon: "👁️",
+          onClick: () => handleOpenEditSurveyUnit(targetUnit)
+        });
+      }
+      actions.push({
+        id: "view-trace",
+        label: "View ETO Observations",
+        icon: "👁️",
+        onClick: () => handleOpenAuditTraceModal(targetUnit)
+      });
+      actions.push({
+        id: "view-dossier",
+        label: "View Assessee Dossier",
+        icon: "📋",
+        href: `/units/${targetUnit.provincialUin || targetUnit.id}/details`,
+        target: "_blank"
+      });
+      if (isInspector) {
+        actions.push({
+          id: "close-survey-unit",
+          label: "Close / Discard Record",
+          icon: "✕",
+          variant: "danger",
+          onClick: () => handleOpenCloseModal(targetUnit.id)
+        });
+      }
+    } else {
+      actions.push({
+        id: "view-dossier",
+        label: "View Assessee Dossier",
+        icon: "📋",
+        href: `/units/${targetUnit.provincialUin || targetUnit.id}/details`,
+        target: "_blank"
+      });
+    }
+
+    return <RowActionMenu align="right" actions={actions} />;
+  };
+
   // Row actions strictly for Form P.F.T-3 Assessment & Demand Register (REGISTER_PFT3)
   const renderPft3UnitActions = (targetUnit: StoredUnit) => {
     return (
@@ -7324,7 +7477,6 @@ export default function HomePage({
                     { key: "FEEDED", label: `📥 Feeded (${assessmentCounts.feeded})` },
                     { key: "SUBMITTED", label: `⚖️ In Review (${assessmentCounts.submitted})` },
                     { key: "RETURNED", label: `↩️ Returned (${assessmentCounts.returned})` },
-                    { key: "APPROVED", label: `✅ Approved (${assessmentCounts.approved})` },
                     { key: "CLOSED", label: `🚫 Closed (${assessmentCounts.closed})` }
                   ] as const
                 ).map((tab) => (
@@ -7713,296 +7865,8 @@ export default function HomePage({
                               {isClosed ? "CLOSED" : status === "DRAFT" ? "FEEDED" : status}
                             </span>
                           </td>
-                          <td className="col-actions">
-                            {isClosed ? (
-                              <div
-                                style={{
-                                  display: "flex",
-                                  gap: "0.35rem",
-                                  justifyContent: "flex-end",
-                                  alignItems: "center"
-                                }}
-                              >
-                                <span
-                                  className="badge badge-secondary"
-                                  style={{ fontSize: "0.72rem" }}
-                                  title={currentVer?.reason || "Closed unit"}
-                                >
-                                  🚫 Closed
-                                </span>
-                                <button
-                                  type="button"
-                                  className="btn-secondary btn-xs"
-                                  style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                                  onClick={() => handleOpenAuditTraceModal(u)}
-                                  title="View closure audit trace"
-                                >
-                                  👁 Trace
-                                </button>
-                              </div>
-                            ) : (
-                              <>
-                                {status === "DRAFT" &&
-                                  (officer.role === "INSPECTOR" ? (
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        gap: "0.35rem",
-                                        justifyContent: "flex-end"
-                                      }}
-                                    >
-                                      <button
-                                        type="button"
-                                        className="btn-success btn-xs"
-                                        style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                                        onClick={() => void handleSubmitAssessment(u.id)}
-                                        title="Submit this feeded survey record to ETO review queue"
-                                      >
-                                        📤 Submit
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="btn-secondary btn-xs"
-                                        style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                                        onClick={() => handleOpenEditSurveyUnit(u)}
-                                        title="Edit survey particulars or classification"
-                                      >
-                                        ✏️ Edit
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="btn-outline btn-xs"
-                                        style={{
-                                          padding: "0.25rem 0.5rem",
-                                          fontSize: "0.75rem",
-                                          color: "#64748b"
-                                        }}
-                                        onClick={() => handleOpenCloseModal(u.id)}
-                                        title="Close / Discard survey entry"
-                                      >
-                                        ✕ Close
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        gap: "0.35rem",
-                                        justifyContent: "flex-end",
-                                        alignItems: "center"
-                                      }}
-                                    >
-                                      <span
-                                        style={{
-                                          fontSize: "0.75rem",
-                                          color: "#64748b",
-                                          fontStyle: "italic"
-                                        }}
-                                      >
-                                        Feeded (Awaiting Inspector submission)
-                                      </span>
-                                      <button
-                                        type="button"
-                                        className="btn-secondary btn-xs"
-                                        style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                                        onClick={() => handleOpenEditSurveyUnit(u)}
-                                        title="View survey particulars"
-                                      >
-                                        👁 View
-                                      </button>
-                                    </div>
-                                  ))}
-
-                                {status === "SUBMITTED" &&
-                                  (officer.role === "ETO" ? (
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        gap: "0.35rem",
-                                        justifyContent: "flex-end",
-                                        flexWrap: "wrap"
-                                      }}
-                                    >
-                                      <button
-                                        type="button"
-                                        className="btn-primary btn-xs"
-                                        style={{ padding: "0.25rem 0.55rem", fontSize: "0.75rem" }}
-                                        onClick={() => void handleApproveAssessment(u.id)}
-                                        title="Grant statutory approval, create Form PFT-2, debit ledger, and enroll in Register Form PFT-3"
-                                      >
-                                        ✓ Approve
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="btn-danger btn-xs"
-                                        style={{ padding: "0.25rem 0.55rem", fontSize: "0.75rem" }}
-                                        onClick={() => handleOpenReturnModal(u.id)}
-                                        title="Return assessment to Inspector with statutory observations"
-                                      >
-                                        ↩ Return
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="btn-outline btn-xs"
-                                        style={{
-                                          padding: "0.25rem 0.5rem",
-                                          fontSize: "0.75rem",
-                                          color: "#64748b"
-                                        }}
-                                        onClick={() => handleOpenCloseModal(u.id)}
-                                        title="Close / Discard survey entry"
-                                      >
-                                        ✕ Close
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        gap: "0.35rem",
-                                        justifyContent: "flex-end",
-                                        alignItems: "center"
-                                      }}
-                                    >
-                                      <span
-                                        className="badge badge-submitted"
-                                        style={{ fontSize: "0.72rem" }}
-                                      >
-                                        ⏳ Pending ETO Approval
-                                      </span>
-                                      <button
-                                        type="button"
-                                        className="btn-secondary btn-xs"
-                                        style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                                        onClick={() => handleOpenEditSurveyUnit(u)}
-                                        title="View submitted record"
-                                      >
-                                        👁 View
-                                      </button>
-                                    </div>
-                                  ))}
-
-                                {status === "RETURNED" &&
-                                  (officer.role === "INSPECTOR" ? (
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        gap: "0.35rem",
-                                        justifyContent: "flex-end",
-                                        flexWrap: "wrap"
-                                      }}
-                                    >
-                                      <button
-                                        type="button"
-                                        className="btn-warning btn-xs"
-                                        style={{ padding: "0.25rem 0.55rem", fontSize: "0.75rem" }}
-                                        onClick={() => handleOpenEditSurveyUnit(u)}
-                                        title={`Returned by ETO: ${currentVer?.reason || "Observations recorded"}`}
-                                      >
-                                        ✏️ Update &amp; Resubmit
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="btn-success btn-xs"
-                                        style={{ padding: "0.25rem 0.55rem", fontSize: "0.75rem" }}
-                                        onClick={() => void handleResubmitAssessment(u.id)}
-                                        title="Resubmit directly to ETO queue"
-                                      >
-                                        📤 Resubmit
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="btn-outline btn-xs"
-                                        style={{
-                                          padding: "0.25rem 0.5rem",
-                                          fontSize: "0.75rem",
-                                          color: "#64748b"
-                                        }}
-                                        onClick={() => handleOpenCloseModal(u.id)}
-                                        title="Close unviable survey entry"
-                                      >
-                                        ✕ Close
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        gap: "0.35rem",
-                                        justifyContent: "flex-end",
-                                        alignItems: "center"
-                                      }}
-                                    >
-                                      <span
-                                        className="badge badge-returned"
-                                        style={{ fontSize: "0.72rem" }}
-                                        title={currentVer?.reason || "Returned to Inspector"}
-                                      >
-                                        ↩ Returned to Inspector
-                                      </span>
-                                      <button
-                                        type="button"
-                                        className="btn-secondary btn-xs"
-                                        style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                                        onClick={() => handleOpenEditSurveyUnit(u)}
-                                        title="View returned particulars"
-                                      >
-                                        👁 View
-                                      </button>
-                                    </div>
-                                  ))}
-
-                                {status === "APPROVED" && (
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      gap: "0.35rem",
-                                      justifyContent: "flex-end",
-                                      alignItems: "center"
-                                    }}
-                                  >
-                                    <span
-                                      className="badge badge-approved"
-                                      style={{ fontSize: "0.72rem" }}
-                                    >
-                                      ✓ In Form PFT-3
-                                    </span>
-                                    <button
-                                      type="button"
-                                      className="btn-warning btn-xs"
-                                      style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                                      onClick={() => handleOpenEditSurveyUnit(u)}
-                                      title="Edit assessee particulars (will place into SUBMITTED status for ETO re-approval)"
-                                    >
-                                      ✏️ Edit
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="btn-secondary btn-xs"
-                                      style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                                      onClick={() => handleOpenAuditTraceModal(u)}
-                                      title="View complete audited history and timestamps"
-                                    >
-                                      👁 Audit Trace
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="btn-primary btn-xs"
-                                      style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
-                                      onClick={() => {
-                                        setPft3SearchQuery(u.demandNumber || u.legalName);
-                                        setPft3SearchExecuted(true);
-                                        setPft3CurrentPage(1);
-                                        switchTab("REGISTER_PFT3");
-                                      }}
-                                      title="View permanent record in Form PFT-3 Register"
-                                    >
-                                      📑 View PFT-3 ↗
-                                    </button>
-                                  </div>
-                                )}
-                              </>
-                            )}
+                          <td className="col-actions" style={{ textAlign: "right" }}>
+                            {renderAssessmentUnitActions(u)}
                           </td>
                         </tr>
                       );
