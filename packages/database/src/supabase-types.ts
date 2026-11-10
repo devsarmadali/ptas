@@ -635,6 +635,9 @@ export type Database = {
           p_cnic: string;
           p_designation: string;
           p_office_address: string;
+          p_ppo_number?: string | null;
+          p_father_name?: string | null;
+          p_bps_scale?: number | null;
         };
         Returns: Json;
       };
@@ -666,6 +669,7 @@ export type Database = {
         Args: {
           p_target_user_id: string;
           p_new_password: string;
+          p_must_change?: boolean | null;
         };
         Returns: Json;
       };
@@ -680,6 +684,21 @@ export type Database = {
           p_designation: string;
           p_office_address: string;
           p_initial_password: string;
+          p_ppo_number?: string | null;
+          p_father_name?: string | null;
+          p_bps_scale?: number | null;
+          p_transfer_order_number?: string | null;
+        };
+        Returns: Json;
+      };
+      transfer_officer_posting: {
+        Args: {
+          p_user_id: string;
+          p_target_circle_id: string;
+          p_transfer_order_number: string;
+          p_is_primary?: boolean | null;
+          p_handing_over_notes?: string | null;
+          p_relieve_current_incumbent?: boolean | null;
         };
         Returns: Json;
       };

@@ -9,7 +9,7 @@ import {
   fetchDistrictGovernanceMatrix,
   fetchUserManagementAuditLog,
   updateOfficerProfile,
-  reassignOfficerCircle,
+  transferOfficerPosting,
   attachCircleToTehsil,
   setOfficerStatus,
   adminSetOfficerPassword,
@@ -48,10 +48,17 @@ export default function UserManagementPage() {
   const [editCnic, setEditCnic] = useState("");
   const [editDesignation, setEditDesignation] = useState("");
   const [editOfficeAddress, setEditOfficeAddress] = useState("");
+  const [editPpoNumber, setEditPpoNumber] = useState("");
+  const [editFatherName, setEditFatherName] = useState("");
+  const [editBpsScale, setEditBpsScale] = useState<number>(14);
 
   const [reassigningOfficer, setReassigningOfficer] = useState<LiveOfficerAccount | null>(null);
   const [targetCircleId, setTargetCircleId] = useState("");
   const [reassignReason, setReassignReason] = useState("");
+  const [transferOrderNumber, setTransferOrderNumber] = useState("");
+  const [isPrimaryCharge, setIsPrimaryCharge] = useState(true);
+  const [handingOverNotes, setHandingOverNotes] = useState("");
+  const [relieveCurrentIncumbent, setRelieveCurrentIncumbent] = useState(false);
 
   const [attachingCircle, setAttachingCircle] = useState<GovernanceCircleRecord | null>(null);
   const [targetTehsilId, setTargetTehsilId] = useState("");
@@ -61,6 +68,7 @@ export default function UserManagementPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [mustChangePassword, setMustChangePassword] = useState(true);
   const [isSendingResetEmail, setIsSendingResetEmail] = useState(false);
 
   const [statusTogglingOfficer, setStatusTogglingOfficer] = useState<LiveOfficerAccount | null>(
@@ -70,13 +78,17 @@ export default function UserManagementPage() {
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createName, setCreateName] = useState("");
+  const [createFatherName, setCreateFatherName] = useState("");
   const [createEmail, setCreateEmail] = useState("");
-  const [createRole, setCreateRole] = useState<"INSPECTOR" | "ETO">("INSPECTOR");
+  const [createRole, setCreateRole] = useState<"INSPECTOR" | "ETO" | "CLERK">("INSPECTOR");
   const [createCircleId, setCreateCircleId] = useState("");
   const [createPhone, setCreatePhone] = useState("");
   const [createCnic, setCreateCnic] = useState("");
   const [createDesignation, setCreateDesignation] = useState("");
   const [createOfficeAddress, setCreateOfficeAddress] = useState("");
+  const [createPpoNumber, setCreatePpoNumber] = useState("");
+  const [createBpsScale, setCreateBpsScale] = useState<number>(14);
+  const [createTransferOrderNumber, setCreateTransferOrderNumber] = useState("");
   const [createPassword, setCreatePassword] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -136,22 +148,11 @@ export default function UserManagementPage() {
         map.set(g.tehsil_id, {
           id: g.tehsil_id,
           name: g.tehsil_name,
-          code: g.tehsil_code
+          code: g.tehsil_code || ""
         });
       }
     });
     return Array.from(map.values());
-  }, [governanceMatrix]);
-
-  // Distinct circles available
-  const distinctCircles = useMemo(() => {
-    return governanceMatrix.map((g) => ({
-      id: g.circle_id,
-      code: g.circle_code,
-      name: g.circle_name,
-      tehsilName: g.tehsil_name,
-      inspectorName: g.inspector_name
-    }));
   }, [governanceMatrix]);
 
   // Statistics
@@ -198,6 +199,9 @@ export default function UserManagementPage() {
     setEditCnic(o.cnic);
     setEditDesignation(o.designation);
     setEditOfficeAddress(o.office_address);
+    setEditPpoNumber(o.ppo_number || "");
+    setEditFatherName(o.father_name || "");
+    setEditBpsScale(o.bps_scale || 14);
   };
 
   const handleSaveEdit = async () => {
@@ -210,7 +214,10 @@ export default function UserManagementPage() {
         phone: editPhone.trim(),
         cnic: editCnic.trim(),
         designation: editDesignation.trim(),
-        officeAddress: editOfficeAddress.trim()
+        officeAddress: editOfficeAddress.trim(),
+        ppoNumber: editPpoNumber.trim(),
+        fatherName: editFatherName.trim(),
+        bpsScale: editBpsScale
       });
       setFeedback({
         type: "success",
@@ -228,9 +235,13 @@ export default function UserManagementPage() {
     }
   };
 
-  const handleOpenReassign = (o: LiveOfficerAccount) => {
+  const handleOpenReassign = (o: LiveOfficerAccount, targetCId?: string) => {
     setReassigningOfficer(o);
-    setTargetCircleId(o.jurisdiction_id);
+    setTargetCircleId(targetCId || o.jurisdiction_id);
+    setTransferOrderNumber(`SO(Admin)ET/2026/${Math.floor(100 + Math.random() * 900)}`);
+    setIsPrimaryCharge(true);
+    setHandingOverNotes("");
+    setRelieveCurrentIncumbent(false);
     setReassignReason("");
   };
 
@@ -238,16 +249,18 @@ export default function UserManagementPage() {
     if (!reassigningOfficer || !targetCircleId) return;
     try {
       setIsSubmitting(true);
-      await reassignOfficerCircle({
+      await transferOfficerPosting({
         userId: reassigningOfficer.user_id,
-        newCircleId: targetCircleId,
-        reason:
-          reassignReason.trim() ||
-          "Administrative circle reassignment under departmental reorganization"
+        targetCircleId,
+        transferOrderNumber:
+          transferOrderNumber.trim() || `SO(Admin)ET/2026/${Math.floor(100 + Math.random() * 900)}`,
+        isPrimary: isPrimaryCharge,
+        handingOverNotes: handingOverNotes.trim() || reassignReason.trim(),
+        relieveCurrentIncumbent
       });
       setFeedback({
         type: "success",
-        text: `Officer ${reassigningOfficer.name} has been reassigned to target circle in the live database.`
+        text: `Official transfer / posting order executed for ${reassigningOfficer.name} in live database.`
       });
       setReassigningOfficer(null);
       await loadLiveContext();
@@ -299,6 +312,7 @@ export default function UserManagementPage() {
     setNewPassword("");
     setConfirmPassword("");
     setShowPassword(false);
+    setMustChangePassword(true);
   };
 
   const handleSavePassword = async () => {
@@ -322,7 +336,8 @@ export default function UserManagementPage() {
       setIsSubmitting(true);
       await adminSetOfficerPassword({
         targetUserId: passwordOfficer.user_id,
-        newPassword
+        newPassword,
+        mustChange: mustChangePassword
       });
       setFeedback({
         type: "success",
@@ -399,15 +414,19 @@ export default function UserManagementPage() {
     }
   };
 
-  const handleOpenCreateModal = () => {
+  const handleOpenCreateModal = (preselectedCircleId?: string) => {
     setIsCreateModalOpen(true);
     setCreateName("");
+    setCreateFatherName("");
     setCreateEmail("");
     setCreateRole("INSPECTOR");
-    setCreateCircleId(governanceMatrix[0]?.circle_id ?? "");
+    setCreateCircleId(preselectedCircleId || governanceMatrix[0]?.circle_id || "");
     setCreatePhone("");
     setCreateCnic("");
     setCreateDesignation("Tax Inspector");
+    setCreateBpsScale(14);
+    setCreatePpoNumber("");
+    setCreateTransferOrderNumber(`SO(Admin)ET/2026/${Math.floor(100 + Math.random() * 900)}`);
     setCreateOfficeAddress(
       "Excise & Taxation Office, Danewal Road, Near General Bus Stand, Vehari"
     );
@@ -439,7 +458,11 @@ export default function UserManagementPage() {
         cnic: createCnic.trim(),
         designation: createDesignation.trim() || `Tax ${createRole}`,
         officeAddress: createOfficeAddress.trim(),
-        initialPassword: createPassword
+        initialPassword: createPassword,
+        ppoNumber: createPpoNumber.trim(),
+        fatherName: createFatherName.trim(),
+        bpsScale: createBpsScale,
+        transferOrderNumber: createTransferOrderNumber.trim()
       });
       setFeedback({
         type: "success",
@@ -695,7 +718,7 @@ export default function UserManagementPage() {
             <button
               type="button"
               id="btn-provision-officer"
-              onClick={handleOpenCreateModal}
+              onClick={() => handleOpenCreateModal()}
               style={{
                 background: "#f59e0b",
                 color: "#78350f",
@@ -1110,8 +1133,8 @@ export default function UserManagementPage() {
                         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
                           <div
                             style={{
-                              width: "36px",
-                              height: "36px",
+                              width: "38px",
+                              height: "38px",
                               borderRadius: "50%",
                               background: o.role === "ETO" ? "#0d3822" : "#1e40af",
                               color: "#ffffff",
@@ -1119,7 +1142,7 @@ export default function UserManagementPage() {
                               alignItems: "center",
                               justifyContent: "center",
                               fontWeight: 700,
-                              fontSize: "0.8rem",
+                              fontSize: "0.825rem",
                               flexShrink: 0
                             }}
                           >
@@ -1132,26 +1155,87 @@ export default function UserManagementPage() {
                           </div>
                           <div>
                             <strong style={{ color: "#0f172a" }}>{o.name}</strong>
-                            <span
-                              style={{ display: "block", fontSize: "0.72rem", color: "#64748b" }}
+                            {o.father_name && (
+                              <span
+                                style={{ display: "block", fontSize: "0.72rem", color: "#64748b" }}
+                              >
+                                s/o {o.father_name}
+                              </span>
+                            )}
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.35rem",
+                                marginTop: "0.15rem"
+                              }}
                             >
-                              {o.designation ||
-                                (o.role === "ETO" ? "Assessing Authority" : "Tax Inspector")}
-                            </span>
+                              <span
+                                style={{
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  background: "#f1f5f9",
+                                  color: "#334155",
+                                  padding: "0.1rem 0.35rem",
+                                  borderRadius: "3px",
+                                  border: "1px solid #cbd5e1"
+                                }}
+                              >
+                                BPS-{o.bps_scale || (o.role === "ETO" ? 17 : 14)}
+                              </span>
+                              <span style={{ fontSize: "0.72rem", color: "#475569" }}>
+                                {o.designation ||
+                                  (o.role === "ETO"
+                                    ? "Excise & Taxation Officer"
+                                    : "Tax Inspector")}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </td>
 
                       <td>
-                        <span
-                          className={`badge ${o.role === "ETO" ? "badge-approved" : "badge-submitted"}`}
-                          style={{ fontSize: "0.72rem", marginRight: "0.4rem" }}
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            marginBottom: "0.2rem"
+                          }}
                         >
-                          {o.role}
-                        </span>
-                        <strong style={{ color: "#0d3822", fontSize: "0.85rem" }}>
-                          {o.circle_name}
+                          <span
+                            className={`badge ${o.role === "ETO" ? "badge-approved" : "badge-submitted"}`}
+                            style={{ fontSize: "0.7rem" }}
+                          >
+                            {o.role}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: "0.68rem",
+                              fontWeight: 600,
+                              background: o.is_primary !== false ? "#f0fdf4" : "#fef3c7",
+                              color: o.is_primary !== false ? "#166534" : "#92400e",
+                              padding: "0.1rem 0.4rem",
+                              borderRadius: "3px"
+                            }}
+                          >
+                            {o.is_primary !== false ? "Regular Charge" : "Additional Charge"}
+                          </span>
+                        </div>
+                        <strong style={{ color: "#0d3822", fontSize: "0.85rem", display: "block" }}>
+                          {o.circle_code ? `${o.circle_code} — ${o.circle_name}` : o.circle_name}
                         </strong>
+                        {o.transfer_order_number && (
+                          <span
+                            style={{
+                              fontSize: "0.7rem",
+                              color: "#64748b",
+                              fontFamily: "monospace"
+                            }}
+                          >
+                            Order: {o.transfer_order_number}
+                          </span>
+                        )}
                       </td>
 
                       <td>
@@ -1170,7 +1254,7 @@ export default function UserManagementPage() {
                           </span>
                         ) : (
                           <span style={{ color: "#94a3b8", fontSize: "0.75rem" }}>
-                            District Level
+                            District Headquarters
                           </span>
                         )}
                       </td>
@@ -1190,18 +1274,24 @@ export default function UserManagementPage() {
                       </td>
 
                       <td>
-                        <span
+                        <div
                           style={{
                             fontFamily: "monospace",
                             fontSize: "0.78rem",
                             background: "#f8fafc",
                             padding: "0.15rem 0.4rem",
                             borderRadius: "3px",
-                            border: "1px solid #e2e8f0"
+                            border: "1px solid #e2e8f0",
+                            marginBottom: "0.2rem"
                           }}
                         >
                           {o.cnic || "36603-XXXXXXX-X"}
-                        </span>
+                        </div>
+                        {o.ppo_number && (
+                          <div style={{ fontSize: "0.7rem", color: "#0369a1", fontWeight: 600 }}>
+                            {o.ppo_number}
+                          </div>
+                        )}
                       </td>
 
                       <td>
@@ -1450,26 +1540,79 @@ export default function UserManagementPage() {
                       <td>
                         {circle.inspector_name ? (
                           <div>
-                            <strong style={{ color: "#0d3822" }}>{circle.inspector_name}</strong>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                              <strong style={{ color: "#0d3822" }}>{circle.inspector_name}</strong>
+                              <span
+                                style={{
+                                  fontSize: "0.68rem",
+                                  fontWeight: 600,
+                                  background:
+                                    circle.is_primary_charge !== false ? "#f0fdf4" : "#fef3c7",
+                                  color: circle.is_primary_charge !== false ? "#166534" : "#92400e",
+                                  padding: "0.1rem 0.35rem",
+                                  borderRadius: "3px"
+                                }}
+                              >
+                                {circle.is_primary_charge !== false ? "Primary" : "Additional"}
+                              </span>
+                            </div>
                             <span
                               style={{ display: "block", fontSize: "0.72rem", color: "#64748b" }}
                             >
                               {circle.inspector_email}
                             </span>
+                            {circle.inspector_ppo && (
+                              <span
+                                style={{
+                                  display: "block",
+                                  fontSize: "0.68rem",
+                                  color: "#0369a1",
+                                  fontWeight: 600
+                                }}
+                              >
+                                {circle.inspector_ppo}
+                              </span>
+                            )}
+                            {circle.transfer_order_number && (
+                              <span
+                                style={{
+                                  display: "block",
+                                  fontSize: "0.68rem",
+                                  color: "#64748b",
+                                  fontFamily: "monospace"
+                                }}
+                              >
+                                {circle.transfer_order_number}
+                              </span>
+                            )}
                           </div>
                         ) : (
-                          <span
-                            style={{
-                              color: "#d97706",
-                              fontSize: "0.75rem",
-                              fontWeight: 600,
-                              background: "#fef3c7",
-                              padding: "0.2rem 0.5rem",
-                              borderRadius: "4px"
-                            }}
-                          >
-                            ⚠️ Unassigned
-                          </span>
+                          <div>
+                            <span
+                              style={{
+                                color: "#b45309",
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                                background: "#fef3c7",
+                                border: "1px solid #fde68a",
+                                padding: "0.25rem 0.6rem",
+                                borderRadius: "4px",
+                                display: "inline-block"
+                              }}
+                            >
+                              ⚠️ VACANT CIRCLE
+                            </span>
+                            <span
+                              style={{
+                                display: "block",
+                                fontSize: "0.7rem",
+                                color: "#94a3b8",
+                                marginTop: "0.2rem"
+                              }}
+                            >
+                              Ready for inspector posting
+                            </span>
+                          </div>
                         )}
                       </td>
 
@@ -1478,17 +1621,46 @@ export default function UserManagementPage() {
                           {circle.units_count.toLocaleString()}
                         </strong>{" "}
                         <span style={{ fontSize: "0.75rem", color: "#64748b" }}>units</span>
+                        {circle.total_assessed_demand > 0 && (
+                          <div style={{ fontSize: "0.72rem", color: "#166534", fontWeight: 600 }}>
+                            PKR {circle.total_assessed_demand.toLocaleString()}
+                          </div>
+                        )}
                       </td>
 
                       <td style={{ fontSize: "0.75rem", color: "#475569", maxWidth: "18rem" }}>
-                        {circle.circle_address}
+                        {circle.circle_address || "District Excise Complex, Vehari"}
                       </td>
 
                       <td style={{ textAlign: "right" }}>
                         {canManageOfficers && (
                           <div
-                            style={{ display: "flex", justifyContent: "flex-end", gap: "0.4rem" }}
+                            style={{
+                              display: "flex",
+                              justifyContent: "flex-end",
+                              gap: "0.4rem",
+                              flexWrap: "wrap"
+                            }}
                           >
+                            {!circle.inspector_name && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenCreateModal(circle.circle_id)}
+                                style={{
+                                  background: "#f59e0b",
+                                  color: "#78350f",
+                                  border: "none",
+                                  borderRadius: "4px",
+                                  padding: "0.35rem 0.75rem",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
+                                }}
+                              >
+                                ➕ Post Officer
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => handleOpenAttachCircle(circle)}
@@ -1801,7 +1973,9 @@ export default function UserManagementPage() {
                 }}
               >
                 <div className="form-group">
-                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>Full Name: *</label>
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    Full Officer Name: *
+                  </label>
                   <input
                     type="text"
                     className="form-control"
@@ -1812,14 +1986,15 @@ export default function UserManagementPage() {
                   />
                 </div>
                 <div className="form-group">
-                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>Login Email: *</label>
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    Father's Name (Service Book):
+                  </label>
                   <input
-                    type="email"
+                    type="text"
                     className="form-control"
-                    value={createEmail}
-                    onChange={(e) => setCreateEmail(e.target.value)}
-                    placeholder="officer@domain.com"
-                    required
+                    value={createFatherName}
+                    onChange={(e) => setCreateFatherName(e.target.value)}
+                    placeholder="e.g. Muhammad Ramzan"
                   />
                 </div>
               </div>
@@ -1833,26 +2008,83 @@ export default function UserManagementPage() {
                 }}
               >
                 <div className="form-group">
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    Official Login Email: *
+                  </label>
+                  <input
+                    type="email"
+                    className="form-control"
+                    value={createEmail}
+                    onChange={(e) => setCreateEmail(e.target.value)}
+                    placeholder="officer@domain.com"
+                    required
+                  />
+                </div>
+                <div className="form-group">
                   <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>Department Role: *</label>
                   <select
                     className="form-control"
                     value={createRole}
-                    onChange={(e) => setCreateRole(e.target.value as "INSPECTOR" | "ETO")}
+                    onChange={(e) => {
+                      const r = e.target.value as "INSPECTOR" | "ETO" | "CLERK";
+                      setCreateRole(r);
+                      if (r === "ETO") {
+                        setCreateBpsScale(17);
+                        setCreateDesignation("Excise & Taxation Officer (Assessing Authority)");
+                      } else if (r === "CLERK") {
+                        setCreateBpsScale(11);
+                        setCreateDesignation("Junior Clerk / Computer Operator");
+                      } else {
+                        setCreateBpsScale(14);
+                        setCreateDesignation("Excise & Taxation Inspector");
+                      }
+                    }}
                   >
-                    <option value="INSPECTOR">Tax Inspector</option>
+                    <option value="INSPECTOR">Excise & Taxation Inspector (Circle Incharge)</option>
+                    <option value="CLERK">Excise Clerk / Computer Operator</option>
                     {isDirectorOrAdmin && <option value="ETO">ETO (Assessing Authority)</option>}
                   </select>
                 </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "1rem",
+                  marginBottom: "1rem"
+                }}
+              >
                 <div className="form-group">
-                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>Assigned Circle: *</label>
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    Basic Pay Scale (BPS): *
+                  </label>
+                  <select
+                    className="form-control"
+                    value={createBpsScale}
+                    onChange={(e) => setCreateBpsScale(Number(e.target.value))}
+                  >
+                    <option value={11}>BPS-11 (Junior Clerk / Operator)</option>
+                    <option value={14}>BPS-14 (Senior Clerk / Inspector Entry)</option>
+                    <option value={16}>BPS-16 (Inspector Selection Grade)</option>
+                    <option value={17}>BPS-17 (Excise & Taxation Officer)</option>
+                    <option value={18}>BPS-18 (Director DET)</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    Assigned Station Circle: *
+                  </label>
                   <select
                     className="form-control"
                     value={createCircleId}
                     onChange={(e) => setCreateCircleId(e.target.value)}
                   >
-                    {distinctCircles.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.code}) — Tehsil {c.tehsilName}
+                    {governanceMatrix.map((c) => (
+                      <option key={c.circle_id} value={c.circle_id}>
+                        {c.circle_code} — {c.circle_name} (
+                        {c.tehsil_name ? `Tehsil ${c.tehsil_name}` : "District"})
+                        {c.inspector_id ? ` [Current: ${c.inspector_name}]` : " [VACANT]"}
                       </option>
                     ))}
                   </select>
@@ -1868,7 +2100,44 @@ export default function UserManagementPage() {
                 }}
               >
                 <div className="form-group">
-                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>Contact Phone: *</label>
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    Government Transfer Order No: *
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={createTransferOrderNumber}
+                    onChange={(e) => setCreateTransferOrderNumber(e.target.value)}
+                    placeholder="e.g. SO(Admin)ET/2026/842"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    Personal PPO / Personnel ID:
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={createPpoNumber}
+                    onChange={(e) => setCreatePpoNumber(e.target.value)}
+                    placeholder="e.g. PPO-36603-9821"
+                  />
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "1rem",
+                  marginBottom: "1rem"
+                }}
+              >
+                <div className="form-group">
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    Official Contact Mobile: *
+                  </label>
                   <input
                     type="text"
                     className="form-control"
@@ -1878,7 +2147,9 @@ export default function UserManagementPage() {
                   />
                 </div>
                 <div className="form-group">
-                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>CNIC Number:</label>
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    CNIC Number (13 Digits):
+                  </label>
                   <input
                     type="text"
                     className="form-control"
@@ -1891,20 +2162,20 @@ export default function UserManagementPage() {
 
               <div className="form-group" style={{ marginBottom: "1rem" }}>
                 <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                  Official Designation:
+                  Official Cadre Designation:
                 </label>
                 <input
                   type="text"
                   className="form-control"
                   value={createDesignation}
                   onChange={(e) => setCreateDesignation(e.target.value)}
-                  placeholder="e.g. Tax Inspector (Circle 2)"
+                  placeholder="e.g. Excise & Taxation Inspector (Circle 2)"
                 />
               </div>
 
               <div className="form-group" style={{ marginBottom: "1rem" }}>
                 <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                  Office Postal Address:
+                  Official Office Station Address:
                 </label>
                 <input
                   type="text"
@@ -1917,7 +2188,7 @@ export default function UserManagementPage() {
 
               <div className="form-group" style={{ marginBottom: "1.5rem" }}>
                 <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                  Initial Password (Minimum 6 characters): *
+                  Initial Temporary Password (Minimum 6 characters): *
                 </label>
                 <input
                   type="password"
@@ -1978,15 +2249,38 @@ export default function UserManagementPage() {
               </button>
             </div>
             <div style={{ padding: "1.5rem" }}>
-              <div className="form-group" style={{ marginBottom: "1rem" }}>
-                <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>Full Display Name: *</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  required
-                />
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "1rem",
+                  marginBottom: "1rem"
+                }}
+              >
+                <div className="form-group">
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    Full Display Name: *
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    Father's Name (Service Book):
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={editFatherName}
+                    onChange={(e) => setEditFatherName(e.target.value)}
+                    placeholder="e.g. Muhammad Kharal"
+                  />
+                </div>
               </div>
 
               <div
@@ -1999,7 +2293,7 @@ export default function UserManagementPage() {
               >
                 <div className="form-group">
                   <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                    Official Designation:
+                    Official Cadre Designation:
                   </label>
                   <input
                     type="text"
@@ -2009,19 +2303,58 @@ export default function UserManagementPage() {
                   />
                 </div>
                 <div className="form-group">
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    Basic Pay Scale (BPS):
+                  </label>
+                  <select
+                    className="form-control"
+                    value={editBpsScale}
+                    onChange={(e) => setEditBpsScale(Number(e.target.value))}
+                  >
+                    <option value={11}>BPS-11 (Junior Clerk / Operator)</option>
+                    <option value={14}>BPS-14 (Senior Clerk / Inspector Entry)</option>
+                    <option value={16}>BPS-16 (Inspector Selection Grade)</option>
+                    <option value={17}>BPS-17 (Excise & Taxation Officer)</option>
+                    <option value={18}>BPS-18 (Director DET)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "1rem",
+                  marginBottom: "1rem"
+                }}
+              >
+                <div className="form-group">
                   <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>CNIC / ID Card:</label>
                   <input
                     type="text"
                     className="form-control"
                     value={editCnic}
                     onChange={(e) => setEditCnic(e.target.value)}
+                    placeholder="36603-XXXXXXX-X"
+                  />
+                </div>
+                <div className="form-group">
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    Personnel PPO Number:
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={editPpoNumber}
+                    onChange={(e) => setEditPpoNumber(e.target.value)}
+                    placeholder="e.g. PPO-36603-01"
                   />
                 </div>
               </div>
 
               <div className="form-group" style={{ marginBottom: "1rem" }}>
                 <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                  Mobile Phone Number: *
+                  Official Mobile Phone: *
                 </label>
                 <input
                   type="text"
@@ -2069,14 +2402,14 @@ export default function UserManagementPage() {
       )}
 
       {/* ============================================================ */}
-      {/* MODAL 3: REASSIGN CIRCLE */}
+      {/* MODAL 3: OFFICIAL TRANSFER & POSTING ORDER */}
       {/* ============================================================ */}
       {reassigningOfficer && (
         <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: "34rem" }}>
+          <div className="modal-card" style={{ maxWidth: "36rem" }}>
             <div className="modal-header">
               <h3 style={{ margin: 0, fontWeight: 700 }}>
-                🔄 Reassign Circle Jurisdiction &bull; {reassigningOfficer.name}
+                🔄 Official Transfer / Posting Order &bull; {reassigningOfficer.name}
               </h3>
               <button
                 type="button"
@@ -2096,20 +2429,33 @@ export default function UserManagementPage() {
               <div
                 style={{
                   background: "#eff6ff",
-                  padding: "0.75rem",
+                  padding: "0.85rem",
                   borderRadius: "6px",
                   marginBottom: "1rem",
                   fontSize: "0.825rem",
-                  color: "#1e3a8a"
+                  color: "#1e3a8a",
+                  lineHeight: 1.5
                 }}
               >
-                Current Assignment: <strong>{reassigningOfficer.circle_name}</strong> (Tehsil{" "}
-                {reassigningOfficer.tehsil_name || "Vehari"})
+                <div>
+                  <strong>Current Incumbency:</strong> {reassigningOfficer.circle_name} (
+                  {reassigningOfficer.circle_code}) &bull; Tehsil{" "}
+                  {reassigningOfficer.tehsil_name || "Vehari"}
+                </div>
+                <div>
+                  <strong>Officer Particulars:</strong> PPO:{" "}
+                  {reassigningOfficer.ppo_number || "Unassigned"} &bull; CNIC:{" "}
+                  {reassigningOfficer.cnic || "N/A"}
+                </div>
+                <div>
+                  <strong>Statutory Scope:</strong> Circles are permanent administrative tax
+                  entities. Postings transfer operational control with immutable audit preservation.
+                </div>
               </div>
 
               <div className="form-group" style={{ marginBottom: "1rem" }}>
                 <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                  Select Target Circle Jurisdiction: *
+                  Select Target Permanent Circle Station: *
                 </label>
                 <select
                   className="form-control"
@@ -2117,24 +2463,89 @@ export default function UserManagementPage() {
                   onChange={(e) => setTargetCircleId(e.target.value)}
                   style={{ fontWeight: 600 }}
                 >
-                  {distinctCircles.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.code}) — Tehsil {c.tehsilName}
+                  {governanceMatrix.map((c) => (
+                    <option key={c.circle_id} value={c.circle_id}>
+                      {c.circle_code} — {c.circle_name} (
+                      {c.tehsil_name ? `Tehsil ${c.tehsil_name}` : "District"})
+                      {c.inspector_id ? ` [Incumbent: ${c.inspector_name}]` : " [VACANT]"}
                     </option>
                   ))}
                 </select>
               </div>
 
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "1rem",
+                  marginBottom: "1rem"
+                }}
+              >
+                <div className="form-group">
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    Government Transfer Order No: *
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={transferOrderNumber}
+                    onChange={(e) => setTransferOrderNumber(e.target.value)}
+                    placeholder="e.g. SO(Admin)ET/2026/842"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    Posting Charge Type: *
+                  </label>
+                  <select
+                    className="form-control"
+                    value={isPrimaryCharge ? "PRIMARY" : "ADDITIONAL"}
+                    onChange={(e) => setIsPrimaryCharge(e.target.value === "PRIMARY")}
+                    style={{ fontWeight: 600 }}
+                  >
+                    <option value="PRIMARY">
+                      Regular Primary Charge (Relinquishes Prior Station)
+                    </option>
+                    <option value="ADDITIONAL">
+                      Additional Temporary Charge (Dual Circle Holding)
+                    </option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "1rem" }}>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    fontSize: "0.825rem",
+                    fontWeight: 600,
+                    color: "#0f172a",
+                    cursor: "pointer"
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={relieveCurrentIncumbent}
+                    onChange={(e) => setRelieveCurrentIncumbent(e.target.checked)}
+                  />
+                  Relieve current incumbent in target circle if assigned (Handing-over execution)
+                </label>
+              </div>
+
               <div className="form-group" style={{ marginBottom: "1.5rem" }}>
                 <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
-                  Statutory Administrative Reason: *
+                  Handing-over Remarks / Statutory Administrative Reason: *
                 </label>
                 <textarea
                   className="form-control"
                   rows={3}
-                  value={reassignReason}
-                  onChange={(e) => setReassignReason(e.target.value)}
-                  placeholder="e.g. Routine field reorganization under ETO office order"
+                  value={handingOverNotes}
+                  onChange={(e) => setHandingOverNotes(e.target.value)}
+                  placeholder="e.g. Routine rotational posting order issued by Assessing Authority under Section 3(4) Punjab Finance Act 1977"
                   required
                 />
               </div>
@@ -2155,7 +2566,7 @@ export default function UserManagementPage() {
                   disabled={isSubmitting}
                   style={{ background: "#0d3822", borderColor: "#062415" }}
                 >
-                  {isSubmitting ? "Reassigning..." : "Confirm Circle Reassignment"}
+                  {isSubmitting ? "Executing Transfer..." : "Execute Official Transfer Order"}
                 </button>
               </div>
             </div>
@@ -2331,7 +2742,7 @@ export default function UserManagementPage() {
                 </div>
               </div>
 
-              <div className="form-group" style={{ marginBottom: "1.5rem" }}>
+              <div className="form-group" style={{ marginBottom: "1rem" }}>
                 <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>Confirm Password: *</label>
                 <input
                   type={showPassword ? "text" : "password"}
@@ -2341,6 +2752,27 @@ export default function UserManagementPage() {
                   placeholder="Re-type new password"
                   required
                 />
+              </div>
+
+              <div style={{ marginBottom: "1.25rem" }}>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    fontSize: "0.825rem",
+                    fontWeight: 600,
+                    color: "#0f172a",
+                    cursor: "pointer"
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={mustChangePassword}
+                    onChange={(e) => setMustChangePassword(e.target.checked)}
+                  />
+                  Require officer to change password on next sign-in (Statutory security mandate)
+                </label>
               </div>
 
               <div

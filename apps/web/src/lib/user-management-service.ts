@@ -1,7 +1,9 @@
 /**
  * PTAS User Management & Jurisdiction Administration Service
  * Pure live Supabase database & statutory RPC integration.
- * No mock/pilot data.
+ * Governed by:
+ * - AGENTS.md: Enforce role and jurisdiction on server/client for every read/write.
+ * - Migration 0054: Decoupled permanent circle postings, civil service cadre, and supervisory authority.
  */
 
 import { getSupabaseAuthClient } from "./supabase-auth";
@@ -15,16 +17,27 @@ export interface LiveOfficerAccount {
   readonly cnic: string;
   readonly designation: string;
   readonly office_address: string;
+  readonly ppo_number?: string;
+  readonly father_name?: string;
+  readonly bps_scale?: number;
+  readonly must_change_password?: boolean;
   readonly active: boolean;
   readonly created_at: string;
-  readonly role: "ETO" | "INSPECTOR" | "DIRECTOR" | "ADMIN";
+  readonly role: "ETO" | "INSPECTOR" | "DIRECTOR" | "ADMIN" | "CLERK" | "AETO";
   readonly jurisdiction_id: string;
   readonly circle_name: string;
   readonly circle_code: string;
+  readonly circle_id?: string;
   readonly tehsil_id: string | null;
   readonly tehsil_name: string | null;
   readonly district_id: string;
   readonly district_name: string;
+  readonly district_code?: string;
+  readonly pbs_code?: string;
+  readonly division_name?: string;
+  readonly is_primary?: boolean;
+  readonly transfer_order_number?: string;
+  readonly posting_date?: string | null;
   readonly assigned_survey_units_count: number;
   readonly circle_survey_units_count: number;
 }
@@ -33,10 +46,10 @@ export interface GovernanceCircleRecord {
   readonly circle_id: string;
   readonly circle_code: string;
   readonly circle_name: string;
-  readonly circle_address: string;
+  readonly circle_address?: string;
   readonly tehsil_id: string;
   readonly tehsil_name: string;
-  readonly tehsil_code: string;
+  readonly tehsil_code?: string;
   readonly district_id: string;
   readonly district_name: string;
   readonly district_code: string;
@@ -44,6 +57,10 @@ export interface GovernanceCircleRecord {
   readonly inspector_name: string | null;
   readonly inspector_phone: string | null;
   readonly inspector_email: string | null;
+  readonly inspector_ppo?: string | null;
+  readonly is_primary_charge?: boolean | null;
+  readonly transfer_order_number?: string | null;
+  readonly posting_date?: string | null;
   readonly units_count: number;
   readonly approved_units_count: number;
   readonly total_assessed_demand: number;
@@ -102,6 +119,9 @@ export async function updateOfficerProfile(params: {
   cnic: string;
   designation: string;
   officeAddress: string;
+  ppoNumber?: string;
+  fatherName?: string;
+  bpsScale?: number;
 }): Promise<void> {
   const supabase = getSupabaseAuthClient();
   const { error } = await supabase.rpc("update_officer_profile", {
@@ -110,10 +130,35 @@ export async function updateOfficerProfile(params: {
     p_phone: params.phone,
     p_cnic: params.cnic,
     p_designation: params.designation,
-    p_office_address: params.officeAddress
+    p_office_address: params.officeAddress,
+    p_ppo_number: params.ppoNumber || null,
+    p_father_name: params.fatherName || null,
+    p_bps_scale: params.bpsScale || null
   });
   if (error) {
     throw new Error(`Failed to update profile: ${error.message}`);
+  }
+}
+
+export async function transferOfficerPosting(params: {
+  userId: string;
+  targetCircleId: string;
+  transferOrderNumber: string;
+  isPrimary?: boolean;
+  handingOverNotes?: string;
+  relieveCurrentIncumbent?: boolean;
+}): Promise<void> {
+  const supabase = getSupabaseAuthClient();
+  const { error } = await supabase.rpc("transfer_officer_posting", {
+    p_user_id: params.userId,
+    p_target_circle_id: params.targetCircleId,
+    p_transfer_order_number: params.transferOrderNumber,
+    p_is_primary: params.isPrimary ?? true,
+    p_handing_over_notes: params.handingOverNotes || null,
+    p_relieve_current_incumbent: params.relieveCurrentIncumbent ?? false
+  });
+  if (error) {
+    throw new Error(`Failed to execute posting transfer: ${error.message}`);
   }
 }
 
@@ -168,6 +213,7 @@ export async function setOfficerStatus(params: {
 export async function adminSetOfficerPassword(params: {
   targetUserId: string;
   newPassword: string;
+  mustChange?: boolean;
 }): Promise<void> {
   if (params.newPassword.length < 6) {
     throw new Error("Password must be at least 6 characters.");
@@ -175,7 +221,8 @@ export async function adminSetOfficerPassword(params: {
   const supabase = getSupabaseAuthClient();
   const { error } = await supabase.rpc("admin_set_officer_password", {
     p_target_user_id: params.targetUserId,
-    p_new_password: params.newPassword
+    p_new_password: params.newPassword,
+    p_must_change: params.mustChange ?? true
   });
   if (error) {
     throw new Error(`Failed to set officer password: ${error.message}`);
@@ -185,13 +232,17 @@ export async function adminSetOfficerPassword(params: {
 export async function adminCreateOfficer(params: {
   name: string;
   email: string;
-  role: "INSPECTOR" | "ETO";
+  role: "INSPECTOR" | "ETO" | "CLERK";
   circleId: string;
   phone: string;
   cnic: string;
   designation: string;
   officeAddress: string;
   initialPassword: string;
+  ppoNumber?: string;
+  fatherName?: string;
+  bpsScale?: number;
+  transferOrderNumber?: string;
 }): Promise<{ id: string; name: string; email: string }> {
   if (params.initialPassword.length < 6) {
     throw new Error("Initial password must be at least 6 characters.");
@@ -206,7 +257,11 @@ export async function adminCreateOfficer(params: {
     p_cnic: params.cnic,
     p_designation: params.designation,
     p_office_address: params.officeAddress,
-    p_initial_password: params.initialPassword
+    p_initial_password: params.initialPassword,
+    p_ppo_number: params.ppoNumber || null,
+    p_father_name: params.fatherName || null,
+    p_bps_scale: params.bpsScale || 14,
+    p_transfer_order_number: params.transferOrderNumber || null
   });
   if (error) {
     throw new Error(`Failed to create officer: ${error.message}`);
