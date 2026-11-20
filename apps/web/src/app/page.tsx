@@ -1112,6 +1112,7 @@ export default function HomePage({
 
   // Modal States
   const [showAddUnitModal, setShowAddUnitModal] = useState(false);
+  const [directEnrollPft3, setDirectEnrollPft3] = useState(true);
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
@@ -2332,6 +2333,120 @@ export default function HomePage({
     const matchedCircle = DISTRICT_VEHARI_CIRCLES.find(
       (c) => c.name === normalizeCircleName(newCircleName) || c.id === newCircleName
     );
+    const canDirectEnroll =
+      (officer.role === "ETO" || officer.role === "ADMIN" || officer.role === "DIRECTOR") &&
+      directEnrollPft3;
+
+    // Offline / Demo Session Fallback
+    if (authenticatedSessionType === "OFFLINE") {
+      const generatedDemandNo = String(units.length + 1).padStart(4, "0");
+      const generatedPin = `237-0010101010${String(units.length + 1).padStart(6, "0")}-${canDirectEnroll ? "01" : "03"}`;
+      const newUnitId = `unit-${Date.now()}`;
+      const initialVer: AssessmentVersion<StoredUnitSnapshot> = {
+        id: `ver-${Date.now()}`,
+        assessmentId: `asm-${Date.now()}`,
+        versionNo: 1,
+        snapshot: {
+          taxAmount: rule.annual_rate_pkr,
+          statutoryCategory: rule.category,
+          legalBasis: rule.rule_code,
+          ruleId: rule.rule_id,
+          subclassificationCode: rule.subclassification_code
+        },
+        status: canDirectEnroll ? "APPROVED" : "DRAFT",
+        createdBy: officer.name,
+        createdAt: new Date().toISOString()
+      };
+      const initialAsm: Assessment = {
+        id: `asm-${Date.now()}`,
+        taxpayerId: newUnitId,
+        financialYearId: FINANCIAL_YEAR_2026_27,
+        status: canDirectEnroll ? "APPROVED" : "DRAFT",
+        currentVersionNo: 1,
+        createdBy: officer.id,
+        createdAt: new Date().toISOString()
+      };
+      const newUnit: StoredUnit = {
+        id: newUnitId,
+        pinNumber: generatedPin,
+        provincialUin: generatedPin,
+        demandNumber: generatedDemandNo,
+        pft3Registered: canDirectEnroll,
+        legalName: newLegalName.trim(),
+        tradeName: newTradeName.trim() || undefined,
+        identifierType: newIdentifierType,
+        identifierValue: newIdentifierValue.trim(),
+        address: newAddress.trim(),
+        locality: newLocality.trim() || undefined,
+        circleId: matchedCircle?.id ?? "circle-1",
+        circleName: newCircleName,
+        districtName: "Vehari",
+        tehsil: newTehsil,
+        assessmentNumber: `ASM-2026-${String(units.length + 1).padStart(4, "0")}`,
+        statutoryRuleId: rule.rule_id,
+        statutoryRule: rule,
+        categoryCode: rule.category_code,
+        subclassificationCode: rule.subclassification_code,
+        statutoryTertiaryCode: rule.statutory_tertiary_code,
+        openingArrears: sanitizedArrears,
+        assessments: [initialAsm],
+        assessmentVersions: [initialVer],
+        ledgerEntries:
+          sanitizedArrears > 0
+            ? [
+                {
+                  id: `adj-arr-${Date.now()}`,
+                  demandUnitId: `dem-${newUnitId}`,
+                  financialYearId: FINANCIAL_YEAR_2026_27,
+                  entryType: "MANUAL_ADJUSTMENT",
+                  amount: sanitizedArrears,
+                  sourceType: "MANUAL_ADJUSTMENT",
+                  sourceId: `arr-${newUnitId}`,
+                  postedAt: new Date().toISOString(),
+                  postedBy: officer.name,
+                  correlationId: `corr-arr-${Date.now()}`,
+                  idempotencyKey: `idem-arr-${Date.now()}`,
+                  metadata: {
+                    note: `Opening unrecovered professional tax arrears liability: PKR ${sanitizedArrears.toLocaleString()}`
+                  }
+                }
+              ]
+            : [],
+        demandUnit: {
+          id: `dem-${newUnitId}`,
+          taxpayerId: newUnitId,
+          permanentDemandNo: generatedDemandNo,
+          createdAt: new Date().toISOString()
+        },
+        createdAt: new Date().toISOString()
+      };
+
+      const auditItem: PilotAuditItem = {
+        id: `audit-${Date.now()}`,
+        eventType: canDirectEnroll ? "ASSESSMENT_APPROVED" : "TAX_UNIT_REGISTERED",
+        actorName: officer.name,
+        actorRole: officer.role,
+        target: newUnit.legalName,
+        timestamp: new Date().toISOString(),
+        correlationId: `corr-add-${Date.now()}`,
+        details: canDirectEnroll
+          ? `Unit assessed and directly enrolled into Form P.F.T-3 by Assessing Authority (${officer.name}). Allocated Demand No. ${generatedDemandNo}.`
+          : `Survey unit feeded into assessment queue awaiting ETO statutory review under Class ${rule.rule_code}.`
+      };
+
+      syncState([newUnit, ...units], [auditItem, ...auditLogs]);
+      setShowAddUnitModal(false);
+      setSelectedUnitId(newUnit.id);
+      showToast(
+        "success",
+        canDirectEnroll
+          ? `✓ Unit '${newLegalName.trim()}' enrolled directly into Form P.F.T-3 (Demand No: ${generatedDemandNo})!`
+          : `✓ Unit '${newLegalName.trim()}' feeded into Assessment Queue (FEEDED). Awaiting ETO review.`
+      );
+      return;
+    }
+
+    // Cloud Database Execution via RPC
     const { data, error } = await getSupabaseAuthClient().rpc("create_individual_survey_unit", {
       p_unit: {
         legal_name: newLegalName.trim(),
@@ -2346,7 +2461,8 @@ export default function HomePage({
         tehsil: newTehsil,
         financial_year_id: "2026-2027",
         statutory_rule_id: rule.rule_id,
-        opening_arrears: sanitizedArrears
+        opening_arrears: sanitizedArrears,
+        enroll_direct_to_pft3: canDirectEnroll
       },
       p_idempotency_key: `survey-individual:${officer.id}:${requestId}`,
       p_correlation_id: `survey-individual:${requestId}`
@@ -2355,7 +2471,11 @@ export default function HomePage({
       showToast("error", `Unable to add survey unit: ${error.message}`);
       return;
     }
-    const created = data as { id?: string } | null;
+    const created = data as {
+      id?: string;
+      permanent_demand_no?: string;
+      direct_enrolled?: boolean;
+    } | null;
     await refreshOperationalSurveyUnits();
 
     // Reset Form
@@ -2373,10 +2493,17 @@ export default function HomePage({
     setNewRuleId("PFT-3.i.b");
     setShowAddUnitModal(false);
     if (created?.id) setSelectedUnitId(created.id);
-    showToast(
-      "success",
-      `✓ Unit '${newLegalName.trim()}' feeded into survey pipeline awaiting ETO statutory review under Class ${rule.rule_code}${sanitizedArrears > 0 ? ` (Opening arrears: PKR ${sanitizedArrears.toLocaleString()})` : ""}.`
-    );
+    if (canDirectEnroll || created?.direct_enrolled) {
+      showToast(
+        "success",
+        `✓ Unit '${newLegalName.trim()}' enrolled directly into Form P.F.T-3 (Demand No: ${created?.permanent_demand_no ?? "Allocated"})!`
+      );
+    } else {
+      showToast(
+        "success",
+        `✓ Unit '${newLegalName.trim()}' feeded into survey intake queue awaiting ETO review under Class ${rule.rule_code}${sanitizedArrears > 0 ? ` (Opening arrears: PKR ${sanitizedArrears.toLocaleString()})` : ""}.`
+      );
+    }
   };
 
   // Handler: Inspector Submits Assessment to ETO Review Queue
@@ -5587,6 +5714,9 @@ export default function HomePage({
     setNewTertiaryCode("");
     setNewRuleId("PFT-1.i");
     setNewOpeningArrears(0);
+    setDirectEnrollPft3(
+      officer.role === "ETO" || officer.role === "ADMIN" || officer.role === "DIRECTOR"
+    );
     setShowAddUnitModal(true);
   };
 
@@ -19058,6 +19188,128 @@ export default function HomePage({
                       </>
                     )}
 
+                    {!editingTarget && (
+                      <>
+                        {officer.role === "ETO" ||
+                        officer.role === "ADMIN" ||
+                        officer.role === "DIRECTOR" ? (
+                          <div
+                            style={{
+                              background: "#ecfdf5",
+                              border: "1px solid #a7f3d0",
+                              padding: "0.75rem 1rem",
+                              borderRadius: "6px",
+                              marginBottom: "1rem",
+                              color: "#065f46"
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                flexWrap: "wrap",
+                                gap: "0.5rem"
+                              }}
+                            >
+                              <strong
+                                style={{
+                                  fontSize: "0.85rem",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.35rem"
+                                }}
+                              >
+                                <span>⭐</span>
+                                <span>Assessing Authority Privilege ({officer.role}):</span>
+                              </strong>
+                              <span
+                                style={{
+                                  fontSize: "0.725rem",
+                                  background: "#d1fae5",
+                                  color: "#065f46",
+                                  padding: "0.15rem 0.5rem",
+                                  borderRadius: "4px",
+                                  fontWeight: 700
+                                }}
+                              >
+                                Rule 11 Direct Statutory Enrollment
+                              </span>
+                            </div>
+                            <p
+                              style={{
+                                margin: "0.35rem 0 0.5rem",
+                                fontSize: "0.8rem",
+                                color: "#047857",
+                                lineHeight: 1.4
+                              }}
+                            >
+                              As the legally authorized Assessing Authority, you can grant immediate
+                              statutory approval upon creation and enroll this unit directly into
+                              Form P.F.T-3.
+                            </p>
+                            <label
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                cursor: "pointer",
+                                fontSize: "0.825rem",
+                                fontWeight: 600,
+                                color: "#065f46"
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={directEnrollPft3}
+                                onChange={(e) => setDirectEnrollPft3(e.target.checked)}
+                                style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                              />
+                              <span>
+                                Enroll directly into Form P.F.T-3 Assessment Register (Allocates
+                                Demand No. &amp; PIN -01)
+                              </span>
+                            </label>
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              background: "#eff6ff",
+                              border: "1px solid #bfdbfe",
+                              padding: "0.75rem 1rem",
+                              borderRadius: "6px",
+                              marginBottom: "1rem",
+                              color: "#1e40af"
+                            }}
+                          >
+                            <strong
+                              style={{
+                                fontSize: "0.85rem",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.35rem"
+                              }}
+                            >
+                              <span>ℹ️</span>
+                              <span>Field Survey Intake Mode (Tax Inspector):</span>
+                            </strong>
+                            <p
+                              style={{
+                                margin: "0.25rem 0 0",
+                                fontSize: "0.8rem",
+                                color: "#1e3a8a"
+                              }}
+                            >
+                              Under Rule 11, newly surveyed units enter the{" "}
+                              <strong>Assessment Queue (FEEDED)</strong>. They will appear on Form
+                              P.F.T-3 once the Assessing Authority (ETO) reviews and grants
+                              statutory approval.
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    )}
+
                     {duplicateWarning && (
                       <div
                         style={{
@@ -19627,7 +19879,12 @@ export default function HomePage({
                             ? isApproved
                               ? "✓ Save Changes & Submit for ETO Re-approval"
                               : "✓ Save Survey Changes (FEEDED)"
-                            : "Save & Feed for ETO Review"
+                            : (officer.role === "ETO" ||
+                                  officer.role === "ADMIN" ||
+                                  officer.role === "DIRECTOR") &&
+                                directEnrollPft3
+                              ? "✓ Approve & Enroll in Form P.F.T-3"
+                              : "Save & Feed for ETO Review"
                           : "🔒 Editing Prohibited (Locked)"}
                       </button>
                     </div>
