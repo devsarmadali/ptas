@@ -4424,15 +4424,16 @@ export default function HomePage({
     setPotentialCurrentPage(1);
   };
 
-  // Defaulter Units Filter
+  // Defaulter Units Filter (only computed while Defaulters tab is active)
   const defaulterUnits = useMemo(() => {
+    if (activeTab !== "DEFAULTERS") return [];
     return units.filter((u) => {
       const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
       if (defaulterFilter === "ALL")
         return aging.remainingBalance > 0 && aging.status !== "PAID" && aging.status !== "CURRENT";
       return aging.status === defaulterFilter;
     });
-  }, [units, defaulterFilter]);
+  }, [units, defaulterFilter, activeTab]);
 
   const noticeTargetUnit = useMemo(() => {
     return units.find((u) => u.id === noticeTargetUnitId) ?? null;
@@ -4457,14 +4458,17 @@ export default function HomePage({
     return units.filter((u) => u.assessments[0]?.status === "APPROVED");
   }, [units]);
 
-  // Statutory Circle Notice Dispatch & Service Register (Rule 6) - restricted strictly to PFT-3 enrolled units
+  // Statutory Circle Notice Dispatch & Service Register (Rule 6) - computed only for modal/Reports tab
   const circleDispatchRegisterData = useMemo(() => {
+    if (!showDispatchRegisterModal && activeTab !== "REPORTS") {
+      return generateCircleDispatchRegister([], "2026-07-02");
+    }
     return generateCircleDispatchRegister(pft3EnrolledUnits, "2026-07-02");
-  }, [pft3EnrolledUnits]);
+  }, [pft3EnrolledUnits, showDispatchRegisterModal, activeTab]);
 
   // Phase 7: Executive MIS Analytics Metrics - strictly computed on PFT-3 enrolled units
   const misMetrics: ExecutiveMetrics = useMemo(() => {
-    if (activeTab !== "ANALYTICS" && activeTab !== "REPORTS") {
+    if (activeTab !== "ANALYTICS" && activeTab !== "MIS_HUB" && activeTab !== "REPORTS") {
       return EMPTY_EXECUTIVE_METRICS;
     }
     return computeExecutiveMetrics(
