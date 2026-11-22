@@ -1041,6 +1041,7 @@ export default function HomePage({
   authStatusRef.current = authStatus;
   const hasAnyModalOpenRef = useRef(false);
   const [units, setUnits] = useState<StoredUnit[]>([]);
+  const unitsById = useMemo(() => new Map(units.map((u) => [u.id, u])), [units]);
   const [auditLogs, setAuditLogs] = useState<PilotAuditItem[]>(() => loadPersistedAuditLogs());
   const [isLoadingOperationalUnits, setIsLoadingOperationalUnits] = useState(true);
   const [operationalUnitsError, setOperationalUnitsError] = useState<string | null>(null);
@@ -2321,9 +2322,11 @@ export default function HomePage({
     return getCircleLocalities(potNewCircleName, units, potentialUnits);
   }, [potNewCircleName, units, potentialUnits]);
 
-  // Real-time Duplicate Detection using domain's findDuplicateCandidates
-  const duplicateWarning = useMemo((): DuplicateMatch | null => {
-    if (!showAddUnitModal || (!newIdentifierValue.trim() && !newLegalName.trim())) return null;
+  const deferredNewIdentifierValue = useDeferredValue(newIdentifierValue);
+  const deferredNewLegalName = useDeferredValue(newLegalName);
+
+  const existingTaxpayersForDuplicateCheck = useMemo<Taxpayer[]>(() => {
+    if (!showAddUnitModal) return [];
 
     const actor: AuditActor = {
       userId: "system-audit",
@@ -2331,7 +2334,7 @@ export default function HomePage({
       jurisdictionId: CIRCLE_VEHARI_ID
     };
 
-    const existingAsTaxpayers: Taxpayer[] = units
+    return units
       .map((u) => {
         try {
           return createTaxpayer(
@@ -2353,41 +2356,45 @@ export default function HomePage({
         }
       })
       .filter((t): t is Taxpayer => t !== null);
+  }, [showAddUnitModal, units]);
+
+  // Real-time Duplicate Detection using domain's findDuplicateCandidates
+  const duplicateWarning = useMemo((): DuplicateMatch | null => {
+    if (!showAddUnitModal || (!deferredNewIdentifierValue.trim() && !deferredNewLegalName.trim())) {
+      return null;
+    }
 
     const matches = findDuplicateCandidates(
       {
-        displayName: newLegalName.trim() || "New Candidate",
+        displayName: deferredNewLegalName.trim() || "New Candidate",
         currentCircleId: CIRCLE_VEHARI_ID,
-        identifiers: newIdentifierValue.trim()
+        identifiers: deferredNewIdentifierValue.trim()
           ? [
               {
                 identifierType: newIdentifierType,
-                value: newIdentifierValue.trim()
+                value: deferredNewIdentifierValue.trim()
               }
             ]
           : []
       },
-      existingAsTaxpayers
+      existingTaxpayersForDuplicateCheck
     );
 
     return matches.length > 0 ? (matches[0] ?? null) : null;
-  }, [showAddUnitModal, newIdentifierValue, newLegalName, newIdentifierType, units]);
+  }, [
+    showAddUnitModal,
+    deferredNewIdentifierValue,
+    deferredNewLegalName,
+    newIdentifierType,
+    existingTaxpayersForDuplicateCheck
+  ]);
 
-  // Metrics Calculations
+  // Metrics Calculations (single pass over units)
   const metrics = useMemo(() => {
     const totalUnits = units.length;
     let totalDemand = 0;
     let totalPayments = 0;
     let pendingApprovals = 0;
-
-    for (const u of units) {
-      const summary = computeUnitFinancialSummary(u);
-      totalDemand += summary.totalDemand;
-      totalPayments += summary.totalPaid;
-      const pending = u.assessments.some((a) => a.status === "SUBMITTED");
-      if (pending) pendingApprovals++;
-    }
-
     let defaultersOverdue = 0;
     let defaultersPenaltyEligible = 0;
     let defaultersPenalized = 0;
@@ -2395,6 +2402,13 @@ export default function HomePage({
     let totalPenaltiesImposed = 0;
 
     for (const u of units) {
+      const summary = computeUnitFinancialSummary(u);
+      totalDemand += summary.totalDemand;
+      totalPayments += summary.totalPaid;
+      if (u.assessments.some((a) => a.status === "SUBMITTED")) {
+        pendingApprovals++;
+      }
+
       const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
       if (aging.status === "OVERDUE_30_DAYS") defaultersOverdue++;
       if (aging.status === "PENALTY_ELIGIBLE") defaultersPenaltyEligible++;
@@ -3141,7 +3155,7 @@ export default function HomePage({
       return;
     }
     const eligibleIds = Array.from(selectedAssessmentIds).filter((id) => {
-      const u = units.find((x) => x.id === id);
+      const u = unitsById.get(id);
       return u?.assessments[0]?.status === "SUBMITTED";
     });
     if (eligibleIds.length === 0) {
@@ -3483,7 +3497,7 @@ export default function HomePage({
   // Handler: Open Close Modal for Bulk Selected Units
   const handleOpenBulkCloseModal = () => {
     const eligibleIds = Array.from(selectedAssessmentIds).filter((id) => {
-      const u = units.find((x) => x.id === id);
+      const u = unitsById.get(id);
       return u?.assessments[0]?.status !== "APPROVED";
     });
     if (eligibleIds.length === 0) {
@@ -3770,8 +3784,8 @@ export default function HomePage({
 
   // Currently Selected Unit object
   const activeUnit = useMemo(() => {
-    return units.find((u) => u.id === selectedUnitId) ?? units[0];
-  }, [units, selectedUnitId]);
+    return unitsById.get(selectedUnitId) ?? units[0];
+  }, [unitsById, units, selectedUnitId]);
 
   // NOTE: formPFT1Data and formPFT2Data are generated on-demand inside their
   // respective modals (showPft1NoticeModal / showIssuePft2Modal) using the
@@ -3870,8 +3884,9 @@ export default function HomePage({
   }, [formPFT3Rows, pft3CategoryFilter]);
 
   const filteredFormPFT3Rows = useMemo(() => {
+    if (activeTab !== "REGISTER_PFT3") return [];
     return formPFT3Rows.filter((row) => {
-      const targetUnit = units.find((unit) => unit.id === row.sourceUnitId);
+      const targetUnit = unitsById.get(row.sourceUnitId);
       if (!targetUnit) return false;
 
       if (
@@ -3969,8 +3984,9 @@ export default function HomePage({
       return true;
     });
   }, [
+    activeTab,
     formPFT3Rows,
-    units,
+    unitsById,
     deferredPft3SearchQuery,
     pft3DistrictFilter,
     pft3CircleFilter,
@@ -4093,6 +4109,7 @@ export default function HomePage({
 
   // Assessment Queue Filtered Rows & Metric Counts (Under-Process Only)
   const filteredAssessmentUnits = useMemo(() => {
+    if (activeTab !== "ASSESSMENTS" && activeTab !== "UNITS") return [];
     return units.filter((u) => {
       if (activePotentialIds.has(u.id)) return false;
       const currentAsm = u.assessments[0];
@@ -4134,6 +4151,7 @@ export default function HomePage({
       return true;
     });
   }, [
+    activeTab,
     units,
     activePotentialIds,
     assessmentStatusFilter,
@@ -4182,6 +4200,7 @@ export default function HomePage({
 
   // Potential Register Filtered Rows
   const filteredPotentialUnits = useMemo(() => {
+    if (activeTab !== "REGISTER_POTENTIAL") return [];
     return potentialUnits.filter((u) => {
       // MIGRATED units have been enrolled in PFT-3; exclude from active pipeline view
       if (u.status === "MIGRATED") return false;
@@ -4274,6 +4293,7 @@ export default function HomePage({
       return true;
     });
   }, [
+    activeTab,
     potentialUnits,
     potentialDistrictFilter,
     potentialCircleFilter,
@@ -4436,8 +4456,8 @@ export default function HomePage({
   }, [units, defaulterFilter, activeTab]);
 
   const noticeTargetUnit = useMemo(() => {
-    return units.find((u) => u.id === noticeTargetUnitId) ?? null;
-  }, [units, noticeTargetUnitId]);
+    return noticeTargetUnitId ? (unitsById.get(noticeTargetUnitId) ?? null) : null;
+  }, [unitsById, noticeTargetUnitId]);
 
   const showCauseNoticeData = useMemo(() => {
     if (!noticeTargetUnit) return null;
@@ -4445,8 +4465,8 @@ export default function HomePage({
   }, [noticeTargetUnit]);
 
   const recoveryTargetUnit = useMemo(() => {
-    return units.find((u) => u.id === recoveryTargetUnitId) ?? null;
-  }, [units, recoveryTargetUnitId]);
+    return recoveryTargetUnitId ? (unitsById.get(recoveryTargetUnitId) ?? null) : null;
+  }, [unitsById, recoveryTargetUnitId]);
 
   const recoveryCertData = useMemo(() => {
     if (!recoveryTargetUnit) return null;
@@ -12357,7 +12377,7 @@ export default function HomePage({
                     </tr>
                   ) : (
                     appeals.map((appeal) => {
-                      const matchingUnit = units.find((u) => u.id === appeal.unitId);
+                      const matchingUnit = unitsById.get(appeal.unitId);
                       const originalTax =
                         matchingUnit?.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
 
@@ -13197,7 +13217,7 @@ export default function HomePage({
                                           label: "View Statutory Closure Order",
                                           icon: "📄",
                                           onClick: () => {
-                                            const u = units.find((unit) => unit.id === disc.unitId);
+                                            const u = unitsById.get(disc.unitId);
                                             if (u) {
                                               const doc = generateDiscontinuanceOrder(u, {
                                                 orderNumber: disc.etoOrderNumber || "DISC-ORD-2026",
@@ -13493,7 +13513,7 @@ export default function HomePage({
                                           label: "View Statutory Refund Decree",
                                           icon: "📄",
                                           onClick: () => {
-                                            const u = units.find((unit) => unit.id === ref.unitId);
+                                            const u = unitsById.get(ref.unitId);
                                             if (u) {
                                               const doc = generateRefundAdjustmentOrder(u, {
                                                 orderNumber: ref.orderNumber || "ADJ-ORD-2026",
@@ -19951,7 +19971,7 @@ export default function HomePage({
       {/* MODAL 1: ADD A NEW UNIT OR EDIT EXISTING FEEDED/RETURNED UNIT */}
       {showAddUnitModal &&
         (() => {
-          const editingTarget = editingUnitId ? units.find((u) => u.id === editingUnitId) : null;
+          const editingTarget = editingUnitId ? (unitsById.get(editingUnitId) ?? null) : null;
           const currentStatus = editingTarget?.assessments[0]?.status ?? "DRAFT";
           const isReturned = currentStatus === "RETURNED";
           const isDraft = currentStatus === "DRAFT";
@@ -21905,7 +21925,7 @@ export default function HomePage({
             <form onSubmit={handleImposePenalty}>
               <div className="modal-body">
                 {(() => {
-                  const target = units.find((u) => u.id === penaltyTargetUnitId);
+                  const target = unitsById.get(penaltyTargetUnitId);
                   if (!target) return null;
                   const aging = computeDefaulterAging(target.ledgerEntries);
                   const calculatedPenalty = Math.round(
@@ -22391,7 +22411,7 @@ export default function HomePage({
       {/* MODAL: VIEW / PRINT SINGLE FORM P.F.T-1 NOTICE OF DEMAND (RULE 6) */}
       {showPft1NoticeModal &&
         (() => {
-          const pft1Unit = units.find((u) => u.id === selectedUnitId) ?? activeUnit;
+          const pft1Unit = unitsById.get(selectedUnitId) ?? activeUnit;
           const pft1Data = pft1Unit ? generateFormPFT1(pft1Unit) : null;
           if (!pft1Data) return null;
           return (
@@ -23972,7 +23992,9 @@ export default function HomePage({
 
                 {(() => {
                   const targetApp = appeals.find((a) => a.id === adjudicateTargetAppealId);
-                  const targetUnit = units.find((u) => u.id === targetApp?.unitId);
+                  const targetUnit = targetApp?.unitId
+                    ? unitsById.get(targetApp.unitId)
+                    : undefined;
                   const originalTax = targetUnit?.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
                   let penalty = 0;
                   for (const entry of targetUnit?.ledgerEntries ?? []) {
@@ -27709,7 +27731,7 @@ export default function HomePage({
 
             <div className="modal-body">
               {(() => {
-                const selectedUnit = units.find((u) => u.id === issuePft2UnitId) ?? units[0];
+                const selectedUnit = unitsById.get(issuePft2UnitId) ?? units[0];
                 const latestVersion = selectedUnit?.assessmentVersions[0];
                 const baseTax = latestVersion?.snapshot.taxAmount ?? 0;
                 const arrears = selectedUnit?.openingArrears ?? 0;
@@ -28300,7 +28322,9 @@ export default function HomePage({
             <div className="modal-body">
               {(() => {
                 const targetUnit =
-                  units.find((u) => u.id === activePrintChallan.unitId) ?? units[0];
+                  (activePrintChallan.unitId
+                    ? unitsById.get(activePrintChallan.unitId)
+                    : undefined) ?? units[0];
                 if (!targetUnit) return null;
 
                 const challanModel = generateFormPFT2(targetUnit, {
