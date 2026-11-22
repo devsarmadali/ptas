@@ -180,6 +180,37 @@ function ReportViewContent() {
     };
   }, [pilotState, reportKey, pft3Units]);
 
+  const surveyRegisterTotals = useMemo(() => {
+    if (!pilotState || reportKey !== "SURVEY_REGISTER") {
+      return { totalProspective: 0, draftCount: 0, submittedCount: 0 };
+    }
+    let totalProspective = 0;
+    let draftCount = 0;
+    let submittedCount = 0;
+    for (const u of surveyUnits) {
+      totalProspective += u.statutoryRule?.annual_rate_pkr ?? 0;
+      const st = u.assessments[0]?.status;
+      if (st === "SUBMITTED") submittedCount++;
+      else draftCount++;
+    }
+    return { totalProspective, draftCount, submittedCount };
+  }, [pilotState, reportKey, surveyUnits]);
+
+  const potentialRegisterTotals = useMemo(() => {
+    if (!pilotState || reportKey !== "POTENTIAL_REGISTER") {
+      return { totalProjected: 0, verifiedCount: 0, pendingCount: 0 };
+    }
+    let totalProjected = 0;
+    let verifiedCount = 0;
+    let pendingCount = 0;
+    for (const p of potentialUnits) {
+      totalProjected += p.annualRatePkr ?? p.statutoryRule?.annual_rate_pkr ?? 0;
+      if (p.status === "ACTIVE") verifiedCount++;
+      else pendingCount++;
+    }
+    return { totalProjected, verifiedCount, pendingCount };
+  }, [pilotState, reportKey, potentialUnits]);
+
   if (loadError) {
     return (
       <main
@@ -1280,483 +1311,450 @@ function ReportViewContent() {
             </table>
           )}
 
-          {reportKey === "SURVEY_REGISTER" &&
-            (() => {
-              let totalProspective = 0;
-              let draftCount = 0;
-              let submittedCount = 0;
-
-              for (const u of surveyUnits) {
-                totalProspective += u.statutoryRule?.annual_rate_pkr ?? 0;
-                const st = u.assessments[0]?.status;
-                if (st === "SUBMITTED") submittedCount++;
-                else draftCount++;
-              }
-
-              return (
-                <div>
-                  {/* Pipeline Summary Banner */}
-                  <div
+          {reportKey === "SURVEY_REGISTER" && (
+            <div>
+              {/* Pipeline Summary Banner */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
+                  gap: "0.85rem",
+                  marginBottom: "1.25rem",
+                  fontFamily: "system-ui, -apple-system, sans-serif"
+                }}
+              >
+                <div
+                  style={{
+                    background: "#f0f9ff",
+                    border: "1px solid #bae6fd",
+                    padding: "0.85rem",
+                    borderRadius: "6px"
+                  }}
+                >
+                  <span
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
-                      gap: "0.85rem",
-                      marginBottom: "1.25rem",
-                      fontFamily: "system-ui, -apple-system, sans-serif"
-                    }}
-                  >
-                    <div
-                      style={{
-                        background: "#f0f9ff",
-                        border: "1px solid #bae6fd",
-                        padding: "0.85rem",
-                        borderRadius: "6px"
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "0.75rem",
-                          color: "#0369a1",
-                          fontWeight: 700,
-                          display: "block"
-                        }}
-                      >
-                        DISCOVERY PIPELINE UNITS
-                      </span>
-                      <strong
-                        style={{
-                          fontSize: "1.3rem",
-                          color: "#0c4a6e",
-                          marginTop: "0.2rem",
-                          display: "block"
-                        }}
-                      >
-                        {surveyUnits.length.toLocaleString()} Units
-                      </strong>
-                    </div>
-
-                    <div
-                      style={{
-                        background: "#f8fafc",
-                        border: "1px solid #cbd5e1",
-                        padding: "0.85rem",
-                        borderRadius: "6px"
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "0.75rem",
-                          color: "#475569",
-                          fontWeight: 700,
-                          display: "block"
-                        }}
-                      >
-                        PROSPECTIVE DEMAND
-                      </span>
-                      <strong
-                        style={{
-                          fontSize: "1.3rem",
-                          color: "#1e293b",
-                          marginTop: "0.2rem",
-                          display: "block"
-                        }}
-                      >
-                        PKR {totalProspective.toLocaleString()}
-                      </strong>
-                    </div>
-
-                    <div
-                      style={{
-                        background: "#fffbeb",
-                        border: "1px solid #fde68a",
-                        padding: "0.85rem",
-                        borderRadius: "6px"
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "0.75rem",
-                          color: "#b45309",
-                          fontWeight: 700,
-                          display: "block"
-                        }}
-                      >
-                        DRAFT SURVEYS
-                      </span>
-                      <strong
-                        style={{
-                          fontSize: "1.3rem",
-                          color: "#92400e",
-                          marginTop: "0.2rem",
-                          display: "block"
-                        }}
-                      >
-                        {draftCount} Units
-                      </strong>
-                    </div>
-
-                    <div
-                      style={{
-                        background: "#f0fdf4",
-                        border: "1px solid #bbf7d0",
-                        padding: "0.85rem",
-                        borderRadius: "6px"
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "0.75rem",
-                          color: "#166534",
-                          fontWeight: 700,
-                          display: "block"
-                        }}
-                      >
-                        SUBMITTED FOR APPROVAL
-                      </span>
-                      <strong
-                        style={{
-                          fontSize: "1.3rem",
-                          color: "#14532d",
-                          marginTop: "0.2rem",
-                          display: "block"
-                        }}
-                      >
-                        {submittedCount} Units
-                      </strong>
-                    </div>
-                  </div>
-
-                  {/* Table */}
-                  <table
-                    style={{
-                      width: "100%",
                       fontSize: "0.75rem",
-                      borderCollapse: "collapse",
-                      marginBottom: "1.25rem"
+                      color: "#0369a1",
+                      fontWeight: 700,
+                      display: "block"
                     }}
                   >
-                    <thead>
-                      <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
-                          S.No
-                        </th>
-                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
-                          Discovery Ref / PIN
-                        </th>
-                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
-                          Profession / Trade Name
-                        </th>
-                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
-                          Proprietor
-                        </th>
-                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
-                          Commercial Address
-                        </th>
-                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
-                          Proposed Category
-                        </th>
-                        <th scope="col" style={{ padding: "0.4rem", textAlign: "right" }}>
-                          Proposed Rate
-                        </th>
-                        <th scope="col" style={{ padding: "0.4rem", textAlign: "center" }}>
-                          Pipeline Status
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {surveyUnits.map((u, idx) => (
-                        <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                          <td style={{ padding: "0.35rem" }}>{idx + 1}</td>
-                          <td
-                            style={{ padding: "0.35rem", fontFamily: "monospace", fontWeight: 700 }}
-                          >
-                            {u.provincialUin ?? u.demandUnit?.permanentDemandNo ?? u.id}
-                          </td>
-                          <td style={{ padding: "0.35rem" }}>
-                            <strong>{u.legalName}</strong>
-                          </td>
-                          <td style={{ padding: "0.35rem" }}>{u.tradeName ?? "—"}</td>
-                          <td style={{ padding: "0.35rem", color: "#475569" }}>{u.address}</td>
-                          <td style={{ padding: "0.35rem" }}>
-                            <span className="badge badge-draft">
-                              Class {u.statutoryRule?.category_code ?? u.categoryCode ?? "1"}
-                            </span>
-                            <span style={{ marginLeft: "0.4rem" }}>
-                              {u.statutoryRule?.category ?? "General"}
-                            </span>
-                          </td>
-                          <td
-                            style={{
-                              padding: "0.35rem",
-                              textAlign: "right",
-                              fontFamily: "monospace",
-                              fontWeight: 700
-                            }}
-                          >
-                            PKR {(u.statutoryRule?.annual_rate_pkr ?? 0).toLocaleString()}
-                          </td>
-                          <td style={{ padding: "0.35rem", textAlign: "center" }}>
-                            <span
-                              className={`badge ${
-                                u.assessments[0]?.status === "SUBMITTED"
-                                  ? "badge-pending"
-                                  : "badge-draft"
-                              }`}
-                            >
-                              {u.assessments[0]?.status ?? "DRAFT"}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                    DISCOVERY PIPELINE UNITS
+                  </span>
+                  <strong
+                    style={{
+                      fontSize: "1.3rem",
+                      color: "#0c4a6e",
+                      marginTop: "0.2rem",
+                      display: "block"
+                    }}
+                  >
+                    {surveyUnits.length.toLocaleString()} Units
+                  </strong>
                 </div>
-              );
-            })()}
 
-          {reportKey === "POTENTIAL_REGISTER" &&
-            (() => {
-              let totalProjected = 0;
-              let verifiedCount = 0;
-              let pendingCount = 0;
-
-              for (const p of potentialUnits) {
-                totalProjected += p.annualRatePkr ?? p.statutoryRule?.annual_rate_pkr ?? 0;
-                if (p.status === "ACTIVE") verifiedCount++;
-                else pendingCount++;
-              }
-
-              return (
-                <div>
-                  {/* Potential Summary Banner */}
-                  <div
+                <div
+                  style={{
+                    background: "#f8fafc",
+                    border: "1px solid #cbd5e1",
+                    padding: "0.85rem",
+                    borderRadius: "6px"
+                  }}
+                >
+                  <span
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
-                      gap: "0.85rem",
-                      marginBottom: "1.25rem",
-                      fontFamily: "system-ui, -apple-system, sans-serif"
-                    }}
-                  >
-                    <div
-                      style={{
-                        background: "#fffbeb",
-                        border: "1px solid #fde68a",
-                        padding: "0.85rem",
-                        borderRadius: "6px"
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "0.75rem",
-                          color: "#b45309",
-                          fontWeight: 700,
-                          display: "block"
-                        }}
-                      >
-                        POTENTIAL ENTITIES
-                      </span>
-                      <strong
-                        style={{
-                          fontSize: "1.3rem",
-                          color: "#92400e",
-                          marginTop: "0.2rem",
-                          display: "block"
-                        }}
-                      >
-                        {potentialUnits.length.toLocaleString()} Entities
-                      </strong>
-                    </div>
-
-                    <div
-                      style={{
-                        background: "#f8fafc",
-                        border: "1px solid #cbd5e1",
-                        padding: "0.85rem",
-                        borderRadius: "6px"
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "0.75rem",
-                          color: "#475569",
-                          fontWeight: 700,
-                          display: "block"
-                        }}
-                      >
-                        PROJECTED TAX POTENTIAL
-                      </span>
-                      <strong
-                        style={{
-                          fontSize: "1.3rem",
-                          color: "#1e293b",
-                          marginTop: "0.2rem",
-                          display: "block"
-                        }}
-                      >
-                        PKR {totalProjected.toLocaleString()}
-                      </strong>
-                    </div>
-
-                    <div
-                      style={{
-                        background: "#f0fdf4",
-                        border: "1px solid #bbf7d0",
-                        padding: "0.85rem",
-                        borderRadius: "6px"
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "0.75rem",
-                          color: "#166534",
-                          fontWeight: 700,
-                          display: "block"
-                        }}
-                      >
-                        VERIFIED FOR ONBOARDING
-                      </span>
-                      <strong
-                        style={{
-                          fontSize: "1.3rem",
-                          color: "#14532d",
-                          marginTop: "0.2rem",
-                          display: "block"
-                        }}
-                      >
-                        {verifiedCount} Entities
-                      </strong>
-                    </div>
-
-                    <div
-                      style={{
-                        background: "#fef2f2",
-                        border: "1px solid #fecaca",
-                        padding: "0.85rem",
-                        borderRadius: "6px"
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "0.75rem",
-                          color: "#b91c1c",
-                          fontWeight: 700,
-                          display: "block"
-                        }}
-                      >
-                        PENDING VERIFICATION
-                      </span>
-                      <strong
-                        style={{
-                          fontSize: "1.3rem",
-                          color: "#991b1b",
-                          marginTop: "0.2rem",
-                          display: "block"
-                        }}
-                      >
-                        {pendingCount} Entities
-                      </strong>
-                    </div>
-                  </div>
-
-                  {/* Table */}
-                  <table
-                    style={{
-                      width: "100%",
                       fontSize: "0.75rem",
-                      borderCollapse: "collapse",
-                      marginBottom: "1.25rem"
+                      color: "#475569",
+                      fontWeight: 700,
+                      display: "block"
                     }}
                   >
-                    <thead>
-                      <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
-                          S.No
-                        </th>
-                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
-                          Potential ID
-                        </th>
-                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
-                          Commercial Name
-                        </th>
-                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
-                          Proprietor
-                        </th>
-                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
-                          CNIC / NTN
-                        </th>
-                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
-                          Commercial Address
-                        </th>
-                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
-                          Category
-                        </th>
-                        <th scope="col" style={{ padding: "0.4rem", textAlign: "right" }}>
-                          Projected Rate
-                        </th>
-                        <th scope="col" style={{ padding: "0.4rem", textAlign: "center" }}>
-                          Verification
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {potentialUnits.map((p, idx) => (
-                        <tr key={p.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                          <td style={{ padding: "0.35rem" }}>{idx + 1}</td>
-                          <td
-                            style={{ padding: "0.35rem", fontFamily: "monospace", fontWeight: 700 }}
-                          >
-                            {p.potentialNumber || p.id}
-                          </td>
-                          <td style={{ padding: "0.35rem" }}>
-                            <strong>{p.legalName}</strong>
-                          </td>
-                          <td style={{ padding: "0.35rem" }}>
-                            {p.tradeName ?? p.taxpayerName ?? "—"}
-                          </td>
-                          <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                            {p.identifierType}: {p.identifierValue}
-                          </td>
-                          <td style={{ padding: "0.35rem", color: "#475569" }}>
-                            {p.address} {p.locality ? `(${p.locality})` : ""}
-                          </td>
-                          <td style={{ padding: "0.35rem" }}>
-                            <span className="badge badge-draft">Class {p.categoryCode || "1"}</span>
-                            <span style={{ marginLeft: "0.4rem" }}>
-                              {p.categoryName || "Commercial"}
-                            </span>
-                          </td>
-                          <td
-                            style={{
-                              padding: "0.35rem",
-                              textAlign: "right",
-                              fontFamily: "monospace",
-                              fontWeight: 700
-                            }}
-                          >
-                            PKR{" "}
-                            {(
-                              p.annualRatePkr ??
-                              p.statutoryRule?.annual_rate_pkr ??
-                              0
-                            ).toLocaleString()}
-                          </td>
-                          <td style={{ padding: "0.35rem", textAlign: "center" }}>
-                            <span
-                              className={`badge ${
-                                p.status === "ACTIVE" ? "badge-approved" : "badge-draft"
-                              }`}
-                            >
-                              {p.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                    PROSPECTIVE DEMAND
+                  </span>
+                  <strong
+                    style={{
+                      fontSize: "1.3rem",
+                      color: "#1e293b",
+                      marginTop: "0.2rem",
+                      display: "block"
+                    }}
+                  >
+                    PKR {surveyRegisterTotals.totalProspective.toLocaleString()}
+                  </strong>
                 </div>
-              );
-            })()}
+
+                <div
+                  style={{
+                    background: "#fffbeb",
+                    border: "1px solid #fde68a",
+                    padding: "0.85rem",
+                    borderRadius: "6px"
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#b45309",
+                      fontWeight: 700,
+                      display: "block"
+                    }}
+                  >
+                    DRAFT SURVEYS
+                  </span>
+                  <strong
+                    style={{
+                      fontSize: "1.3rem",
+                      color: "#92400e",
+                      marginTop: "0.2rem",
+                      display: "block"
+                    }}
+                  >
+                    {surveyRegisterTotals.draftCount} Units
+                  </strong>
+                </div>
+
+                <div
+                  style={{
+                    background: "#f0fdf4",
+                    border: "1px solid #bbf7d0",
+                    padding: "0.85rem",
+                    borderRadius: "6px"
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#166534",
+                      fontWeight: 700,
+                      display: "block"
+                    }}
+                  >
+                    SUBMITTED FOR APPROVAL
+                  </span>
+                  <strong
+                    style={{
+                      fontSize: "1.3rem",
+                      color: "#14532d",
+                      marginTop: "0.2rem",
+                      display: "block"
+                    }}
+                  >
+                    {surveyRegisterTotals.submittedCount} Units
+                  </strong>
+                </div>
+              </div>
+
+              {/* Table */}
+              <table
+                style={{
+                  width: "100%",
+                  fontSize: "0.75rem",
+                  borderCollapse: "collapse",
+                  marginBottom: "1.25rem"
+                }}
+              >
+                <thead>
+                  <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                      S.No
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                      Discovery Ref / PIN
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                      Profession / Trade Name
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                      Proprietor
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                      Commercial Address
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                      Proposed Category
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "right" }}>
+                      Proposed Rate
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "center" }}>
+                      Pipeline Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {surveyUnits.map((u, idx) => (
+                    <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                      <td style={{ padding: "0.35rem" }}>{idx + 1}</td>
+                      <td style={{ padding: "0.35rem", fontFamily: "monospace", fontWeight: 700 }}>
+                        {u.provincialUin ?? u.demandUnit?.permanentDemandNo ?? u.id}
+                      </td>
+                      <td style={{ padding: "0.35rem" }}>
+                        <strong>{u.legalName}</strong>
+                      </td>
+                      <td style={{ padding: "0.35rem" }}>{u.tradeName ?? "—"}</td>
+                      <td style={{ padding: "0.35rem", color: "#475569" }}>{u.address}</td>
+                      <td style={{ padding: "0.35rem" }}>
+                        <span className="badge badge-draft">
+                          Class {u.statutoryRule?.category_code ?? u.categoryCode ?? "1"}
+                        </span>
+                        <span style={{ marginLeft: "0.4rem" }}>
+                          {u.statutoryRule?.category ?? "General"}
+                        </span>
+                      </td>
+                      <td
+                        style={{
+                          padding: "0.35rem",
+                          textAlign: "right",
+                          fontFamily: "monospace",
+                          fontWeight: 700
+                        }}
+                      >
+                        PKR {(u.statutoryRule?.annual_rate_pkr ?? 0).toLocaleString()}
+                      </td>
+                      <td style={{ padding: "0.35rem", textAlign: "center" }}>
+                        <span
+                          className={`badge ${
+                            u.assessments[0]?.status === "SUBMITTED"
+                              ? "badge-pending"
+                              : "badge-draft"
+                          }`}
+                        >
+                          {u.assessments[0]?.status ?? "DRAFT"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {reportKey === "POTENTIAL_REGISTER" && (
+            <div>
+              {/* Potential Summary Banner */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
+                  gap: "0.85rem",
+                  marginBottom: "1.25rem",
+                  fontFamily: "system-ui, -apple-system, sans-serif"
+                }}
+              >
+                <div
+                  style={{
+                    background: "#fffbeb",
+                    border: "1px solid #fde68a",
+                    padding: "0.85rem",
+                    borderRadius: "6px"
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#b45309",
+                      fontWeight: 700,
+                      display: "block"
+                    }}
+                  >
+                    POTENTIAL ENTITIES
+                  </span>
+                  <strong
+                    style={{
+                      fontSize: "1.3rem",
+                      color: "#92400e",
+                      marginTop: "0.2rem",
+                      display: "block"
+                    }}
+                  >
+                    {potentialUnits.length.toLocaleString()} Entities
+                  </strong>
+                </div>
+
+                <div
+                  style={{
+                    background: "#f8fafc",
+                    border: "1px solid #cbd5e1",
+                    padding: "0.85rem",
+                    borderRadius: "6px"
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#475569",
+                      fontWeight: 700,
+                      display: "block"
+                    }}
+                  >
+                    PROJECTED TAX POTENTIAL
+                  </span>
+                  <strong
+                    style={{
+                      fontSize: "1.3rem",
+                      color: "#1e293b",
+                      marginTop: "0.2rem",
+                      display: "block"
+                    }}
+                  >
+                    PKR {potentialRegisterTotals.totalProjected.toLocaleString()}
+                  </strong>
+                </div>
+
+                <div
+                  style={{
+                    background: "#f0fdf4",
+                    border: "1px solid #bbf7d0",
+                    padding: "0.85rem",
+                    borderRadius: "6px"
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#166534",
+                      fontWeight: 700,
+                      display: "block"
+                    }}
+                  >
+                    VERIFIED FOR ONBOARDING
+                  </span>
+                  <strong
+                    style={{
+                      fontSize: "1.3rem",
+                      color: "#14532d",
+                      marginTop: "0.2rem",
+                      display: "block"
+                    }}
+                  >
+                    {potentialRegisterTotals.verifiedCount} Entities
+                  </strong>
+                </div>
+
+                <div
+                  style={{
+                    background: "#fef2f2",
+                    border: "1px solid #fecaca",
+                    padding: "0.85rem",
+                    borderRadius: "6px"
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#b91c1c",
+                      fontWeight: 700,
+                      display: "block"
+                    }}
+                  >
+                    PENDING VERIFICATION
+                  </span>
+                  <strong
+                    style={{
+                      fontSize: "1.3rem",
+                      color: "#991b1b",
+                      marginTop: "0.2rem",
+                      display: "block"
+                    }}
+                  >
+                    {potentialRegisterTotals.pendingCount} Entities
+                  </strong>
+                </div>
+              </div>
+
+              {/* Table */}
+              <table
+                style={{
+                  width: "100%",
+                  fontSize: "0.75rem",
+                  borderCollapse: "collapse",
+                  marginBottom: "1.25rem"
+                }}
+              >
+                <thead>
+                  <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                      S.No
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                      Potential ID
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                      Commercial Name
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                      Proprietor
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                      CNIC / NTN
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                      Commercial Address
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                      Category
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "right" }}>
+                      Projected Rate
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "center" }}>
+                      Verification
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {potentialUnits.map((p, idx) => (
+                    <tr key={p.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                      <td style={{ padding: "0.35rem" }}>{idx + 1}</td>
+                      <td style={{ padding: "0.35rem", fontFamily: "monospace", fontWeight: 700 }}>
+                        {p.potentialNumber || p.id}
+                      </td>
+                      <td style={{ padding: "0.35rem" }}>
+                        <strong>{p.legalName}</strong>
+                      </td>
+                      <td style={{ padding: "0.35rem" }}>{p.tradeName ?? p.taxpayerName ?? "—"}</td>
+                      <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                        {p.identifierType}: {p.identifierValue}
+                      </td>
+                      <td style={{ padding: "0.35rem", color: "#475569" }}>
+                        {p.address} {p.locality ? `(${p.locality})` : ""}
+                      </td>
+                      <td style={{ padding: "0.35rem" }}>
+                        <span className="badge badge-draft">Class {p.categoryCode || "1"}</span>
+                        <span style={{ marginLeft: "0.4rem" }}>
+                          {p.categoryName || "Commercial"}
+                        </span>
+                      </td>
+                      <td
+                        style={{
+                          padding: "0.35rem",
+                          textAlign: "right",
+                          fontFamily: "monospace",
+                          fontWeight: 700
+                        }}
+                      >
+                        PKR{" "}
+                        {(
+                          p.annualRatePkr ??
+                          p.statutoryRule?.annual_rate_pkr ??
+                          0
+                        ).toLocaleString()}
+                      </td>
+                      <td style={{ padding: "0.35rem", textAlign: "center" }}>
+                        <span
+                          className={`badge ${
+                            p.status === "ACTIVE" ? "badge-approved" : "badge-draft"
+                          }`}
+                        >
+                          {p.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Official Authentication Footer */}
           <div

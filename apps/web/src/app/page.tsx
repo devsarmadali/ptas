@@ -3855,9 +3855,19 @@ export default function HomePage({
     });
   }, [units, activePotentialIds]);
 
-  const surveyProspectiveDemand = useMemo(() => {
-    return surveyPendingUnits.reduce((sum, u) => sum + (u.statutoryRule?.annual_rate_pkr ?? 0), 0);
+  const surveyPipelineStats = useMemo(() => {
+    let prospectiveDemand = 0;
+    let submittedCount = 0;
+    let draftCount = 0;
+    for (const u of surveyPendingUnits) {
+      prospectiveDemand += u.statutoryRule?.annual_rate_pkr ?? 0;
+      const st = u.assessments[0]?.status;
+      if (st === "SUBMITTED") submittedCount++;
+      else if (!st || st === "DRAFT") draftCount++;
+    }
+    return { prospectiveDemand, submittedCount, draftCount };
   }, [surveyPendingUnits]);
+  const surveyProspectiveDemand = surveyPipelineStats.prospectiveDemand;
 
   const potentialProjectedDemand = useMemo(() => {
     return potentialUnits.reduce(
@@ -7905,9 +7915,7 @@ export default function HomePage({
                 }
               >
                 <TargetIcon size={15} />
-                <span>
-                  Potential Register ({potentialUnits.filter((u) => u.status === "ACTIVE").length})
-                </span>
+                <span>Potential Register ({activePotentialIds.size})</span>
               </Link>
               <Link
                 href={asRoute("/demand/pft3")}
@@ -17680,19 +17688,10 @@ export default function HomePage({
                       marginTop: "0.2rem"
                     }}
                   >
-                    {
-                      surveyPendingUnits.filter((u) => u.assessments[0]?.status === "SUBMITTED")
-                        .length
-                    }{" "}
-                    Submitted
+                    {surveyPipelineStats.submittedCount} Submitted
                   </div>
                   <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
-                    {
-                      surveyPendingUnits.filter(
-                        (u) => !u.assessments[0] || u.assessments[0]?.status === "DRAFT"
-                      ).length
-                    }{" "}
-                    Drafts Awaiting Field Submission
+                    {surveyPipelineStats.draftCount} Drafts Awaiting Field Submission
                   </span>
                 </div>
 
