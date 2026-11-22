@@ -3,7 +3,7 @@
 import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { type StoredUnit } from "../../../lib/pilot-store";
-import { loadOperationalSurveyUnits } from "../../../lib/operational-survey";
+import { loadOperationalSurveyUnitByIdentifier } from "../../../lib/operational-survey";
 import { generateLandRevenueRecoveryCertificate } from "../../../lib/statutory-forms";
 import { downloadOfficialPdf } from "../../../lib/pdf";
 import { StandalonePageHeader } from "../../../components/ui/StandalonePageHeader";
@@ -24,21 +24,16 @@ function LandRevenueRecoveryContent() {
 
   useEffect(() => {
     let cancelled = false;
-    void loadOperationalSurveyUnits()
-      .then((available) => {
-        if (cancelled) return;
-
-        const found = unitParam
-          ? (available.find(
-              (u) =>
-                u.pinNumber === unitParam ||
-                u.id === unitParam ||
-                u.demandUnit?.permanentDemandNo === unitParam ||
-                u.provincialUin === unitParam
-            ) ?? null)
-          : null;
-
-        setUnit(found);
+    if (!unitParam.trim()) {
+      setUnit(null);
+      setIsLoaded(true);
+      return;
+    }
+    void loadOperationalSurveyUnitByIdentifier(unitParam)
+      .then((found) => {
+        if (!cancelled) {
+          setUnit(found);
+        }
       })
       .catch((error: unknown) => {
         if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));

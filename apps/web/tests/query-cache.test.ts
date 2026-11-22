@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearAllQueryCaches,
+  getCachedValue,
   getOrFetchCached,
   invalidateQueryCache,
   invalidateQueryCachePrefix
@@ -26,9 +27,11 @@ describe("Client TTL and Single-Flight Query Cache", () => {
 
     expect(first).toEqual(["u1"]);
     expect(second).toEqual(["u1"]);
+    expect(getCachedValue<string[]>("units")).toEqual(["u1"]);
     expect(fetcher).toHaveBeenCalledTimes(1);
 
     vi.advanceTimersByTime(45_001);
+    expect(getCachedValue<string[]>("units")).toBeUndefined();
     const third = await getOrFetchCached("units", 45_000, fetcher);
     expect(third).toEqual(["u2"]);
     expect(fetcher).toHaveBeenCalledTimes(2);

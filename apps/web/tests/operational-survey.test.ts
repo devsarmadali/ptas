@@ -1,7 +1,28 @@
-import { describe, expect, it } from "vitest";
-import { mapOperationalUnit } from "../src/lib/operational-survey.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const rpcMock = vi.hoisted(() => vi.fn());
+vi.mock("../src/lib/supabase-auth.js", () => ({
+  getSupabaseAuthClient: () => ({ rpc: rpcMock }),
+  resolveAuthenticatedOfficer: vi.fn()
+}));
+
+import {
+  loadOperationalSurveyUnitByIdentifier,
+  loadOperationalSurveyUnits,
+  mapOperationalUnit
+} from "../src/lib/operational-survey.js";
+import { clearAllQueryCaches } from "../src/lib/query-cache.js";
 
 describe("operational survey projection", () => {
+  beforeEach(() => {
+    clearAllQueryCaches();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    clearAllQueryCaches();
+  });
+
   it("keeps internal UUID keys out of public statutory identifier fields", () => {
     const unit = mapOperationalUnit({
       unit_id: "7e65b0a1-4e56-4608-9717-61d846c7665f",
@@ -56,5 +77,53 @@ describe("operational survey projection", () => {
     expect(unit.assessmentNumber).toBe("ASM-VHR-0001");
     expect(unit.pinNumber).toBe("PIN-VHR-0001");
     expect(unit.provincialUin).toBe("PIN-VHR-0001");
+  });
+
+  it("short-circuits empty identifiers and serves single-unit RPC lookups with caching", async () => {
+    await expect(loadOperationalSurveyUnitByIdentifier("   ")).resolves.toBeNull();
+    expect(rpcMock).not.toHaveBeenCalled();
+
+    rpcMock.mockResolvedValueOnce({
+      data: {
+        id: "7e65b0a1-4e56-4608-9717-61d846c7665f",
+        taxpayer: { display_name: "Single Lookup Enterprise", permanent_demand_no: "PDN-42" },
+        profile: { legal_name: "Single Lookup Enterprise", pin_number: "36601-1234567-1" }
+      },
+      error: null
+    });
+
+    const first = await loadOperationalSurveyUnitByIdentifier("36601-1234567-1");
+    const second = await loadOperationalSurveyUnitByIdentifier("36601-1234567-1");
+
+    expect(first?.legalName).toBe("Single Lookup Enterprise");
+    expect(second).toBe(first);
+    expect(rpcMock).toHaveBeenCalledTimes(1);
+    expect(rpcMock).toHaveBeenCalledWith("get_operational_survey_unit", {
+      p_identifier: "36601-1234567-1"
+    });
+  });
+
+  it("returns null when single-unit RPC finds no authorized unit and reuses warm operational cache", async () => {
+    rpcMock.mockResolvedValueOnce({ data: null, error: null });
+    await expect(loadOperationalSurveyUnitByIdentifier("MISSING-PIN")).resolves.toBeNull();
+    expect(rpcMock).toHaveBeenCalledWith("get_operational_survey_unit", {
+      p_identifier: "MISSING-PIN"
+    });
+
+    rpcMock.mockResolvedValueOnce({
+      data: [
+        {
+          id: "8e65b0a1-4e56-4608-9717-61d846c7665f",
+          taxpayer: { display_name: "Warm Cache Trader", permanent_demand_no: "PDN-99" },
+          profile: { legal_name: "Warm Cache Trader", pin_number: "PIN-VHR-0099" }
+        }
+      ],
+      error: null
+    });
+    await loadOperationalSurveyUnits();
+
+    const cachedHit = await loadOperationalSurveyUnitByIdentifier("PIN-VHR-0099");
+    expect(cachedHit?.legalName).toBe("Warm Cache Trader");
+    expect(rpcMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -8,6 +8,7 @@
 
 export const PTAS_CACHE_KEYS = {
   OPERATIONAL_UNITS: "operational_units",
+  OPERATIONAL_UNIT_PREFIX: "operational_unit:",
   POTENTIAL_UNITS: "potential_units",
   CHALLAN_REGISTRY: "challan_registry",
   AUDIT_LOGS: "audit_logs",
@@ -69,6 +70,16 @@ export async function getOrFetchCached<T>(
 
   inFlightRequests.set(key, request);
   return request;
+}
+
+export function getCachedValue<T>(key: string): T | undefined {
+  const cached = valueCache.get(key);
+  if (!cached) return undefined;
+  if (cached.expiresAtMs <= Date.now()) {
+    valueCache.delete(key);
+    return undefined;
+  }
+  return cached.value as T;
 }
 
 export function invalidateQueryCache(keys: string | readonly string[]): void {

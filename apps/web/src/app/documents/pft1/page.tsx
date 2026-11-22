@@ -3,7 +3,7 @@
 import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { type StoredUnit } from "../../../lib/pilot-store";
-import { loadOperationalSurveyUnits } from "../../../lib/operational-survey";
+import { loadOperationalSurveyUnitByIdentifier } from "../../../lib/operational-survey";
 import {
   loadPersistedPotentialUnits,
   convertPotentialUnitToStoredUnit,
@@ -25,25 +25,22 @@ function FormPft1NoticeContent() {
 
   useEffect(() => {
     let cancelled = false;
-    loadOperationalSurveyUnits()
+    if (!unitParam.trim()) {
+      setUnit(null);
+      setIsLoaded(true);
+      return;
+    }
+    loadOperationalSurveyUnitByIdentifier(unitParam)
       .catch((err) => {
-        console.warn("Could not load operational survey units for PFT-1:", err);
-        return [] as StoredUnit[];
+        console.warn("Could not load operational survey unit for PFT-1:", err);
+        return null;
       })
-      .then((available) => {
+      .then((matched) => {
         if (cancelled) return;
 
-        let found = unitParam
-          ? (available.find(
-              (u) =>
-                u.pinNumber === unitParam ||
-                u.provincialUin === unitParam ||
-                u.demandUnit?.permanentDemandNo === unitParam ||
-                u.id === unitParam
-            ) ?? null)
-          : null;
+        let found = matched;
 
-        if (!found && unitParam) {
+        if (!found) {
           const potList = loadPersistedPotentialUnits();
           const pot = potList.find(
             (p: PotentialUnitRecord) =>

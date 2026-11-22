@@ -412,6 +412,12 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      get_operational_survey_unit: {
+        Args: {
+          p_identifier: string;
+        };
+        Returns: Json;
+      };
       list_operational_survey_units: {
         Args: Record<PropertyKey, never>;
         Returns: Json;

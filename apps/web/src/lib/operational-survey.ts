@@ -6,7 +6,13 @@ import type {
   StatutoryRuleDefinition
 } from "@ptas/domain";
 import type { Json } from "@ptas/database/types";
-import { PTAS_CACHE_KEYS, getOrFetchCached, invalidateQueryCache } from "./query-cache";
+import {
+  PTAS_CACHE_KEYS,
+  getCachedValue,
+  getOrFetchCached,
+  invalidateQueryCache,
+  invalidateQueryCachePrefix
+} from "./query-cache";
 import type { StoredUnit, StoredUnitSnapshot } from "./pilot-store";
 import { getSupabaseAuthClient, resolveAuthenticatedOfficer } from "./supabase-auth";
 import type { MockOfficer } from "./pilot-store";
@@ -301,6 +307,60 @@ export async function loadOperationalSurveyUnits(options?: {
   );
 }
 
+function matchesUnitIdentifier(unit: StoredUnit, identifier: string): boolean {
+  return (
+    unit.id === identifier ||
+    unit.pinNumber === identifier ||
+    unit.provincialUin === identifier ||
+    unit.demandUnit?.permanentDemandNo === identifier ||
+    unit.demandNumber === identifier
+  );
+}
+
+export async function loadOperationalSurveyUnitByIdentifier(
+  identifier: string,
+  options?: { readonly force?: boolean | undefined }
+): Promise<StoredUnit | null> {
+  const trimmed = identifier.trim();
+  if (!trimmed) return null;
+
+  let decoded = trimmed;
+  try {
+    decoded = decodeURIComponent(trimmed);
+  } catch {
+    decoded = trimmed;
+  }
+
+  if (!options?.force) {
+    const cachedUnits = getCachedValue<StoredUnit[]>(PTAS_CACHE_KEYS.OPERATIONAL_UNITS);
+    if (cachedUnits) {
+      const hit = cachedUnits.find(
+        (u) => matchesUnitIdentifier(u, decoded) || matchesUnitIdentifier(u, trimmed)
+      );
+      if (hit) return hit;
+    }
+  }
+
+  return getOrFetchCached(
+    `${PTAS_CACHE_KEYS.OPERATIONAL_UNIT_PREFIX}${decoded}`,
+    45_000,
+    async () => {
+      const supabase = getSupabaseAuthClient();
+      const { data, error } = await supabase.rpc("get_operational_survey_unit", {
+        p_identifier: decoded
+      });
+      if (error) {
+        throw new Error(`Unable to load operational survey unit: ${error.message}`);
+      }
+      if (data === null || data === undefined) {
+        return null;
+      }
+      return mapOperationalUnit(data as Json);
+    },
+    { force: options?.force, shouldCache: (v) => v !== null }
+  );
+}
+
 export async function loadOperationalContext(): Promise<{
   readonly officer: MockOfficer;
   readonly units: StoredUnit[];
@@ -352,6 +412,7 @@ export async function updateIndividualSurveyUnit(
       return { success: false, id: unitId, error: error.message };
     }
     invalidateQueryCache(PTAS_CACHE_KEYS.OPERATIONAL_UNITS);
+    invalidateQueryCachePrefix(PTAS_CACHE_KEYS.OPERATIONAL_UNIT_PREFIX);
     const res = data as Record<string, unknown> | null;
     return { success: true, id: String(res?.id ?? unitId) };
   } catch (err) {

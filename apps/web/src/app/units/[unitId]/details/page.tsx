@@ -6,7 +6,7 @@ import {
   type Pft2ChallanRecord,
   type StatutoryReceiptRecord
 } from "../../../../lib/pilot-store";
-import { loadOperationalSurveyUnits } from "../../../../lib/operational-survey";
+import { loadOperationalSurveyUnitByIdentifier } from "../../../../lib/operational-survey";
 import {
   loadPersistedPotentialUnits,
   convertPotentialUnitToStoredUnit
@@ -35,22 +35,15 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
 
   useEffect(() => {
     let cancelled = false;
-    loadOperationalSurveyUnits()
+    loadOperationalSurveyUnitByIdentifier(unitId)
       .catch((err) => {
-        console.warn("Could not load operational survey units in details page:", err);
-        return [] as StoredUnit[];
+        console.warn("Could not load operational survey unit in details page:", err);
+        return null;
       })
-      .then((available) => {
+      .then((matched) => {
         if (cancelled) return;
 
-        let found =
-          available.find(
-            (u) =>
-              u.provincialUin === unitId ||
-              u.pinNumber === unitId ||
-              u.demandUnit?.permanentDemandNo === unitId ||
-              u.id === unitId
-          ) ?? null;
+        let found = matched;
 
         if (!found) {
           const potentialUnits = loadPersistedPotentialUnits();
