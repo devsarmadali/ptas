@@ -2409,7 +2409,7 @@ export default function HomePage({
         pendingApprovals++;
       }
 
-      const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
+      const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined, summary);
       if (aging.status === "OVERDUE_30_DAYS") defaultersOverdue++;
       if (aging.status === "PENALTY_ELIGIBLE") defaultersPenaltyEligible++;
       if (aging.status === "PENALIZED") defaultersPenalized++;

@@ -5,11 +5,13 @@ const rpc = vi.fn();
 vi.mock("@ptas/database/client", () => ({
   createPtasSupabaseClient: () => ({ auth: { getUser }, rpc })
 }));
-import { resolveDocumentActor } from "../src/lib/server-actor.js";
+import { clearDocumentActorCache, resolveDocumentActor } from "../src/lib/server-actor.js";
 
 describe("server document actor resolution", () => {
   afterEach(() => {
-    vi.restoreAllMocks();
+    clearDocumentActorCache();
+    vi.clearAllMocks();
+    vi.useRealTimers();
     delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   });
@@ -39,5 +41,77 @@ describe("server document actor resolution", () => {
       role: "ETO",
       jurisdictionId: "office-1"
     });
+  });
+
+  it("caches verified actor contexts across repeated requests within TTL and respects cache clear", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "publishable-test-key";
+    getUser.mockResolvedValue({
+      data: { user: { id: "auth-user" } },
+      error: null
+    });
+    rpc.mockResolvedValue({
+      data: { user_id: "app-user", role: "ETO", jurisdiction_id: "office-1" },
+      error: null
+    });
+
+    const first = await resolveDocumentActor("Bearer cached-token");
+    const second = await resolveDocumentActor("Bearer cached-token");
+
+    expect(first).toEqual({
+      officerId: "app-user",
+      role: "ETO",
+      jurisdictionId: "office-1"
+    });
+    expect(second).toEqual(first);
+    expect(getUser).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledTimes(1);
+
+    clearDocumentActorCache();
+
+    await resolveDocumentActor("Bearer cached-token");
+    expect(getUser).toHaveBeenCalledTimes(2);
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it("never caches failed or denied actor lookups", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "publishable-test-key";
+    getUser
+      .mockResolvedValueOnce({
+        data: { user: null },
+        error: new Error("session expired")
+      })
+      .mockResolvedValueOnce({
+        data: { user: { id: "auth-user" } },
+        error: null
+      })
+      .mockResolvedValueOnce({
+        data: { user: { id: "auth-user" } },
+        error: null
+      });
+    rpc
+      .mockResolvedValueOnce({
+        data: { user_id: "app-user", role: "GUEST", jurisdiction_id: "office-1" },
+        error: null
+      })
+      .mockResolvedValueOnce({
+        data: { user_id: "app-user", role: "INSPECTOR", jurisdiction_id: "office-1" },
+        error: null
+      });
+
+    await expect(resolveDocumentActor("Bearer retry-token")).rejects.toThrow(
+      "invalid or expired session"
+    );
+    await expect(resolveDocumentActor("Bearer retry-token")).rejects.toThrow(
+      "active PTAS role and jurisdiction assignment required"
+    );
+    await expect(resolveDocumentActor("Bearer retry-token")).resolves.toEqual({
+      officerId: "app-user",
+      role: "INSPECTOR",
+      jurisdictionId: "office-1"
+    });
+    expect(getUser).toHaveBeenCalledTimes(3);
+    expect(rpc).toHaveBeenCalledTimes(2);
   });
 });

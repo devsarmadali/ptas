@@ -1642,9 +1642,10 @@ export function computeUnitBalance(unit: StoredUnit): number {
 export function computeUnitDefaulterAging(
   unit: StoredUnit,
   dueDateIso: string = "2026-08-31",
-  referenceDateIso?: string
+  referenceDateIso?: string,
+  precomputedSummary?: UnitFinancialSummary
 ): DefaulterAgingInfo {
-  const fin = computeUnitFinancialSummary(unit);
+  const fin = precomputedSummary ?? computeUnitFinancialSummary(unit);
   const hasAssessmentDemand = unit.ledgerEntries.some((e) => e.entryType === "ASSESSMENT_DEMAND");
   const fallbackDemand = hasAssessmentDemand ? 0 : fin.assessedCurrentTax + fin.arrears;
 

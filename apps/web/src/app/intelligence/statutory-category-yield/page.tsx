@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { loadOperationalSurveyUnits } from "../../../lib/operational-survey";
 import {
@@ -24,6 +24,9 @@ export type RegisterSource = "PFT3" | "SURVEY" | "POTENTIAL";
 export default function StatutoryCategoryYieldPage() {
   const [operationalUnits, setOperationalUnits] = useState<StoredUnit[]>([]);
   const [potentialUnits, setPotentialUnits] = useState<PotentialUnitRecord[]>([]);
+  const [potentialLoaded, setPotentialLoaded] = useState(false);
+  const [isLoadingPotential, setIsLoadingPotential] = useState(false);
+  const potentialLoadRequestedRef = useRef(false);
   const [registerSource, setRegisterSource] = useState<RegisterSource>("PFT3");
   const [selectedCategoryCode, setSelectedCategoryCode] = useState<string>("ALL");
   const [isLoaded, setIsLoaded] = useState(false);
@@ -31,15 +34,10 @@ export default function StatutoryCategoryYieldPage() {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([
-      loadOperationalSurveyUnits(),
-      fetchPotentialAssessmentUnitsFromDatabase().catch(() => null)
-    ])
-      .then(([units, dbPotential]) => {
+    void loadOperationalSurveyUnits()
+      .then((units) => {
         if (!cancelled) {
           setOperationalUnits(units);
-          const resolvedPotential = dbPotential ?? loadPersistedPotentialUnits();
-          setPotentialUnits(resolvedPotential);
         }
       })
       .catch((error: unknown) => {
@@ -52,6 +50,36 @@ export default function StatutoryCategoryYieldPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (registerSource !== "POTENTIAL" || potentialLoadRequestedRef.current) {
+      return;
+    }
+    let cancelled = false;
+    potentialLoadRequestedRef.current = true;
+    setIsLoadingPotential(true);
+
+    void fetchPotentialAssessmentUnitsFromDatabase()
+      .catch(() => null)
+      .then((dbPotential) => {
+        if (cancelled) return;
+        const resolvedPotential = dbPotential ?? loadPersistedPotentialUnits();
+        setPotentialUnits(resolvedPotential);
+        setPotentialLoaded(true);
+      })
+      .finally(() => {
+        if (cancelled) {
+          potentialLoadRequestedRef.current = false;
+        }
+        if (!cancelled) {
+          setIsLoadingPotential(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [registerSource]);
 
   // Filter 1: Form P.F.T-3 Statutory Enrolled Units (Rule 11) - strictly approved
   const pft3Units = useMemo(() => {
@@ -77,10 +105,11 @@ export default function StatutoryCategoryYieldPage() {
     );
   }, [operationalUnits]);
 
-  // Filter 3: Potential Register Units - converted to stored unit representation
+  // Filter 3: Potential Register Units - converted on demand only when active
   const convertedPotentialUnits = useMemo(() => {
+    if (registerSource !== "POTENTIAL") return [];
     return potentialUnits.map(convertPotentialUnitToStoredUnit);
-  }, [potentialUnits]);
+  }, [registerSource, potentialUnits]);
 
   // Determine active units pool based on user-selected register source
   const activeUnits = useMemo(() => {
@@ -310,7 +339,13 @@ export default function StatutoryCategoryYieldPage() {
           >
             <span>⚡</span>
             <span>
-              Potential Register Projected Yield (Provisional — {potentialUnits.length} Units)
+              Potential Register Projected Yield (Provisional —{" "}
+              {isLoadingPotential
+                ? "Loading…"
+                : potentialLoaded
+                  ? `${potentialUnits.length} Units`
+                  : "Load on demand"}
+              )
             </span>
           </button>
         </div>
@@ -402,7 +437,9 @@ export default function StatutoryCategoryYieldPage() {
                 ? `Across ${pft3Units.length} Approved Units`
                 : registerSource === "SURVEY"
                   ? `Across ${surveyUnits.length} Survey Units`
-                  : `Across ${potentialUnits.length} Potential Units`}
+                  : isLoadingPotential
+                    ? "Loading Potential Units..."
+                    : `Across ${potentialUnits.length} Potential Units`}
             </p>
           </div>
 

@@ -1,7 +1,42 @@
+import { createHash } from "node:crypto";
 import { createPtasSupabaseClient } from "@ptas/database/client";
 import type { DocumentAuthorizationContext } from "./pdf/types";
 
 const ALLOWED_ROLES = new Set(["INSPECTOR", "ETO", "DIRECTOR", "FINANCE", "AUDITOR"]);
+const ACTOR_CACHE_TTL_MS = 15_000;
+const ACTOR_CACHE_MAX_ENTRIES = 512;
+
+interface CachedActorEntry {
+  context: DocumentAuthorizationContext;
+  expiresAt: number;
+}
+
+const actorCache = new Map<string, CachedActorEntry>();
+
+function hashAccessToken(accessToken: string): string {
+  return createHash("sha256").update(accessToken).digest("hex");
+}
+
+function extractJwtExpiryMs(accessToken: string): number | null {
+  const parts = accessToken.split(".");
+  if (parts.length !== 3 || !parts[1]) {
+    return null;
+  }
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as {
+      exp?: unknown;
+    };
+    return typeof payload.exp === "number" && Number.isFinite(payload.exp)
+      ? payload.exp * 1000
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearDocumentActorCache(): void {
+  actorCache.clear();
+}
 
 export async function resolveDocumentActor(
   authorizationHeader: string | null
@@ -19,6 +54,16 @@ export async function resolveDocumentActor(
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) {
     throw new Error("Authorization service is not configured");
+  }
+
+  const cacheKey = hashAccessToken(accessToken);
+  const now = Date.now();
+  const cached = actorCache.get(cacheKey);
+  if (cached) {
+    if (cached.expiresAt > now) {
+      return { ...cached.context };
+    }
+    actorCache.delete(cacheKey);
   }
 
   const supabase = createPtasSupabaseClient({ url, key, accessToken });
@@ -44,5 +89,34 @@ export async function resolveDocumentActor(
     throw new Error("Authorization denied: active PTAS role and jurisdiction assignment required");
   }
 
-  return { officerId: String(actor.user_id ?? data.user.id), role, jurisdictionId };
+  const context: DocumentAuthorizationContext = {
+    officerId: String(actor.user_id ?? data.user.id),
+    role,
+    jurisdictionId
+  };
+
+  const jwtExpMs = extractJwtExpiryMs(accessToken);
+  const resolvedAt = Date.now();
+  const expiresAt =
+    jwtExpMs !== null
+      ? Math.min(resolvedAt + ACTOR_CACHE_TTL_MS, jwtExpMs)
+      : resolvedAt + ACTOR_CACHE_TTL_MS;
+
+  if (expiresAt > resolvedAt) {
+    if (actorCache.size >= ACTOR_CACHE_MAX_ENTRIES) {
+      for (const [entryKey, entry] of actorCache) {
+        if (entry.expiresAt <= resolvedAt) {
+          actorCache.delete(entryKey);
+        }
+      }
+      while (actorCache.size >= ACTOR_CACHE_MAX_ENTRIES) {
+        const oldestKey = actorCache.keys().next().value;
+        if (oldestKey === undefined) break;
+        actorCache.delete(oldestKey);
+      }
+    }
+    actorCache.set(cacheKey, { context: { ...context }, expiresAt });
+  }
+
+  return { ...context };
 }

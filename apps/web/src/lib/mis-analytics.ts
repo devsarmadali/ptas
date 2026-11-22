@@ -349,7 +349,7 @@ export function computeExecutiveMetrics(
     slabArrears.set(ruleId, round2((slabArrears.get(ruleId) ?? 0) + (uBalance > 0 ? uBalance : 0)));
 
     // Defaulter aging distribution
-    const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
+    const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined, summary);
 
     switch (aging.status) {
       case "CURRENT":
@@ -620,7 +620,7 @@ export function exportPft3RegisterCsv(units: readonly StoredUnit[]): string {
     const totalPaid = summary.totalPaid;
     const balance = summary.outstandingBalance;
 
-    const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
+    const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined, summary);
 
     return [
       idx + 1,
@@ -684,14 +684,18 @@ export function exportDefaulterRecoveryCsv(units: readonly StoredUnit[]): string
     "Land Revenue Certified"
   ];
 
-  const defaulterUnits = units.filter((u) => {
-    const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
-    return aging.status !== "PAID" && aging.status !== "CURRENT" && aging.remainingBalance > 0;
-  });
+  const defaulterEntries: Array<{
+    unit: StoredUnit;
+    aging: ReturnType<typeof computeUnitDefaulterAging>;
+  }> = [];
+  for (const unit of units) {
+    const aging = computeUnitDefaulterAging(unit, "2026-08-31", undefined);
+    if (aging.status !== "PAID" && aging.status !== "CURRENT" && aging.remainingBalance > 0) {
+      defaulterEntries.push({ unit, aging });
+    }
+  }
 
-  const rows = defaulterUnits.map((u, idx) => {
-    const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
-
+  const rows = defaulterEntries.map(({ unit: u, aging }, idx) => {
     return [
       idx + 1,
       u.provincialUin ?? "",
