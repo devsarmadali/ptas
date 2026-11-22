@@ -1,9 +1,9 @@
 "use client";
 
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { loadPilotState, type PilotState } from "../../../../lib/pilot-store";
+import { loadPilotState, type PilotState, type StoredUnit } from "../../../../lib/pilot-store";
 import { loadOperationalContext } from "../../../../lib/operational-survey";
 import { computeLedgerBalance } from "@ptas/domain";
 import {
@@ -93,6 +93,61 @@ function ReportViewContent() {
     };
   }, [reportKey]);
 
+  const pft3Units = useMemo(() => {
+    const sourceUnits = pilotState?.units || [];
+    return sourceUnits.filter(
+      (unit) =>
+        unit.assessments[0]?.status === "APPROVED" &&
+        unit.pft3Registered !== false &&
+        !unit.demandUnit?.permanentDemandNo?.startsWith("V-") &&
+        !unit.demandNumber?.startsWith("V-")
+    );
+  }, [pilotState?.units]);
+
+  const surveyUnits = useMemo(() => {
+    const sourceUnits = pilotState?.units || [];
+    return sourceUnits.filter(
+      (unit) =>
+        unit.assessments[0]?.status !== "APPROVED" ||
+        unit.pft3Registered === false ||
+        unit.demandUnit?.permanentDemandNo?.startsWith("V-") ||
+        unit.demandNumber?.startsWith("V-")
+    );
+  }, [pilotState?.units]);
+
+  const misMetrics = useMemo(() => {
+    if (
+      !pilotState ||
+      (reportKey !== "EXECUTIVE_MIS_SUMMARY" && reportKey !== "SLAB_DISTRIBUTION")
+    ) {
+      return null;
+    }
+    return computeExecutiveMetrics(
+      pft3Units,
+      pilotState.appeals || [],
+      pilotState.discontinuances || [],
+      pilotState.refundAdjustments || [],
+      pilotState.clearanceCertificates || []
+    );
+  }, [pilotState, reportKey, pft3Units]);
+
+  const defaulterReportRows = useMemo(() => {
+    if (!pilotState || reportKey !== "DEFAULTER_ROLL") {
+      return [];
+    }
+    const entries: Array<{
+      unit: StoredUnit;
+      aging: ReturnType<typeof computeUnitDefaulterAging>;
+    }> = [];
+    for (const u of pilotState.units || []) {
+      const summary = computeUnitFinancialSummary(u);
+      if (summary.outstandingBalance <= 0) continue;
+      const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined, summary);
+      entries.push({ unit: u, aging });
+    }
+    return entries;
+  }, [pilotState, reportKey]);
+
   if (loadError) {
     return (
       <main
@@ -159,32 +214,10 @@ function ReportViewContent() {
   }
 
   const units = pilotState.units || [];
-  const pft3Units = units.filter(
-    (unit) =>
-      unit.assessments[0]?.status === "APPROVED" &&
-      unit.pft3Registered !== false &&
-      !unit.demandUnit?.permanentDemandNo?.startsWith("V-") &&
-      !unit.demandNumber?.startsWith("V-")
-  );
-  const surveyUnits = units.filter(
-    (unit) =>
-      unit.assessments[0]?.status !== "APPROVED" ||
-      unit.pft3Registered === false ||
-      unit.demandUnit?.permanentDemandNo?.startsWith("V-") ||
-      unit.demandNumber?.startsWith("V-")
-  );
   const clearanceCertificates = pilotState.clearanceCertificates || [];
   const discontinuances = pilotState.discontinuances || [];
   const refundAdjustments = pilotState.refundAdjustments || [];
-  const appeals = pilotState.appeals || [];
   const currentOfficer = pilotState.currentOfficer;
-  const misMetrics = computeExecutiveMetrics(
-    pft3Units,
-    appeals,
-    discontinuances,
-    refundAdjustments,
-    clearanceCertificates
-  );
 
   const getReportTitle = () => {
     switch (reportKey) {
@@ -356,7 +389,7 @@ function ReportViewContent() {
           </div>
 
           {/* Dynamic Report Content */}
-          {reportKey === "EXECUTIVE_MIS_SUMMARY" && (
+          {reportKey === "EXECUTIVE_MIS_SUMMARY" && misMetrics && (
             <div>
               {/* Executive Synopsis */}
               <div
@@ -850,68 +883,63 @@ function ReportViewContent() {
                 </tr>
               </thead>
               <tbody>
-                {units
-                  .filter((u) => computeUnitFinancialSummary(u).outstandingBalance > 0)
-                  .map((u) => {
-                    const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
-                    return (
-                      <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                        <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                          {u.demandUnit.permanentDemandNo}
-                          {u.provincialUin ? (
-                            <span
-                              style={{ display: "block", fontSize: "0.7rem", color: "#0369a1" }}
-                            >
-                              {u.provincialUin}
-                            </span>
-                          ) : null}
-                        </td>
-                        <td style={{ padding: "0.35rem" }}>
-                          <strong>{u.legalName}</strong>
-                        </td>
-                        <td style={{ padding: "0.35rem" }}>{u.address}</td>
-                        <td style={{ padding: "0.35rem" }}>
-                          Class {u.statutoryRule.subclassification_code}
-                        </td>
-                        <td style={{ padding: "0.35rem", textAlign: "right" }}>
-                          {aging.daysOverdue} days
-                        </td>
-                        <td
-                          style={{
-                            padding: "0.35rem",
-                            textAlign: "right",
-                            fontFamily: "monospace"
-                          }}
-                        >
-                          {aging.originalDemand.toLocaleString()}
-                        </td>
-                        <td
-                          style={{
-                            padding: "0.35rem",
-                            textAlign: "right",
-                            fontFamily: "monospace",
-                            color: "#b91c1c"
-                          }}
-                        >
-                          {aging.penaltyDemand.toLocaleString()}
-                        </td>
-                        <td
-                          style={{
-                            padding: "0.35rem",
-                            textAlign: "right",
-                            fontFamily: "monospace",
-                            fontWeight: 700,
-                            color: "#b91c1c"
-                          }}
-                        >
-                          {aging.remainingBalance.toLocaleString()}
-                        </td>
-                        <td style={{ padding: "0.35rem", textAlign: "center", fontWeight: 700 }}>
-                          {aging.status}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                {defaulterReportRows.map(({ unit: u, aging }) => {
+                  return (
+                    <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                      <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                        {u.demandUnit.permanentDemandNo}
+                        {u.provincialUin ? (
+                          <span style={{ display: "block", fontSize: "0.7rem", color: "#0369a1" }}>
+                            {u.provincialUin}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td style={{ padding: "0.35rem" }}>
+                        <strong>{u.legalName}</strong>
+                      </td>
+                      <td style={{ padding: "0.35rem" }}>{u.address}</td>
+                      <td style={{ padding: "0.35rem" }}>
+                        Class {u.statutoryRule.subclassification_code}
+                      </td>
+                      <td style={{ padding: "0.35rem", textAlign: "right" }}>
+                        {aging.daysOverdue} days
+                      </td>
+                      <td
+                        style={{
+                          padding: "0.35rem",
+                          textAlign: "right",
+                          fontFamily: "monospace"
+                        }}
+                      >
+                        {aging.originalDemand.toLocaleString()}
+                      </td>
+                      <td
+                        style={{
+                          padding: "0.35rem",
+                          textAlign: "right",
+                          fontFamily: "monospace",
+                          color: "#b91c1c"
+                        }}
+                      >
+                        {aging.penaltyDemand.toLocaleString()}
+                      </td>
+                      <td
+                        style={{
+                          padding: "0.35rem",
+                          textAlign: "right",
+                          fontFamily: "monospace",
+                          fontWeight: 700,
+                          color: "#b91c1c"
+                        }}
+                      >
+                        {aging.remainingBalance.toLocaleString()}
+                      </td>
+                      <td style={{ padding: "0.35rem", textAlign: "center", fontWeight: 700 }}>
+                        {aging.status}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -1147,7 +1175,7 @@ function ReportViewContent() {
             </table>
           )}
 
-          {reportKey === "SLAB_DISTRIBUTION" && (
+          {reportKey === "SLAB_DISTRIBUTION" && misMetrics && (
             <table
               style={{
                 width: "100%",

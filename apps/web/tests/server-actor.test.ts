@@ -114,4 +114,34 @@ describe("server document actor resolution", () => {
     expect(getUser).toHaveBeenCalledTimes(3);
     expect(rpc).toHaveBeenCalledTimes(2);
   });
+
+  it("deduplicates concurrent in-flight lookups for the same uncached token", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "publishable-test-key";
+
+    let releaseGetUser!: (value: { data: { user: { id: string } }; error: null }) => void;
+    getUser.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseGetUser = resolve;
+        })
+    );
+    rpc.mockResolvedValueOnce({
+      data: { user_id: "app-user", role: "DIRECTOR", jurisdiction_id: "hq-1" },
+      error: null
+    });
+
+    const p1 = resolveDocumentActor("Bearer concurrent-token");
+    const p2 = resolveDocumentActor("Bearer concurrent-token");
+    const p3 = resolveDocumentActor("Bearer concurrent-token");
+
+    releaseGetUser({ data: { user: { id: "auth-user" } }, error: null });
+    const [r1, r2, r3] = await Promise.all([p1, p2, p3]);
+
+    expect(r1).toEqual({ officerId: "app-user", role: "DIRECTOR", jurisdictionId: "hq-1" });
+    expect(r2).toEqual(r1);
+    expect(r3).toEqual(r1);
+    expect(getUser).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
 });

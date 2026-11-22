@@ -12,6 +12,7 @@ interface CachedActorEntry {
 }
 
 const actorCache = new Map<string, CachedActorEntry>();
+const inFlightActorLookups = new Map<string, Promise<DocumentAuthorizationContext>>();
 
 function hashAccessToken(accessToken: string): string {
   return createHash("sha256").update(accessToken).digest("hex");
@@ -36,6 +37,7 @@ function extractJwtExpiryMs(accessToken: string): number | null {
 
 export function clearDocumentActorCache(): void {
   actorCache.clear();
+  inFlightActorLookups.clear();
 }
 
 export async function resolveDocumentActor(
@@ -66,57 +68,76 @@ export async function resolveDocumentActor(
     actorCache.delete(cacheKey);
   }
 
-  const supabase = createPtasSupabaseClient({ url, key, accessToken });
-  const { data, error } = await supabase.auth.getUser(accessToken);
-  if (error || !data.user) {
-    throw new Error("Authorization required: invalid or expired session");
+  const inFlight = inFlightActorLookups.get(cacheKey);
+  if (inFlight) {
+    return { ...(await inFlight) };
   }
 
-  const { data: assignment, error: assignmentError } = await supabase.rpc("resolve_my_ptas_actor");
-  if (
-    assignmentError ||
-    !assignment ||
-    typeof assignment !== "object" ||
-    Array.isArray(assignment)
-  ) {
-    throw new Error("Authorization denied: active PTAS assignment lookup failed");
-  }
+  const lookupPromise = (async (): Promise<DocumentAuthorizationContext> => {
+    const supabase = createPtasSupabaseClient({ url, key, accessToken });
+    const { data, error } = await supabase.auth.getUser(accessToken);
+    if (error || !data.user) {
+      throw new Error("Authorization required: invalid or expired session");
+    }
 
-  const actor = assignment as { role?: unknown; jurisdiction_id?: unknown; user_id?: unknown };
-  const role = String(actor.role ?? "").toUpperCase();
-  const jurisdictionId = String(actor.jurisdiction_id ?? "").trim();
-  if (!ALLOWED_ROLES.has(role) || !jurisdictionId) {
-    throw new Error("Authorization denied: active PTAS role and jurisdiction assignment required");
-  }
+    const { data: assignment, error: assignmentError } =
+      await supabase.rpc("resolve_my_ptas_actor");
+    if (
+      assignmentError ||
+      !assignment ||
+      typeof assignment !== "object" ||
+      Array.isArray(assignment)
+    ) {
+      throw new Error("Authorization denied: active PTAS assignment lookup failed");
+    }
 
-  const context: DocumentAuthorizationContext = {
-    officerId: String(actor.user_id ?? data.user.id),
-    role,
-    jurisdictionId
-  };
+    const actor = assignment as { role?: unknown; jurisdiction_id?: unknown; user_id?: unknown };
+    const role = String(actor.role ?? "").toUpperCase();
+    const jurisdictionId = String(actor.jurisdiction_id ?? "").trim();
+    if (!ALLOWED_ROLES.has(role) || !jurisdictionId) {
+      throw new Error(
+        "Authorization denied: active PTAS role and jurisdiction assignment required"
+      );
+    }
 
-  const jwtExpMs = extractJwtExpiryMs(accessToken);
-  const resolvedAt = Date.now();
-  const expiresAt =
-    jwtExpMs !== null
-      ? Math.min(resolvedAt + ACTOR_CACHE_TTL_MS, jwtExpMs)
-      : resolvedAt + ACTOR_CACHE_TTL_MS;
+    const context: DocumentAuthorizationContext = {
+      officerId: String(actor.user_id ?? data.user.id),
+      role,
+      jurisdictionId
+    };
 
-  if (expiresAt > resolvedAt) {
-    if (actorCache.size >= ACTOR_CACHE_MAX_ENTRIES) {
-      for (const [entryKey, entry] of actorCache) {
-        if (entry.expiresAt <= resolvedAt) {
-          actorCache.delete(entryKey);
+    const jwtExpMs = extractJwtExpiryMs(accessToken);
+    const resolvedAt = Date.now();
+    const expiresAt =
+      jwtExpMs !== null
+        ? Math.min(resolvedAt + ACTOR_CACHE_TTL_MS, jwtExpMs)
+        : resolvedAt + ACTOR_CACHE_TTL_MS;
+
+    if (expiresAt > resolvedAt) {
+      if (actorCache.size >= ACTOR_CACHE_MAX_ENTRIES) {
+        for (const [entryKey, entry] of actorCache) {
+          if (entry.expiresAt <= resolvedAt) {
+            actorCache.delete(entryKey);
+          }
+        }
+        while (actorCache.size >= ACTOR_CACHE_MAX_ENTRIES) {
+          const oldestKey = actorCache.keys().next().value;
+          if (oldestKey === undefined) break;
+          actorCache.delete(oldestKey);
         }
       }
-      while (actorCache.size >= ACTOR_CACHE_MAX_ENTRIES) {
-        const oldestKey = actorCache.keys().next().value;
-        if (oldestKey === undefined) break;
-        actorCache.delete(oldestKey);
-      }
+      actorCache.set(cacheKey, { context: { ...context }, expiresAt });
     }
-    actorCache.set(cacheKey, { context: { ...context }, expiresAt });
-  }
 
-  return { ...context };
+    return context;
+  })();
+
+  inFlightActorLookups.set(cacheKey, lookupPromise);
+  try {
+    return { ...(await lookupPromise) };
+  } finally {
+    if (inFlightActorLookups.get(cacheKey) === lookupPromise) {
+      inFlightActorLookups.delete(cacheKey);
+    }
+  }
 }

@@ -4587,15 +4587,24 @@ export default function HomePage({
     deferredReceiptSearchQuery
   ]);
 
-  // Defaulter Units Filter (only computed while Defaulters tab is active)
+  // Defaulter Units Filter (only computed while Defaulters tab is active; retains aging info per unit)
   const defaulterUnits = useMemo(() => {
     if (activeTab !== "DEFAULTERS") return [];
-    return units.filter((u) => {
+    const entries: Array<{
+      unit: StoredUnit;
+      aging: ReturnType<typeof computeUnitDefaulterAging>;
+    }> = [];
+    for (const u of units) {
       const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
-      if (defaulterFilter === "ALL")
-        return aging.remainingBalance > 0 && aging.status !== "PAID" && aging.status !== "CURRENT";
-      return aging.status === defaulterFilter;
-    });
+      const matches =
+        defaulterFilter === "ALL"
+          ? aging.remainingBalance > 0 && aging.status !== "PAID" && aging.status !== "CURRENT"
+          : aging.status === defaulterFilter;
+      if (matches) {
+        entries.push({ unit: u, aging });
+      }
+    }
+    return entries;
   }, [units, defaulterFilter, activeTab]);
 
   const noticeTargetUnit = useMemo(() => {
@@ -4755,22 +4764,23 @@ export default function HomePage({
         break;
       }
       case "DEFAULTER_ROLL": {
-        const defaulterUnits = pft3EnrolledUnits.filter((u) => computeUnitBalance(u) > 0);
-        const rows = defaulterUnits.map((u, i) => {
-          const balance = computeUnitBalance(u);
-          const aging = computeUnitDefaulterAging(u, "2026-09-01");
-          return [
-            i + 1,
+        const rows: Array<(string | number)[]> = [];
+        for (const u of pft3EnrolledUnits) {
+          const summary = computeUnitFinancialSummary(u);
+          if (summary.outstandingBalance <= 0) continue;
+          const aging = computeUnitDefaulterAging(u, "2026-09-01", undefined, summary);
+          rows.push([
+            rows.length + 1,
             u.demandUnit?.permanentDemandNo || u.assessmentNumber,
             u.legalName,
             u.statutoryRule?.category || "Commercial",
             `${aging.daysOverdue} Days`,
             u.assessmentVersions[0]?.snapshot?.taxAmount?.toLocaleString() || "0",
             aging.penaltyDemand?.toLocaleString() || "0",
-            balance.toLocaleString(),
+            summary.outstandingBalance.toLocaleString(),
             u.isRecoveryCertified ? "RECOVERY_CERTIFIED" : "DEFAULTER"
-          ];
-        });
+          ]);
+        }
         downloadOfficialPdf({
           type: "STATUTORY_REPORT",
           documentIdOrData: {
@@ -11793,22 +11803,23 @@ export default function HomePage({
                   type="button"
                   className="btn-primary"
                   onClick={() => {
-                    const defaulterUnits = units.filter((u) => computeUnitBalance(u) > 0);
-                    const dRows = defaulterUnits.map((u, i) => {
-                      const bal = computeUnitBalance(u);
-                      const aging = computeUnitDefaulterAging(u, "2026-09-01");
-                      return [
-                        i + 1,
+                    const dRows: Array<(string | number)[]> = [];
+                    for (const u of units) {
+                      const summary = computeUnitFinancialSummary(u);
+                      if (summary.outstandingBalance <= 0) continue;
+                      const aging = computeUnitDefaulterAging(u, "2026-09-01", undefined, summary);
+                      dRows.push([
+                        dRows.length + 1,
                         u.demandUnit?.permanentDemandNo || u.assessmentNumber,
                         u.legalName,
                         u.statutoryRule?.category || "Commercial",
                         `${aging.daysOverdue} Days`,
                         u.assessmentVersions[0]?.snapshot?.taxAmount?.toLocaleString() || "0",
                         aging.penaltyDemand?.toLocaleString() || "0",
-                        bal.toLocaleString(),
+                        summary.outstandingBalance.toLocaleString(),
                         u.isRecoveryCertified ? "RECOVERY_CERTIFIED" : "DEFAULTER"
-                      ];
-                    });
+                      ]);
+                    }
                     downloadOfficialPdf({
                       type: "STATUTORY_REPORT",
                       documentIdOrData: {
@@ -12047,8 +12058,7 @@ export default function HomePage({
                       </td>
                     </tr>
                   ) : (
-                    defaulterUnits.map((u) => {
-                      const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
+                    defaulterUnits.map(({ unit: u, aging }) => {
                       const latestVersion = u.assessmentVersions[0];
                       const assessedTax = latestVersion?.snapshot.taxAmount ?? 0;
 
