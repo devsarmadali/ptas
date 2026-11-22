@@ -3867,10 +3867,12 @@ export default function HomePage({
   }, [potentialUnits]);
 
   const formPFT3Rows = useMemo(() => {
+    if (activeTab !== "REGISTER_PFT3") return [];
     return generateFormPFT3Rows(pft3EnrolledUnits);
-  }, [pft3EnrolledUnits]);
+  }, [pft3EnrolledUnits, activeTab]);
 
   const pft3AvailableSubclasses = useMemo(() => {
+    if (activeTab !== "REGISTER_PFT3") return [];
     const codes = new Set<string>();
     for (const row of formPFT3Rows) {
       if (pft3CategoryFilter !== "ALL") {
@@ -3881,7 +3883,7 @@ export default function HomePage({
       if (row.subclassificationCode) codes.add(row.subclassificationCode);
     }
     return Array.from(codes).sort();
-  }, [formPFT3Rows, pft3CategoryFilter]);
+  }, [formPFT3Rows, pft3CategoryFilter, activeTab]);
 
   const filteredFormPFT3Rows = useMemo(() => {
     if (activeTab !== "REGISTER_PFT3") return [];
@@ -4607,6 +4609,36 @@ export default function HomePage({
     return entries;
   }, [units, defaulterFilter, activeTab]);
 
+  // Tax Clearance Tab Data (only computed while Clearance tab is active; single-pass balance & O(1) cert lookup)
+  const clearanceTabData = useMemo(() => {
+    if (activeTab !== "CLEARANCE") {
+      return {
+        zeroBalanceCount: 0,
+        arrearCount: 0,
+        rows: [] as Array<{
+          unit: StoredUnit;
+          balance: number;
+          certRecord: ClearanceCertificateRecord | undefined;
+        }>
+      };
+    }
+    const certByUnitId = new Map(clearanceCertificates.map((c) => [c.unitId, c]));
+    let zeroBalanceCount = 0;
+    let arrearCount = 0;
+    const rows: Array<{
+      unit: StoredUnit;
+      balance: number;
+      certRecord: ClearanceCertificateRecord | undefined;
+    }> = [];
+    for (const u of units) {
+      const balance = computeUnitBalance(u);
+      if (balance === 0) zeroBalanceCount++;
+      else if (balance > 0) arrearCount++;
+      rows.push({ unit: u, balance, certRecord: certByUnitId.get(u.id) });
+    }
+    return { zeroBalanceCount, arrearCount, rows };
+  }, [activeTab, units, clearanceCertificates]);
+
   const noticeTargetUnit = useMemo(() => {
     return noticeTargetUnitId ? (unitsById.get(noticeTargetUnitId) ?? null) : null;
   }, [unitsById, noticeTargetUnitId]);
@@ -4756,7 +4788,7 @@ export default function HomePage({
         downloadOfficialPdf({
           type: "FORM_PFT3_REGISTER",
           documentIdOrData: {
-            rows: formPFT3Rows
+            rows: formPFT3Rows.length > 0 ? formPFT3Rows : generateFormPFT3Rows(pft3EnrolledUnits)
           },
           defaultFilename: "Form_PFT3_Statutory_Assessment_Register.pdf"
         });
@@ -7759,7 +7791,7 @@ export default function HomePage({
             <div className="route-hub-content">
               <div className="route-hub-title-row">
                 <span className="route-hub-title">Demand Desk</span>
-                <span className="route-hub-badge">{formPFT3Rows.length} Assessed</span>
+                <span className="route-hub-badge">{pft3EnrolledUnits.length} Assessed</span>
               </div>
               <p className="route-hub-desc">Potential &amp; Form P.F.T-3 Assessment Registers</p>
             </div>
@@ -7890,7 +7922,7 @@ export default function HomePage({
                 }
               >
                 <ClipboardListIcon size={15} />
-                <span>Form P.F.T-3 Assessment Register ({formPFT3Rows.length})</span>
+                <span>Form P.F.T-3 Assessment Register ({pft3EnrolledUnits.length})</span>
               </Link>
             </>
           )}
@@ -7906,7 +7938,7 @@ export default function HomePage({
               </Link>
               <Link href={asRoute("/demand/pft3")} className="subtab-btn">
                 <ClipboardListIcon size={15} />
-                <span>Form P.F.T-3 Register ({formPFT3Rows.length})</span>
+                <span>Form P.F.T-3 Register ({pft3EnrolledUnits.length})</span>
               </Link>
             </>
           )}
@@ -12813,7 +12845,7 @@ export default function HomePage({
                     marginTop: "0.25rem"
                   }}
                 >
-                  {units.filter((u) => computeUnitBalance(u) === 0).length} Units
+                  {clearanceTabData.zeroBalanceCount} Units
                 </strong>
                 <span style={{ fontSize: "0.75rem", color: "#166534" }}>
                   Zero balance verified in demand ledger
@@ -12839,7 +12871,7 @@ export default function HomePage({
                     marginTop: "0.25rem"
                   }}
                 >
-                  {units.filter((u) => computeUnitBalance(u) > 0).length} Units
+                  {clearanceTabData.arrearCount} Units
                 </strong>
                 <span style={{ fontSize: "0.75rem", color: "#9f1239" }}>
                   Clearance certificate generation blocked
@@ -12899,10 +12931,8 @@ export default function HomePage({
                   </tr>
                 </thead>
                 <tbody>
-                  {units.map((u) => {
-                    const balance = computeUnitBalance(u);
+                  {clearanceTabData.rows.map(({ unit: u, balance, certRecord }) => {
                     const isZeroBalance = balance === 0;
-                    const certRecord = clearanceCertificates.find((c) => c.unitId === u.id);
 
                     return (
                       <tr key={u.id}>
@@ -18017,8 +18047,7 @@ export default function HomePage({
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "#991b1b" }}>Active Defaulters:</span>
                       <strong style={{ color: "#991b1b" }}>
-                        {pft3EnrolledUnits.filter((u) => computeUnitBalance(u) > 0).length}{" "}
-                        Assessees
+                        {misMetrics.kpis.defaulterUnitsCount} Assessees
                       </strong>
                     </div>
                     <div
@@ -27196,7 +27225,7 @@ export default function HomePage({
                       onChange={(e) => {
                         const uid = e.target.value;
                         setCitizenPayUnitId(uid);
-                        const u = units.find((item) => item.id === uid);
+                        const u = unitsById.get(uid);
                         if (u) {
                           const bal = computeLedgerBalance(u.ledgerEntries);
                           setCitizenPayAmount(bal > 0 ? bal : u.statutoryRule.annual_rate_pkr);
