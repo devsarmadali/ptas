@@ -16,13 +16,24 @@
  * also match (e.g. "pft2").  The list is ordered from most-specific to least-specific.
  */
 
-import { downloadOfficialPdf } from "./pdf/download-service";
-import { generateAuthoritativePdf } from "./pdf/document-engine";
+import type { DownloadPdfParams } from "./pdf/download-service";
 import type { OfficialDocumentType } from "./pdf/types";
 import { loadPilotState } from "./pilot-store";
 import { generateFormPFT3Rows, generateCircleDispatchRegister } from "./statutory-forms";
 import { calculatePft2ExecutiveSummary } from "./receipt-generator";
 import { buildVerificationUrl } from "./site-url";
+
+async function downloadOfficialPdf(params: DownloadPdfParams): Promise<boolean> {
+  const { downloadOfficialPdf: impl } = await import("./pdf/download-service");
+  return impl(params);
+}
+
+async function generateAuthoritativePdf(
+  ...args: Parameters<typeof import("./pdf/document-engine").generateAuthoritativePdf>
+): ReturnType<typeof import("./pdf/document-engine").generateAuthoritativePdf> {
+  const { generateAuthoritativePdf: impl } = await import("./pdf/document-engine");
+  return impl(...args);
+}
 
 export interface PdfExportOptions {
   readonly orientation?: "portrait" | "landscape";

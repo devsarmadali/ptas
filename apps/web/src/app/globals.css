@@ -594,6 +594,27 @@ a:hover {
   margin-bottom: var(--space-3);
 }
 
+.auth-seal-badge {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-pill);
+  background: #ffffff;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  flex-shrink: 0;
+}
+
+.auth-seal-badge img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
 .auth-brand-eyebrow {
   margin: 0;
   font-size: var(--text-xs);
@@ -668,6 +689,13 @@ a:hover {
   flex-wrap: wrap;
   gap: var(--space-2);
   font-size: var(--text-sm);
+}
+
+.standalone-topbar a,
+.auth-footer-links a {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* ==========================================================================

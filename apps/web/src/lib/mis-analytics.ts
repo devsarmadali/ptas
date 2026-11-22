@@ -181,6 +181,67 @@ function round2(val: number): number {
   return Math.round((val + Number.EPSILON) * 100) / 100;
 }
 
+export const EMPTY_EXECUTIVE_METRICS: ExecutiveMetrics = {
+  kpis: {
+    totalUnitsCount: 0,
+    assessedDemand: 0,
+    penaltyDemand: 0,
+    totalAssessedGross: 0,
+    totalRealizedRecovery: 0,
+    outstandingArrears: 0,
+    recoveryRatePct: 0,
+    baselineBudgetTargetPkr: 0,
+    targetRealizationPct: 0,
+    paidUnitsCount: 0,
+    defaulterUnitsCount: 0
+  },
+  categoryYields: [],
+  slabYields: [],
+  defaulterFunnel: {
+    current: { count: 0, amount: 0 },
+    overdue30Days: { count: 0, amount: 0 },
+    penaltyEligible: { count: 0, amount: 0 },
+    penalized: { count: 0, amount: 0 },
+    recoveryCertified: { count: 0, amount: 0 },
+    paid: { count: 0, amount: 0 },
+    totalDefaulterExposure: 0
+  },
+  pendency: {
+    pendingDraftAssessments: 0,
+    unservedNotices: 0,
+    pendingFieldInspections: 0,
+    pendingAppeals: 0,
+    pendingRefunds: 0,
+    clearanceCertificatesIssued: 0,
+    totalPendencyActions: 0
+  },
+  roleMetrics: {
+    inspector: {
+      totalAssignedUnits: 0,
+      servedNoticesCount: 0,
+      unservedNoticesCount: 0,
+      serviceCoveragePct: 0,
+      pendingInspectionsCount: 0,
+      fieldComplianceRatePct: 0
+    },
+    eto: {
+      pendingAssessmentsCount: 0,
+      approvedAssessmentsCount: 0,
+      penaltyEligibleCount: 0,
+      recoveryCertificatesCount: 0,
+      totalAdjudicatedReliefPkr: 0
+    },
+    director: {
+      circleTargetRealizationPct: 0,
+      divisionalCollectionTotalPkr: 0,
+      totalDefaulterExposurePkr: 0,
+      pendingAppealsCount: 0,
+      circleIntegrityStatus: "ATTENTION_REQUIRED"
+    }
+  },
+  generatedAt: ""
+};
+
 /**
  * Computes comprehensive Executive MIS Analytics across revenue, category yield,
  * defaulter aging funnel, and operational pendency velocity.

@@ -172,7 +172,8 @@ export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: str
 
           {!isVerifying && hasSearched && result && (
             <div
-              role="region"
+              role={result.isValid ? "status" : "alert"}
+              aria-live="polite"
               aria-label="Verification result"
               style={{
                 borderRadius: "var(--radius-lg)",

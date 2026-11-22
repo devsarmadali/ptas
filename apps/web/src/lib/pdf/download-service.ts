@@ -12,7 +12,6 @@
  *   - Never alerts() directly — UI feedback is the caller's responsibility.
  */
 
-import { generateAuthoritativePdf } from "./document-engine";
 import { getSupabaseAuthClient, resolveAuthenticatedOfficer } from "../supabase-auth";
 import type {
   OfficialDocumentType,
@@ -74,6 +73,7 @@ export async function downloadOfficialPdf(params: DownloadPdfParams): Promise<bo
         : undefined;
     const verifiedAuthContext = browserActor?.authContext ?? params.authContext;
 
+    const { generateAuthoritativePdf } = await import("./document-engine");
     const doc = await generateAuthoritativePdf(
       params.type,
       params.documentIdOrData,

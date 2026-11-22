@@ -111,19 +111,14 @@ function SignInForm() {
         <section className="auth-card" aria-labelledby="sign-in-heading">
           <header className="auth-header">
             <div className="auth-brand-row">
-              <img
-                src="/punjab-logo.png"
-                alt="Government of the Punjab Official Seal"
-                width={48}
-                height={40}
-                style={{
-                  width: "44px",
-                  height: "auto",
-                  maxHeight: "42px",
-                  objectFit: "contain",
-                  flexShrink: 0
-                }}
-              />
+              <div className="auth-seal-badge">
+                <img
+                  src="/punjab-logo.png"
+                  alt="Government of the Punjab Official Seal"
+                  width={40}
+                  height={40}
+                />
+              </div>
               <div>
                 <p className="auth-brand-eyebrow">Government of the Punjab</p>
                 <p className="auth-brand-dept">

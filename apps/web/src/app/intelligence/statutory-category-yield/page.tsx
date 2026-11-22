@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { loadOperationalSurveyUnits } from "../../../lib/operational-survey";
 import {
   fetchPotentialAssessmentUnitsFromDatabase,
@@ -102,10 +103,52 @@ export default function StatutoryCategoryYieldPage() {
 
   if (loadError) {
     return (
-      <main id="main-content" tabIndex={-1} className="standalone-page">
-        <div role="alert" className="alert alert-error">
-          {loadError}
-        </div>
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="standalone-page standalone-page--narrow"
+        style={{ paddingTop: "3rem" }}
+      >
+        <section
+          className="surface-card"
+          style={{
+            textAlign: "center",
+            borderColor: "var(--color-danger-border)"
+          }}
+        >
+          <h1
+            style={{
+              margin: "0 0 0.75rem",
+              fontSize: "1.35rem",
+              fontWeight: 800,
+              color: "var(--color-danger-text)"
+            }}
+          >
+            Unable to Load Category Yield Analytics
+          </h1>
+          <p
+            role="alert"
+            style={{
+              margin: "0 auto 1.25rem",
+              maxWidth: "34rem",
+              fontSize: "0.9rem",
+              color: "var(--color-text-muted)",
+              lineHeight: 1.5
+            }}
+          >
+            {loadError}
+          </p>
+          <div
+            style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}
+          >
+            <Link href="/sign-in" className="btn-primary" style={{ textDecoration: "none" }}>
+              Sign In to Department Desk
+            </Link>
+            <Link href="/" className="btn-secondary" style={{ textDecoration: "none" }}>
+              Return to Dashboard
+            </Link>
+          </div>
+        </section>
       </main>
     );
   }

@@ -1,20 +1,22 @@
 /**
- * PTAS Central Statutory Document & PDF Architecture
- * Government of the Punjab — Excise & Taxation Department
+ * PTAS Central Statutory Document & PDF Architecture Entry Point
+ * Keeps heavy PDF generation dependencies (jsPDF, logo assets, templates) lazily split
+ * out of initial page bundles until an officer or taxpayer explicitly triggers a PDF export.
  */
 
 export * from "./types";
-export * from "./base-document";
-export * from "./document-engine";
-export * from "./download-service";
-export * from "./templates/pft2-challan";
-export * from "./templates/pft1-demand-notice";
-export * from "./templates/pft3-assessment-register";
-export * from "./templates/show-cause-notice";
-export * from "./templates/statutory-receipt";
-export * from "./templates/executive-pft2-brief";
-export * from "./templates/statutory-reports";
-export * from "./templates/tax-clearance-certificate";
-export * from "./templates/land-revenue-recovery";
-export * from "./templates/appellate-order";
-export * from "./templates/unit-dossier";
+export type { DownloadPdfParams } from "./download-service";
+
+export async function downloadOfficialPdf(
+  params: import("./download-service").DownloadPdfParams
+): Promise<boolean> {
+  const { downloadOfficialPdf: impl } = await import("./download-service");
+  return impl(params);
+}
+
+export async function generateAuthoritativePdf(
+  ...args: Parameters<typeof import("./document-engine").generateAuthoritativePdf>
+): ReturnType<typeof import("./document-engine").generateAuthoritativePdf> {
+  const { generateAuthoritativePdf: impl } = await import("./document-engine");
+  return impl(...args);
+}

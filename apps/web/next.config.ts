@@ -19,6 +19,14 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["@ptas/ui"]
   },
+  async rewrites() {
+    return [
+      {
+        source: "/favicon.ico",
+        destination: "/punjab-logo.png"
+      }
+    ];
+  },
   async redirects() {
     return [
       {
@@ -35,6 +43,24 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
+      {
+        source: "/punjab-logo.png",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=86400, stale-while-revalidate=604800"
+          }
+        ]
+      },
+      {
+        source: "/government-of-punjab-seeklogo.png",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=86400, stale-while-revalidate=604800"
+          }
+        ]
+      },
       {
         source: "/(.*)",
         headers: [

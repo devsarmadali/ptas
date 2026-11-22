@@ -3,6 +3,18 @@ import { getSupabaseAuthClient } from "./supabase-auth";
 
 export type { DesignatedBankBranch };
 
+const BRANCH_CACHE_TTL_MS = 10 * 60_000;
+const branchCacheByDistrict = new Map<
+  string,
+  { readonly branches: readonly DesignatedBankBranch[]; readonly expiresAtMs: number }
+>();
+const branchInFlightByDistrict = new Map<string, Promise<readonly DesignatedBankBranch[]>>();
+
+export function clearDesignatedBranchCache(): void {
+  branchCacheByDistrict.clear();
+  branchInFlightByDistrict.clear();
+}
+
 /**
  * Normalize district string for robust comparison across legal/statutory and bank schedules.
  * Examples:
@@ -73,48 +85,72 @@ export function formatBranchOptionLabel(branch: DesignatedBankBranch): string {
 }
 
 /**
- * Fetch designated bank branches from the PostgreSQL system table via RPC,
- * falling back gracefully to the statutory embedded schedule.
+ * Fetch designated bank branches from PostgreSQL via RPC with bounded TTL caching and
+ * in-flight request deduplication, falling back gracefully to the embedded schedule.
  */
 export async function fetchDesignatedBranchesFromDatabase(
   district?: string | null
 ): Promise<readonly DesignatedBankBranch[]> {
-  try {
-    const supabase = getSupabaseAuthClient();
-    type RpcCaller = (
-      fn: string,
-      args: Record<string, unknown>
-    ) => Promise<{ data: unknown; error: unknown }>;
-    const { data, error } = await (supabase.rpc as unknown as RpcCaller)(
-      "get_designated_bank_branches",
-      {
-        p_district: district ? normalizeDistrictName(district) : null
-      }
-    );
-
-    if (error || !Array.isArray(data) || data.length === 0) {
-      return getDesignatedBranchesForDistrict(district);
-    }
-
-    const rows = data as Array<{
-      serial_no: number;
-      bank_name: string;
-      region: string;
-      district: string;
-      branch_name: string;
-      branch_code: string;
-    }>;
-
-    return rows.map((r) => ({
-      serialNo: r.serial_no,
-      bankName: r.bank_name,
-      region: r.region,
-      district: r.district,
-      branchName: r.branch_name,
-      branchCode: r.branch_code
-    }));
-  } catch (err) {
-    console.warn("Falling back to local designated bank branches:", err);
-    return getDesignatedBranchesForDistrict(district);
+  const cacheKey = district ? normalizeDistrictName(district) || "__ALL__" : "__ALL__";
+  const now = Date.now();
+  const cached = branchCacheByDistrict.get(cacheKey);
+  if (cached && cached.expiresAtMs > now) {
+    return cached.branches;
   }
+
+  const existingInFlight = branchInFlightByDistrict.get(cacheKey);
+  if (existingInFlight) {
+    return existingInFlight;
+  }
+
+  const fetchPromise = (async (): Promise<readonly DesignatedBankBranch[]> => {
+    try {
+      const supabase = getSupabaseAuthClient();
+      type RpcCaller = (
+        fn: string,
+        args: Record<string, unknown>
+      ) => Promise<{ data: unknown; error: unknown }>;
+      const { data, error } = await (supabase.rpc as unknown as RpcCaller)(
+        "get_designated_bank_branches",
+        {
+          p_district: district ? normalizeDistrictName(district) : null
+        }
+      );
+
+      if (error || !Array.isArray(data) || data.length === 0) {
+        return getDesignatedBranchesForDistrict(district);
+      }
+
+      const rows = data as Array<{
+        serial_no: number;
+        bank_name: string;
+        region: string;
+        district: string;
+        branch_name: string;
+        branch_code: string;
+      }>;
+
+      const mapped: readonly DesignatedBankBranch[] = rows.map((r) => ({
+        serialNo: r.serial_no,
+        bankName: r.bank_name,
+        region: r.region,
+        district: r.district,
+        branchName: r.branch_name,
+        branchCode: r.branch_code
+      }));
+      branchCacheByDistrict.set(cacheKey, {
+        branches: mapped,
+        expiresAtMs: Date.now() + BRANCH_CACHE_TTL_MS
+      });
+      return mapped;
+    } catch (err) {
+      console.warn("Falling back to local designated bank branches:", err);
+      return getDesignatedBranchesForDistrict(district);
+    } finally {
+      branchInFlightByDistrict.delete(cacheKey);
+    }
+  })();
+
+  branchInFlightByDistrict.set(cacheKey, fetchPromise);
+  return fetchPromise;
 }

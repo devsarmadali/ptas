@@ -133,8 +133,24 @@ export function mapActorAssignmentToOfficer(
   };
 }
 
-/** Resolve the current authenticated identity through server-controlled PTAS assignments with transient retry resilience. */
-export async function resolveAuthenticatedOfficer(user: User): Promise<MockOfficer> {
+const OFFICER_CACHE_TTL_MS = 30_000;
+const resolvedOfficerCache = new Map<
+  string,
+  { readonly officer: MockOfficer; readonly expiresAtMs: number }
+>();
+const officerLookupInFlight = new Map<string, Promise<MockOfficer>>();
+
+export function clearAuthenticatedOfficerCache(userId?: string): void {
+  if (userId) {
+    resolvedOfficerCache.delete(userId);
+    officerLookupInFlight.delete(userId);
+  } else {
+    resolvedOfficerCache.clear();
+    officerLookupInFlight.clear();
+  }
+}
+
+async function fetchAuthenticatedOfficerFromRpc(user: User): Promise<MockOfficer> {
   const supabase = getSupabaseAuthClient();
   let lastError: Error | null = null;
 
@@ -168,6 +184,35 @@ export async function resolveAuthenticatedOfficer(user: User): Promise<MockOffic
   }
 
   throw lastError ?? new Error("Officer jurisdiction lookup failed");
+}
+
+/** Resolve the current authenticated identity with single-flight deduplication and short-lived TTL caching. */
+export async function resolveAuthenticatedOfficer(user: User): Promise<MockOfficer> {
+  const now = Date.now();
+  const cached = resolvedOfficerCache.get(user.id);
+  if (cached && cached.expiresAtMs > now) {
+    return cached.officer;
+  }
+
+  const existingInFlight = officerLookupInFlight.get(user.id);
+  if (existingInFlight) {
+    return existingInFlight;
+  }
+
+  const lookupPromise = fetchAuthenticatedOfficerFromRpc(user)
+    .then((officer) => {
+      resolvedOfficerCache.set(user.id, {
+        officer,
+        expiresAtMs: Date.now() + OFFICER_CACHE_TTL_MS
+      });
+      return officer;
+    })
+    .finally(() => {
+      officerLookupInFlight.delete(user.id);
+    });
+
+  officerLookupInFlight.set(user.id, lookupPromise);
+  return lookupPromise;
 }
 
 /**
@@ -257,6 +302,7 @@ export async function signInOfficer(email: string, password?: string): Promise<S
         message: `Authenticated as ${officer.name} (${officer.role})`
       };
     } catch (assignmentError) {
+      clearAuthenticatedOfficerCache(data.user.id);
       await supabase.auth.signOut();
       const assignmentMessage =
         assignmentError instanceof Error
@@ -288,6 +334,7 @@ export async function signInOfficer(email: string, password?: string): Promise<S
  * Signs out the currently authenticated officer.
  */
 export async function signOutOfficer(): Promise<void> {
+  clearAuthenticatedOfficerCache();
   try {
     const supabase = getSupabaseAuthClient();
     await supabase.auth.signOut();
@@ -304,7 +351,12 @@ export function subscribeToAuthChanges(
 ) {
   try {
     const supabase = getSupabaseAuthClient();
-    const { data } = supabase.auth.onAuthStateChange(callback);
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" || !session) {
+        clearAuthenticatedOfficerCache();
+      }
+      callback(event, session);
+    });
     return data.subscription;
   } catch {
     return {

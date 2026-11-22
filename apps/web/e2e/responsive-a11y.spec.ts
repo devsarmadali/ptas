@@ -10,13 +10,22 @@ const ACCESSIBLE_ROUTES = [
   "/sign-in",
   "/account/update-password",
   "/verify",
+  "/verify/PTAS-TEST-123",
   "/documents/pf2/new",
   "/documents/pft1",
   "/documents/land-revenue-recovery",
-  "/admin/user-management"
+  "/admin/user-management",
+  "/intelligence/reports/view",
+  "/intelligence/statutory-category-yield",
+  "/units/test-unit/details"
 ] as const;
 
-const SKIP_LINK_ROUTES = ["/sign-in", "/account/update-password", "/verify"] as const;
+const SKIP_LINK_ROUTES = [
+  "/sign-in",
+  "/account/update-password",
+  "/verify",
+  "/verify/PTAS-TEST-123"
+] as const;
 
 for (const viewport of VIEWPORTS) {
   test.describe(`Responsive layout & semantic landmarks (${viewport.name})`, () => {
@@ -84,4 +93,25 @@ test("/verify binds search label and renders lookup feedback region", async ({ p
 
   const statusOrAlert = page.locator('[role="alert"], [role="status"], .alert, .alert-danger');
   await expect(statusOrAlert.first()).toBeVisible();
+});
+
+test("public routes load with valid favicon and zero 404/console errors", async ({ page }) => {
+  const consoleErrors: string[] = [];
+  const failedAssets: string[] = [];
+
+  page.on("console", (msg) => {
+    if (msg.type() === "error") consoleErrors.push(msg.text());
+  });
+  page.on("response", (res) => {
+    if (res.status() >= 400) failedAssets.push(`${res.status()} ${res.url()}`);
+  });
+
+  for (const route of ["/sign-in", "/verify", "/intelligence/reports/view"]) {
+    await page.goto(route, { waitUntil: "networkidle" });
+  }
+
+  const faviconRes = await page.request.get("/favicon.ico");
+  expect(faviconRes.status()).toBe(200);
+  expect(failedAssets).toEqual([]);
+  expect(consoleErrors).toEqual([]);
 });

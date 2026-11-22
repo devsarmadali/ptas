@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { Route } from "next";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -112,6 +113,7 @@ import {
 } from "../lib/supabase-auth";
 import {
   type ExecutiveMetrics,
+  EMPTY_EXECUTIVE_METRICS,
   computeExecutiveMetrics,
   downloadCsvFile,
   exportClearanceCertificatesCsv,
@@ -125,7 +127,10 @@ import {
 } from "../lib/mis-analytics";
 import { StatutoryQrCode } from "../components/StatutoryQrCode";
 import { Pft2ChallanDocument } from "../components/Pft2ChallanDocument";
-import { QrScannerModal } from "../components/QrScannerModal";
+const LazyQrScannerModal = dynamic(
+  () => import("../components/QrScannerModal").then((mod) => mod.QrScannerModal),
+  { ssr: false }
+);
 import { RowActionMenu, type RowAction } from "../components/RowActionMenu";
 import {
   BarChartIcon,
@@ -1005,6 +1010,11 @@ export default function HomePage({
   const [authStatus, setAuthStatus] = useState<"CHECKING" | "AUTHENTICATED" | "UNAUTHENTICATED">(
     "CHECKING"
   );
+  const refreshInFlightRef = useRef<Promise<void> | null>(null);
+  const lastRefreshAtRef = useRef<number>(0);
+  const authStatusRef = useRef(authStatus);
+  authStatusRef.current = authStatus;
+  const hasAnyModalOpenRef = useRef(false);
   const [units, setUnits] = useState<StoredUnit[]>([]);
   const [auditLogs, setAuditLogs] = useState<PilotAuditItem[]>(() => loadPersistedAuditLogs());
   const [isLoadingOperationalUnits, setIsLoadingOperationalUnits] = useState(true);
@@ -1579,6 +1589,7 @@ export default function HomePage({
       showImportPotentialModal ||
       showMigratePotentialModal;
 
+    hasAnyModalOpenRef.current = hasOpenModal || showQrScannerModal;
     if (!hasOpenModal) return;
 
     const handleEscapeModal = (event: KeyboardEvent) => {
@@ -1674,31 +1685,33 @@ export default function HomePage({
     showMigratePotentialModal
   ]);
 
-  const refreshOperationalSurveyUnits = async () => {
-    setIsLoadingOperationalUnits(true);
-    setOperationalUnitsError(null);
-    try {
-      const liveUnits = await loadOperationalSurveyUnits();
-      setUnits(liveUnits);
-
-      // PostgreSQL is the sole system of record for the potential register.
-      const dbPotential = await fetchPotentialAssessmentUnitsFromDatabase();
-      if (dbPotential === null) throw new Error("Unable to load the potential register");
-      setPotentialUnits(dbPotential);
-      const { challans: syncedChallans, receipts: syncedReceipts } =
-        await loadDurableChallanRegistry();
-      setPft2Challans(syncedChallans);
-      setStatutoryReceipts(syncedReceipts);
-      const firstId = liveUnits[0]?.id ?? "";
-      setSelectedUnitId(firstId);
-      setPaymentUnitId(firstId);
-      setAppealUnitId(firstId);
-      setDiscUnitId(firstId);
-      setRefUnitId(firstId);
-
-      // Synchronize audit logs from database if available, merging with local persisted logs
+  const refreshOperationalSurveyUnits = () => {
+    if (refreshInFlightRef.current) {
+      return refreshInFlightRef.current;
+    }
+    const run = (async () => {
+      setIsLoadingOperationalUnits(true);
+      setOperationalUnitsError(null);
       try {
-        const cloudAudits = await fetchAuditLogsFromDatabase();
+        const [liveUnits, dbPotential, challanRegistry, cloudAudits] = await Promise.all([
+          loadOperationalSurveyUnits(),
+          fetchPotentialAssessmentUnitsFromDatabase(),
+          loadDurableChallanRegistry(),
+          fetchAuditLogsFromDatabase().catch(() => null)
+        ]);
+        if (dbPotential === null) throw new Error("Unable to load the potential register");
+        setUnits(liveUnits);
+        setPotentialUnits(dbPotential);
+        setPft2Challans(challanRegistry.challans);
+        setStatutoryReceipts(challanRegistry.receipts);
+        const firstId = liveUnits[0]?.id ?? "";
+        setSelectedUnitId(firstId);
+        setPaymentUnitId(firstId);
+        setAppealUnitId(firstId);
+        setDiscUnitId(firstId);
+        setRefUnitId(firstId);
+        lastRefreshAtRef.current = Date.now();
+
         if (cloudAudits && cloudAudits.length > 0) {
           setAuditLogs((prev) => {
             const existingIds = new Set(cloudAudits.map((a) => a.id));
@@ -1707,17 +1720,18 @@ export default function HomePage({
             return merged;
           });
         }
-      } catch {
-        // Fallback to local persisted audit logs
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load operational units";
+        setUnits([]);
+        setOperationalUnitsError(message);
+        throw error;
+      } finally {
+        setIsLoadingOperationalUnits(false);
+        refreshInFlightRef.current = null;
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to load operational units";
-      setUnits([]);
-      setOperationalUnitsError(message);
-      throw error;
-    } finally {
-      setIsLoadingOperationalUnits(false);
-    }
+    })();
+    refreshInFlightRef.current = run;
+    return run;
   };
 
   // Resolve the Supabase session first, then load only the database rows allowed
@@ -1725,6 +1739,8 @@ export default function HomePage({
   useEffect(() => {
     let sub: { unsubscribe: () => void } | undefined;
     const handleFocus = () => {
+      if (authStatusRef.current !== "AUTHENTICATED" || hasAnyModalOpenRef.current) return;
+      if (Date.now() - lastRefreshAtRef.current < 60_000) return;
       void refreshOperationalSurveyUnits().catch(() => undefined);
     };
     const handleAuditEvent = (event: Event) => {
@@ -2180,7 +2196,7 @@ export default function HomePage({
 
   // Real-time Duplicate Detection using domain's findDuplicateCandidates
   const duplicateWarning = useMemo((): DuplicateMatch | null => {
-    if (!newIdentifierValue.trim() && !newLegalName.trim()) return null;
+    if (!showAddUnitModal || (!newIdentifierValue.trim() && !newLegalName.trim())) return null;
 
     const actor: AuditActor = {
       userId: "system-audit",
@@ -2228,7 +2244,7 @@ export default function HomePage({
     );
 
     return matches.length > 0 ? (matches[0] ?? null) : null;
-  }, [newIdentifierValue, newLegalName, newIdentifierType, units]);
+  }, [showAddUnitModal, newIdentifierValue, newLegalName, newIdentifierType, units]);
 
   // Metrics Calculations
   const metrics = useMemo(() => {
@@ -4300,6 +4316,9 @@ export default function HomePage({
 
   // Phase 7: Executive MIS Analytics Metrics - strictly computed on PFT-3 enrolled units
   const misMetrics: ExecutiveMetrics = useMemo(() => {
+    if (activeTab !== "ANALYTICS" && activeTab !== "REPORTS") {
+      return EMPTY_EXECUTIVE_METRICS;
+    }
     return computeExecutiveMetrics(
       pft3EnrolledUnits,
       appeals,
@@ -4307,7 +4326,14 @@ export default function HomePage({
       refundAdjustments,
       clearanceCertificates
     );
-  }, [pft3EnrolledUnits, appeals, discontinuances, refundAdjustments, clearanceCertificates]);
+  }, [
+    activeTab,
+    pft3EnrolledUnits,
+    appeals,
+    discontinuances,
+    refundAdjustments,
+    clearanceCertificates
+  ]);
 
   // Phase 9: Effective Perspective for Analytics Dashboard
   const effectivePerspective: "INSPECTOR" | "ETO" | "DIRECTOR" =
@@ -4406,7 +4432,7 @@ export default function HomePage({
         downloadOfficialPdf({
           type: "FORM_PFT3_REGISTER",
           documentIdOrData: {
-            rows: generateFormPFT3Rows(pft3EnrolledUnits)
+            rows: formPFT3Rows
           },
           defaultFilename: "Form_PFT3_Statutory_Assessment_Register.pdf"
         });
@@ -30908,15 +30934,17 @@ export default function HomePage({
       )}
 
       {/* UNIVERSAL QR CODE SCANNER MODAL */}
-      <QrScannerModal
-        isOpen={showQrScannerModal}
-        onClose={() => setShowQrScannerModal(false)}
-        onScan={(payload) => {
-          setPortalVerificationInput(payload);
-          handleVerifyDocument(payload);
-          showToast("success", `QR Code detected and verified!`);
-        }}
-      />
+      {showQrScannerModal && (
+        <LazyQrScannerModal
+          isOpen={showQrScannerModal}
+          onClose={() => setShowQrScannerModal(false)}
+          onScan={(payload) => {
+            setPortalVerificationInput(payload);
+            handleVerifyDocument(payload);
+            showToast("success", `QR Code detected and verified!`);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import jsQR from "jsqr";
 import { Modal } from "./ui/Modal";
 import { AlertTriangleIcon, CameraIcon, QrCodeIcon, UploadIcon } from "./ui/Icons";
+
+type JsQrFn = typeof import("jsqr").default;
 
 interface QrScannerModalProps {
   readonly isOpen: boolean;
@@ -22,6 +23,15 @@ export function QrScannerModal({ isOpen, onClose, onScan }: QrScannerModalProps)
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const jsQrRef = useRef<JsQrFn | null>(null);
+
+  const loadJsQr = useCallback(async (): Promise<JsQrFn> => {
+    if (!jsQrRef.current) {
+      const mod = await import("jsqr");
+      jsQrRef.current = mod.default;
+    }
+    return jsQrRef.current;
+  }, []);
 
   const stopCamera = useCallback(() => {
     if (animationFrameRef.current) {
@@ -61,40 +71,43 @@ export function QrScannerModal({ isOpen, onClose, onScan }: QrScannerModalProps)
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
-      img.onload = () => {
-        setPreviewImage(img.src);
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        if (!ctx) {
-          setErrorMessage("Failed to initialize canvas context.");
-          setIsProcessing(false);
-          return;
-        }
-
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img, 0, 0, img.width, img.height);
-
-        const imageData = ctx.getImageData(0, 0, img.width, img.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: "dontInvert"
-        });
-
-        if (code && code.data) {
-          handleScanSuccess(code.data);
-        } else {
-          const retryCode = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: "attemptBoth"
-          });
-          if (retryCode && retryCode.data) {
-            handleScanSuccess(retryCode.data);
-          } else {
-            setErrorMessage(
-              "No valid statutory QR code detected in the selected image. Please ensure good lighting and that the QR finder patterns are visible."
-            );
+      img.onload = async () => {
+        try {
+          setPreviewImage(img.src);
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d", { willReadFrequently: true });
+          if (!ctx) {
+            setErrorMessage("Failed to initialize canvas context.");
+            return;
           }
+
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0, img.width, img.height);
+
+          const jsQR = await loadJsQr();
+          const imageData = ctx.getImageData(0, 0, img.width, img.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: "dontInvert"
+          });
+
+          if (code && code.data) {
+            handleScanSuccess(code.data);
+          } else {
+            const retryCode = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: "attemptBoth"
+            });
+            if (retryCode && retryCode.data) {
+              handleScanSuccess(retryCode.data);
+            } else {
+              setErrorMessage(
+                "No valid statutory QR code detected in the selected image. Please ensure good lighting and that the QR finder patterns are visible."
+              );
+            }
+          }
+        } finally {
+          setIsProcessing(false);
         }
-        setIsProcessing(false);
       };
       img.src = event.target?.result as string;
     };
@@ -115,7 +128,8 @@ export function QrScannerModal({ isOpen, onClose, onScan }: QrScannerModalProps)
     }
 
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (ctx) {
+    const jsQR = jsQrRef.current;
+    if (ctx && jsQR) {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -140,6 +154,7 @@ export function QrScannerModal({ isOpen, onClose, onScan }: QrScannerModalProps)
         throw new Error("Camera streaming is not supported on this browser device.");
       }
 
+      await loadJsQr();
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: "environment",
