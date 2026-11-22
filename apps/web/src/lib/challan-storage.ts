@@ -365,6 +365,58 @@ export function ensureChallansAndReceiptsForUnits(units?: readonly StoredUnit[])
   return { challans: mergedChallans, receipts: mergedReceipts };
 }
 
+interface UnitMatchableRecord {
+  readonly unitId?: string | undefined;
+  readonly demandNumber?: string | undefined;
+  readonly provincialUin?: string | undefined;
+  readonly pin?: string | undefined;
+  readonly identifierValue?: string | undefined;
+}
+
+function addIndexEntry<T>(index: Map<string, T[]>, key: string, item: T): void {
+  const bucket = index.get(key);
+  if (bucket) {
+    bucket.push(item);
+  } else {
+    index.set(key, [item]);
+  }
+}
+
+function buildRecordIndex<T extends UnitMatchableRecord>(items: readonly T[]): Map<string, T[]> {
+  const index = new Map<string, T[]>();
+  for (const item of items) {
+    if (item.unitId) addIndexEntry(index, `id:${item.unitId}`, item);
+    if (item.demandNumber) addIndexEntry(index, `dem:${item.demandNumber}`, item);
+    if (item.provincialUin) addIndexEntry(index, `uin:${item.provincialUin}`, item);
+    if (item.pin) addIndexEntry(index, `uin:${item.pin}`, item);
+    if (item.identifierValue) addIndexEntry(index, `ident:${item.identifierValue}`, item);
+  }
+  return index;
+}
+
+function collectMatchedItems<T>(index: Map<string, T[]>, keys: readonly string[]): T[] {
+  if (index.size === 0 || keys.length === 0) return [];
+  const seen = new Set<T>();
+  for (const key of keys) {
+    const bucket = index.get(key);
+    if (!bucket) continue;
+    for (const item of bucket) {
+      seen.add(item);
+    }
+  }
+  return Array.from(seen);
+}
+
+function buildLookupKeysForUnit(unit: StoredUnit): string[] {
+  const keys: string[] = [`id:${unit.id}`];
+  if (unit.demandUnit?.permanentDemandNo) keys.push(`dem:${unit.demandUnit.permanentDemandNo}`);
+  if (unit.demandNumber) keys.push(`dem:${unit.demandNumber}`);
+  if (unit.provincialUin) keys.push(`uin:${unit.provincialUin}`);
+  if (unit.pinNumber) keys.push(`uin:${unit.pinNumber}`);
+  if (unit.identifierValue) keys.push(`ident:${unit.identifierValue}`);
+  return keys;
+}
+
 /**
  * Merges persisted migrated potential units and applies any received challans
  * or statutory receipts to unit ledger entries to ensure realized recovery is accurate.
@@ -376,26 +428,42 @@ export function applyReceiptsAndMigratedUnitsToStoredUnits(
   const storedReceipts = loadPersistedStatutoryReceipts();
   const storedChallans = loadPersistedPft2Challans();
 
-  // Combine base units with migrated units, deduplicating by ID, demandNumber, and PIN
+  // Combine base units with migrated units via O(1) lookup maps (by ID, demandNumber, PIN/UIN)
   const unitMap = new Map<string, StoredUnit>();
+  const byDemandNo = new Map<string, string>();
+  const byUinOrPin = new Map<string, string>();
+
+  const registerUnitAliases = (key: string, unit: StoredUnit) => {
+    if (unit.demandNumber && !byDemandNo.has(unit.demandNumber)) {
+      byDemandNo.set(unit.demandNumber, key);
+    }
+    if (unit.demandUnit?.permanentDemandNo && !byDemandNo.has(unit.demandUnit.permanentDemandNo)) {
+      byDemandNo.set(unit.demandUnit.permanentDemandNo, key);
+    }
+    if (unit.provincialUin && !byUinOrPin.has(unit.provincialUin)) {
+      byUinOrPin.set(unit.provincialUin, key);
+    }
+    if (unit.pinNumber && !byUinOrPin.has(unit.pinNumber)) {
+      byUinOrPin.set(unit.pinNumber, key);
+    }
+  };
+
   for (const u of baseUnits) {
     unitMap.set(u.id, u);
+    registerUnitAliases(u.id, u);
   }
+
   for (const mu of migratedUnits) {
-    const existingKey = Array.from(unitMap.keys()).find((k) => {
-      const existing = unitMap.get(k)!;
-      return (
-        existing.id === mu.id ||
-        (mu.demandNumber &&
-          (existing.demandNumber === mu.demandNumber ||
-            existing.demandUnit?.permanentDemandNo === mu.demandNumber)) ||
-        (mu.provincialUin &&
-          (existing.provincialUin === mu.provincialUin || existing.pinNumber === mu.provincialUin))
-      );
-    });
+    let existingKey: string | undefined = unitMap.has(mu.id) ? mu.id : undefined;
+    if (!existingKey && mu.demandNumber) {
+      existingKey = byDemandNo.get(mu.demandNumber);
+    }
+    if (!existingKey && mu.provincialUin) {
+      existingKey = byUinOrPin.get(mu.provincialUin);
+    }
     if (existingKey) {
       const existing = unitMap.get(existingKey)!;
-      unitMap.set(existingKey, {
+      const merged: StoredUnit = {
         ...existing,
         ...mu,
         id: existing.id,
@@ -404,14 +472,20 @@ export function applyReceiptsAndMigratedUnitsToStoredUnits(
           mu.ledgerEntries.length > existing.ledgerEntries.length
             ? mu.ledgerEntries
             : existing.ledgerEntries
-      });
+      };
+      unitMap.set(existingKey, merged);
+      registerUnitAliases(existingKey, merged);
     } else {
       unitMap.set(mu.id, mu);
+      registerUnitAliases(mu.id, mu);
     }
   }
 
   const allUnits = Array.from(unitMap.values());
   const receivedChallans = storedChallans.filter((c) => c.status === "RECEIVED");
+
+  const receiptIndex = buildRecordIndex(storedReceipts);
+  const receivedChallanIndex = buildRecordIndex(receivedChallans);
 
   return allUnits.map((unit) => {
     // Normalise existing ledger entries so PAYMENT_CREDIT is always negative
@@ -423,18 +497,10 @@ export function applyReceiptsAndMigratedUnitsToStoredUnits(
     });
     let ledgerModified = updatedLedger.some((e, i) => e !== unit.ledgerEntries[i]);
 
-    // Check matching statutory receipts
-    const matchingReceipts = storedReceipts.filter(
-      (r) =>
-        r.unitId === unit.id ||
-        (r.demandNumber &&
-          (r.demandNumber === unit.demandUnit?.permanentDemandNo ||
-            r.demandNumber === unit.demandNumber)) ||
-        (r.provincialUin &&
-          (r.provincialUin === unit.provincialUin || r.provincialUin === unit.pinNumber)) ||
-        (r.pin && (r.pin === unit.pinNumber || r.pin === unit.provincialUin)) ||
-        (r.identifierValue && r.identifierValue === unit.identifierValue)
-    );
+    const unitKeys = buildLookupKeysForUnit(unit);
+
+    // Check matching statutory receipts via pre-indexed O(1) lookup buckets
+    const matchingReceipts = collectMatchedItems(receiptIndex, unitKeys);
 
     for (const r of matchingReceipts) {
       const alreadyCredited = updatedLedger.some(
@@ -474,18 +540,8 @@ export function applyReceiptsAndMigratedUnitsToStoredUnits(
       }
     }
 
-    // Check matching received challans if receipt not yet created
-    const matchingReceivedChallans = receivedChallans.filter(
-      (c) =>
-        c.unitId === unit.id ||
-        (c.demandNumber &&
-          (c.demandNumber === unit.demandUnit?.permanentDemandNo ||
-            c.demandNumber === unit.demandNumber)) ||
-        (c.provincialUin &&
-          (c.provincialUin === unit.provincialUin || c.provincialUin === unit.pinNumber)) ||
-        (c.pin && (c.pin === unit.pinNumber || c.pin === unit.provincialUin)) ||
-        (c.identifierValue && c.identifierValue === unit.identifierValue)
-    );
+    // Check matching received challans if receipt not yet created via pre-indexed O(1) lookup buckets
+    const matchingReceivedChallans = collectMatchedItems(receivedChallanIndex, unitKeys);
 
     for (const c of matchingReceivedChallans) {
       const receiptNo = c.receiptNumber;

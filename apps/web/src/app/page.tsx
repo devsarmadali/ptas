@@ -4300,6 +4300,27 @@ export default function HomePage({
     return Array.from(codes).sort();
   }, [potentialUnits, potentialClassificationFilter]);
 
+  const potentialLocalityOptions = useMemo(() => {
+    const localities = new Set<string>();
+    for (const u of potentialUnits) {
+      if (u.locality) localities.add(u.locality);
+    }
+    return Array.from(localities);
+  }, [potentialUnits]);
+
+  const receiptSubclassOptions = useMemo(() => {
+    const codes = new Set<string>();
+    const normalizedCategory =
+      receiptCategoryFilter === "ALL" ? "" : receiptCategoryFilter.toLowerCase();
+    for (const r of statutoryReceipts) {
+      if (normalizedCategory && !r.statutoryCategory.toLowerCase().includes(normalizedCategory)) {
+        continue;
+      }
+      if (r.subclassificationCode) codes.add(r.subclassificationCode);
+    }
+    return Array.from(codes).sort();
+  }, [statutoryReceipts, receiptCategoryFilter]);
+
   // Potential Register KPI Metrics (strictly separate; never aggregated into PFT-3)
   const potentialKpiMetrics = useMemo(() => {
     const activeUnits = filteredPotentialUnits.filter((p) => p.status === "ACTIVE");
@@ -8921,13 +8942,11 @@ export default function HomePage({
                   }}
                 >
                   <option value="ALL">All Localities</option>
-                  {Array.from(new Set(potentialUnits.map((u) => u.locality).filter(Boolean))).map(
-                    (loc) => (
-                      <option key={loc} value={loc}>
-                        {loc}
-                      </option>
-                    )
-                  )}
+                  {potentialLocalityOptions.map((loc) => (
+                    <option key={loc} value={loc}>
+                      {loc}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -14755,27 +14774,11 @@ export default function HomePage({
                   onChange={(e) => setReceiptSubclassFilter(e.target.value)}
                 >
                   <option value="ALL">All Sub-Classes</option>
-                  {(() => {
-                    const codes = new Set<string>();
-                    for (const r of statutoryReceipts) {
-                      if (
-                        receiptCategoryFilter !== "ALL" &&
-                        !r.statutoryCategory
-                          .toLowerCase()
-                          .includes(receiptCategoryFilter.toLowerCase())
-                      ) {
-                        continue;
-                      }
-                      if (r.subclassificationCode) codes.add(r.subclassificationCode);
-                    }
-                    return Array.from(codes)
-                      .sort()
-                      .map((code) => (
-                        <option key={code} value={code}>
-                          {formatFullSubclassCode(code)}
-                        </option>
-                      ));
-                  })()}
+                  {receiptSubclassOptions.map((code) => (
+                    <option key={code} value={code}>
+                      {formatFullSubclassCode(code)}
+                    </option>
+                  ))}
                 </select>
               </div>
 

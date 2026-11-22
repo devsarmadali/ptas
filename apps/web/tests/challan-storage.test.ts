@@ -11,6 +11,7 @@ import {
   STATUTORY_RECEIPTS_STORAGE_KEY
 } from "../src/lib/challan-storage";
 import { createInitialPilotUnits, type Pft2ChallanRecord } from "../src/lib/pilot-store";
+import { MIGRATED_UNITS_STORAGE_KEY } from "../src/lib/potential-units-storage";
 import { computeUnitFinancialSummary } from "../src/lib/statutory-forms";
 
 class MockStorage {
@@ -235,5 +236,90 @@ describe("Form P.F.T-2 Challans & Statutory Receipts Persistence Layer", () => {
 
     const summary = computeUnitFinancialSummary(updated);
     expect(summary.totalPaid).toBeGreaterThanOrEqual(5000);
+  });
+
+  it("merges migrated units and deduplicates multi-key receipt matches in O(N)", () => {
+    const units = createInitialPilotUnits();
+    const baseUnit = units[0]!;
+    const secondUnit = units[1]!;
+
+    // Persist a migrated unit colliding by demandNumber (with extra ledger entry) and one brand new migrated unit
+    localStorage.setItem(
+      MIGRATED_UNITS_STORAGE_KEY,
+      JSON.stringify([
+        {
+          ...baseUnit,
+          id: "migrated-alias-id",
+          legalName: "Migrated Merged Enterprise",
+          ledgerEntries: [
+            ...baseUnit.ledgerEntries,
+            {
+              id: "led-mig-01",
+              demandUnitId: baseUnit.demandUnit.id,
+              financialYearId: "FY-2026-27",
+              entryType: "ANNUAL_DEMAND",
+              amount: 2000,
+              sourceType: "ASSESSMENT_VERSION",
+              sourceId: "ver-mig-01",
+              idempotencyKey: "idem-mig-01",
+              correlationId: "corr-mig-01",
+              postedBy: "ETO",
+              postedAt: "2026-07-02T00:00:00.000Z"
+            }
+          ]
+        },
+        {
+          ...secondUnit,
+          id: "migrated-brand-new-01",
+          demandNumber: "9991",
+          demandUnit: { ...secondUnit.demandUnit, permanentDemandNo: "9991" },
+          provincialUin: "PTAS-UIN-9991",
+          pinNumber: "999991",
+          identifierValue: "9999999-1",
+          ledgerEntries: []
+        }
+      ])
+    );
+
+    // Receipt matching on unitId + demandNumber + pin simultaneously must only credit once
+    savePersistedStatutoryReceipts([
+      {
+        id: "rcpt-multi-01",
+        receiptNumber: "RCPT-MULTI-01",
+        challanNumber: "PFT2-MULTI-01",
+        pin: baseUnit.pinNumber,
+        provincialUin: baseUnit.provincialUin,
+        demandNumber: baseUnit.demandUnit.permanentDemandNo,
+        unitId: baseUnit.id,
+        assesseeLegalName: baseUnit.legalName,
+        identifierType: baseUnit.identifierType,
+        identifierValue: baseUnit.identifierValue,
+        address: baseUnit.address,
+        statutoryCategory: "Companies",
+        subclassificationCode: "1.i",
+        tertiarySlab: null,
+        amountPaidPkr: 3500,
+        amountPaidWords: "Three Thousand Five Hundred Rupees Only",
+        paymentChannel: "NBP_TREASURY",
+        bankScrollRef: "NBP-SCROLL-01",
+        dateOfReceipt: "2026-07-10",
+        timeOfReceipt: "11:00:00",
+        receivingOfficerName: "Treasury Officer",
+        receivingOfficerTitle: "Bank Counter Officer",
+        officialSha256: "sha-multi-01",
+        qrPayload: "/verify",
+        paymentSource: "ISSUED_PFT2"
+      }
+    ]);
+
+    const merged = applyReceiptsAndMigratedUnitsToStoredUnits([baseUnit]);
+    expect(merged).toHaveLength(2);
+    const mergedBase = merged.find((u) => u.id === baseUnit.id)!;
+    expect(mergedBase.legalName).toBe("Migrated Merged Enterprise");
+    const matchingCredits = mergedBase.ledgerEntries.filter(
+      (e) => e.entryType === "PAYMENT_CREDIT" && e.sourceId === "RCPT-MULTI-01"
+    );
+    expect(matchingCredits).toHaveLength(1);
+    expect(matchingCredits[0]?.amount).toBe(-3500);
   });
 });
