@@ -439,56 +439,30 @@ CREATE INDEX IF NOT EXISTS idx_user_jurisdiction_assignments_assigned_by
 -- 3. VIEW SECURITY INVOKER & ROW-LEVEL SECURITY HARDENING
 -- =============================================================================
 
-ALTER VIEW IF EXISTS public.potential_pft2_challans
-  SET (security_invoker = true);
+-- Lock tables in live-query access order (pft3_assessment_units -> geo_circles)
+-- to prevent 40P01 deadlocks against concurrent list_operational_survey_units() reads.
+ALTER TABLE public.pft3_assessment_units ENABLE ROW LEVEL SECURITY;
 
--- Enable RLS on public geography, bank branch, and assignment governance tables
-ALTER TABLE public.geo_divisions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.geo_districts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.geo_tehsils ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.geo_circles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.designated_bank_branches ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_jurisdiction_assignments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS pft3_assessment_units_select ON public.pft3_assessment_units;
 
-DROP POLICY IF EXISTS geo_divisions_authenticated_select ON public.geo_divisions;
-CREATE POLICY geo_divisions_authenticated_select
-  ON public.geo_divisions FOR SELECT TO authenticated USING (true);
-
-DROP POLICY IF EXISTS geo_districts_authenticated_select ON public.geo_districts;
-CREATE POLICY geo_districts_authenticated_select
-  ON public.geo_districts FOR SELECT TO authenticated USING (true);
-
-DROP POLICY IF EXISTS geo_tehsils_authenticated_select ON public.geo_tehsils;
-CREATE POLICY geo_tehsils_authenticated_select
-  ON public.geo_tehsils FOR SELECT TO authenticated USING (true);
-
-DROP POLICY IF EXISTS geo_circles_authenticated_select ON public.geo_circles;
-CREATE POLICY geo_circles_authenticated_select
-  ON public.geo_circles FOR SELECT TO authenticated USING (true);
-
-DROP POLICY IF EXISTS designated_bank_branches_authenticated_select ON public.designated_bank_branches;
-CREATE POLICY designated_bank_branches_authenticated_select
-  ON public.designated_bank_branches FOR SELECT TO authenticated USING (true);
-
-DROP POLICY IF EXISTS user_jurisdiction_assignments_select ON public.user_jurisdiction_assignments;
-CREATE POLICY user_jurisdiction_assignments_select
-  ON public.user_jurisdiction_assignments
-  FOR SELECT
+DROP POLICY IF EXISTS pft2_receipts_all ON public.pft2_receipts;
+CREATE POLICY pft2_receipts_write
+  ON public.pft2_receipts
+  FOR INSERT
   TO authenticated
-  USING (
-    user_id IN (
-      SELECT u.id FROM public.app_users u WHERE u.auth_user_id = (SELECT auth.uid())
-    )
-    OR EXISTS (
-      SELECT 1 FROM ptas_private.active_actor(ARRAY['ADMIN', 'DIRECTOR']) a
-    )
-    OR EXISTS (
+  WITH CHECK (
+    EXISTS (
       SELECT 1
-      FROM ptas_private.active_actor(ARRAY['ETO']) a
-      WHERE ptas_private.jurisdiction_contains(
-        a.jurisdiction_id,
-        coalesce(circle_id, district_id, division_id)
-      )
+      FROM ptas_private.active_actor(ARRAY['INSPECTOR', 'ETO', 'FINANCE', 'ADMIN', 'DIRECTOR']) a
+      LEFT JOIN public.pft3_assessment_units p ON p.id = pft2_receipts.pft3_unit_id
+      LEFT JOIN public.potential_assessment_units pau ON pau.id = pft2_receipts.potential_unit_id
+      LEFT JOIN public.pft2_challans c ON c.id = pft2_receipts.challan_id
+      LEFT JOIN public.potential_pft2_challans_deprecated pc ON pc.id = pft2_receipts.potential_challan_id
+      WHERE a.role_code IN ('ADMIN', 'DIRECTOR')
+         OR ptas_private.jurisdiction_contains(
+              a.jurisdiction_id,
+              coalesce(p.circle_id, pau.circle_id, c.jurisdiction_id, pc.jurisdiction_id)
+            )
     )
   );
 
@@ -532,30 +506,6 @@ CREATE POLICY potential_assessment_units_update
     )
   );
 
--- Consolidate redundant SELECT policies on pft3_assessment_units & pft2_receipts
-DROP POLICY IF EXISTS pft3_assessment_units_select ON public.pft3_assessment_units;
-
-DROP POLICY IF EXISTS pft2_receipts_all ON public.pft2_receipts;
-CREATE POLICY pft2_receipts_write
-  ON public.pft2_receipts
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    EXISTS (
-      SELECT 1
-      FROM ptas_private.active_actor(ARRAY['INSPECTOR', 'ETO', 'FINANCE', 'ADMIN', 'DIRECTOR']) a
-      LEFT JOIN public.pft3_assessment_units p ON p.id = pft2_receipts.pft3_unit_id
-      LEFT JOIN public.potential_assessment_units pau ON pau.id = pft2_receipts.potential_unit_id
-      LEFT JOIN public.pft2_challans c ON c.id = pft2_receipts.challan_id
-      LEFT JOIN public.potential_pft2_challans_deprecated pc ON pc.id = pft2_receipts.potential_challan_id
-      WHERE a.role_code IN ('ADMIN', 'DIRECTOR')
-         OR ptas_private.jurisdiction_contains(
-              a.jurisdiction_id,
-              coalesce(p.circle_id, pau.circle_id, c.jurisdiction_id, pc.jurisdiction_id)
-            )
-    )
-  );
-
 -- Replace overly permissive USING (true) / WITH CHECK (true) policies on assessment_versions
 DROP POLICY IF EXISTS assessment_versions_select_policy ON public.assessment_versions;
 CREATE POLICY assessment_versions_select_policy
@@ -584,6 +534,59 @@ CREATE POLICY assessment_versions_insert_policy
         AND ptas_private.can_access_jurisdiction(u.circle_id)
     )
   );
+
+ALTER VIEW IF EXISTS public.potential_pft2_challans
+  SET (security_invoker = true);
+
+-- Enable RLS on public geography, bank branch, and assignment governance tables
+ALTER TABLE public.user_jurisdiction_assignments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.designated_bank_branches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.geo_divisions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.geo_districts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.geo_tehsils ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.geo_circles ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS user_jurisdiction_assignments_select ON public.user_jurisdiction_assignments;
+CREATE POLICY user_jurisdiction_assignments_select
+  ON public.user_jurisdiction_assignments
+  FOR SELECT
+  TO authenticated
+  USING (
+    user_id IN (
+      SELECT u.id FROM public.app_users u WHERE u.auth_user_id = (SELECT auth.uid())
+    )
+    OR EXISTS (
+      SELECT 1 FROM ptas_private.active_actor(ARRAY['ADMIN', 'DIRECTOR']) a
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM ptas_private.active_actor(ARRAY['ETO']) a
+      WHERE ptas_private.jurisdiction_contains(
+        a.jurisdiction_id,
+        coalesce(circle_id, district_id, division_id)
+      )
+    )
+  );
+
+DROP POLICY IF EXISTS designated_bank_branches_authenticated_select ON public.designated_bank_branches;
+CREATE POLICY designated_bank_branches_authenticated_select
+  ON public.designated_bank_branches FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS geo_divisions_authenticated_select ON public.geo_divisions;
+CREATE POLICY geo_divisions_authenticated_select
+  ON public.geo_divisions FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS geo_districts_authenticated_select ON public.geo_districts;
+CREATE POLICY geo_districts_authenticated_select
+  ON public.geo_districts FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS geo_tehsils_authenticated_select ON public.geo_tehsils;
+CREATE POLICY geo_tehsils_authenticated_select
+  ON public.geo_tehsils FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS geo_circles_authenticated_select ON public.geo_circles;
+CREATE POLICY geo_circles_authenticated_select
+  ON public.geo_circles FOR SELECT TO authenticated USING (true);
 
 -- =============================================================================
 -- 4. LEAST-PRIVILEGE RPC GRANTS & SEARCH_PATH LOCKDOWN
