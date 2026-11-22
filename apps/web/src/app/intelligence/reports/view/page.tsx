@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { loadPilotState, type PilotState } from "../../../../lib/pilot-store";
 import { loadOperationalContext } from "../../../../lib/operational-survey";
-import { loadDurableChallanRegistry } from "../../../../lib/challan-storage";
 import { computeLedgerBalance } from "@ptas/domain";
 import {
   computeExecutiveMetrics,
@@ -62,21 +61,25 @@ function ReportViewContent() {
 
   useEffect(() => {
     let cancelled = false;
+    const shouldLoadPotential = reportKey === "POTENTIAL_REGISTER";
     void Promise.all([
       loadOperationalContext(),
-      loadDurableChallanRegistry().catch(() => ({ challans: [], receipts: [] })),
-      fetchPotentialAssessmentUnitsFromDatabase().catch(() => null)
+      shouldLoadPotential
+        ? fetchPotentialAssessmentUnitsFromDatabase().catch(() => null)
+        : Promise.resolve(null)
     ])
-      .then(([{ officer, units }, durable, dbPotential]) => {
+      .then(([{ officer, units }, dbPotential]) => {
         if (!cancelled) {
           setPilotState({
             ...loadPilotState(),
             currentOfficer: officer,
             units,
-            pft2Challans: durable.challans ?? [],
-            statutoryReceipts: durable.receipts ?? []
+            pft2Challans: [],
+            statutoryReceipts: []
           });
-          setPotentialUnits(dbPotential ?? loadPersistedPotentialUnits());
+          setPotentialUnits(
+            shouldLoadPotential ? (dbPotential ?? loadPersistedPotentialUnits()) : []
+          );
         }
       })
       .catch((error: unknown) => {
@@ -88,7 +91,7 @@ function ReportViewContent() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reportKey]);
 
   if (loadError) {
     return (

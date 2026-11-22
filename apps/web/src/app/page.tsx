@@ -4444,6 +4444,149 @@ export default function HomePage({
     setPotentialCurrentPage(1);
   };
 
+  const isPft2Tab = activeTab === "PFT2" || activeTab === "POTENTIAL_PFT2";
+
+  const pft2RegisterStats = useMemo(() => {
+    if (!isPft2Tab) {
+      return {
+        regularCount: 0,
+        provisionalCount: 0,
+        scopeChallans: [] as Pft2ChallanRecord[],
+        executiveSummary: calculatePft2ExecutiveSummary([]),
+        statusCounts: {
+          ALL: 0,
+          ISSUED: 0,
+          RECEIVED: 0,
+          CANCELLED: 0
+        }
+      };
+    }
+
+    const regularChallans: Pft2ChallanRecord[] = [];
+    const provisionalChallans: Pft2ChallanRecord[] = [];
+    for (const c of pft2Challans) {
+      if (c.isProvisional) provisionalChallans.push(c);
+      else regularChallans.push(c);
+    }
+
+    const scopeChallans =
+      pft2RegisterFilter === "REGULAR"
+        ? regularChallans
+        : pft2RegisterFilter === "PROVISIONAL"
+          ? provisionalChallans
+          : pft2Challans;
+
+    let issued = 0;
+    let received = 0;
+    let cancelled = 0;
+    for (const c of scopeChallans) {
+      if (c.status === "ISSUED") issued++;
+      else if (c.status === "RECEIVED") received++;
+      else if (c.status === "CANCELLED") cancelled++;
+    }
+
+    return {
+      regularCount: regularChallans.length,
+      provisionalCount: provisionalChallans.length,
+      scopeChallans,
+      executiveSummary: calculatePft2ExecutiveSummary(scopeChallans),
+      statusCounts: {
+        ALL: scopeChallans.length,
+        ISSUED: issued,
+        RECEIVED: received,
+        CANCELLED: cancelled
+      }
+    };
+  }, [isPft2Tab, pft2Challans, pft2RegisterFilter]);
+
+  const filteredPft2Challans = useMemo(() => {
+    if (!isPft2Tab) return [] as Pft2ChallanRecord[];
+    const normalizedCat = pft2CategoryFilter === "ALL" ? "" : pft2CategoryFilter.toLowerCase();
+    const q = deferredPft2SearchQuery.trim().toLowerCase();
+
+    return pft2RegisterStats.scopeChallans.filter((c) => {
+      if (pft2StatusFilter !== "ALL" && c.status !== pft2StatusFilter) return false;
+      if (normalizedCat && !c.category.toLowerCase().includes(normalizedCat)) return false;
+      if (q) {
+        const match =
+          c.challanNumber.toLowerCase().includes(q) ||
+          c.demandNumber.toLowerCase().includes(q) ||
+          Boolean(c.potentialNumber && c.potentialNumber.toLowerCase().includes(q)) ||
+          Boolean(c.noticeNumber && c.noticeNumber.toLowerCase().includes(q)) ||
+          Boolean(c.pin && c.pin.includes(q)) ||
+          c.legalName.toLowerCase().includes(q) ||
+          Boolean(c.tradeName && c.tradeName.toLowerCase().includes(q)) ||
+          c.identifierValue.toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [
+    isPft2Tab,
+    pft2RegisterStats.scopeChallans,
+    pft2StatusFilter,
+    pft2CategoryFilter,
+    deferredPft2SearchQuery
+  ]);
+
+  const filteredStatutoryReceipts = useMemo(() => {
+    if (activeTab !== "RECEIPTS") return [] as StatutoryReceiptRecord[];
+    const normalizedChannel =
+      receiptChannelFilter === "ALL" ? "" : receiptChannelFilter.toLowerCase();
+    const normalizedCategory =
+      receiptCategoryFilter === "ALL" ? "" : receiptCategoryFilter.toLowerCase();
+    const q = deferredReceiptSearchQuery.trim().toLowerCase();
+
+    return statutoryReceipts.filter((r) => {
+      if (
+        receiptDemandCategoryFilter !== "ALL" &&
+        getReceiptCategory(r) !== receiptDemandCategoryFilter
+      ) {
+        return false;
+      }
+      if (
+        receiptSourceFilter !== "ALL" &&
+        (r.paymentSource ?? "ISSUED_PFT2") !== receiptSourceFilter
+      ) {
+        return false;
+      }
+      if (normalizedChannel && !r.paymentChannel.toLowerCase().includes(normalizedChannel)) {
+        return false;
+      }
+      if (normalizedCategory && !r.statutoryCategory.toLowerCase().includes(normalizedCategory)) {
+        return false;
+      }
+      if (receiptSubclassFilter !== "ALL" && r.subclassificationCode !== receiptSubclassFilter) {
+        return false;
+      }
+      if (receiptDateFrom && r.dateOfReceipt < receiptDateFrom) return false;
+      if (receiptDateTo && r.dateOfReceipt > receiptDateTo) return false;
+      if (q) {
+        const match =
+          r.receiptNumber.toLowerCase().includes(q) ||
+          r.challanNumber.toLowerCase().includes(q) ||
+          r.demandNumber.toLowerCase().includes(q) ||
+          r.assesseeLegalName.toLowerCase().includes(q) ||
+          Boolean(r.assesseeTradeName && r.assesseeTradeName.toLowerCase().includes(q)) ||
+          r.bankScrollRef.toLowerCase().includes(q) ||
+          r.identifierValue.toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [
+    activeTab,
+    statutoryReceipts,
+    receiptDemandCategoryFilter,
+    receiptSourceFilter,
+    receiptChannelFilter,
+    receiptCategoryFilter,
+    receiptSubclassFilter,
+    receiptDateFrom,
+    receiptDateTo,
+    deferredReceiptSearchQuery
+  ]);
+
   // Defaulter Units Filter (only computed while Defaulters tab is active)
   const defaulterUnits = useMemo(() => {
     if (activeTab !== "DEFAULTERS") return [];
@@ -13833,7 +13976,7 @@ export default function HomePage({
                 className={`btn-sm ${pft2RegisterFilter === "REGULAR" ? "btn-primary" : "btn-secondary"}`}
                 style={{ borderRadius: "20px", padding: "0.35rem 0.9rem", fontWeight: 600 }}
               >
-                🏛️ Regular Form P.F.T-3 ({pft2Challans.filter((c) => !c.isProvisional).length})
+                🏛️ Regular Form P.F.T-3 ({pft2RegisterStats.regularCount})
               </button>
               <button
                 type="button"
@@ -13841,70 +13984,65 @@ export default function HomePage({
                 className={`btn-sm ${pft2RegisterFilter === "PROVISIONAL" ? "btn-primary" : "btn-secondary"}`}
                 style={{ borderRadius: "20px", padding: "0.35rem 0.9rem", fontWeight: 600 }}
               >
-                ⚡ Potential Register ({pft2Challans.filter((c) => c.isProvisional).length})
+                ⚡ Potential Register ({pft2RegisterStats.provisionalCount})
               </button>
             </div>
 
             {/* Lifecycle KPI Cards */}
-            {(() => {
-              const scopeChallans =
-                pft2RegisterFilter === "REGULAR"
-                  ? pft2Challans.filter((c) => !c.isProvisional)
-                  : pft2RegisterFilter === "PROVISIONAL"
-                    ? pft2Challans.filter((c) => c.isProvisional)
-                    : pft2Challans;
-              const summary = calculatePft2ExecutiveSummary(scopeChallans);
-              return (
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
-                    gap: "1rem",
-                    marginBottom: "1.5rem"
-                  }}
-                >
-                  <div className="metric-card highlight">
-                    <p className="metric-label">
-                      {pft2RegisterFilter === "PROVISIONAL"
-                        ? "Potential Challans"
-                        : pft2RegisterFilter === "REGULAR"
-                          ? "Regular Challans"
-                          : "Total Challans"}
-                    </p>
-                    <p className="metric-value">{summary.total}</p>
-                    <p className="metric-subtext">
-                      PKR {summary.totalDemandPkr.toLocaleString()} Assessed Demand
-                    </p>
-                  </div>
-                  <div className="metric-card success">
-                    <p className="metric-label">Received / Discharged</p>
-                    <p className="metric-value">{summary.receivedCount}</p>
-                    <p className="metric-subtext">
-                      PKR {summary.receivedAmountPkr.toLocaleString()} Discharged
-                    </p>
-                  </div>
-                  <div className="metric-card warning">
-                    <p className="metric-label">Pending / Active</p>
-                    <p className="metric-value">{summary.issuedCount}</p>
-                    <p className="metric-subtext">
-                      PKR {summary.pendingAmountPkr.toLocaleString()} Outstanding
-                    </p>
-                  </div>
-                  <div className="metric-card" style={{ borderLeft: "4px solid #94a3b8" }}>
-                    <p className="metric-label">Cancelled Challans</p>
-                    <p className="metric-value">{summary.cancelledCount}</p>
-                    <p className="metric-subtext">
-                      PKR {summary.cancelledAmountPkr.toLocaleString()} Superseded
-                    </p>
-                  </div>
-                  <div className="metric-card info">
-                    <p className="metric-label">Realization Rate</p>
-                    <p className="metric-value">{summary.realizationRate}%</p>
-                    <p className="metric-subtext">Collection vs Demand</p>
-                  </div>
-                </div>
-              );
-            })()}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
+                gap: "1rem",
+                marginBottom: "1.5rem"
+              }}
+            >
+              <div className="metric-card highlight">
+                <p className="metric-label">
+                  {pft2RegisterFilter === "PROVISIONAL"
+                    ? "Potential Challans"
+                    : pft2RegisterFilter === "REGULAR"
+                      ? "Regular Challans"
+                      : "Total Challans"}
+                </p>
+                <p className="metric-value">{pft2RegisterStats.executiveSummary.total}</p>
+                <p className="metric-subtext">
+                  PKR {pft2RegisterStats.executiveSummary.totalDemandPkr.toLocaleString()} Assessed
+                  Demand
+                </p>
+              </div>
+              <div className="metric-card success">
+                <p className="metric-label">Received / Discharged</p>
+                <p className="metric-value">{pft2RegisterStats.executiveSummary.receivedCount}</p>
+                <p className="metric-subtext">
+                  PKR {pft2RegisterStats.executiveSummary.receivedAmountPkr.toLocaleString()}{" "}
+                  Discharged
+                </p>
+              </div>
+              <div className="metric-card warning">
+                <p className="metric-label">Pending / Active</p>
+                <p className="metric-value">{pft2RegisterStats.executiveSummary.issuedCount}</p>
+                <p className="metric-subtext">
+                  PKR {pft2RegisterStats.executiveSummary.pendingAmountPkr.toLocaleString()}{" "}
+                  Outstanding
+                </p>
+              </div>
+              <div className="metric-card" style={{ borderLeft: "4px solid #94a3b8" }}>
+                <p className="metric-label">Cancelled Challans</p>
+                <p className="metric-value">{pft2RegisterStats.executiveSummary.cancelledCount}</p>
+                <p className="metric-subtext">
+                  PKR {pft2RegisterStats.executiveSummary.cancelledAmountPkr.toLocaleString()}{" "}
+                  Superseded
+                </p>
+              </div>
+              <div className="metric-card info">
+                <p className="metric-label">Realization Rate</p>
+                <p className="metric-value">
+                  {pft2RegisterStats.executiveSummary.realizationRate}%
+                </p>
+                <p className="metric-subtext">Collection vs Demand</p>
+              </div>
+            </div>
 
             {/* Filter & Search Controls */}
             <div
@@ -13923,45 +14061,34 @@ export default function HomePage({
             >
               {/* Lifecycle Status Pills */}
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                {(() => {
-                  const scopeChallans =
-                    pft2RegisterFilter === "REGULAR"
-                      ? pft2Challans.filter((c) => !c.isProvisional)
-                      : pft2RegisterFilter === "PROVISIONAL"
-                        ? pft2Challans.filter((c) => c.isProvisional)
-                        : pft2Challans;
-                  return (["ALL", "ISSUED", "RECEIVED", "CANCELLED"] as const).map((st) => {
-                    const count =
-                      st === "ALL"
-                        ? scopeChallans.length
-                        : scopeChallans.filter((c) => c.status === st).length;
-                    const isActive = pft2StatusFilter === st;
-                    return (
-                      <button
-                        key={st}
-                        type="button"
-                        onClick={() => setPft2StatusFilter(st)}
-                        style={{
-                          padding: "0.4rem 0.85rem",
-                          borderRadius: "20px",
-                          border: "1px solid",
-                          borderColor: isActive ? "#0d3822" : "#cbd5e1",
-                          background: isActive ? "#0d3822" : "#ffffff",
-                          color: isActive ? "#ffffff" : "#334155",
-                          fontWeight: 600,
-                          fontSize: "0.825rem",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease"
-                        }}
-                      >
-                        {st === "ALL" && "All Statuses"}
-                        {st === "ISSUED" && "⏳ Issued / Pending"}
-                        {st === "RECEIVED" && "✓ Received / Discharged"}
-                        {st === "CANCELLED" && "✕ Cancelled"} ({count})
-                      </button>
-                    );
-                  });
-                })()}
+                {(["ALL", "ISSUED", "RECEIVED", "CANCELLED"] as const).map((st) => {
+                  const count = pft2RegisterStats.statusCounts[st];
+                  const isActive = pft2StatusFilter === st;
+                  return (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setPft2StatusFilter(st)}
+                      style={{
+                        padding: "0.4rem 0.85rem",
+                        borderRadius: "20px",
+                        border: "1px solid",
+                        borderColor: isActive ? "#0d3822" : "#cbd5e1",
+                        background: isActive ? "#0d3822" : "#ffffff",
+                        color: isActive ? "#ffffff" : "#334155",
+                        fontWeight: 600,
+                        fontSize: "0.825rem",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease"
+                      }}
+                    >
+                      {st === "ALL" && "All Statuses"}
+                      {st === "ISSUED" && "⏳ Issued / Pending"}
+                      {st === "RECEIVED" && "✓ Received / Discharged"}
+                      {st === "CANCELLED" && "✕ Cancelled"} ({count})
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Search & Category Filter */}
@@ -14050,102 +14177,73 @@ export default function HomePage({
                   </tr>
                 </thead>
                 <tbody>
-                  {(() => {
-                    const filtered = pft2Challans.filter((c) => {
-                      if (pft2RegisterFilter === "REGULAR" && c.isProvisional) return false;
-                      if (pft2RegisterFilter === "PROVISIONAL" && !c.isProvisional) return false;
-                      if (pft2StatusFilter !== "ALL" && c.status !== pft2StatusFilter) return false;
-                      if (
-                        pft2CategoryFilter !== "ALL" &&
-                        !c.category.toLowerCase().includes(pft2CategoryFilter.toLowerCase())
-                      )
-                        return false;
-                      if (deferredPft2SearchQuery.trim()) {
-                        const q = deferredPft2SearchQuery.toLowerCase();
-                        const match =
-                          c.challanNumber.toLowerCase().includes(q) ||
-                          c.demandNumber.toLowerCase().includes(q) ||
-                          (c.potentialNumber && c.potentialNumber.toLowerCase().includes(q)) ||
-                          (c.noticeNumber && c.noticeNumber.toLowerCase().includes(q)) ||
-                          (c.pin && c.pin.includes(q)) ||
-                          c.legalName.toLowerCase().includes(q) ||
-                          (c.tradeName && c.tradeName.toLowerCase().includes(q)) ||
-                          c.identifierValue.toLowerCase().includes(q);
-                        if (!match) return false;
-                      }
-                      return true;
-                    });
-
-                    if (filtered.length === 0) {
-                      return (
-                        <tr>
-                          <td
-                            colSpan={9}
+                  {filteredPft2Challans.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={9}
+                        style={{
+                          textAlign: "center",
+                          padding: "3rem 1.5rem",
+                          color: "var(--color-text-muted)"
+                        }}
+                      >
+                        <div style={{ maxWidth: "26rem", margin: "0 auto" }}>
+                          <p
                             style={{
-                              textAlign: "center",
-                              padding: "3rem 1.5rem",
-                              color: "var(--color-text-muted)"
+                              fontSize: "1.05rem",
+                              fontWeight: 700,
+                              color: "#1e293b",
+                              marginBottom: "0.4rem"
                             }}
                           >
-                            <div style={{ maxWidth: "26rem", margin: "0 auto" }}>
-                              <p
-                                style={{
-                                  fontSize: "1.05rem",
-                                  fontWeight: 700,
-                                  color: "#1e293b",
-                                  marginBottom: "0.4rem"
-                                }}
-                              >
-                                {pft2Challans.length === 0
-                                  ? "No Form P.F.T-2 Challans Registered"
-                                  : "No Matching Challans Found"}
-                              </p>
-                              <p
-                                style={{
-                                  fontSize: "0.85rem",
-                                  marginBottom: "1rem",
-                                  lineHeight: 1.4
-                                }}
-                              >
-                                {pft2Challans.length === 0
-                                  ? "Payment challans can be issued for any establishment with an approved statutory assessment or potential record."
-                                  : "Try changing your register view, status filter, or search keyword to locate the desired challan record."}
-                              </p>
-                              {pft2Challans.length === 0 ? (
-                                <button
-                                  type="button"
-                                  className="btn-success"
-                                  onClick={() => {
-                                    const firstApproved = units.find(
-                                      (u) => u.assessments[0]?.status === "APPROVED"
-                                    );
-                                    if (firstApproved) setIssuePft2UnitId(firstApproved.id);
-                                    setShowIssuePft2Modal(true);
-                                  }}
-                                >
-                                  ➕ Issue First Challan
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="btn-secondary"
-                                  onClick={() => {
-                                    setPft2RegisterFilter("ALL");
-                                    setPft2StatusFilter("ALL");
-                                    setPft2CategoryFilter("ALL");
-                                    setPft2SearchQuery("");
-                                  }}
-                                >
-                                  Reset Filters
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    return filtered.map((challan, idx) => {
+                            {pft2Challans.length === 0
+                              ? "No Form P.F.T-2 Challans Registered"
+                              : "No Matching Challans Found"}
+                          </p>
+                          <p
+                            style={{
+                              fontSize: "0.85rem",
+                              marginBottom: "1rem",
+                              lineHeight: 1.4
+                            }}
+                          >
+                            {pft2Challans.length === 0
+                              ? "Payment challans can be issued for any establishment with an approved statutory assessment or potential record."
+                              : "Try changing your register view, status filter, or search keyword to locate the desired challan record."}
+                          </p>
+                          {pft2Challans.length === 0 ? (
+                            <button
+                              type="button"
+                              className="btn-success"
+                              onClick={() => {
+                                const firstApproved = units.find(
+                                  (u) => u.assessments[0]?.status === "APPROVED"
+                                );
+                                if (firstApproved) setIssuePft2UnitId(firstApproved.id);
+                                setShowIssuePft2Modal(true);
+                              }}
+                            >
+                              ➕ Issue First Challan
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn-secondary"
+                              onClick={() => {
+                                setPft2RegisterFilter("ALL");
+                                setPft2StatusFilter("ALL");
+                                setPft2CategoryFilter("ALL");
+                                setPft2SearchQuery("");
+                              }}
+                            >
+                              Reset Filters
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredPft2Challans.map((challan, idx) => {
                       const isIssued = challan.status === "ISSUED";
                       const isReceived = challan.status === "RECEIVED";
                       const isCancelled = challan.status === "CANCELLED";
@@ -14522,8 +14620,8 @@ export default function HomePage({
                           </td>
                         </tr>
                       );
-                    });
-                  })()}
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -14929,70 +15027,21 @@ export default function HomePage({
                   </tr>
                 </thead>
                 <tbody>
-                  {(() => {
-                    const filtered = statutoryReceipts.filter((r) => {
-                      if (
-                        receiptDemandCategoryFilter !== "ALL" &&
-                        getReceiptCategory(r) !== receiptDemandCategoryFilter
-                      )
-                        return false;
-                      if (
-                        receiptSourceFilter !== "ALL" &&
-                        (r.paymentSource ?? "ISSUED_PFT2") !== receiptSourceFilter
-                      )
-                        return false;
-                      if (
-                        receiptChannelFilter !== "ALL" &&
-                        !r.paymentChannel.toLowerCase().includes(receiptChannelFilter.toLowerCase())
-                      )
-                        return false;
-                      if (
-                        receiptCategoryFilter !== "ALL" &&
-                        !r.statutoryCategory
-                          .toLowerCase()
-                          .includes(receiptCategoryFilter.toLowerCase())
-                      )
-                        return false;
-                      if (
-                        receiptSubclassFilter !== "ALL" &&
-                        r.subclassificationCode !== receiptSubclassFilter
-                      )
-                        return false;
-                      if (receiptDateFrom && r.dateOfReceipt < receiptDateFrom) return false;
-                      if (receiptDateTo && r.dateOfReceipt > receiptDateTo) return false;
-                      if (deferredReceiptSearchQuery.trim()) {
-                        const q = deferredReceiptSearchQuery.toLowerCase();
-                        const match =
-                          r.receiptNumber.toLowerCase().includes(q) ||
-                          r.challanNumber.toLowerCase().includes(q) ||
-                          r.demandNumber.toLowerCase().includes(q) ||
-                          r.assesseeLegalName.toLowerCase().includes(q) ||
-                          (r.assesseeTradeName && r.assesseeTradeName.toLowerCase().includes(q)) ||
-                          r.bankScrollRef.toLowerCase().includes(q) ||
-                          r.identifierValue.toLowerCase().includes(q);
-                        if (!match) return false;
-                      }
-                      return true;
-                    });
-
-                    if (filtered.length === 0) {
-                      return (
-                        <tr>
-                          <td
-                            colSpan={10}
-                            style={{
-                              textAlign: "center",
-                              padding: "2.5rem",
-                              color: "var(--color-text-muted)"
-                            }}
-                          >
-                            No statutory payment receipts match the active query.
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    return filtered.map((rec) => (
+                  {filteredStatutoryReceipts.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={10}
+                        style={{
+                          textAlign: "center",
+                          padding: "2.5rem",
+                          color: "var(--color-text-muted)"
+                        }}
+                      >
+                        No statutory payment receipts match the active query.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredStatutoryReceipts.map((rec) => (
                       <tr key={rec.id}>
                         <td className="cell-fit">
                           <strong
@@ -15290,8 +15339,8 @@ export default function HomePage({
                           />
                         </td>
                       </tr>
-                    ));
-                  })()}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   type LiveOfficerAccount,
   type GovernanceCircleRecord,
@@ -30,6 +30,8 @@ export default function UserManagementPage() {
   const [officers, setOfficers] = useState<LiveOfficerAccount[]>([]);
   const [governanceMatrix, setGovernanceMatrix] = useState<GovernanceCircleRecord[]>([]);
   const [auditLogs, setAuditLogs] = useState<LiveAuditRecord[]>([]);
+  const [isLoadingAuditLogs, setIsLoadingAuditLogs] = useState(false);
+  const auditLogsLoadedRef = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -37,9 +39,12 @@ export default function UserManagementPage() {
   const [activeTab, setActiveTab] = useState<"OFFICERS" | "CIRCLES" | "MATRIX" | "AUDIT">(
     "OFFICERS"
   );
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [roleFilter, setRoleFilter] = useState<"ALL" | "ETO" | "INSPECTOR">("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
 
@@ -146,15 +151,23 @@ export default function UserManagementPage() {
         return;
       }
 
+      const shouldRefreshAudit = activeTabRef.current === "AUDIT";
+      if (!shouldRefreshAudit) {
+        auditLogsLoadedRef.current = false;
+      }
+
       const [dir, matrix, logs] = await Promise.all([
         fetchOfficersDirectory(),
         fetchDistrictGovernanceMatrix(),
-        fetchUserManagementAuditLog(100)
+        shouldRefreshAudit ? fetchUserManagementAuditLog(100) : Promise.resolve(null)
       ]);
 
       setOfficers(dir);
       setGovernanceMatrix(matrix);
-      setAuditLogs(logs);
+      if (logs) {
+        setAuditLogs(logs);
+        auditLogsLoadedRef.current = true;
+      }
       if (matrix.length > 0 && !createCircleId) {
         setCreateCircleId(matrix[0]?.circle_id ?? "");
       }
@@ -171,6 +184,30 @@ export default function UserManagementPage() {
   useEffect(() => {
     loadLiveContext();
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== "AUDIT" || !currentOfficer || auditLogsLoadedRef.current) return;
+    let cancelled = false;
+    setIsLoadingAuditLogs(true);
+    void fetchUserManagementAuditLog(100)
+      .then((logs) => {
+        if (!cancelled) {
+          setAuditLogs(logs);
+          auditLogsLoadedRef.current = true;
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          console.error("Audit trail load error:", err);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingAuditLogs(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, currentOfficer]);
 
   // Distinct tehsils available in the district governance matrix
   const distinctTehsils = useMemo(() => {
@@ -189,10 +226,17 @@ export default function UserManagementPage() {
 
   // Statistics
   const totalOfficersCount = officers.length;
-  const activeOfficersCount = officers.filter((o) => o.active).length;
+  const activeOfficersCount = useMemo(() => officers.filter((o) => o.active).length, [officers]);
   const totalCirclesCount = governanceMatrix.length;
-  const assignedCirclesCount = governanceMatrix.filter((g) => g.inspector_id).length;
-  const totalUnitsMonitored = governanceMatrix.reduce((acc, g) => acc + g.units_count, 0);
+  const { assignedCirclesCount, totalUnitsMonitored } = useMemo(() => {
+    let assigned = 0;
+    let totalUnits = 0;
+    for (const g of governanceMatrix) {
+      if (g.inspector_id) assigned++;
+      totalUnits += g.units_count;
+    }
+    return { assignedCirclesCount: assigned, totalUnitsMonitored: totalUnits };
+  }, [governanceMatrix]);
 
   // Authority levels
   const isDirectorOrAdmin = currentOfficer?.role === "DIRECTOR" || currentOfficer?.role === "ADMIN";
@@ -207,8 +251,8 @@ export default function UserManagementPage() {
       if (statusFilter === "ACTIVE" && !o.active) return false;
       if (statusFilter === "INACTIVE" && o.active) return false;
 
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+      if (deferredSearchQuery.trim()) {
+        const q = deferredSearchQuery.toLowerCase();
         const matchesName = o.name.toLowerCase().includes(q);
         const matchesEmail = o.email.toLowerCase().includes(q);
         const matchesCircle = o.circle_name.toLowerCase().includes(q);
@@ -221,7 +265,7 @@ export default function UserManagementPage() {
 
       return true;
     });
-  }, [officers, roleFilter, statusFilter, searchQuery]);
+  }, [officers, roleFilter, statusFilter, deferredSearchQuery]);
 
   // Handlers for Modals
   const handleOpenEdit = (o: LiveOfficerAccount) => {
@@ -1759,7 +1803,20 @@ export default function UserManagementPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {auditLogs.length === 0 ? (
+                  {isLoadingAuditLogs && auditLogs.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        style={{
+                          textAlign: "center",
+                          padding: "2rem",
+                          color: "var(--color-text-muted)"
+                        }}
+                      >
+                        Loading administrative audit trail…
+                      </td>
+                    </tr>
+                  ) : auditLogs.length === 0 ? (
                     <tr>
                       <td
                         colSpan={5}
