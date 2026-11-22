@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { Route } from "next";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -996,19 +996,26 @@ function ColumnFilterPopover({
   );
 }
 
-type RefreshScope = "ALL" | "UNITS" | "POTENTIAL" | "CHALLANS";
+type DataScopeKey = "UNITS" | "POTENTIAL" | "CHALLANS";
+type RefreshScope = "ALL" | DataScopeKey;
 
-function resolveRefreshScopeForTab(tab: TabId): RefreshScope {
+function getRequiredScopesForTab(tab: TabId): readonly DataScopeKey[] {
   if (tab === "REGISTER_POTENTIAL") {
-    return "POTENTIAL";
+    return ["POTENTIAL"];
   }
-  if (tab === "PFT2" || tab === "POTENTIAL_PFT2" || tab === "RECEIPTS" || tab === "EPAY") {
-    return "CHALLANS";
+  if (tab === "PFT2" || tab === "RECEIPTS" || tab === "EPAY") {
+    return ["CHALLANS", "UNITS"];
+  }
+  if (tab === "POTENTIAL_PFT2") {
+    return ["CHALLANS", "POTENTIAL"];
   }
   if (tab === "ANALYTICS" || tab === "REPORTS" || tab === "MIS_HUB") {
-    return "ALL";
+    return ["UNITS", "POTENTIAL", "CHALLANS"];
   }
-  return "UNITS";
+  if (tab === "AUDIT") {
+    return [];
+  }
+  return ["UNITS"];
 }
 
 export default function HomePage({
@@ -1029,6 +1036,7 @@ export default function HomePage({
   const refreshInFlightScopeRef = useRef<RefreshScope | null>(null);
   const lastRefreshAtRef = useRef<number>(0);
   const loadedAuthUserIdRef = useRef<string | null>(null);
+  const loadedScopesRef = useRef<Set<DataScopeKey>>(new Set());
   const authStatusRef = useRef(authStatus);
   authStatusRef.current = authStatus;
   const hasAnyModalOpenRef = useRef(false);
@@ -1190,6 +1198,7 @@ export default function HomePage({
   const [auditTraceUnit, setAuditTraceUnit] = useState<StoredUnit | null>(null);
   const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<Set<string>>(new Set());
   const [assessmentSearchQuery, setAssessmentSearchQuery] = useState("");
+  const deferredAssessmentSearchQuery = useDeferredValue(assessmentSearchQuery);
   const [assessmentStatusFilter, setAssessmentStatusFilter] = useState<
     "ALL" | "FEEDED" | "SUBMITTED" | "RETURNED" | "APPROVED" | "CLOSED"
   >("ALL");
@@ -1262,6 +1271,7 @@ export default function HomePage({
 
   // PFT-3 Search & Filter Controls
   const [pft3SearchQuery, setPft3SearchQuery] = useState("");
+  const deferredPft3SearchQuery = useDeferredValue(pft3SearchQuery);
   const [pft3DistrictFilter, setPft3DistrictFilter] = useState("ALL");
   const [pft3CircleFilter, setPft3CircleFilter] = useState("ALL");
   const [pft3LocalityFilter, setPft3LocalityFilter] = useState("ALL");
@@ -1288,6 +1298,7 @@ export default function HomePage({
   // Potential Register State, Search & Filter Controls
   const [potentialUnits, setPotentialUnits] = useState<PotentialUnitRecord[]>([]);
   const [potentialSearchQuery, setPotentialSearchQuery] = useState("");
+  const deferredPotentialSearchQuery = useDeferredValue(potentialSearchQuery);
   const [potentialDistrictFilter, setPotentialDistrictFilter] = useState("ALL");
   const [potentialCircleFilter, setPotentialCircleFilter] = useState("ALL");
   const [potentialLocalityFilter, setPotentialLocalityFilter] = useState("ALL");
@@ -1359,6 +1370,7 @@ export default function HomePage({
     "AUTO" | "INSPECTOR" | "ETO" | "DIRECTOR"
   >("AUTO");
   const [slabSearchQuery, setSlabSearchQuery] = useState("");
+  const deferredSlabSearchQuery = useDeferredValue(slabSearchQuery);
   const [slabCategoryFilter, setSlabCategoryFilter] = useState("ALL");
 
   // New Unit Form State
@@ -1455,6 +1467,7 @@ export default function HomePage({
     }
   );
   const [pft2SearchQuery, setPft2SearchQuery] = useState("");
+  const deferredPft2SearchQuery = useDeferredValue(pft2SearchQuery);
   const [pft2CategoryFilter, setPft2CategoryFilter] = useState("ALL");
   const [showReceivePft2Modal, setShowReceivePft2Modal] = useState(false);
   const [receivingChallan, setReceivingChallan] = useState<Pft2ChallanRecord | null>(null);
@@ -1540,6 +1553,7 @@ export default function HomePage({
 
   // Receipts Filters & Modals
   const [receiptSearchQuery, setReceiptSearchQuery] = useState("");
+  const deferredReceiptSearchQuery = useDeferredValue(receiptSearchQuery);
   const [receiptDateFrom, setReceiptDateFrom] = useState("");
   const [receiptDateTo, setReceiptDateTo] = useState("");
   const [receiptCategoryFilter, setReceiptCategoryFilter] = useState("ALL");
@@ -1707,14 +1721,27 @@ export default function HomePage({
   const refreshOperationalSurveyUnits = (options?: {
     readonly force?: boolean | undefined;
     readonly scope?: RefreshScope | undefined;
+    readonly scopes?: readonly DataScopeKey[] | undefined;
   }) => {
     const scope: RefreshScope = options?.scope ?? "ALL";
+    const explicitScopes = options?.scopes;
     const force = options?.force ?? false;
+
+    const requestedScopes: readonly DataScopeKey[] = explicitScopes
+      ? explicitScopes
+      : scope === "ALL"
+        ? ["UNITS", "POTENTIAL", "CHALLANS"]
+        : [scope];
+    if (requestedScopes.length === 0) {
+      return Promise.resolve();
+    }
+
+    const effectiveScope: RefreshScope = requestedScopes.length === 1 ? requestedScopes[0]! : "ALL";
 
     if (
       refreshInFlightRef.current &&
       (!force ||
-        refreshInFlightScopeRef.current === scope ||
+        refreshInFlightScopeRef.current === effectiveScope ||
         refreshInFlightScopeRef.current === "ALL")
     ) {
       return refreshInFlightRef.current;
@@ -1729,9 +1756,9 @@ export default function HomePage({
       setIsLoadingOperationalUnits(true);
       setOperationalUnitsError(null);
       try {
-        const needUnits = scope === "ALL" || scope === "UNITS";
-        const needPotential = scope === "ALL" || scope === "POTENTIAL";
-        const needChallans = scope === "ALL" || scope === "CHALLANS";
+        const needUnits = requestedScopes.includes("UNITS");
+        const needPotential = requestedScopes.includes("POTENTIAL");
+        const needChallans = requestedScopes.includes("CHALLANS");
 
         const [liveUnits, dbPotential, challanRegistry] = await Promise.all([
           needUnits ? loadOperationalSurveyUnits({ force }) : Promise.resolve(null),
@@ -1745,6 +1772,7 @@ export default function HomePage({
           throw new Error("Unable to load the potential register");
         }
         if (liveUnits !== null) {
+          loadedScopesRef.current.add("UNITS");
           setUnits(liveUnits);
           const firstId = liveUnits[0]?.id ?? "";
           setSelectedUnitId(firstId);
@@ -1754,16 +1782,18 @@ export default function HomePage({
           setRefUnitId(firstId);
         }
         if (dbPotential) {
+          loadedScopesRef.current.add("POTENTIAL");
           setPotentialUnits(dbPotential);
         }
         if (challanRegistry !== null) {
+          loadedScopesRef.current.add("CHALLANS");
           setPft2Challans(challanRegistry.challans);
           setStatutoryReceipts(challanRegistry.receipts);
         }
         lastRefreshAtRef.current = Date.now();
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unable to load operational units";
-        if (scope === "ALL" || scope === "UNITS") {
+        if (requestedScopes.includes("UNITS")) {
           setUnits([]);
         }
         setOperationalUnitsError(message);
@@ -1778,9 +1808,19 @@ export default function HomePage({
     })();
     runPromise = run;
     refreshInFlightRef.current = run;
-    refreshInFlightScopeRef.current = scope;
+    refreshInFlightScopeRef.current = effectiveScope;
     return run;
   };
+
+  // Load any dataset scope required by the active tab strictly on demand.
+  useEffect(() => {
+    if (authStatus !== "AUTHENTICATED") return;
+    const missing = getRequiredScopesForTab(activeTab).filter(
+      (s) => !loadedScopesRef.current.has(s)
+    );
+    if (missing.length === 0) return;
+    void refreshOperationalSurveyUnits({ scopes: missing }).catch(() => undefined);
+  }, [authStatus, activeTab]);
 
   // Load recent cloud audit events strictly on demand when an officer opens the Audit tab.
   useEffect(() => {
@@ -1810,10 +1850,10 @@ export default function HomePage({
       if (authStatusRef.current !== "AUTHENTICATED" || hasAnyModalOpenRef.current) return;
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       if (Date.now() - lastRefreshAtRef.current < 180_000) return;
-      void refreshOperationalSurveyUnits({
-        force: true,
-        scope: resolveRefreshScopeForTab(activeTabRef.current)
-      }).catch(() => undefined);
+      const scopes = getRequiredScopesForTab(activeTabRef.current);
+      if (scopes.length > 0) {
+        void refreshOperationalSurveyUnits({ force: true, scopes }).catch(() => undefined);
+      }
     };
     const handleAuditEvent = (event: Event) => {
       const customEvent = event as CustomEvent<PilotAuditItem>;
@@ -1856,6 +1896,7 @@ export default function HomePage({
 
       const rejectUnauthenticatedSession = () => {
         loadedAuthUserIdRef.current = null;
+        loadedScopesRef.current.clear();
         setOfficer(UNAUTHENTICATED_OFFICER_CONTEXT);
         setAuthenticatedSessionType("OFFLINE");
         setUnits([]);
@@ -1883,7 +1924,12 @@ export default function HomePage({
           setAuthenticatedSessionType("CLOUD");
           setAuthStatus("AUTHENTICATED");
           try {
-            await refreshOperationalSurveyUnits();
+            const initialScopes = getRequiredScopesForTab(activeTabRef.current);
+            if (initialScopes.length > 0) {
+              await refreshOperationalSurveyUnits({ scopes: initialScopes });
+            } else {
+              setIsLoadingOperationalUnits(false);
+            }
           } catch (error) {
             showToast(
               "error",
@@ -3863,8 +3909,8 @@ export default function HomePage({
         }
       }
 
-      if (pft3SearchQuery.trim()) {
-        const q = pft3SearchQuery.trim().toLowerCase();
+      if (deferredPft3SearchQuery.trim()) {
+        const q = deferredPft3SearchQuery.trim().toLowerCase();
         const matchesDemand = row.permanentDemandNo.toLowerCase().includes(q);
         const matchesPin = (row.provincialUin ?? "").toLowerCase().includes(q);
         const matchesLegalName = row.legalName.toLowerCase().includes(q);
@@ -3925,7 +3971,7 @@ export default function HomePage({
   }, [
     formPFT3Rows,
     units,
-    pft3SearchQuery,
+    deferredPft3SearchQuery,
     pft3DistrictFilter,
     pft3CircleFilter,
     pft3LocalityFilter,
@@ -4072,8 +4118,8 @@ export default function HomePage({
         if (uSubclass !== assessmentSubclassFilter) return false;
       }
 
-      if (assessmentSearchQuery.trim()) {
-        const q = assessmentSearchQuery.trim().toLowerCase();
+      if (deferredAssessmentSearchQuery.trim()) {
+        const q = deferredAssessmentSearchQuery.trim().toLowerCase();
         const matchName =
           u.legalName.toLowerCase().includes(q) || (u.tradeName || "").toLowerCase().includes(q);
         const matchId = u.identifierValue.toLowerCase().includes(q);
@@ -4093,7 +4139,7 @@ export default function HomePage({
     assessmentStatusFilter,
     assessmentCircleFilter,
     assessmentSubclassFilter,
-    assessmentSearchQuery
+    deferredAssessmentSearchQuery
   ]);
 
   const assessmentCounts = useMemo(() => {
@@ -4166,8 +4212,8 @@ export default function HomePage({
           return false;
         }
       }
-      if (potentialSearchQuery.trim()) {
-        const q = potentialSearchQuery.trim().toLowerCase();
+      if (deferredPotentialSearchQuery.trim()) {
+        const q = deferredPotentialSearchQuery.trim().toLowerCase();
         const matchesPotentialNo = u.potentialNumber.toLowerCase().includes(q);
         const matchesPin = u.pinNumber.toLowerCase().includes(q);
         const matchesLegalName = u.legalName.toLowerCase().includes(q);
@@ -4234,7 +4280,7 @@ export default function HomePage({
     potentialLocalityFilter,
     potentialClassificationFilter,
     potentialSubclassFilter,
-    potentialSearchQuery,
+    deferredPotentialSearchQuery,
     potentialColFilters
   ]);
 
@@ -13971,8 +14017,8 @@ export default function HomePage({
                         !c.category.toLowerCase().includes(pft2CategoryFilter.toLowerCase())
                       )
                         return false;
-                      if (pft2SearchQuery.trim()) {
-                        const q = pft2SearchQuery.toLowerCase();
+                      if (deferredPft2SearchQuery.trim()) {
+                        const q = deferredPft2SearchQuery.toLowerCase();
                         const match =
                           c.challanNumber.toLowerCase().includes(q) ||
                           c.demandNumber.toLowerCase().includes(q) ||
@@ -14887,8 +14933,8 @@ export default function HomePage({
                         return false;
                       if (receiptDateFrom && r.dateOfReceipt < receiptDateFrom) return false;
                       if (receiptDateTo && r.dateOfReceipt > receiptDateTo) return false;
-                      if (receiptSearchQuery.trim()) {
-                        const q = receiptSearchQuery.toLowerCase();
+                      if (deferredReceiptSearchQuery.trim()) {
+                        const q = deferredReceiptSearchQuery.toLowerCase();
                         const match =
                           r.receiptNumber.toLowerCase().includes(q) ||
                           r.challanNumber.toLowerCase().includes(q) ||
@@ -16912,7 +16958,7 @@ export default function HomePage({
                       .filter((slab) => {
                         const matchesCat =
                           slabCategoryFilter === "ALL" || slab.categoryCode === slabCategoryFilter;
-                        const q = slabSearchQuery.trim().toLowerCase();
+                        const q = deferredSlabSearchQuery.trim().toLowerCase();
                         const matchesQuery =
                           !q ||
                           (slab.ruleCode?.toLowerCase().includes(q) ?? false) ||

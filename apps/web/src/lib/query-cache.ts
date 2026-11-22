@@ -11,7 +11,10 @@ export const PTAS_CACHE_KEYS = {
   POTENTIAL_UNITS: "potential_units",
   CHALLAN_REGISTRY: "challan_registry",
   AUDIT_LOGS: "audit_logs",
-  CHALLAN_JURISDICTION_CODES_PREFIX: "challan_jurisdiction_codes:"
+  CHALLAN_JURISDICTION_CODES_PREFIX: "challan_jurisdiction_codes:",
+  OFFICERS_DIRECTORY: "officers_directory",
+  GOVERNANCE_MATRIX: "governance_matrix",
+  USER_MGMT_AUDIT_PREFIX: "user_mgmt_audit:"
 } as const;
 
 interface CacheEntry<T> {

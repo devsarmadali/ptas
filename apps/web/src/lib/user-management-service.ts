@@ -7,6 +7,12 @@
  */
 
 import { getSupabaseAuthClient } from "./supabase-auth";
+import {
+  PTAS_CACHE_KEYS,
+  getOrFetchCached,
+  invalidateQueryCache,
+  invalidateQueryCachePrefix
+} from "./query-cache";
 
 export interface LiveOfficerAccount {
   readonly user_id: string;
@@ -82,34 +88,69 @@ export interface LiveAuditRecord {
   readonly payload: Record<string, unknown>;
 }
 
-export async function fetchOfficersDirectory(): Promise<LiveOfficerAccount[]> {
-  const supabase = getSupabaseAuthClient();
-  const { data, error } = await supabase.rpc("get_officers_directory");
-  if (error) {
-    throw new Error(`Failed to load officers directory: ${error.message}`);
-  }
-  if (!Array.isArray(data)) return [];
-  return data as unknown as LiveOfficerAccount[];
+export async function fetchOfficersDirectory(options?: {
+  readonly force?: boolean | undefined;
+}): Promise<LiveOfficerAccount[]> {
+  return getOrFetchCached(
+    PTAS_CACHE_KEYS.OFFICERS_DIRECTORY,
+    60_000,
+    async () => {
+      const supabase = getSupabaseAuthClient();
+      const { data, error } = await supabase.rpc("get_officers_directory");
+      if (error) {
+        throw new Error(`Failed to load officers directory: ${error.message}`);
+      }
+      if (!Array.isArray(data)) return [];
+      return data as unknown as LiveOfficerAccount[];
+    },
+    { force: options?.force }
+  );
 }
 
-export async function fetchDistrictGovernanceMatrix(): Promise<GovernanceCircleRecord[]> {
-  const supabase = getSupabaseAuthClient();
-  const { data, error } = await supabase.rpc("get_district_governance_matrix");
-  if (error) {
-    throw new Error(`Failed to load governance matrix: ${error.message}`);
-  }
-  if (!Array.isArray(data)) return [];
-  return data as unknown as GovernanceCircleRecord[];
+export async function fetchDistrictGovernanceMatrix(options?: {
+  readonly force?: boolean | undefined;
+}): Promise<GovernanceCircleRecord[]> {
+  return getOrFetchCached(
+    PTAS_CACHE_KEYS.GOVERNANCE_MATRIX,
+    300_000,
+    async () => {
+      const supabase = getSupabaseAuthClient();
+      const { data, error } = await supabase.rpc("get_district_governance_matrix");
+      if (error) {
+        throw new Error(`Failed to load governance matrix: ${error.message}`);
+      }
+      if (!Array.isArray(data)) return [];
+      return data as unknown as GovernanceCircleRecord[];
+    },
+    { force: options?.force }
+  );
 }
 
-export async function fetchUserManagementAuditLog(limit = 100): Promise<LiveAuditRecord[]> {
-  const supabase = getSupabaseAuthClient();
-  const { data, error } = await supabase.rpc("get_user_management_audit_log", { p_limit: limit });
-  if (error) {
-    throw new Error(`Failed to load user management audit logs: ${error.message}`);
-  }
-  if (!Array.isArray(data)) return [];
-  return data as unknown as LiveAuditRecord[];
+export async function fetchUserManagementAuditLog(
+  limit = 100,
+  options?: { readonly force?: boolean | undefined }
+): Promise<LiveAuditRecord[]> {
+  return getOrFetchCached(
+    `${PTAS_CACHE_KEYS.USER_MGMT_AUDIT_PREFIX}${limit}`,
+    60_000,
+    async () => {
+      const supabase = getSupabaseAuthClient();
+      const { data, error } = await supabase.rpc("get_user_management_audit_log", {
+        p_limit: limit
+      });
+      if (error) {
+        throw new Error(`Failed to load user management audit logs: ${error.message}`);
+      }
+      if (!Array.isArray(data)) return [];
+      return data as unknown as LiveAuditRecord[];
+    },
+    { force: options?.force }
+  );
+}
+
+function invalidateUserManagementCaches(): void {
+  invalidateQueryCache([PTAS_CACHE_KEYS.OFFICERS_DIRECTORY, PTAS_CACHE_KEYS.GOVERNANCE_MATRIX]);
+  invalidateQueryCachePrefix(PTAS_CACHE_KEYS.USER_MGMT_AUDIT_PREFIX);
 }
 
 export async function updateOfficerProfile(params: {
@@ -138,6 +179,7 @@ export async function updateOfficerProfile(params: {
   if (error) {
     throw new Error(`Failed to update profile: ${error.message}`);
   }
+  invalidateUserManagementCaches();
 }
 
 export async function transferOfficerPosting(params: {
@@ -160,6 +202,7 @@ export async function transferOfficerPosting(params: {
   if (error) {
     throw new Error(`Failed to execute posting transfer: ${error.message}`);
   }
+  invalidateUserManagementCaches();
 }
 
 export async function reassignOfficerCircle(params: {
@@ -176,6 +219,7 @@ export async function reassignOfficerCircle(params: {
   if (error) {
     throw new Error(`Failed to reassign circle: ${error.message}`);
   }
+  invalidateUserManagementCaches();
 }
 
 export async function attachCircleToTehsil(params: {
@@ -192,6 +236,8 @@ export async function attachCircleToTehsil(params: {
   if (error) {
     throw new Error(`Failed to attach circle to tehsil: ${error.message}`);
   }
+  invalidateQueryCache([PTAS_CACHE_KEYS.GOVERNANCE_MATRIX]);
+  invalidateQueryCachePrefix(PTAS_CACHE_KEYS.USER_MGMT_AUDIT_PREFIX);
 }
 
 export async function setOfficerStatus(params: {
@@ -208,6 +254,7 @@ export async function setOfficerStatus(params: {
   if (error) {
     throw new Error(`Failed to update officer status: ${error.message}`);
   }
+  invalidateUserManagementCaches();
 }
 
 export async function adminSetOfficerPassword(params: {
@@ -227,6 +274,7 @@ export async function adminSetOfficerPassword(params: {
   if (error) {
     throw new Error(`Failed to set officer password: ${error.message}`);
   }
+  invalidateUserManagementCaches();
 }
 
 export async function adminCreateOfficer(params: {
@@ -266,5 +314,6 @@ export async function adminCreateOfficer(params: {
   if (error) {
     throw new Error(`Failed to create officer: ${error.message}`);
   }
+  invalidateUserManagementCaches();
   return data as unknown as { id: string; name: string; email: string };
 }

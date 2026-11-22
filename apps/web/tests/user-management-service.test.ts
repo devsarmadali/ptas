@@ -8,6 +8,8 @@ vi.mock("../src/lib/supabase-auth.js", () => ({
   })
 }));
 
+import { clearAllQueryCaches } from "../src/lib/query-cache.js";
+
 import {
   adminCreateOfficer,
   adminSetOfficerPassword,
@@ -21,6 +23,7 @@ import {
 
 describe("PTAS User Management & Cadre Service", () => {
   afterEach(() => {
+    clearAllQueryCaches();
     vi.restoreAllMocks();
     rpc.mockReset();
   });
