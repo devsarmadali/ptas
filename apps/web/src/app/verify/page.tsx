@@ -6,6 +6,12 @@ import {
   verifyStatutoryDocumentOnline,
   type DocumentVerificationResult
 } from "../../lib/public-portal";
+import {
+  AlertTriangleIcon,
+  ArrowLeftIcon,
+  CheckCircleIcon,
+  SearchIcon
+} from "../../components/ui/Icons";
 
 export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: string }) {
   const searchParams = useSearchParams();
@@ -67,259 +73,226 @@ export function PublicVerificationContent({ defaultQuery }: { defaultQuery?: str
   };
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f8fafc", padding: "1.5rem 1rem" }}>
-      {/* Return to Dashboard Link Bar */}
-      <div
-        style={{
-          maxWidth: "48rem",
-          margin: "0 auto 1.5rem auto",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "0.5rem"
-        }}
-      >
-        <a
-          href="/"
-          style={{
-            fontSize: "0.85rem",
-            color: "#0d3822",
-            textDecoration: "none",
-            fontWeight: 600,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.35rem"
-          }}
-        >
-          ← Return to Main PTAS System
-        </a>
-      </div>
+    <div className="standalone-page standalone-page--narrow">
+      <a href="#main-content" className="skip-link">
+        Skip to verification form
+      </a>
 
-      {/* Clean Public Citizen Header (No staff navigation or editing controls) */}
-      <div
-        style={{ maxWidth: "48rem", margin: "0 auto", textAlign: "center", marginBottom: "2rem" }}
-      >
-        <div
-          style={{
-            display: "inline-block",
-            background: "#0d3822",
-            color: "#ffffff",
-            padding: "0.4rem 1rem",
-            borderRadius: "9999px",
-            fontSize: "0.75rem",
-            fontWeight: 700,
-            letterSpacing: "0.05em",
-            textTransform: "uppercase",
-            marginBottom: "0.75rem"
-          }}
-        >
-          Official Public Verification Portal
-        </div>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.75rem" }}>
-          <img
-            src="/punjab-logo.png"
-            alt="Government of the Punjab Official Seal"
-            width={72}
-            height={60}
-            style={{
-              width: "68px",
-              height: "auto",
-              maxHeight: "60px",
-              objectFit: "contain",
-              filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.08))"
-            }}
-          />
-        </div>
-        <h1
-          style={{ color: "#0d3822", fontSize: "1.75rem", fontWeight: 800, margin: "0 0 0.5rem" }}
-        >
-          Government of the Punjab
-        </h1>
-        <p style={{ color: "#475569", margin: 0, fontSize: "0.95rem" }}>
-          Excise, Taxation &amp; Narcotics Control Department &bull; Professional Tax Verification
-        </p>
-      </div>
-
-      <div
-        style={{
-          maxWidth: "42rem",
-          margin: "0 auto",
-          background: "#ffffff",
-          border: "1px solid #cbd5e1",
-          borderRadius: "10px",
-          boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)",
-          padding: "1.75rem"
-        }}
-      >
-        <form onSubmit={handleSearchSubmit} style={{ marginBottom: "1.5rem" }}>
-          <label
-            style={{
-              display: "block",
-              fontSize: "0.85rem",
-              fontWeight: 700,
-              color: "#1e293b",
-              marginBottom: "0.5rem"
-            }}
+      <header>
+        <nav className="standalone-topbar" aria-label="Public portal navigation">
+          <a
+            href="/"
+            className="btn-secondary btn-sm"
+            style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}
           >
-            Enter Security Code, Notice Number, or Challan Number:
-          </label>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <input
-              type="text"
-              className="form-control"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="e.g. 6-digit Security Code (e.g. 684219) or PFT2-0001-..."
-              style={{ fontSize: "0.95rem", padding: "0.65rem 0.85rem" }}
-              required
+            <ArrowLeftIcon size={14} />
+            <span>Return to Main PTAS System</span>
+          </a>
+          <span className="badge badge-approved">Official Public Verification Portal</span>
+        </nav>
+
+        <div style={{ textAlign: "center", margin: "1.25rem 0 1.75rem" }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.75rem" }}>
+            <img
+              src="/punjab-logo.png"
+              alt="Government of the Punjab Official Seal"
+              width={72}
+              height={60}
+              style={{
+                width: "68px",
+                height: "auto",
+                maxHeight: "60px",
+                objectFit: "contain"
+              }}
             />
-            <button
-              type="submit"
-              disabled={isVerifying}
-              className="btn-primary"
-              style={{
-                padding: "0.65rem 1.25rem",
-                fontWeight: 700,
-                whiteSpace: "nowrap",
-                opacity: isVerifying ? 0.7 : 1
-              }}
-            >
-              {isVerifying ? "Verifying..." : "Verify Now"}
-            </button>
           </div>
-        </form>
-
-        {isVerifying && (
-          <div style={{ padding: "2rem", textAlign: "center", color: "#475569" }}>
-            Verifying statutory document with the official Punjab register...
-          </div>
-        )}
-
-        {!isVerifying && hasSearched && result && (
-          <div
+          <h1
             style={{
-              borderRadius: "8px",
-              border: `2px solid ${result.isValid ? "#86efac" : "#fca5a5"}`,
-              background: result.isValid ? "#f0fdf4" : "#fef2f2",
-              padding: "1.5rem"
+              color: "var(--color-brand-900)",
+              fontSize: "1.65rem",
+              fontWeight: 800,
+              margin: "0 0 0.4rem",
+              lineHeight: 1.2
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.75rem",
-                marginBottom: "1rem"
-              }}
-            >
-              <span style={{ fontSize: "2rem" }}>{result.isValid ? "✅" : "⚠️"}</span>
-              <div>
-                <h2
-                  style={{
-                    margin: 0,
-                    fontSize: "1.2rem",
-                    fontWeight: 800,
-                    color: result.isValid ? "#166534" : "#991b1b"
-                  }}
+            Government of the Punjab
+          </h1>
+          <p style={{ color: "var(--color-text-muted)", margin: 0, fontSize: "0.95rem" }}>
+            Excise, Taxation &amp; Narcotics Control Department &bull; Professional Tax Verification
+          </p>
+        </div>
+      </header>
+
+      <main id="main-content" tabIndex={-1}>
+        <section className="surface-card" aria-label="Document verification lookup">
+          <form onSubmit={handleSearchSubmit} style={{ marginBottom: hasSearched ? "1.5rem" : 0 }}>
+            <div className="form-group">
+              <label htmlFor="verify-query-input">
+                Enter Security Code, Notice Number, or Challan Number
+              </label>
+              <div className="verify-search-row">
+                <input
+                  id="verify-query-input"
+                  type="text"
+                  className="form-control"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="e.g. 6-digit Security Code (e.g. 684219) or PFT2-0001-..."
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={isVerifying}
+                  className="btn-primary"
+                  style={{ whiteSpace: "nowrap" }}
                 >
-                  {result.title}
-                </h2>
-                <span
-                  style={{
-                    fontSize: "0.75rem",
-                    fontWeight: 700,
-                    color: result.isValid ? "#15803d" : "#b91c1c",
-                    textTransform: "uppercase"
-                  }}
-                >
-                  Status: {result.verificationStatus}
-                </span>
+                  <SearchIcon size={15} />
+                  <span>{isVerifying ? "Verifying..." : "Verify Now"}</span>
+                </button>
               </div>
+              <p className="form-help">
+                Supports Form P.F.T-1 demand notices, Form P.F.T-2 challans, Form P.F.T-5 clearance
+                certificates, and official receipts.
+              </p>
             </div>
+          </form>
 
-            <p
+          {isVerifying && (
+            <div
+              role="status"
               style={{
-                fontSize: "0.875rem",
-                color: "#1e293b",
-                lineHeight: 1.5,
-                margin: "0 0 1rem"
+                padding: "2rem 1rem",
+                textAlign: "center",
+                color: "var(--color-text-muted)"
               }}
             >
-              {result.message}
-            </p>
+              Verifying statutory document with the official Punjab register...
+            </div>
+          )}
 
-            {/* Read-Only Public Attributes */}
-            {result.isValid && (
+          {!isVerifying && hasSearched && result && (
+            <div
+              role="region"
+              aria-label="Verification result"
+              style={{
+                borderRadius: "var(--radius-lg)",
+                border: `1.5px solid ${result.isValid ? "var(--color-success-border)" : "var(--color-danger-border)"}`,
+                background: result.isValid
+                  ? "var(--color-success-surface)"
+                  : "var(--color-danger-surface)",
+                padding: "1.25rem"
+              }}
+            >
               <div
                 style={{
-                  background: "#ffffff",
-                  border: "1px solid #bbf7d0",
-                  borderRadius: "6px",
-                  padding: "1rem",
-                  fontSize: "0.825rem",
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "0.65rem",
-                  color: "#334155"
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                  marginBottom: "0.85rem"
                 }}
               >
-                {result.unitName && (
-                  <div>
-                    <span style={{ color: "#64748b", display: "block", fontSize: "0.72rem" }}>
-                      Profession/Trade Name:
-                    </span>
-                    <strong>{result.unitName}</strong>
-                  </div>
-                )}
-                {result.identifier && (
-                  <div>
-                    <span style={{ color: "#64748b", display: "block", fontSize: "0.72rem" }}>
-                      Identifier:
-                    </span>
-                    <strong>{result.identifier}</strong>
-                  </div>
-                )}
-                {result.categoryName && (
-                  <div>
-                    <span style={{ color: "#64748b", display: "block", fontSize: "0.72rem" }}>
-                      Classification:
-                    </span>
-                    <span>{result.categoryName}</span>
-                  </div>
-                )}
-                {result.scheduleEntry && (
-                  <div>
-                    <span style={{ color: "#64748b", display: "block", fontSize: "0.72rem" }}>
-                      Schedule Entry:
-                    </span>
-                    <span>{result.scheduleEntry}</span>
-                  </div>
-                )}
+                <span
+                  style={{
+                    color: result.isValid ? "var(--color-success-text)" : "var(--color-danger-text)"
+                  }}
+                >
+                  {result.isValid ? <CheckCircleIcon size={28} /> : <AlertTriangleIcon size={28} />}
+                </span>
                 <div>
-                  <span style={{ color: "#64748b", display: "block", fontSize: "0.72rem" }}>
-                    Issuing Authority:
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontSize: "1.15rem",
+                      fontWeight: 800,
+                      color: result.isValid
+                        ? "var(--color-success-text)"
+                        : "var(--color-danger-text)"
+                    }}
+                  >
+                    {result.title}
+                  </h2>
+                  <span
+                    className={`badge ${result.isValid ? "badge-approved" : "badge-returned"}`}
+                    style={{ marginTop: "0.25rem" }}
+                  >
+                    Status: {result.verificationStatus}
                   </span>
-                  <span>{result.issuingAuthority}</span>
-                </div>
-                <div>
-                  <span style={{ color: "#64748b", display: "block", fontSize: "0.72rem" }}>
-                    Verified At:
-                  </span>
-                  <span style={{ fontFamily: "monospace" }}>{result.verifiedAt}</span>
                 </div>
               </div>
-            )}
-          </div>
-        )}
-      </div>
 
-      <div
-        style={{ textAlign: "center", marginTop: "2rem", color: "#94a3b8", fontSize: "0.75rem" }}
+              <p
+                style={{
+                  fontSize: "0.875rem",
+                  color: "var(--color-text)",
+                  lineHeight: 1.5,
+                  margin: "0 0 1rem"
+                }}
+              >
+                {result.message}
+              </p>
+
+              {result.isValid && (
+                <div
+                  className="detail-grid"
+                  style={{
+                    background: "var(--color-surface)",
+                    border: "1px solid var(--color-success-border)",
+                    borderRadius: "var(--radius-md)",
+                    padding: "1rem",
+                    fontSize: "0.85rem",
+                    color: "var(--color-text-secondary)"
+                  }}
+                >
+                  {result.unitName && (
+                    <div>
+                      <span className="detail-field-label">Profession/Trade Name</span>
+                      <strong>{result.unitName}</strong>
+                    </div>
+                  )}
+                  {result.identifier && (
+                    <div>
+                      <span className="detail-field-label">Identifier</span>
+                      <strong>{result.identifier}</strong>
+                    </div>
+                  )}
+                  {result.categoryName && (
+                    <div>
+                      <span className="detail-field-label">Classification</span>
+                      <span>{result.categoryName}</span>
+                    </div>
+                  )}
+                  {result.scheduleEntry && (
+                    <div>
+                      <span className="detail-field-label">Schedule Entry</span>
+                      <span>{result.scheduleEntry}</span>
+                    </div>
+                  )}
+                  <div>
+                    <span className="detail-field-label">Issuing Authority</span>
+                    <span>{result.issuingAuthority}</span>
+                  </div>
+                  <div>
+                    <span className="detail-field-label">Verified At</span>
+                    <span style={{ fontFamily: "var(--font-mono)" }}>{result.verifiedAt}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      </main>
+
+      <footer
+        style={{
+          textAlign: "center",
+          marginTop: "1.5rem",
+          color: "var(--color-text-muted)",
+          fontSize: "0.78rem"
+        }}
       >
         Official Provincial Digital Verification Service &bull; Punjab Professional Tax
         Administration System (PTAS)
-      </div>
+      </footer>
     </div>
   );
 }
@@ -328,7 +301,14 @@ export default function PublicVerificationPage() {
   return (
     <Suspense
       fallback={
-        <div style={{ padding: "3rem", textAlign: "center" }}>Loading verification portal...</div>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="standalone-page standalone-page--narrow"
+          style={{ textAlign: "center" }}
+        >
+          Loading verification portal...
+        </main>
       }
     >
       <PublicVerificationContent />

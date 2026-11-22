@@ -114,7 +114,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
           <div
             style={{
               fontSize: "0.48rem",
-              color: "#64748b",
+              color: "#475569",
               fontWeight: 700,
               marginTop: "0.15rem",
               letterSpacing: "0.3px"
@@ -854,7 +854,7 @@ export function Pft2ChallanCopy({ copy, onScanOrClick }: Pft2ChallanCopyProps) {
               alignItems: "center",
               justifyContent: "flex-end",
               padding: "0.15rem",
-              color: "#64748b",
+              color: "#475569",
               fontSize: "0.52rem",
               textAlign: "center",
               minHeight: "2.6rem"

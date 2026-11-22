@@ -25,6 +25,7 @@ import {
   fetchPotentialAssessmentUnitsFromDatabase,
   type PotentialUnitRecord
 } from "../../../../lib/potential-units-storage";
+import { StandalonePageHeader } from "../../../../components/ui/StandalonePageHeader";
 
 function DocumentIssuanceContent() {
   const searchParams = useSearchParams();
@@ -166,66 +167,66 @@ function DocumentIssuanceContent() {
 
   if (!isLoaded) {
     return (
-      <div style={{ padding: "3rem", textAlign: "center", color: "#64748b" }}>
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="standalone-page"
+        style={{ padding: "3rem", textAlign: "center", color: "var(--color-text-muted)" }}
+      >
         Loading verified unit issuance context...
-      </div>
+      </main>
     );
   }
 
   if (!unit) {
     return (
-      <div
-        style={{
-          maxWidth: "48rem",
-          margin: "3rem auto",
-          padding: "2rem",
-          background: "#fef2f2",
-          border: "1px solid #fecaca",
-          borderRadius: "8px",
-          textAlign: "center"
-        }}
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="standalone-page standalone-page--narrow"
+        style={{ paddingTop: "3rem" }}
       >
-        <h2 style={{ color: "#991b1b", margin: "0 0 0.5rem" }}>
-          {fetchError
-            ? "Unable to Load Taxpayer Units"
-            : !unitParam
-              ? "No Taxpayer Unit Specified"
-              : "Taxpayer Unit Not Found"}
-        </h2>
-        <p style={{ color: "#475569" }}>
-          {fetchError ||
-            (!unitParam
-              ? "Please select a registered or provisional taxpayer unit from the PFT-3 Assessment Register or Potential Register to prepare an official Form PFT-2 Challan."
-              : `Unable to locate an approved unit matching "${unitParam}" in your assigned jurisdiction.`)}
-        </p>
         <div
-          style={{ display: "flex", gap: "0.75rem", justifyContent: "center", marginTop: "1rem" }}
+          className="surface-card"
+          style={{ textAlign: "center", borderColor: "var(--color-danger-border)" }}
         >
-          <a
-            href="/assessment/pft3"
-            className="btn-primary"
-            style={{ display: "inline-block", textDecoration: "none", backgroundColor: "#0d3822" }}
-          >
-            ← Open Assessment Register (PFT-3)
-          </a>
-          <a
-            href="/"
+          <h1
             style={{
-              display: "inline-block",
-              padding: "0.5rem 1rem",
-              borderRadius: "6px",
-              border: "1px solid #cbd5e1",
-              background: "#ffffff",
-              color: "#334155",
-              textDecoration: "none",
-              fontSize: "0.875rem",
-              fontWeight: 600
+              color: "var(--color-danger-text)",
+              margin: "0 0 0.5rem",
+              fontSize: "1.35rem"
             }}
           >
-            Dashboard
-          </a>
+            {fetchError
+              ? "Unable to Load Taxpayer Units"
+              : !unitParam
+                ? "No Taxpayer Unit Specified"
+                : "Taxpayer Unit Not Found"}
+          </h1>
+          <p style={{ color: "var(--color-text-muted)" }}>
+            {fetchError ||
+              (!unitParam
+                ? "Please select a registered or provisional taxpayer unit from the PFT-3 Assessment Register or Potential Register to prepare an official Form PFT-2 Challan."
+                : `Unable to locate an approved unit matching "${unitParam}" in your assigned jurisdiction.`)}
+          </p>
+          <div
+            style={{
+              display: "flex",
+              gap: "0.75rem",
+              justifyContent: "center",
+              flexWrap: "wrap",
+              marginTop: "1rem"
+            }}
+          >
+            <a href="/assessment/pft3" className="btn-primary">
+              Open Assessment Register (PFT-3)
+            </a>
+            <a href="/" className="btn-secondary">
+              Dashboard
+            </a>
+          </div>
         </div>
-      </div>
+      </main>
     );
   }
 
@@ -380,50 +381,32 @@ function DocumentIssuanceContent() {
   });
 
   return (
-    <div style={{ maxWidth: "80rem", margin: "1.25rem auto", padding: "1rem" }}>
-      {/* Top Decoupled Navigation Header (Isolated to Contextual Actions Only) */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "1rem",
-          background: "#ffffff",
-          padding: "0.75rem 1.25rem",
-          borderRadius: "8px",
-          border: "1px solid #e2e8f0",
-          boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-          flexWrap: "wrap",
-          gap: "0.75rem"
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <span style={{ fontSize: "1.25rem" }}>🏛️</span>
-          <div>
-            <span
-              style={{ fontSize: "0.9rem", fontWeight: 700, color: "#0d3822", display: "block" }}
-            >
-              PTAS Punjab &bull; Vehari Circle I (City / Commercial) &bull;{" "}
-              <span style={{ color: "#15803d" }}>
-                {demandScope === "ARREAR"
-                  ? "ARREARS DEMAND"
-                  : demandScope === "COMBINED"
-                    ? "COMBINED DEMAND (CURRENT + ARREARS)"
-                    : "CURRENT YEAR DEMAND"}
-              </span>
-            </span>
-            <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
-              Form P.F.T-2 Statutory Payment Instrument &bull; Rule 9
-            </span>
-          </div>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-          {issuedChallan ? (
+    <div className="standalone-page" style={{ maxWidth: "82rem" }}>
+      <StandalonePageHeader
+        eyebrow="Form P.F.T-2 Statutory Payment Instrument • Rule 9"
+        title="Form P.F.T-2 Challan Issuance Workbench"
+        subtitle={
+          <>
+            Vehari Circle I (City / Commercial) &bull;{" "}
+            {demandScope === "ARREAR"
+              ? "ARREARS DEMAND"
+              : demandScope === "COMBINED"
+                ? "COMBINED DEMAND (CURRENT + ARREARS)"
+                : "CURRENT YEAR DEMAND"}
+          </>
+        }
+        backHref="/revenue"
+        backLabel="Return to Revenue Desk"
+        topLinks={[
+          { label: "Main Dashboard", href: "/" },
+          { label: "View Assessee Dossier", href: `/units/${unit.provincialUin}/details` }
+        ]}
+        bannerActions={
+          issuedChallan ? (
             <>
               <button
                 type="button"
-                className="btn-primary"
+                className="btn-on-dark"
                 disabled={isPdfLoading}
                 onClick={async () => {
                   if (!unit) {
@@ -433,9 +416,6 @@ function DocumentIssuanceContent() {
                   setIsPdfLoading(true);
                   setErrorMessage("");
                   try {
-                    // Pre-resolve the FormPFT2Model here where unit is already in scope.
-                    // This avoids the engine reconstruction path which requires a fresh
-                    // loadPilotState() lookup that may fail in the standalone document page.
                     const challanModel = generateFormPFT2(unit, {
                       dueDate: issuedChallan.dueDate,
                       issueDate: issuedChallan.issueDate,
@@ -452,8 +432,6 @@ function DocumentIssuanceContent() {
                     challanModel.challanStatus = issuedChallan.status;
                     await downloadOfficialPdf({
                       type: "FORM_PFT2_CHALLAN",
-                      // Pass the resolved FormPFT2Model directly (has "copies" field)
-                      // so the engine skips the reconstruction step entirely.
                       documentIdOrData: challanModel,
                       authContext: {
                         role: "ETO",
@@ -471,359 +449,168 @@ function DocumentIssuanceContent() {
                 }}
                 title="Download authoritative 3-copy Form PFT-2 payment instrument as PDF"
               >
-                {isPdfLoading ? "⏳ Generating PDF…" : "📥 Download Official PDF (A4 Landscape)"}
+                {isPdfLoading ? "Generating PDF…" : "Download Official PDF (A4 Landscape)"}
               </button>
               <a
                 href="/revenue"
-                style={{
-                  fontSize: "0.8rem",
-                  fontWeight: 600,
-                  padding: "0.45rem 0.75rem",
-                  borderRadius: "6px",
-                  background: "#166534",
-                  color: "#ffffff",
-                  textDecoration: "none",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.3rem"
-                }}
+                className="btn-on-dark-outline"
                 title="View this issued challan in the Form P.F.T-2 Revenue Registry Desk"
               >
-                🏛️ View in Revenue Desk →
+                View in Revenue Desk
               </a>
             </>
           ) : (
             <span
-              style={{
-                fontSize: "0.75rem",
-                color: "#94a3b8",
-                background: "#f1f5f9",
-                padding: "0.45rem 0.75rem",
-                borderRadius: "6px",
-                border: "1px dashed #cbd5e1",
-                fontWeight: 600
-              }}
+              className="badge badge-draft"
               title="Form PFT-2 must be officially issued before PDF download is authorized"
             >
-              🔒 Issue Challan to Enable PDF Download
+              Issue Challan to Enable PDF Download
             </span>
-          )}
-          <a
-            href="/revenue"
-            style={{
-              fontSize: "0.8rem",
-              fontWeight: 600,
-              padding: "0.45rem 0.75rem",
-              borderRadius: "6px",
-              background: "#0d3822",
-              color: "#ffffff",
-              textDecoration: "none",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.3rem"
-            }}
-          >
-            🏛️ Revenue Desk
-          </a>
-          <a
-            href="/"
-            style={{
-              fontSize: "0.8rem",
-              fontWeight: 600,
-              padding: "0.45rem 0.75rem",
-              borderRadius: "6px",
-              background: "#f1f5f9",
-              color: "#1e293b",
-              border: "1px solid #cbd5e1",
-              textDecoration: "none",
-              display: "inline-flex",
-              alignItems: "center"
-            }}
-          >
-            ← Main Dashboard
-          </a>
-          <a
-            href={`/units/${unit.provincialUin}/details`}
-            style={{
-              fontSize: "0.8rem",
-              fontWeight: 600,
-              padding: "0.45rem 0.75rem",
-              borderRadius: "6px",
-              background: "#f1f5f9",
-              color: "#1e293b",
-              border: "1px solid #cbd5e1",
-              textDecoration: "none",
-              display: "inline-flex",
-              alignItems: "center"
-            }}
-          >
-            📋 View Assessee Dossier
-          </a>
-        </div>
-      </div>
+          )
+        }
+      />
 
-      {/* Establishment Switcher & Issuance Configuration Bar */}
-      <div
-        style={{
-          background: "#ffffff",
-          border: "1px solid #cbd5e1",
-          borderRadius: "8px",
-          padding: "1rem 1.25rem",
-          marginBottom: "1.25rem",
-          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)"
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "0.75rem",
-            flexWrap: "wrap",
-            gap: "0.5rem"
-          }}
-        >
-          <div>
-            {unitParam ? (
-              <div>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: "0.78rem",
-                    fontWeight: 700,
-                    color: "#166534",
-                    marginBottom: "0.25rem"
-                  }}
-                >
-                  Originating Taxpayer Establishment (Locked):
-                </span>
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    padding: "0.45rem 0.75rem",
-                    borderRadius: "6px",
-                    border: "1px solid #86efac",
-                    backgroundColor: "#f0fdf4",
-                    color: "#0f172a",
-                    fontSize: "0.85rem",
-                    fontWeight: 600,
-                    flexWrap: "wrap"
-                  }}
-                >
-                  <span>🔒 {unit.legalName}</span>
-                  <span style={{ color: "#64748b" }}>•</span>
-                  <span>UIN: {unit.provincialUin}</span>
-                  <span style={{ color: "#64748b" }}>•</span>
-                  <span>Demand Number: {unit.demandUnit.permanentDemandNo}</span>
-                  <span style={{ color: "#64748b" }}>•</span>
-                  <span>
-                    Class {unit.statutoryRule.rule_code} ({unit.statutoryRule.category})
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <label
-                  htmlFor="establishment-selector"
-                  style={{
-                    display: "block",
-                    fontSize: "0.78rem",
-                    fontWeight: 700,
-                    color: "#166534",
-                    marginBottom: "0.25rem"
-                  }}
-                >
-                  Select Taxpayer Establishment:
-                </label>
-                <select
-                  id="establishment-selector"
-                  value={unit.provincialUin}
-                  onChange={(e) => handleSelectUnit(e.target.value)}
-                  style={{
-                    minWidth: "22rem",
-                    maxWidth: "38rem",
-                    padding: "0.45rem 0.75rem",
-                    borderRadius: "6px",
-                    border: "1px solid #86efac",
-                    fontSize: "0.85rem",
-                    fontWeight: 600,
-                    backgroundColor: "#f0fdf4",
-                    color: "#0f172a"
-                  }}
-                >
-                  {allUnits.map((u) => {
-                    const assessed = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
-                    return (
-                      <option key={u.id} value={u.provincialUin}>
-                        UIN: {u.provincialUin} &bull; Demand Number:{" "}
-                        {u.demandUnit.permanentDemandNo} &bull; {u.statutoryRule.category}{" "}
-                        (Assessed: PKR {assessed.toLocaleString()})
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <button
-              type="button"
-              className="btn-secondary btn-sm"
-              onClick={() => setShowConfigPanel(!showConfigPanel)}
-              style={{ fontSize: "0.8rem" }}
-            >
-              {showConfigPanel ? "🔼 Hide Issuance Controls" : "⚙️ Issuance Controls"}
-            </button>
-            {!issuedChallan ? (
-              <button
-                type="button"
-                className="btn-success btn-sm"
-                onClick={handleConfirmIssuance}
-                disabled={!validation.canIssue || isIssuing}
-                style={{ fontWeight: 700 }}
-              >
-                {isIssuing ? "Issuing..." : "⚡ Issue & Register Challan"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="btn-secondary btn-sm"
-                onClick={() => setIssuedChallan(null)}
-              >
-                ➕ Issue Another
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Streamlined Issuance Controls (Form Type removed, Radio check buttons for Scope) */}
-        {showConfigPanel && !issuedChallan && (
+      <main id="main-content" tabIndex={-1}>
+        {/* Establishment Switcher & Issuance Configuration Bar */}
+        <div className="surface-card no-print">
           <div
             style={{
               display: "flex",
-              flexDirection: "column",
-              gap: "1rem",
-              paddingTop: "0.85rem",
-              borderTop: "1px solid #e2e8f0",
-              fontSize: "0.85rem"
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "0.75rem",
+              flexWrap: "wrap",
+              gap: "0.5rem"
             }}
           >
-            {/* Challan Scope Radio Group */}
             <div>
-              <span
-                style={{
-                  display: "block",
-                  fontWeight: 700,
-                  color: "#1e293b",
-                  marginBottom: "0.35rem"
-                }}
-              >
-                Challan Scope:
-              </span>
-              <div
-                style={{
-                  display: "flex",
-                  gap: "1.25rem",
-                  flexWrap: "wrap",
-                  alignItems: "center"
-                }}
-              >
-                <label
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.4rem",
-                    cursor: "pointer",
-                    fontWeight: 600,
-                    color: demandScope === "CURRENT" ? "#065f46" : "#475569"
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="pf2DemandScopeRadio"
-                    value="CURRENT"
-                    checked={demandScope === "CURRENT"}
-                    onChange={() => {
-                      setDemandScope("CURRENT");
-                      setErrorMessage("");
+              {unitParam ? (
+                <div>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      color: "#166534",
+                      marginBottom: "0.25rem"
                     }}
-                  />
-                  <span>
-                    01 - Current Year Demand (PKR{" "}
-                    {(validation.currentOutstanding ?? 0).toLocaleString()})
+                  >
+                    Originating Taxpayer Establishment (Locked):
                   </span>
-                </label>
-
-                <label
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.4rem",
-                    cursor: "pointer",
-                    fontWeight: 600,
-                    color: demandScope === "ARREAR" ? "#065f46" : "#475569"
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="pf2DemandScopeRadio"
-                    value="ARREAR"
-                    checked={demandScope === "ARREAR"}
-                    onChange={() => {
-                      setDemandScope("ARREAR");
-                      setErrorMessage("");
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      padding: "0.45rem 0.75rem",
+                      borderRadius: "6px",
+                      border: "1px solid #86efac",
+                      backgroundColor: "#f0fdf4",
+                      color: "#0f172a",
+                      fontSize: "0.85rem",
+                      fontWeight: 600,
+                      flexWrap: "wrap"
                     }}
-                  />
-                  <span>
-                    02 - Arrears Demand (PKR {(validation.arrearBalance ?? 0).toLocaleString()})
-                  </span>
-                </label>
-
-                <label
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.4rem",
-                    cursor: "pointer",
-                    fontWeight: 600,
-                    color: demandScope === "COMBINED" ? "#065f46" : "#475569"
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="pf2DemandScopeRadio"
-                    value="COMBINED"
-                    checked={demandScope === "COMBINED"}
-                    onChange={() => {
-                      setDemandScope("COMBINED");
-                      setErrorMessage("");
+                  >
+                    <span>🔒 {unit.legalName}</span>
+                    <span style={{ color: "var(--color-text-muted)" }}>•</span>
+                    <span>UIN: {unit.provincialUin}</span>
+                    <span style={{ color: "var(--color-text-muted)" }}>•</span>
+                    <span>Demand Number: {unit.demandUnit.permanentDemandNo}</span>
+                    <span style={{ color: "var(--color-text-muted)" }}>•</span>
+                    <span>
+                      Class {unit.statutoryRule.rule_code} ({unit.statutoryRule.category})
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label
+                    htmlFor="establishment-selector"
+                    style={{
+                      display: "block",
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      color: "#166534",
+                      marginBottom: "0.25rem"
                     }}
-                  />
-                  <span>
-                    03 - Combined Current &amp; Arrears (PKR{" "}
-                    {(
-                      (validation.currentOutstanding ?? 0) +
-                      (validation.arrearBalance ?? 0) +
-                      (validation.penalties ?? 0)
-                    ).toLocaleString()}
-                    )
-                  </span>
-                </label>
-              </div>
+                  >
+                    Select Taxpayer Establishment:
+                  </label>
+                  <select
+                    id="establishment-selector"
+                    value={unit.provincialUin}
+                    onChange={(e) => handleSelectUnit(e.target.value)}
+                    className="form-control"
+                    style={{
+                      width: "100%",
+                      maxWidth: "38rem",
+                      borderColor: "var(--color-success-border)",
+                      fontSize: "0.85rem",
+                      fontWeight: 600,
+                      backgroundColor: "var(--color-brand-50)",
+                      color: "var(--color-text)"
+                    }}
+                  >
+                    {allUnits.map((u) => {
+                      const assessed = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+                      return (
+                        <option key={u.id} value={u.provincialUin}>
+                          UIN: {u.provincialUin} &bull; Demand Number:{" "}
+                          {u.demandUnit.permanentDemandNo} &bull; {u.statutoryRule.category}{" "}
+                          (Assessed: PKR {assessed.toLocaleString()})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
             </div>
 
-            {/* Payment Scope Radio Group & Due Date Grid */}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={() => setShowConfigPanel(!showConfigPanel)}
+                style={{ fontSize: "0.8rem" }}
+              >
+                {showConfigPanel ? "🔼 Hide Issuance Controls" : "⚙️ Issuance Controls"}
+              </button>
+              {!issuedChallan ? (
+                <button
+                  type="button"
+                  className="btn-success btn-sm"
+                  onClick={handleConfirmIssuance}
+                  disabled={!validation.canIssue || isIssuing}
+                  style={{ fontWeight: 700 }}
+                >
+                  {isIssuing ? "Issuing..." : "⚡ Issue & Register Challan"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  onClick={() => setIssuedChallan(null)}
+                >
+                  ➕ Issue Another
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Streamlined Issuance Controls (Form Type removed, Radio check buttons for Scope) */}
+          {showConfigPanel && !issuedChallan && (
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))",
+                display: "flex",
+                flexDirection: "column",
                 gap: "1rem",
-                alignItems: "flex-start"
+                paddingTop: "0.85rem",
+                borderTop: "1px solid #e2e8f0",
+                fontSize: "0.85rem"
               }}
             >
+              {/* Challan Scope Radio Group */}
               <div>
                 <span
                   style={{
@@ -833,7 +620,7 @@ function DocumentIssuanceContent() {
                     marginBottom: "0.35rem"
                   }}
                 >
-                  Payment Scope:
+                  Challan Scope:
                 </span>
                 <div
                   style={{
@@ -850,17 +637,23 @@ function DocumentIssuanceContent() {
                       gap: "0.4rem",
                       cursor: "pointer",
                       fontWeight: 600,
-                      color: paymentScope === "FULL" ? "#065f46" : "#475569"
+                      color: demandScope === "CURRENT" ? "#065f46" : "#475569"
                     }}
                   >
                     <input
                       type="radio"
-                      name="pf2PaymentScopeRadio"
-                      value="FULL"
-                      checked={paymentScope === "FULL"}
-                      onChange={() => setPaymentScope("FULL")}
+                      name="pf2DemandScopeRadio"
+                      value="CURRENT"
+                      checked={demandScope === "CURRENT"}
+                      onChange={() => {
+                        setDemandScope("CURRENT");
+                        setErrorMessage("");
+                      }}
                     />
-                    <span>Full Assessed (PKR {validation.calculatedAmount.toLocaleString()})</span>
+                    <span>
+                      01 - Current Year Demand (PKR{" "}
+                      {(validation.currentOutstanding ?? 0).toLocaleString()})
+                    </span>
                   </label>
 
                   <label
@@ -870,149 +663,238 @@ function DocumentIssuanceContent() {
                       gap: "0.4rem",
                       cursor: "pointer",
                       fontWeight: 600,
-                      color: paymentScope === "PARTIAL" ? "#065f46" : "#475569"
+                      color: demandScope === "ARREAR" ? "#065f46" : "#475569"
                     }}
                   >
                     <input
                       type="radio"
-                      name="pf2PaymentScopeRadio"
-                      value="PARTIAL"
-                      checked={paymentScope === "PARTIAL"}
-                      onChange={() => setPaymentScope("PARTIAL")}
+                      name="pf2DemandScopeRadio"
+                      value="ARREAR"
+                      checked={demandScope === "ARREAR"}
+                      onChange={() => {
+                        setDemandScope("ARREAR");
+                        setErrorMessage("");
+                      }}
                     />
-                    <span>Partial / Installment</span>
+                    <span>
+                      02 - Arrears Demand (PKR {(validation.arrearBalance ?? 0).toLocaleString()})
+                    </span>
+                  </label>
+
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      color: demandScope === "COMBINED" ? "#065f46" : "#475569"
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="pf2DemandScopeRadio"
+                      value="COMBINED"
+                      checked={demandScope === "COMBINED"}
+                      onChange={() => {
+                        setDemandScope("COMBINED");
+                        setErrorMessage("");
+                      }}
+                    />
+                    <span>
+                      03 - Combined Current &amp; Arrears (PKR{" "}
+                      {(
+                        (validation.currentOutstanding ?? 0) +
+                        (validation.arrearBalance ?? 0) +
+                        (validation.penalties ?? 0)
+                      ).toLocaleString()}
+                      )
+                    </span>
                   </label>
                 </div>
               </div>
 
-              <div>
-                <label
-                  htmlFor="pf2-due-date-input"
-                  style={{
-                    display: "block",
-                    fontWeight: 700,
-                    color: "#1e293b",
-                    marginBottom: "0.35rem"
-                  }}
-                >
-                  Statutory Due Date (Calendar Month):
-                </label>
-                <input
-                  id="pf2-due-date-input"
-                  type="date"
-                  className="form-control"
-                  style={{ fontSize: "0.85rem", padding: "0.35rem 0.6rem", maxWidth: "16rem" }}
-                  value={dueDate}
-                  min={minDueDate}
-                  max={maxDueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {paymentScope === "PARTIAL" && (
+              {/* Payment Scope Radio Group & Due Date Grid */}
               <div
                 style={{
-                  background: "#fffbeb",
-                  border: "1px solid #fde68a",
-                  borderRadius: "6px",
-                  padding: "0.6rem 0.85rem",
-                  maxWidth: "24rem"
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))",
+                  gap: "1rem",
+                  alignItems: "flex-start"
                 }}
               >
-                <label
+                <div>
+                  <span
+                    style={{
+                      display: "block",
+                      fontWeight: 700,
+                      color: "#1e293b",
+                      marginBottom: "0.35rem"
+                    }}
+                  >
+                    Payment Scope:
+                  </span>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "1.25rem",
+                      flexWrap: "wrap",
+                      alignItems: "center"
+                    }}
+                  >
+                    <label
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                        color: paymentScope === "FULL" ? "#065f46" : "#475569"
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="pf2PaymentScopeRadio"
+                        value="FULL"
+                        checked={paymentScope === "FULL"}
+                        onChange={() => setPaymentScope("FULL")}
+                      />
+                      <span>
+                        Full Assessed (PKR {validation.calculatedAmount.toLocaleString()})
+                      </span>
+                    </label>
+
+                    <label
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                        color: paymentScope === "PARTIAL" ? "#065f46" : "#475569"
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="pf2PaymentScopeRadio"
+                        value="PARTIAL"
+                        checked={paymentScope === "PARTIAL"}
+                        onChange={() => setPaymentScope("PARTIAL")}
+                      />
+                      <span>Partial / Installment</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="pf2-due-date-input"
+                    style={{
+                      display: "block",
+                      fontWeight: 700,
+                      color: "#1e293b",
+                      marginBottom: "0.35rem"
+                    }}
+                  >
+                    Statutory Due Date (Calendar Month):
+                  </label>
+                  <input
+                    id="pf2-due-date-input"
+                    type="date"
+                    className="form-control"
+                    style={{ fontSize: "0.85rem", padding: "0.35rem 0.6rem", maxWidth: "16rem" }}
+                    value={dueDate}
+                    min={minDueDate}
+                    max={maxDueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {paymentScope === "PARTIAL" && (
+                <div
                   style={{
-                    display: "block",
-                    fontWeight: 700,
-                    color: "#92400e",
-                    marginBottom: "0.25rem",
-                    fontSize: "0.8rem"
+                    background: "#fffbeb",
+                    border: "1px solid #fde68a",
+                    borderRadius: "6px",
+                    padding: "0.6rem 0.85rem",
+                    maxWidth: "24rem"
                   }}
                 >
-                  Enter Partial Amount to Demand (PKR):
-                </label>
-                <input
-                  type="number"
-                  className="form-control"
-                  style={{ fontSize: "0.85rem", padding: "0.35rem 0.6rem" }}
-                  value={partialAmount}
-                  min={100}
-                  max={validation.calculatedAmount}
-                  onChange={(e) => setPartialAmount(Number(e.target.value))}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Issued Status Notification Banner */}
-        {issuedChallan && (
-          <div
-            style={{
-              marginTop: "0.75rem",
-              background: "#f0fdf4",
-              border: "1px solid #bbf7d0",
-              borderRadius: "6px",
-              padding: "0.6rem 1rem",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: "0.5rem",
-              fontSize: "0.825rem"
-            }}
-          >
-            <div style={{ color: "#166534" }}>
-              <strong>✓ Form P.F.T-2 Successfully Issued &amp; Sealed:</strong> Challan No:{" "}
-              <strong>{issuedChallan.challanNumber}</strong> &bull; Notice No:{" "}
-              <strong>{issuedChallan.noticeNumber}</strong> &bull; PIN:{" "}
-              <strong>{issuedChallan.pin}</strong>
+                  <label
+                    htmlFor="pf2-partial-amount-input"
+                    style={{
+                      display: "block",
+                      fontWeight: 700,
+                      color: "#92400e",
+                      marginBottom: "0.25rem",
+                      fontSize: "0.8rem"
+                    }}
+                  >
+                    Enter Partial Amount to Demand (PKR):
+                  </label>
+                  <input
+                    id="pf2-partial-amount-input"
+                    type="number"
+                    className="form-control"
+                    style={{ fontSize: "0.85rem", padding: "0.35rem 0.6rem" }}
+                    value={partialAmount}
+                    min={100}
+                    max={validation.calculatedAmount}
+                    onChange={(e) => setPartialAmount(Number(e.target.value))}
+                  />
+                </div>
+              )}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
-              <div style={{ color: "#15803d", fontWeight: 700 }}>
-                Amount: PKR {issuedChallan.amountPayable.toLocaleString()} &bull; Due:{" "}
-                {issuedChallan.dueDate}
+          )}
+
+          {/* Issued Status Notification Banner */}
+          {issuedChallan && (
+            <div
+              role="status"
+              className="alert alert-success"
+              style={{
+                marginTop: "0.75rem",
+                marginBottom: 0,
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap"
+              }}
+            >
+              <div>
+                <strong>Form P.F.T-2 Successfully Issued &amp; Sealed:</strong> Challan No:{" "}
+                <strong>{issuedChallan.challanNumber}</strong> &bull; Notice No:{" "}
+                <strong>{issuedChallan.noticeNumber}</strong> &bull; PIN:{" "}
+                <strong>{issuedChallan.pin}</strong>
               </div>
-              <a
-                href="/revenue"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.25rem",
-                  padding: "0.25rem 0.65rem",
-                  borderRadius: "5px",
-                  background: "#166534",
-                  color: "#ffffff",
-                  fontSize: "0.78rem",
-                  fontWeight: 600,
-                  textDecoration: "none"
-                }}
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}
               >
-                🏛️ View in Revenue Desk →
-              </a>
+                <div style={{ fontWeight: 700 }}>
+                  Amount: PKR {issuedChallan.amountPayable.toLocaleString()} &bull; Due:{" "}
+                  {issuedChallan.dueDate}
+                </div>
+                <a href="/revenue" className="btn-primary btn-sm">
+                  View in Revenue Desk
+                </a>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {errorMessage && (
-          <div
-            style={{
-              marginTop: "0.75rem",
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-              borderRadius: "6px",
-              padding: "0.6rem 1rem",
-              color: "#991b1b",
-              fontSize: "0.85rem"
-            }}
-          >
-            <strong>Error:</strong> {errorMessage}
-          </div>
-        )}
-      </div>
+          {errorMessage && (
+            <div
+              role="alert"
+              className="alert alert-error"
+              style={{ marginTop: "0.75rem", marginBottom: 0 }}
+            >
+              <strong>Error:</strong> {errorMessage}
+            </div>
+          )}
+        </div>
 
-      {/* THE AUTHENTIC STATUTORY 3-COPY FORM P.F.T-2 PAYMENT INSTRUMENT (EXACT STATUTORY RULE 9 LAYOUT) */}
-      <Pft2ChallanDocument challan={challanModel} id="issued-pft2-document-target" />
+        {/* THE AUTHENTIC STATUTORY 3-COPY FORM P.F.T-2 PAYMENT INSTRUMENT (EXACT STATUTORY RULE 9 LAYOUT) */}
+        <Pft2ChallanDocument challan={challanModel} id="issued-pft2-document-target" />
+      </main>
     </div>
   );
 }

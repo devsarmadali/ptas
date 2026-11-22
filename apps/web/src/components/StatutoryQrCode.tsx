@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import QRCode from "qrcode";
+import { LockIcon } from "./ui/Icons";
 
 export interface StatutoryQrCodeProps {
   readonly payload: string;
@@ -78,6 +79,7 @@ export function StatutoryQrCode({
       onClick={() => onScanOrClick?.(payload)}
       title={onScanOrClick ? "Click to verify this official Punjab Government document" : payload}
       role={onScanOrClick ? "button" : undefined}
+      aria-label={onScanOrClick ? "Verify statutory document via QR code" : undefined}
       tabIndex={onScanOrClick ? 0 : undefined}
       onKeyDown={(e) => {
         if (onScanOrClick && (e.key === "Enter" || e.key === " ")) {
@@ -108,7 +110,7 @@ export function StatutoryQrCode({
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: "#f8fafc",
-            color: "#64748b",
+            color: "#475569",
             fontSize: "0.75rem"
           }}
         >
@@ -123,16 +125,20 @@ export function StatutoryQrCode({
             marginTop: "0.3rem",
             fontSize: "0.75rem",
             fontWeight: 800,
-            fontFamily: "monospace",
+            fontFamily: "var(--font-mono)",
             color: "#0f172a",
             letterSpacing: "1px",
             background: "#f1f5f9",
             padding: "0.15rem 0.45rem",
             borderRadius: "4px",
-            border: "1px solid #e2e8f0"
+            border: "1px solid #e2e8f0",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.25rem"
           }}
         >
-          🔒 {securityCode}
+          <LockIcon size={11} />
+          <span>{securityCode}</span>
         </div>
       )}
 
@@ -154,8 +160,8 @@ export function StatutoryQrCode({
         <span
           style={{
             fontSize: "0.55rem",
-            color: "#64748b",
-            fontFamily: "monospace",
+            color: "#475569",
+            fontFamily: "var(--font-mono)",
             maxWidth: `${size + 24}px`,
             overflow: "hidden",
             textOverflow: "ellipsis",

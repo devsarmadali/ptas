@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import type { Route } from "next";
 import Link from "next/link";
 import { getSupabaseAuthClient } from "../../../lib/supabase-auth";
+import { AlertTriangleIcon, ArrowLeftIcon, CheckCircleIcon } from "../../../components/ui/Icons";
 
 const asRoute = (path: string): Route => path as unknown as Route;
 
@@ -102,45 +103,114 @@ export default function UpdatePasswordPage() {
   };
 
   return (
-    <main style={{ maxWidth: "32rem", margin: "4rem auto", padding: "1rem" }}>
-      <h1>Set PTAS password</h1>
-      <p>Open this page from the password setup email, then choose your password.</p>
-      {error && <div role="alert">{error}</div>}
-      {message && <div role="status">{message}</div>}
-      <form onSubmit={handleSubmit} style={{ display: "grid", gap: "1rem" }}>
-        <div className="form-group">
-          <label htmlFor="new-password">New password</label>
-          <input
-            id="new-password"
-            type="password"
-            autoComplete="new-password"
-            className="form-control"
-            required
-            minLength={6}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-        </div>
-        <div className="form-group">
-          <label htmlFor="confirm-password">Confirm new password</label>
-          <input
-            id="confirm-password"
-            type="password"
-            autoComplete="new-password"
-            className="form-control"
-            required
-            minLength={6}
-            value={confirmation}
-            onChange={(event) => setConfirmation(event.target.value)}
-          />
-        </div>
-        <button type="submit" className="btn-primary" disabled={isSaving || !hasRecoverySession}>
-          {isSaving ? "Saving…" : "Save password"}
-        </button>
-      </form>
-      <Link href={asRoute("/sign-in")} style={{ display: "inline-block", marginTop: "1rem" }}>
-        Return to sign in
-      </Link>
-    </main>
+    <div className="auth-shell">
+      <a href="#main-content" className="skip-link">
+        Skip to password setup form
+      </a>
+
+      <main
+        id="main-content"
+        tabIndex={-1}
+        style={{ width: "100%", display: "grid", placeItems: "center" }}
+      >
+        <section className="auth-card" aria-labelledby="update-password-heading">
+          <header className="auth-header">
+            <div className="auth-brand-row">
+              <img
+                src="/punjab-logo.png"
+                alt="Government of the Punjab Official Seal"
+                width={48}
+                height={40}
+                style={{
+                  width: "44px",
+                  height: "auto",
+                  maxHeight: "42px",
+                  objectFit: "contain",
+                  flexShrink: 0
+                }}
+              />
+              <div>
+                <p className="auth-brand-eyebrow">Government of the Punjab</p>
+                <p className="auth-brand-dept">
+                  Excise, Taxation &amp; Narcotics Control Department
+                </p>
+              </div>
+            </div>
+            <h1 id="update-password-heading">Set PTAS password</h1>
+            <p className="auth-header-desc">
+              Open this page from the password setup email, then choose your password.
+            </p>
+          </header>
+
+          <div className="auth-body">
+            {error && (
+              <div role="alert" className="alert alert-error">
+                <AlertTriangleIcon size={18} />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {message && (
+              <div role="status" className="alert alert-success">
+                <CheckCircleIcon size={18} />
+                <span>{message}</span>
+              </div>
+            )}
+
+            <form className="auth-form" onSubmit={handleSubmit}>
+              <div className="form-group">
+                <label htmlFor="new-password">New password</label>
+                <input
+                  id="new-password"
+                  type="password"
+                  autoComplete="new-password"
+                  className="form-control"
+                  required
+                  minLength={6}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+                <p className="form-help">Minimum 6 characters required.</p>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="confirm-password">Confirm new password</label>
+                <input
+                  id="confirm-password"
+                  type="password"
+                  autoComplete="new-password"
+                  className="form-control"
+                  required
+                  minLength={6}
+                  value={confirmation}
+                  onChange={(event) => setConfirmation(event.target.value)}
+                />
+              </div>
+
+              <div className="auth-actions">
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={isSaving || !hasRecoverySession}
+                  style={{ width: "100%" }}
+                >
+                  {isSaving ? "Saving…" : "Save password"}
+                </button>
+              </div>
+            </form>
+
+            <div className="auth-footer-links">
+              <Link
+                href={asRoute("/sign-in")}
+                style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+              >
+                <ArrowLeftIcon size={14} />
+                <span>Return to sign in</span>
+              </Link>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
   );
 }

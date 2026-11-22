@@ -127,6 +127,24 @@ import { StatutoryQrCode } from "../components/StatutoryQrCode";
 import { Pft2ChallanDocument } from "../components/Pft2ChallanDocument";
 import { QrScannerModal } from "../components/QrScannerModal";
 import { RowActionMenu, type RowAction } from "../components/RowActionMenu";
+import {
+  BarChartIcon,
+  ClipboardListIcon,
+  CloseIcon,
+  CreditCardIcon,
+  ExternalLinkIcon,
+  FileTextIcon,
+  LandmarkIcon,
+  LogOutIcon,
+  ReceiptIcon,
+  ScaleIcon,
+  SearchIcon,
+  ShieldAlertIcon,
+  ShieldCheckIcon,
+  TargetIcon,
+  UserIcon,
+  UsersIcon
+} from "../components/ui/Icons";
 import { downloadOfficialPdf } from "../lib/pdf-export";
 import {
   exportPft2ChallansCsv,
@@ -563,11 +581,12 @@ function ColumnFilterPopover({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close column filter"
             style={{
               background: "transparent",
               border: "none",
               cursor: "pointer",
-              color: "#94a3b8",
+              color: "#475569",
               fontSize: "0.85rem",
               padding: "0.1rem 0.3rem",
               lineHeight: 1
@@ -582,10 +601,11 @@ function ColumnFilterPopover({
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
             <div>
               <label
+                htmlFor="ptas-portal-field-1"
                 style={{
                   display: "block",
                   fontSize: "0.7rem",
-                  color: "#64748b",
+                  color: "var(--color-text-muted)",
                   marginBottom: "0.2rem",
                   fontWeight: 500
                 }}
@@ -593,6 +613,7 @@ function ColumnFilterPopover({
                 Match Rule
               </label>
               <select
+                id="ptas-portal-field-1"
                 value={textMode}
                 onChange={(e) =>
                   setTextMode(e.target.value as "contains" | "startsWith" | "equals")
@@ -614,10 +635,11 @@ function ColumnFilterPopover({
             </div>
             <div>
               <label
+                htmlFor="ptas-portal-field-2"
                 style={{
                   display: "block",
                   fontSize: "0.7rem",
-                  color: "#64748b",
+                  color: "var(--color-text-muted)",
                   marginBottom: "0.2rem",
                   fontWeight: 500
                 }}
@@ -625,6 +647,7 @@ function ColumnFilterPopover({
                 Search Term
               </label>
               <input
+                id="ptas-portal-field-2"
                 autoFocus
                 type="text"
                 placeholder={`Search ${columnLabel}...`}
@@ -694,10 +717,11 @@ function ColumnFilterPopover({
           <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
             <div>
               <label
+                htmlFor="ptas-portal-field-3"
                 style={{
                   display: "block",
                   fontSize: "0.7rem",
-                  color: "#64748b",
+                  color: "var(--color-text-muted)",
                   marginBottom: "0.2rem",
                   fontWeight: 500
                 }}
@@ -705,6 +729,7 @@ function ColumnFilterPopover({
                 Condition
               </label>
               <select
+                id="ptas-portal-field-3"
                 value={numOp}
                 onChange={(e) => setNumOp(e.target.value)}
                 style={{
@@ -731,10 +756,11 @@ function ColumnFilterPopover({
             {numOp !== ">0" && numOp !== "=0" && (
               <div>
                 <label
+                  htmlFor="ptas-portal-field-4"
                   style={{
                     display: "block",
                     fontSize: "0.7rem",
-                    color: "#64748b",
+                    color: "var(--color-text-muted)",
                     marginBottom: "0.2rem",
                     fontWeight: 500
                   }}
@@ -742,6 +768,7 @@ function ColumnFilterPopover({
                   Amount (PKR)
                 </label>
                 <input
+                  id="ptas-portal-field-4"
                   autoFocus
                   type="number"
                   placeholder="Enter amount..."
@@ -764,7 +791,13 @@ function ColumnFilterPopover({
               </div>
             )}
             <div>
-              <div style={{ fontSize: "0.68rem", color: "#94a3b8", marginBottom: "0.25rem" }}>
+              <div
+                style={{
+                  fontSize: "0.68rem",
+                  color: "var(--color-text-muted)",
+                  marginBottom: "0.25rem"
+                }}
+              >
                 Quick presets:
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
@@ -879,10 +912,11 @@ function ColumnFilterPopover({
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
             <div>
               <label
+                htmlFor="ptas-portal-field-5"
                 style={{
                   display: "block",
                   fontSize: "0.7rem",
-                  color: "#64748b",
+                  color: "var(--color-text-muted)",
                   marginBottom: "0.2rem",
                   fontWeight: 500
                 }}
@@ -890,6 +924,7 @@ function ColumnFilterPopover({
                 Status
               </label>
               <select
+                id="ptas-portal-field-5"
                 value={statusVal}
                 onChange={(e) => setStatusVal(e.target.value)}
                 style={{
@@ -1502,6 +1537,142 @@ export default function HomePage({
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 5000);
   };
+
+  // Global Escape key close handler for all portal modals
+  useEffect(() => {
+    const hasOpenModal =
+      showAddUnitModal ||
+      showPaymentModal ||
+      showReturnModal ||
+      showCloseModal ||
+      showAuditTraceModal ||
+      Boolean(previewScanModalUrl) ||
+      showNoticeModal ||
+      showPenaltyModal ||
+      showRecoveryModal ||
+      showPft1NoticeModal ||
+      showBatchPft1Modal ||
+      showBatchPft2Modal ||
+      showDispatchRegisterModal ||
+      showRecordBatchServiceModal ||
+      showFileAppealModal ||
+      showScheduleHearingModal ||
+      showAdjudicateAppealModal ||
+      showAppellateOrderModal ||
+      showBulkSurveyModal ||
+      showAuthModal ||
+      showClearanceModal ||
+      showFileDiscontinuanceModal ||
+      showDiscontinuanceInspectionModal ||
+      showDiscontinuanceOrderModal ||
+      showRefundModal ||
+      showRefundOrderModal ||
+      showCitizenPaymentModal ||
+      showReceivePft2Modal ||
+      showIssuePft2Modal ||
+      showPrintChallanModal ||
+      showCancelPft2Modal ||
+      showReceiptDocumentModal ||
+      showPft2ExecutiveModal ||
+      showReceiptsExecutiveModal ||
+      showAddPotentialModal ||
+      showImportPotentialModal ||
+      showMigratePotentialModal;
+
+    if (!hasOpenModal) return;
+
+    const handleEscapeModal = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (showRecordBatchServiceModal) setShowRecordBatchServiceModal(false);
+      else if (showDispatchRegisterModal) setShowDispatchRegisterModal(false);
+      else if (showBatchPft2Modal) setShowBatchPft2Modal(false);
+      else if (showBatchPft1Modal) setShowBatchPft1Modal(false);
+      else if (showPft1NoticeModal) setShowPft1NoticeModal(false);
+      else if (showRecoveryModal) setShowRecoveryModal(false);
+      else if (showPenaltyModal) setShowPenaltyModal(false);
+      else if (showNoticeModal) setShowNoticeModal(false);
+      else if (previewScanModalUrl) setPreviewScanModalUrl(null);
+      else if (showAuditTraceModal) setShowAuditTraceModal(false);
+      else if (showCloseModal) setShowCloseModal(false);
+      else if (showReturnModal) setShowReturnModal(false);
+      else if (showPaymentModal) setShowPaymentModal(false);
+      else if (showAddUnitModal) {
+        setShowAddUnitModal(false);
+        setEditingUnitId(null);
+      } else if (showAppellateOrderModal) setShowAppellateOrderModal(false);
+      else if (showAdjudicateAppealModal) setShowAdjudicateAppealModal(false);
+      else if (showScheduleHearingModal) setShowScheduleHearingModal(false);
+      else if (showFileAppealModal) setShowFileAppealModal(false);
+      else if (showBulkSurveyModal) setShowBulkSurveyModal(false);
+      else if (showAuthModal) setShowAuthModal(false);
+      else if (showClearanceModal) setShowClearanceModal(false);
+      else if (showFileDiscontinuanceModal) setShowFileDiscontinuanceModal(false);
+      else if (showDiscontinuanceInspectionModal) setShowDiscontinuanceInspectionModal(false);
+      else if (showDiscontinuanceOrderModal) {
+        setShowDiscontinuanceOrderModal(false);
+        setActiveDiscontinuanceOrder(null);
+      } else if (showRefundModal) setShowRefundModal(false);
+      else if (showRefundOrderModal) {
+        setShowRefundOrderModal(false);
+        setActiveRefundOrder(null);
+      } else if (showCitizenPaymentModal) setShowCitizenPaymentModal(false);
+      else if (showReceivePft2Modal) setShowReceivePft2Modal(false);
+      else if (showIssuePft2Modal) setShowIssuePft2Modal(false);
+      else if (showPrintChallanModal) setShowPrintChallanModal(false);
+      else if (showCancelPft2Modal) setShowCancelPft2Modal(false);
+      else if (showReceiptDocumentModal) {
+        setShowReceiptDocumentModal(false);
+        setActiveReceiptRecord(null);
+      } else if (showPft2ExecutiveModal) setShowPft2ExecutiveModal(false);
+      else if (showReceiptsExecutiveModal) setShowReceiptsExecutiveModal(false);
+      else if (showAddPotentialModal) {
+        setShowAddPotentialModal(false);
+        setEditingPotentialUnitId(null);
+      } else if (showImportPotentialModal) setShowImportPotentialModal(false);
+      else if (showMigratePotentialModal) setShowMigratePotentialModal(false);
+    };
+
+    window.addEventListener("keydown", handleEscapeModal);
+    return () => window.removeEventListener("keydown", handleEscapeModal);
+  }, [
+    showAddUnitModal,
+    showPaymentModal,
+    showReturnModal,
+    showCloseModal,
+    showAuditTraceModal,
+    previewScanModalUrl,
+    showNoticeModal,
+    showPenaltyModal,
+    showRecoveryModal,
+    showPft1NoticeModal,
+    showBatchPft1Modal,
+    showBatchPft2Modal,
+    showDispatchRegisterModal,
+    showRecordBatchServiceModal,
+    showFileAppealModal,
+    showScheduleHearingModal,
+    showAdjudicateAppealModal,
+    showAppellateOrderModal,
+    showBulkSurveyModal,
+    showAuthModal,
+    showClearanceModal,
+    showFileDiscontinuanceModal,
+    showDiscontinuanceInspectionModal,
+    showDiscontinuanceOrderModal,
+    showRefundModal,
+    showRefundOrderModal,
+    showCitizenPaymentModal,
+    showReceivePft2Modal,
+    showIssuePft2Modal,
+    showPrintChallanModal,
+    showCancelPft2Modal,
+    showReceiptDocumentModal,
+    showPft2ExecutiveModal,
+    showReceiptsExecutiveModal,
+    showAddPotentialModal,
+    showImportPotentialModal,
+    showMigratePotentialModal
+  ]);
 
   const refreshOperationalSurveyUnits = async () => {
     setIsLoadingOperationalUnits(true);
@@ -7110,189 +7281,122 @@ export default function HomePage({
   if (authStatus !== "AUTHENTICATED") {
     return (
       <main
+        id="main-content"
+        tabIndex={-1}
         aria-live="polite"
-        style={{
-          minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-          background: "#f8fafc",
-          color: "#334155"
-        }}
+        className="auth-shell"
+        style={{ color: "var(--color-text-secondary)" }}
       >
         <p>{authStatus === "CHECKING" ? "Verifying secure PTAS session…" : "Redirecting…"}</p>
       </main>
     );
   }
 
+  const roleBadgeClass =
+    officer.role === "INSPECTOR"
+      ? "role-pill--inspector"
+      : officer.role === "ETO"
+        ? "role-pill--eto"
+        : officer.role === "DIRECTOR"
+          ? "role-pill--director"
+          : "role-pill--admin";
+
+  const roleDisplayLabel =
+    officer.role === "INSPECTOR"
+      ? "ETI"
+      : officer.role === "ETO"
+        ? "ETO"
+        : officer.role === "DIRECTOR"
+          ? "Director"
+          : "Admin";
+
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      <a href="#main-content" className="skip-link no-print">
+        Skip to main content
+      </a>
+
       {/* Toast Notification */}
       {notification && (
         <div
-          style={{
-            position: "fixed",
-            top: "1.5rem",
-            right: "1.5rem",
-            zIndex: 100,
-            background:
-              notification.type === "success"
-                ? "#14532d"
-                : notification.type === "error"
-                  ? "#991b1b"
-                  : "#0369a1",
-            color: "#ffffff",
-            padding: "0.85rem 1.25rem",
-            borderRadius: "8px",
-            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.2)",
-            fontWeight: 600,
-            fontSize: "0.875rem",
-            maxWidth: "28rem"
-          }}
+          role="status"
+          aria-live="polite"
+          className={`toast-banner toast-banner--${notification.type}`}
         >
-          {notification.message}
+          <span>{notification.message}</span>
         </div>
       )}
 
       {/* Official Gov Header */}
-      <header className="gov-header">
+      <header className="gov-header no-print">
         <div className="gov-header-inner">
           <div className="gov-title-group">
-            <div className="gov-crest">🏛️</div>
+            <div className="gov-crest" aria-hidden="true">
+              <LandmarkIcon size={20} />
+            </div>
             <div className="gov-titles">
               <h1>Government of the Punjab — Professional Tax Administration (PTAS)</h1>
               <p className="gov-subtitle">Excise, Taxation &amp; Narcotics Control Department</p>
             </div>
           </div>
 
-          {/* Immersed Single-Line Officer Identity & Sign Out */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.85rem",
-              flexShrink: 0,
-              whiteSpace: "nowrap"
-            }}
-          >
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                color: "#ffffff",
-                fontSize: "0.84rem"
-              }}
-            >
-              <span
-                style={{
-                  width: "28px",
-                  height: "28px",
-                  borderRadius: "50%",
-                  background: "rgba(255, 255, 255, 0.18)",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "0.95rem"
-                }}
-              >
-                {officer.role === "INSPECTOR"
-                  ? "👤"
-                  : officer.role === "ETO"
-                    ? "⚖️"
-                    : officer.role === "DIRECTOR"
-                      ? "📊"
-                      : "🛡️"}
+          <div className="gov-officer-controls">
+            <div className="officer-identity">
+              <span className="officer-badge-avatar" aria-hidden="true">
+                {officer.role === "INSPECTOR" ? (
+                  <UserIcon size={15} />
+                ) : officer.role === "ETO" ? (
+                  <ScaleIcon size={15} />
+                ) : officer.role === "DIRECTOR" ? (
+                  <BarChartIcon size={15} />
+                ) : (
+                  <ShieldCheckIcon size={15} />
+                )}
               </span>
 
-              <span style={{ fontWeight: 700, color: "#ffffff" }}>{officer.name}</span>
+              <span className="officer-name">{officer.name}</span>
 
-              <span
-                style={{
-                  background:
-                    officer.role === "INSPECTOR"
-                      ? "#0284c7"
-                      : officer.role === "ETO"
-                        ? "#d97706"
-                        : officer.role === "DIRECTOR"
-                          ? "#7e22ce"
-                          : "#059669",
-                  color: "#ffffff",
-                  padding: "0.15rem 0.5rem",
-                  borderRadius: "4px",
-                  fontSize: "0.72rem",
-                  fontWeight: 800,
-                  letterSpacing: "0.04em"
-                }}
-              >
-                {officer.role === "INSPECTOR"
-                  ? "ETI"
-                  : officer.role === "ETO"
-                    ? "ETO"
-                    : officer.role === "DIRECTOR"
-                      ? "Director"
-                      : "Admin"}
-              </span>
+              <span className={`role-pill ${roleBadgeClass}`}>{roleDisplayLabel}</span>
 
-              <span style={{ color: "#d1fae5", fontSize: "0.78rem" }}>
-                &bull; Jurisdiction:{" "}
-                <strong style={{ color: "#ffffff" }}>{officer.jurisdictionName}</strong>
+              <span className="officer-jurisdiction">
+                &bull; Jurisdiction: <strong>{officer.jurisdictionName}</strong>
                 {officer.jurisdictionTier ? ` (${officer.jurisdictionTier})` : ""}
               </span>
 
               {officer.role === "ADMIN" && (
-                <span
-                  style={{
-                    background: "rgba(16, 185, 129, 0.25)",
-                    color: "#a7f3d0",
-                    border: "1px solid rgba(167, 243, 208, 0.4)",
-                    padding: "0.1rem 0.4rem",
-                    borderRadius: "4px",
-                    fontSize: "0.65rem",
-                    fontWeight: 600
-                  }}
-                >
-                  🟢 {authenticatedSessionType === "CLOUD" ? "Cloud" : "Session"}
+                <span className="session-mode-pill">
+                  <span className="session-dot" aria-hidden="true" />
+                  <span>{authenticatedSessionType === "CLOUD" ? "Cloud" : "Session"}</span>
                 </span>
               )}
             </div>
 
-            {/* Immersed Compact Sign Out */}
             <button
               type="button"
               onClick={handleOfficerSignOut}
-              className="btn-secondary btn-sm"
-              style={{
-                color: "#fecaca",
-                backgroundColor: "rgba(220, 38, 38, 0.25)",
-                borderColor: "rgba(248, 113, 113, 0.4)",
-                fontWeight: 600,
-                fontSize: "0.75rem",
-                padding: "0.3rem 0.65rem",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.3rem",
-                cursor: "pointer",
-                borderRadius: "5px"
-              }}
+              className="btn-signout"
               title="Sign out of current officer session"
             >
-              🚪 Sign Out
+              <LogOutIcon size={14} />
+              <span>Sign Out</span>
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Page Body */}
-      <main className="page-shell">
+      <main id="main-content" tabIndex={-1} className="page-shell">
         {/* Tier 1: Unified Route Hubs Navigation */}
-        <nav className="route-hubs-bar" aria-label="Unified Operational Routes">
+        <nav className="route-hubs-bar no-print" aria-label="Unified Operational Routes">
           <Link
             href={asRoute("/demand")}
             className={`route-hub-card ${activeRouteHub === "demand" ? "active" : ""}`}
+            aria-current={activeRouteHub === "demand" ? "true" : undefined}
             title="Demand Desk Hub (/demand)"
-            style={{ textDecoration: "none" }}
           >
-            <span className="route-hub-icon">📋</span>
+            <span className="route-hub-icon" aria-hidden="true">
+              <ClipboardListIcon size={18} />
+            </span>
             <div className="route-hub-content">
               <div className="route-hub-title-row">
                 <span className="route-hub-title">Demand Desk</span>
@@ -7305,10 +7409,12 @@ export default function HomePage({
           <Link
             href="/assessment"
             className={`route-hub-card ${activeRouteHub === "assessment" ? "active" : ""}`}
+            aria-current={activeRouteHub === "assessment" ? "true" : undefined}
             title="Assessment & Field Desk Hub (/assessment)"
-            style={{ textDecoration: "none" }}
           >
-            <span className="route-hub-icon">🏛️</span>
+            <span className="route-hub-icon" aria-hidden="true">
+              <LandmarkIcon size={18} />
+            </span>
             <div className="route-hub-content">
               <div className="route-hub-title-row">
                 <span className="route-hub-title">Assessment &amp; Field Desk</span>
@@ -7323,10 +7429,12 @@ export default function HomePage({
           <Link
             href="/enforcement"
             className={`route-hub-card ${activeRouteHub === "enforcement" ? "active" : ""}`}
+            aria-current={activeRouteHub === "enforcement" ? "true" : undefined}
             title="Compliance & Recovery Hub (/enforcement)"
-            style={{ textDecoration: "none" }}
           >
-            <span className="route-hub-icon">🚨</span>
+            <span className="route-hub-icon" aria-hidden="true">
+              <ShieldAlertIcon size={18} />
+            </span>
             <div className="route-hub-content">
               <div className="route-hub-title-row">
                 <span className="route-hub-title">Compliance &amp; Recovery</span>
@@ -7343,10 +7451,12 @@ export default function HomePage({
           <Link
             href="/revenue"
             className={`route-hub-card ${activeRouteHub === "revenue" ? "active" : ""}`}
+            aria-current={activeRouteHub === "revenue" ? "true" : undefined}
             title="Revenue & Collections Desk Hub (/revenue)"
-            style={{ textDecoration: "none" }}
           >
-            <span className="route-hub-icon">💳</span>
+            <span className="route-hub-icon" aria-hidden="true">
+              <CreditCardIcon size={18} />
+            </span>
             <div className="route-hub-content">
               <div className="route-hub-title-row">
                 <span className="route-hub-title">Revenue &amp; Collections Desk</span>
@@ -7358,10 +7468,12 @@ export default function HomePage({
           <Link
             href="/intelligence"
             className={`route-hub-card ${activeRouteHub === "intelligence" ? "active" : ""}`}
+            aria-current={activeRouteHub === "intelligence" ? "true" : undefined}
             title="Intelligence & Governance Hub (/intelligence)"
-            style={{ textDecoration: "none" }}
           >
-            <span className="route-hub-icon">📊</span>
+            <span className="route-hub-icon" aria-hidden="true">
+              <BarChartIcon size={18} />
+            </span>
             <div className="route-hub-content">
               <div className="route-hub-title-row">
                 <span className="route-hub-title">Intelligence &amp; Governance</span>
@@ -7373,10 +7485,12 @@ export default function HomePage({
           <Link
             href="/admin/user-management"
             className={`route-hub-card ${activeRouteHub === "admin" ? "active" : ""}`}
+            aria-current={activeRouteHub === "admin" ? "true" : undefined}
             title="Administration & Access Desk (/admin/user-management)"
-            style={{ textDecoration: "none" }}
           >
-            <span className="route-hub-icon">👥</span>
+            <span className="route-hub-icon" aria-hidden="true">
+              <UsersIcon size={18} />
+            </span>
             <div className="route-hub-content">
               <div className="route-hub-title-row">
                 <span className="route-hub-title">Administration &amp; Access</span>
@@ -7386,45 +7500,54 @@ export default function HomePage({
           </Link>
         </nav>
 
-        {/* Tier 2: Contextual Sub-Tab Navigation Bar */}
-        <div className="subtabs-nav" role="tablist" aria-label="Route Contextual Sub-Tabs">
+        {/* Tier 2: Contextual Sub-Navigation Bar */}
+        <nav className="subtabs-nav no-print" aria-label="Section navigation">
           {activeRouteHub === "demand" && (
             <>
               <Link
                 href={asRoute("/demand/potential")}
                 className={`subtab-btn ${pathname === "/demand/potential" || activeTab === "REGISTER_POTENTIAL" ? "active" : ""}`}
-                style={{ textDecoration: "none" }}
+                aria-current={
+                  pathname === "/demand/potential" || activeTab === "REGISTER_POTENTIAL"
+                    ? "page"
+                    : undefined
+                }
               >
-                🎯 Potential Register ({potentialUnits.filter((u) => u.status === "ACTIVE").length})
+                <TargetIcon size={15} />
+                <span>
+                  Potential Register ({potentialUnits.filter((u) => u.status === "ACTIVE").length})
+                </span>
               </Link>
               <Link
                 href={asRoute("/demand/pft3")}
                 className={`subtab-btn ${pathname === "/demand/pft3" || pathname === "/demand" || pathname === "/" || activeTab === "REGISTER_PFT3" ? "active" : ""}`}
-                style={{ textDecoration: "none" }}
+                aria-current={
+                  pathname === "/demand/pft3" ||
+                  pathname === "/demand" ||
+                  pathname === "/" ||
+                  activeTab === "REGISTER_PFT3"
+                    ? "page"
+                    : undefined
+                }
               >
-                📋 Form P.F.T-3 Assessment Register ({formPFT3Rows.length})
+                <ClipboardListIcon size={15} />
+                <span>Form P.F.T-3 Assessment Register ({formPFT3Rows.length})</span>
               </Link>
             </>
           )}
 
           {activeRouteHub === "assessment" && (
             <>
-              <Link
-                href={asRoute("/assessment")}
-                className="subtab-btn active"
-                style={{ textDecoration: "none" }}
-              >
-                ⚖️ Assessment &amp; Survey Queue ({surveyPendingUnits.length})
+              <Link href={asRoute("/assessment")} className="subtab-btn active" aria-current="page">
+                <ScaleIcon size={15} />
+                <span>Assessment &amp; Survey Queue ({surveyPendingUnits.length})</span>
                 {metrics.pendingApprovals > 0 && (
                   <span className="subtab-badge">{metrics.pendingApprovals} Pending</span>
                 )}
               </Link>
-              <Link
-                href={asRoute("/demand/pft3")}
-                className="subtab-btn"
-                style={{ textDecoration: "none" }}
-              >
-                📋 Form P.F.T-3 Register ({formPFT3Rows.length}) ↗
+              <Link href={asRoute("/demand/pft3")} className="subtab-btn">
+                <ClipboardListIcon size={15} />
+                <span>Form P.F.T-3 Register ({formPFT3Rows.length})</span>
               </Link>
             </>
           )}
@@ -7434,9 +7557,12 @@ export default function HomePage({
               <Link
                 href={asRoute("/enforcement")}
                 className={`subtab-btn ${pathname === "/enforcement" || activeTab === "DEFAULTERS" ? "active" : ""}`}
-                style={{ textDecoration: "none" }}
+                aria-current={
+                  pathname === "/enforcement" || activeTab === "DEFAULTERS" ? "page" : undefined
+                }
               >
-                ⚠️ Defaulter &amp; Arrears Roll
+                <ShieldAlertIcon size={15} />
+                <span>Defaulter &amp; Arrears Roll</span>
                 {metrics.defaultersPenaltyEligible + metrics.defaultersOverdue > 0 && (
                   <span className="subtab-badge">
                     {metrics.defaultersPenaltyEligible + metrics.defaultersOverdue}
@@ -7446,9 +7572,14 @@ export default function HomePage({
               <Link
                 href={asRoute("/enforcement/appeals")}
                 className={`subtab-btn ${pathname === "/enforcement/appeals" || activeTab === "APPEALS" ? "active" : ""}`}
-                style={{ textDecoration: "none" }}
+                aria-current={
+                  pathname === "/enforcement/appeals" || activeTab === "APPEALS"
+                    ? "page"
+                    : undefined
+                }
               >
-                ⚖️ Appellate Tribunal Desk
+                <ScaleIcon size={15} />
+                <span>Appellate Tribunal Desk</span>
                 {appeals.filter((a) => a.status === "FILED" || a.status === "HEARING_SCHEDULED")
                   .length > 0 && (
                   <span className="subtab-badge">
@@ -7463,9 +7594,14 @@ export default function HomePage({
               <Link
                 href={asRoute("/enforcement/adjustments")}
                 className={`subtab-btn ${pathname === "/enforcement/adjustments" || activeTab === "RELIEF_DESK" ? "active" : ""}`}
-                style={{ textDecoration: "none" }}
+                aria-current={
+                  pathname === "/enforcement/adjustments" || activeTab === "RELIEF_DESK"
+                    ? "page"
+                    : undefined
+                }
               >
-                🛑 Discontinuance &amp; Refunds
+                <FileTextIcon size={15} />
+                <span>Discontinuance &amp; Refunds</span>
                 {discontinuances.filter(
                   (d) => d.status === "PENDING_INSPECTION" || d.status === "INSPECTED"
                 ).length > 0 && (
@@ -7481,14 +7617,16 @@ export default function HomePage({
               <Link
                 href={asRoute("/enforcement/clearance")}
                 className={`subtab-btn ${pathname === "/enforcement/clearance" || activeTab === "CLEARANCE" ? "active" : ""}`}
-                style={{ textDecoration: "none" }}
+                aria-current={
+                  pathname === "/enforcement/clearance" || activeTab === "CLEARANCE"
+                    ? "page"
+                    : undefined
+                }
               >
-                📜 Tax Clearance Certificates
+                <ShieldCheckIcon size={15} />
+                <span>Tax Clearance Certificates</span>
                 {clearanceCertificates.length > 0 && (
-                  <span
-                    className="subtab-badge"
-                    style={{ background: "#dcfce7", color: "#166534" }}
-                  >
+                  <span className="subtab-badge subtab-badge--success">
                     {clearanceCertificates.length}
                   </span>
                 )}
@@ -7498,10 +7636,11 @@ export default function HomePage({
                 target="_blank"
                 rel="noopener noreferrer"
                 className="subtab-btn"
-                style={{ textDecoration: "none" }}
                 title="Open Land Revenue Recovery (Rule 12) Certificate Desk (/documents/land-revenue-recovery)"
               >
-                🏛️ Land Revenue Recovery (Rule 12) ↗
+                <LandmarkIcon size={15} />
+                <span>Land Revenue Recovery (Rule 12)</span>
+                <ExternalLinkIcon size={13} />
               </Link>
             </>
           )}
@@ -7519,23 +7658,38 @@ export default function HomePage({
                     ? "active"
                     : ""
                 }`}
-                style={{ textDecoration: "none" }}
+                aria-current={
+                  pathname === "/revenue" ||
+                  pathname === "/revenue/challans" ||
+                  pathname === "/revenue/potential-challans" ||
+                  activeTab === "PFT2" ||
+                  activeTab === "POTENTIAL_PFT2"
+                    ? "page"
+                    : undefined
+                }
               >
-                📑 Form PFT-2 Challans Desk ({pft2Challans.length})
+                <FileTextIcon size={15} />
+                <span>Form PFT-2 Challans Desk ({pft2Challans.length})</span>
               </Link>
               <Link
                 href={asRoute("/revenue/receipts")}
                 className={`subtab-btn ${pathname === "/revenue/receipts" || activeTab === "RECEIPTS" ? "active" : ""}`}
-                style={{ textDecoration: "none" }}
+                aria-current={
+                  pathname === "/revenue/receipts" || activeTab === "RECEIPTS" ? "page" : undefined
+                }
               >
-                🧾 Receipts &amp; Collections ({statutoryReceipts.length})
+                <ReceiptIcon size={15} />
+                <span>Receipts &amp; Collections ({statutoryReceipts.length})</span>
               </Link>
               <Link
                 href={asRoute("/revenue/epay")}
                 className={`subtab-btn ${pathname === "/revenue/epay" || activeTab === "EPAY" ? "active" : ""}`}
-                style={{ textDecoration: "none" }}
+                aria-current={
+                  pathname === "/revenue/epay" || activeTab === "EPAY" ? "page" : undefined
+                }
               >
-                💳 ePay Punjab Reconciliation
+                <CreditCardIcon size={15} />
+                <span>ePay Punjab Reconciliation</span>
               </Link>
             </>
           )}
@@ -7545,33 +7699,49 @@ export default function HomePage({
               <Link
                 href={asRoute("/intelligence")}
                 className={`subtab-btn ${pathname === "/intelligence" || activeTab === "ANALYTICS" || activeTab === "MIS_HUB" ? "active" : ""}`}
-                style={{ textDecoration: "none" }}
+                aria-current={
+                  pathname === "/intelligence" ||
+                  activeTab === "ANALYTICS" ||
+                  activeTab === "MIS_HUB"
+                    ? "page"
+                    : undefined
+                }
               >
-                📊 Analytics Dashboard
+                <BarChartIcon size={15} />
+                <span>Analytics Dashboard</span>
               </Link>
               <Link
                 href={asRoute("/intelligence/reports")}
                 className={`subtab-btn ${pathname === "/intelligence/reports" || activeTab === "REPORTS" ? "active" : ""}`}
-                style={{ textDecoration: "none" }}
+                aria-current={
+                  pathname === "/intelligence/reports" || activeTab === "REPORTS"
+                    ? "page"
+                    : undefined
+                }
               >
-                📑 Statutory Gazette &amp; Reports
+                <FileTextIcon size={15} />
+                <span>Statutory Gazette &amp; Reports</span>
               </Link>
               <Link
                 href={asRoute("/intelligence/statutory-category-yield")}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="subtab-btn"
-                style={{ textDecoration: "none" }}
                 title="Open Statutory Category Yield & Slabs Analysis (/intelligence/statutory-category-yield)"
               >
-                📈 Statutory Category Yield &amp; Slabs ↗
+                <BarChartIcon size={15} />
+                <span>Statutory Category Yield &amp; Slabs</span>
+                <ExternalLinkIcon size={13} />
               </Link>
               <Link
                 href={asRoute("/intelligence/audit")}
                 className={`subtab-btn ${pathname === "/intelligence/audit" || activeTab === "AUDIT" ? "active" : ""}`}
-                style={{ textDecoration: "none" }}
+                aria-current={
+                  pathname === "/intelligence/audit" || activeTab === "AUDIT" ? "page" : undefined
+                }
               >
-                🛡️ Immutable Audit Log ({auditLogs.length})
+                <ShieldCheckIcon size={15} />
+                <span>Immutable Audit Log ({auditLogs.length})</span>
               </Link>
             </>
           )}
@@ -7581,23 +7751,25 @@ export default function HomePage({
               <Link
                 href={asRoute("/admin/user-management")}
                 className="subtab-btn active"
-                style={{ textDecoration: "none" }}
+                aria-current="page"
               >
-                👥 User Management Desk
+                <UsersIcon size={15} />
+                <span>User Management Desk</span>
               </Link>
               <Link
                 href={asRoute("/verify")}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="subtab-btn"
-                style={{ textDecoration: "none" }}
                 title="Open Public Citizen Document Verification Portal (/verify)"
               >
-                🔍 Public Citizen Verification Portal ↗
+                <SearchIcon size={15} />
+                <span>Public Citizen Verification Portal</span>
+                <ExternalLinkIcon size={13} />
               </Link>
             </>
           )}
-        </div>
+        </nav>
 
         {/* STATUTORY ASSESSMENT & FIELD SURVEY QUEUE (CONSOLIDATED) */}
         {(activeTab === "ASSESSMENTS" || activeTab === "UNITS") && (
@@ -8002,7 +8174,7 @@ export default function HomePage({
               <table className="gov-table" style={{ width: "100%" }}>
                 <thead>
                   <tr>
-                    <th style={{ width: "2.5rem", textAlign: "center" }}>
+                    <th scope="col" style={{ width: "2.5rem", textAlign: "center" }}>
                       <input
                         type="checkbox"
                         checked={
@@ -8021,14 +8193,22 @@ export default function HomePage({
                         aria-label="Select all units"
                       />
                     </th>
-                    <th className="cell-wrap-text">Taxpayer Unit</th>
-                    <th className="cell-fit">Financial Year</th>
-                    <th className="cell-wrap-text">Statutory Rule &amp; Slab</th>
-                    <th className="cell-currency">Tax Amount</th>
-                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                    <th scope="col" className="cell-wrap-text">
+                      Taxpayer Unit
+                    </th>
+                    <th scope="col" className="cell-fit">
+                      Financial Year
+                    </th>
+                    <th scope="col" className="cell-wrap-text">
+                      Statutory Rule &amp; Slab
+                    </th>
+                    <th scope="col" className="cell-currency">
+                      Tax Amount
+                    </th>
+                    <th scope="col" className="cell-fit" style={{ textAlign: "center" }}>
                       Workflow Status
                     </th>
-                    <th className="col-actions" style={{ textAlign: "right" }}>
+                    <th scope="col" className="col-actions" style={{ textAlign: "right" }}>
                       Statutory Action
                     </th>
                   </tr>
@@ -8053,7 +8233,11 @@ export default function HomePage({
                     <tr>
                       <td
                         colSpan={7}
-                        style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
+                        style={{
+                          textAlign: "center",
+                          padding: "2.5rem",
+                          color: "var(--color-text-muted)"
+                        }}
                       >
                         No assessment units match the selected filters or search query in this
                         jurisdiction.
@@ -8099,7 +8283,7 @@ export default function HomePage({
                               style={{
                                 display: "block",
                                 fontSize: "0.75rem",
-                                color: "#64748b",
+                                color: "var(--color-text-muted)",
                                 marginTop: "0.15rem"
                               }}
                             >
@@ -8116,7 +8300,11 @@ export default function HomePage({
                                 : ""}
                             </span>
                             <span
-                              style={{ display: "block", fontSize: "0.75rem", color: "#94a3b8" }}
+                              style={{
+                                display: "block",
+                                fontSize: "0.75rem",
+                                color: "var(--color-text-muted)"
+                              }}
                             >
                               📍 {u.address} &bull; {u.circleName || "Circle-Vehari"}
                             </span>
@@ -8132,7 +8320,7 @@ export default function HomePage({
                               style={{
                                 display: "block",
                                 fontSize: "0.75rem",
-                                color: "#64748b",
+                                color: "var(--color-text-muted)",
                                 marginTop: "0.15rem",
                                 lineHeight: 1.25
                               }}
@@ -8445,6 +8633,7 @@ export default function HomePage({
             >
               <div>
                 <label
+                  htmlFor="ptas-portal-field-6"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -8456,6 +8645,7 @@ export default function HomePage({
                   Search Assessee / PIN / Potential No.
                 </label>
                 <input
+                  id="ptas-portal-field-6"
                   type="text"
                   placeholder="e.g. 1, 320, PIN, Trade Name..."
                   value={potentialSearchQuery}
@@ -8475,6 +8665,7 @@ export default function HomePage({
 
               <div>
                 <label
+                  htmlFor="ptas-portal-field-7"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -8486,6 +8677,7 @@ export default function HomePage({
                   District
                 </label>
                 <select
+                  id="ptas-portal-field-7"
                   value={potentialDistrictFilter}
                   onChange={(e) => {
                     setPotentialDistrictFilter(e.target.value);
@@ -8506,6 +8698,7 @@ export default function HomePage({
 
               <div>
                 <label
+                  htmlFor="ptas-portal-field-8"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -8517,6 +8710,7 @@ export default function HomePage({
                   Circle
                 </label>
                 <select
+                  id="ptas-portal-field-8"
                   value={potentialCircleFilter}
                   onChange={(e) => {
                     setPotentialCircleFilter(e.target.value);
@@ -8539,6 +8733,7 @@ export default function HomePage({
 
               <div>
                 <label
+                  htmlFor="ptas-portal-field-9"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -8550,6 +8745,7 @@ export default function HomePage({
                   Locality
                 </label>
                 <select
+                  id="ptas-portal-field-9"
                   value={potentialLocalityFilter}
                   onChange={(e) => {
                     setPotentialLocalityFilter(e.target.value);
@@ -8576,6 +8772,7 @@ export default function HomePage({
 
               <div>
                 <label
+                  htmlFor="ptas-portal-field-10"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -8587,6 +8784,7 @@ export default function HomePage({
                   Sub-Class
                 </label>
                 <select
+                  id="ptas-portal-field-10"
                   aria-label="Filter by Sub-Class"
                   value={potentialSubclassFilter}
                   onChange={(e) => {
@@ -8628,6 +8826,7 @@ export default function HomePage({
                 <thead>
                   <tr>
                     <th
+                      scope="col"
                       className="cell-fit"
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Potential No."
@@ -8715,6 +8914,7 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
+                      scope="col"
                       className="cell-fit"
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by PIN"
@@ -8794,6 +8994,7 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
+                      scope="col"
                       className="cell-wrap-text"
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Profession/Trade Name"
@@ -8875,6 +9076,7 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
+                      scope="col"
                       className="cell-fit"
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Identifier"
@@ -8962,6 +9164,7 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
+                      scope="col"
                       className="cell-wrap-text"
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Location & Locality"
@@ -9043,6 +9246,7 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
+                      scope="col"
                       className="cell-wrap-text"
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Classification"
@@ -9126,6 +9330,7 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
+                      scope="col"
                       className="cell-currency"
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Annual Rate"
@@ -9212,6 +9417,7 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
+                      scope="col"
                       className="cell-currency"
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Arrears"
@@ -9296,6 +9502,7 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
+                      scope="col"
                       className="cell-currency"
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Total Demand"
@@ -9376,6 +9583,7 @@ export default function HomePage({
                       </div>
                     </th>
                     <th
+                      scope="col"
                       className="cell-fit"
                       style={{ cursor: "pointer", userSelect: "none" }}
                       title="Click to sort by Pipeline Status"
@@ -9454,7 +9662,7 @@ export default function HomePage({
                         )}
                       </div>
                     </th>
-                    <th className="col-actions" style={{ textAlign: "right" }}>
+                    <th scope="col" className="col-actions" style={{ textAlign: "right" }}>
                       Actions
                     </th>
                   </tr>
@@ -9464,7 +9672,11 @@ export default function HomePage({
                     <tr>
                       <td
                         colSpan={11}
-                        style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
+                        style={{
+                          textAlign: "center",
+                          padding: "2.5rem",
+                          color: "var(--color-text-muted)"
+                        }}
                       >
                         No prospective units found matching filter criteria. Click &quot;Add
                         Potential Unit&quot; or &quot;Import CSV&quot; to populate.
@@ -9518,7 +9730,7 @@ export default function HomePage({
                         </td>
                         <td className="cell-wrap-text">
                           <div style={{ fontSize: "0.8125rem", color: "#1e293b" }}>{u.address}</div>
-                          <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                          <div style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
                             {u.locality} &bull; {u.circleName || "Circle-Vehari"}
                           </div>
                         </td>
@@ -9573,7 +9785,7 @@ export default function HomePage({
                   padding: "0.5rem 0"
                 }}
               >
-                <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                <div style={{ fontSize: "0.8rem", color: "var(--color-text-muted)" }}>
                   Showing {(potentialCurrentPage - 1) * POTENTIAL_PAGE_SIZE + 1} to{" "}
                   {Math.min(
                     potentialCurrentPage * POTENTIAL_PAGE_SIZE,
@@ -9863,6 +10075,7 @@ export default function HomePage({
             >
               <div>
                 <label
+                  htmlFor="ptas-portal-field-11"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -9874,6 +10087,7 @@ export default function HomePage({
                   Multi-Field Search:
                 </label>
                 <input
+                  id="ptas-portal-field-11"
                   type="text"
                   placeholder="Demand #, PIN, Name, Class..."
                   className="form-control"
@@ -9893,6 +10107,7 @@ export default function HomePage({
 
               <div>
                 <label
+                  htmlFor="ptas-portal-field-12"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -9904,6 +10119,7 @@ export default function HomePage({
                   District:
                 </label>
                 <select
+                  id="ptas-portal-field-12"
                   aria-label="Filter by District"
                   className="form-control"
                   style={{ width: "100%", fontSize: "0.85rem" }}
@@ -9924,6 +10140,7 @@ export default function HomePage({
 
               <div>
                 <label
+                  htmlFor="ptas-portal-field-13"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -9935,6 +10152,7 @@ export default function HomePage({
                   Circle:
                 </label>
                 <select
+                  id="ptas-portal-field-13"
                   aria-label="Filter by Circle"
                   className="form-control"
                   style={{ width: "100%", fontSize: "0.85rem" }}
@@ -9955,6 +10173,7 @@ export default function HomePage({
 
               <div>
                 <label
+                  htmlFor="ptas-portal-field-14"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -9966,6 +10185,7 @@ export default function HomePage({
                   Locality:
                 </label>
                 <select
+                  id="ptas-portal-field-14"
                   aria-label="Filter by Locality"
                   className="form-control"
                   style={{ width: "100%", fontSize: "0.85rem" }}
@@ -9986,6 +10206,7 @@ export default function HomePage({
 
               <div>
                 <label
+                  htmlFor="ptas-portal-field-15"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -9997,6 +10218,7 @@ export default function HomePage({
                   Statutory Classification:
                 </label>
                 <select
+                  id="ptas-portal-field-15"
                   aria-label="Filter by Statutory Classification"
                   className="form-control"
                   style={{ width: "100%", fontSize: "0.85rem" }}
@@ -10017,6 +10239,7 @@ export default function HomePage({
 
               <div>
                 <label
+                  htmlFor="ptas-portal-field-16"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -10028,6 +10251,7 @@ export default function HomePage({
                   Sub-Class:
                 </label>
                 <select
+                  id="ptas-portal-field-16"
                   aria-label="Filter by Sub-Class"
                   className="form-control"
                   style={{ width: "100%", fontSize: "0.85rem" }}
@@ -10047,7 +10271,7 @@ export default function HomePage({
               </div>
 
               <div>
-                <label
+                <span
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -10058,7 +10282,7 @@ export default function HomePage({
                   }}
                 >
                   Actions
-                </label>
+                </span>
                 <div style={{ display: "flex", gap: "0.5rem" }}>
                   <button
                     type="button"
@@ -10125,7 +10349,7 @@ export default function HomePage({
                 <p
                   style={{
                     fontSize: "0.85rem",
-                    color: "#64748b",
+                    color: "var(--color-text-muted)",
                     maxWidth: "34rem",
                     margin: "0 auto 1.25rem"
                   }}
@@ -10150,6 +10374,7 @@ export default function HomePage({
                   <thead>
                     <tr>
                       <th
+                        scope="col"
                         className="cell-fit"
                         style={{ userSelect: "none" }}
                         title="Click to sort by Demand No."
@@ -10241,6 +10466,7 @@ export default function HomePage({
                         </div>
                       </th>
                       <th
+                        scope="col"
                         className="cell-fit"
                         style={{ userSelect: "none" }}
                         title="Click to sort by PIN"
@@ -10326,6 +10552,7 @@ export default function HomePage({
                         </div>
                       </th>
                       <th
+                        scope="col"
                         className="cell-wrap-text"
                         style={{ userSelect: "none" }}
                         title="Click to sort by Profession/Trade Name"
@@ -10411,6 +10638,7 @@ export default function HomePage({
                         </div>
                       </th>
                       <th
+                        scope="col"
                         className="cell-wrap-text"
                         style={{ userSelect: "none" }}
                         title="Click to sort by Statutory Class"
@@ -10496,6 +10724,7 @@ export default function HomePage({
                         </div>
                       </th>
                       <th
+                        scope="col"
                         className="cell-currency"
                         style={{ userSelect: "none" }}
                         title="Click to sort by Assessed Tax"
@@ -10591,6 +10820,7 @@ export default function HomePage({
                         </div>
                       </th>
                       <th
+                        scope="col"
                         className="cell-currency"
                         style={{ userSelect: "none" }}
                         title="Click to sort by Arrears"
@@ -10677,6 +10907,7 @@ export default function HomePage({
                         </div>
                       </th>
                       <th
+                        scope="col"
                         className="cell-currency"
                         style={{ userSelect: "none" }}
                         title="Click to sort by Total Demand"
@@ -10763,6 +10994,7 @@ export default function HomePage({
                         </div>
                       </th>
                       <th
+                        scope="col"
                         className="cell-currency"
                         style={{ userSelect: "none" }}
                         title="Click to sort by Paid Amount"
@@ -10849,6 +11081,7 @@ export default function HomePage({
                         </div>
                       </th>
                       <th
+                        scope="col"
                         className="cell-currency"
                         style={{ userSelect: "none" }}
                         title="Click to sort by Balance"
@@ -10943,7 +11176,7 @@ export default function HomePage({
                           )}
                         </div>
                       </th>
-                      <th className="col-actions" style={{ textAlign: "right" }}>
+                      <th scope="col" className="col-actions" style={{ textAlign: "right" }}>
                         Actions
                       </th>
                     </tr>
@@ -10953,7 +11186,11 @@ export default function HomePage({
                       <tr>
                         <td
                           colSpan={10}
-                          style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
+                          style={{
+                            textAlign: "center",
+                            padding: "2.5rem",
+                            color: "var(--color-text-muted)"
+                          }}
                         >
                           No assessed units match the selected search or filter criteria.
                         </td>
@@ -10997,7 +11234,7 @@ export default function HomePage({
                               style={{
                                 display: "block",
                                 fontSize: "0.75rem",
-                                color: "#64748b",
+                                color: "var(--color-text-muted)",
                                 marginTop: "0.15rem",
                                 lineHeight: 1.3
                               }}
@@ -11128,7 +11365,7 @@ export default function HomePage({
                           typeof item === "string" ? (
                             <span
                               key={`ellipsis-${idx}`}
-                              style={{ padding: "0 0.25rem", color: "#94a3b8" }}
+                              style={{ padding: "0 0.25rem", color: "var(--color-text-muted)" }}
                             >
                               ...
                             </span>
@@ -11422,18 +11659,28 @@ export default function HomePage({
               <table className="gov-table" style={{ width: "100%" }}>
                 <thead>
                   <tr>
-                    <th className="cell-wrap-text">Demand No &amp; Assessee</th>
-                    <th className="cell-wrap-text">Category &amp; Rule</th>
-                    <th className="cell-currency">Assessed Tax</th>
-                    <th className="cell-currency">Penalty</th>
-                    <th className="cell-currency">Total Outstanding</th>
-                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                    <th scope="col" className="cell-wrap-text">
+                      Demand No &amp; Assessee
+                    </th>
+                    <th scope="col" className="cell-wrap-text">
+                      Category &amp; Rule
+                    </th>
+                    <th scope="col" className="cell-currency">
+                      Assessed Tax
+                    </th>
+                    <th scope="col" className="cell-currency">
+                      Penalty
+                    </th>
+                    <th scope="col" className="cell-currency">
+                      Total Outstanding
+                    </th>
+                    <th scope="col" className="cell-fit" style={{ textAlign: "center" }}>
                       Days Overdue
                     </th>
-                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                    <th scope="col" className="cell-fit" style={{ textAlign: "center" }}>
                       Statutory Status
                     </th>
-                    <th className="col-actions" style={{ textAlign: "right" }}>
+                    <th scope="col" className="col-actions" style={{ textAlign: "right" }}>
                       Statutory Actions
                     </th>
                   </tr>
@@ -11443,7 +11690,11 @@ export default function HomePage({
                     <tr>
                       <td
                         colSpan={8}
-                        style={{ textAlign: "center", padding: "2rem", color: "#64748b" }}
+                        style={{
+                          textAlign: "center",
+                          padding: "2rem",
+                          color: "var(--color-text-muted)"
+                        }}
                       >
                         ✓ No defaulting units found for the selected filter.
                       </td>
@@ -11462,7 +11713,11 @@ export default function HomePage({
                             </strong>
                             {u.tradeName && (
                               <span
-                                style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                                style={{
+                                  display: "block",
+                                  fontSize: "0.75rem",
+                                  color: "var(--color-text-muted)"
+                                }}
                               >
                                 {u.tradeName}
                               </span>
@@ -11493,7 +11748,7 @@ export default function HomePage({
                               style={{
                                 display: "block",
                                 fontSize: "0.75rem",
-                                color: "#64748b",
+                                color: "var(--color-text-muted)",
                                 marginTop: "0.125rem"
                               }}
                             >
@@ -11509,7 +11764,7 @@ export default function HomePage({
                                 PKR {aging.penaltyDemand.toLocaleString()}
                               </span>
                             ) : (
-                              <span style={{ color: "#94a3b8" }}>—</span>
+                              <span style={{ color: "var(--color-text-muted)" }}>—</span>
                             )}
                           </td>
                           <td className="cell-currency">
@@ -11538,7 +11793,11 @@ export default function HomePage({
                               {aging.daysOverdue} days
                             </span>
                             <span
-                              style={{ display: "block", fontSize: "0.6875rem", color: "#64748b" }}
+                              style={{
+                                display: "block",
+                                fontSize: "0.6875rem",
+                                color: "var(--color-text-muted)"
+                              }}
                             >
                               Due: 31/08/2026
                             </span>
@@ -11774,7 +12033,7 @@ export default function HomePage({
                   borderRadius: "8px"
                 }}
               >
-                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--color-text-muted)" }}>
                   Total Appeals Filed
                 </p>
                 <p
@@ -11787,7 +12046,7 @@ export default function HomePage({
                 >
                   {appeals.length}
                 </p>
-                <p style={{ margin: 0, fontSize: "0.75rem", color: "#64748b" }}>
+                <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
                   Cause-List Vehicles &amp; Trades
                 </p>
               </div>
@@ -11879,18 +12138,28 @@ export default function HomePage({
               <table className="gov-table" style={{ width: "100%" }}>
                 <thead>
                   <tr>
-                    <th className="cell-fit">Appeal No &amp; Filing Date</th>
-                    <th className="cell-wrap-text">Appellant &amp; Profession/Trade Name</th>
-                    <th className="cell-wrap-text">Impugned Demand &amp; Notice</th>
-                    <th className="cell-wrap-text">Ground of Appeal</th>
-                    <th className="cell-currency">Undisputed Paid</th>
-                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                    <th scope="col" className="cell-fit">
+                      Appeal No &amp; Filing Date
+                    </th>
+                    <th scope="col" className="cell-wrap-text">
+                      Appellant &amp; Profession/Trade Name
+                    </th>
+                    <th scope="col" className="cell-wrap-text">
+                      Impugned Demand &amp; Notice
+                    </th>
+                    <th scope="col" className="cell-wrap-text">
+                      Ground of Appeal
+                    </th>
+                    <th scope="col" className="cell-currency">
+                      Undisputed Paid
+                    </th>
+                    <th scope="col" className="cell-fit" style={{ textAlign: "center" }}>
                       Hearing Date
                     </th>
-                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                    <th scope="col" className="cell-fit" style={{ textAlign: "center" }}>
                       Status
                     </th>
-                    <th className="col-actions" style={{ textAlign: "right" }}>
+                    <th scope="col" className="col-actions" style={{ textAlign: "right" }}>
                       Statutory Actions
                     </th>
                   </tr>
@@ -11952,7 +12221,11 @@ export default function HomePage({
                               {appeal.appealNumber}
                             </strong>
                             <span
-                              style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                              style={{
+                                display: "block",
+                                fontSize: "0.75rem",
+                                color: "var(--color-text-muted)"
+                              }}
                             >
                               Filed: {appeal.filingDate}
                             </span>
@@ -11963,14 +12236,22 @@ export default function HomePage({
                             </strong>
                             {appeal.appellantTradeName && (
                               <span
-                                style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                                style={{
+                                  display: "block",
+                                  fontSize: "0.75rem",
+                                  color: "var(--color-text-muted)"
+                                }}
                               >
                                 {appeal.appellantTradeName}
                               </span>
                             )}
                             <span
                               className="cell-token"
-                              style={{ display: "block", fontSize: "0.75rem", color: "#94a3b8" }}
+                              style={{
+                                display: "block",
+                                fontSize: "0.75rem",
+                                color: "var(--color-text-muted)"
+                              }}
                             >
                               {appeal.appellantCnic}
                             </span>
@@ -11983,7 +12264,11 @@ export default function HomePage({
                               PFT-1/VEH/2026/{appeal.unitId.slice(-4)}
                             </span>
                             <span
-                              style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                              style={{
+                                display: "block",
+                                fontSize: "0.75rem",
+                                color: "var(--color-text-muted)"
+                              }}
                             >
                               Demand: PKR {originalTax.toLocaleString()}
                             </span>
@@ -11996,7 +12281,11 @@ export default function HomePage({
                               PKR {appeal.undisputedPaid.toLocaleString()}
                             </span>
                             <span
-                              style={{ display: "block", fontSize: "0.6875rem", color: "#64748b" }}
+                              style={{
+                                display: "block",
+                                fontSize: "0.6875rem",
+                                color: "var(--color-text-muted)"
+                              }}
                             >
                               Rule 13(2) Compliant
                             </span>
@@ -12011,7 +12300,7 @@ export default function HomePage({
                             ) : (
                               <span
                                 style={{
-                                  color: "#94a3b8",
+                                  color: "#475569",
                                   fontStyle: "italic",
                                   fontSize: "0.75rem"
                                 }}
@@ -12232,14 +12521,22 @@ export default function HomePage({
               <table className="gov-table">
                 <thead>
                   <tr>
-                    <th className="cell-fit">Demand No.</th>
-                    <th className="cell-wrap-text">Assessee Profession/Trade Name</th>
-                    <th className="cell-wrap-text">Category &amp; Rule</th>
-                    <th className="cell-currency">Ledger Outstanding Balance</th>
-                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                    <th scope="col" className="cell-fit">
+                      Demand No.
+                    </th>
+                    <th scope="col" className="cell-wrap-text">
+                      Assessee Profession/Trade Name
+                    </th>
+                    <th scope="col" className="cell-wrap-text">
+                      Category &amp; Rule
+                    </th>
+                    <th scope="col" className="cell-currency">
+                      Ledger Outstanding Balance
+                    </th>
+                    <th scope="col" className="cell-fit" style={{ textAlign: "center" }}>
                       Statutory Clearance Status
                     </th>
-                    <th className="col-actions" style={{ textAlign: "right" }}>
+                    <th scope="col" className="col-actions" style={{ textAlign: "right" }}>
                       Statutory Actions
                     </th>
                   </tr>
@@ -12274,7 +12571,13 @@ export default function HomePage({
                               UIN: {u.provincialUin}
                             </span>
                           )}
-                          <span style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}>
+                          <span
+                            style={{
+                              display: "block",
+                              fontSize: "0.75rem",
+                              color: "var(--color-text-muted)"
+                            }}
+                          >
                             {u.circleName || "Vehari Circle I (City / Commercial)"}
                           </span>
                         </td>
@@ -12284,14 +12587,22 @@ export default function HomePage({
                           </strong>
                           {u.tradeName && u.tradeName !== u.legalName && (
                             <span
-                              style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                              style={{
+                                display: "block",
+                                fontSize: "0.75rem",
+                                color: "var(--color-text-muted)"
+                              }}
                             >
                               Trading as: {u.tradeName}
                             </span>
                           )}
                           <span
                             className="cell-token"
-                            style={{ display: "block", fontSize: "0.75rem", color: "#94a3b8" }}
+                            style={{
+                              display: "block",
+                              fontSize: "0.75rem",
+                              color: "var(--color-text-muted)"
+                            }}
                           >
                             {u.identifierType}: {u.identifierValue}
                           </span>
@@ -12300,7 +12611,13 @@ export default function HomePage({
                           <strong style={{ fontSize: "0.8125rem", color: "#1e293b" }}>
                             {u.statutoryRule.category}
                           </strong>
-                          <span style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}>
+                          <span
+                            style={{
+                              display: "block",
+                              fontSize: "0.75rem",
+                              color: "var(--color-text-muted)"
+                            }}
+                          >
                             {u.statutoryRule.subclassification_code
                               ? `Class ${u.statutoryRule.subclassification_code}`
                               : `Class ${u.statutoryRule.category_code}`}{" "}
@@ -12485,7 +12802,7 @@ export default function HomePage({
                 <h3 style={{ margin: 0, color: "#0d3822", fontSize: "1.15rem" }}>
                   🛑 Rule 10: Trade Cessation &amp; Discontinuance
                 </h3>
-                <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                <span style={{ fontSize: "0.8rem", color: "var(--color-text-muted)" }}>
                   Statutory 30-Day Notice &bull; On-Site Physical Inspection &bull; ETO Closure
                   Order
                 </span>
@@ -12507,7 +12824,7 @@ export default function HomePage({
                   discontinues their profession or trade must give thirty days notice in writing to
                   the Assessing Authority.
                 </p>
-                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--color-text-muted)" }}>
                   <strong>Legal Consequence:</strong> Approval of discontinuance freezes future
                   annual tax liability while preserving all past uncollected arrears for recovery
                   under Section 3(4).
@@ -12518,14 +12835,22 @@ export default function HomePage({
                 <table className="gov-table">
                   <thead>
                     <tr>
-                      <th className="cell-fit">Notice Reference</th>
-                      <th className="cell-wrap-text">Assessee Unit</th>
-                      <th className="cell-wrap-text">Discontinuance Date &amp; Reason</th>
-                      <th className="cell-wrap-text">Inspector Field Inspection</th>
-                      <th className="cell-fit" style={{ textAlign: "center" }}>
+                      <th scope="col" className="cell-fit">
+                        Notice Reference
+                      </th>
+                      <th scope="col" className="cell-wrap-text">
+                        Assessee Unit
+                      </th>
+                      <th scope="col" className="cell-wrap-text">
+                        Discontinuance Date &amp; Reason
+                      </th>
+                      <th scope="col" className="cell-wrap-text">
+                        Inspector Field Inspection
+                      </th>
+                      <th scope="col" className="cell-fit" style={{ textAlign: "center" }}>
                         Status
                       </th>
-                      <th className="col-actions" style={{ textAlign: "right" }}>
+                      <th scope="col" className="col-actions" style={{ textAlign: "right" }}>
                         Statutory Actions
                       </th>
                     </tr>
@@ -12535,7 +12860,11 @@ export default function HomePage({
                       <tr>
                         <td
                           colSpan={6}
-                          style={{ textAlign: "center", padding: "2rem", color: "#64748b" }}
+                          style={{
+                            textAlign: "center",
+                            padding: "2rem",
+                            color: "var(--color-text-muted)"
+                          }}
                         >
                           No discontinuance notices filed in Circle-Vehari.
                         </td>
@@ -12557,7 +12886,11 @@ export default function HomePage({
                                 {disc.noticeNumber}
                               </strong>
                               <span
-                                style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                                style={{
+                                  display: "block",
+                                  fontSize: "0.75rem",
+                                  color: "var(--color-text-muted)"
+                                }}
                               >
                                 Filed: {new Date(disc.filedAt).toLocaleDateString()}
                               </span>
@@ -12568,7 +12901,11 @@ export default function HomePage({
                               </strong>
                               <span
                                 className="cell-token"
-                                style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                                style={{
+                                  display: "block",
+                                  fontSize: "0.75rem",
+                                  color: "var(--color-text-muted)"
+                                }}
                               >
                                 {disc.cnicOrNtn}
                               </span>
@@ -12603,7 +12940,7 @@ export default function HomePage({
                                     style={{
                                       display: "block",
                                       fontSize: "0.725rem",
-                                      color: "#64748b"
+                                      color: "var(--color-text-muted)"
                                     }}
                                   >
                                     {disc.inspectorReport}
@@ -12636,7 +12973,7 @@ export default function HomePage({
                                   style={{
                                     display: "block",
                                     fontSize: "0.6875rem",
-                                    color: "#64748b",
+                                    color: "var(--color-text-muted)",
                                     marginTop: "0.2rem"
                                   }}
                                 >
@@ -12760,7 +13097,7 @@ export default function HomePage({
                 <h3 style={{ margin: 0, color: "#0d3822", fontSize: "1.15rem" }}>
                   💰 Rule 5: Excess Tax Refunds &amp; Credit Adjustments
                 </h3>
-                <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                <span style={{ fontSize: "0.8rem", color: "var(--color-text-muted)" }}>
                   Application Scrutiny &bull; ETO Statutory Decree &bull; Double-Entry Demand Ledger
                   Credit
                 </span>
@@ -12782,7 +13119,7 @@ export default function HomePage({
                   assessed erroneously, relief is granted via an immutable double-entry credit
                   (MANUAL_ADJUSTMENT).
                 </p>
-                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--color-text-muted)" }}>
                   <strong>Compliance Rule:</strong> Existing demand entries are never deleted or
                   mutated. Adjustments credit the ledger with a negative amount (-PKR) linked to the
                   formal ETO decree.
@@ -12793,14 +13130,22 @@ export default function HomePage({
                 <table className="gov-table">
                   <thead>
                     <tr>
-                      <th className="cell-fit">Application No.</th>
-                      <th className="cell-wrap-text">Assessee Unit</th>
-                      <th className="cell-currency">Relief Type &amp; Amount</th>
-                      <th className="cell-wrap-text">Legal Grounds &amp; Evidence</th>
-                      <th className="cell-fit" style={{ textAlign: "center" }}>
+                      <th scope="col" className="cell-fit">
+                        Application No.
+                      </th>
+                      <th scope="col" className="cell-wrap-text">
+                        Assessee Unit
+                      </th>
+                      <th scope="col" className="cell-currency">
+                        Relief Type &amp; Amount
+                      </th>
+                      <th scope="col" className="cell-wrap-text">
+                        Legal Grounds &amp; Evidence
+                      </th>
+                      <th scope="col" className="cell-fit" style={{ textAlign: "center" }}>
                         Status &amp; Ledger Posting
                       </th>
-                      <th className="col-actions" style={{ textAlign: "right" }}>
+                      <th scope="col" className="col-actions" style={{ textAlign: "right" }}>
                         Statutory Actions
                       </th>
                     </tr>
@@ -12810,7 +13155,11 @@ export default function HomePage({
                       <tr>
                         <td
                           colSpan={6}
-                          style={{ textAlign: "center", padding: "2rem", color: "#64748b" }}
+                          style={{
+                            textAlign: "center",
+                            padding: "2rem",
+                            color: "var(--color-text-muted)"
+                          }}
                         >
                           No refund or adjustment applications recorded.
                         </td>
@@ -12830,7 +13179,11 @@ export default function HomePage({
                                 {ref.applicationNumber}
                               </strong>
                               <span
-                                style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                                style={{
+                                  display: "block",
+                                  fontSize: "0.75rem",
+                                  color: "var(--color-text-muted)"
+                                }}
                               >
                                 Filed: {new Date(ref.filedAt).toLocaleDateString()}
                               </span>
@@ -12841,7 +13194,11 @@ export default function HomePage({
                               </strong>
                               <span
                                 className="cell-token"
-                                style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                                style={{
+                                  display: "block",
+                                  fontSize: "0.75rem",
+                                  color: "var(--color-text-muted)"
+                                }}
                               >
                                 {ref.cnicOrNtn}
                               </span>
@@ -12854,7 +13211,7 @@ export default function HomePage({
                                 style={{
                                   display: "block",
                                   fontSize: "0.6875rem",
-                                  color: "#64748b"
+                                  color: "var(--color-text-muted)"
                                 }}
                               >
                                 Type: {ref.type.replace(/_/g, " ")}
@@ -12876,7 +13233,7 @@ export default function HomePage({
                                   style={{
                                     display: "block",
                                     fontSize: "0.6875rem",
-                                    color: "#64748b",
+                                    color: "var(--color-text-muted)",
                                     marginTop: "0.2rem"
                                   }}
                                 >
@@ -13086,7 +13443,13 @@ export default function HomePage({
                     🔒 Dormant / Read-Only
                   </span>
                 </div>
-                <p style={{ fontSize: "0.8rem", color: "#64748b", margin: "0 0 1rem" }}>
+                <p
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "var(--color-text-muted)",
+                    margin: "0 0 1rem"
+                  }}
+                >
                   Live payment ledger modifications via simulated webhooks are strictly locked to
                   protect fiscal ledger integrity. Production settlement connects exclusively via
                   authenticated 1Link/ePay banking channels.
@@ -13453,21 +13816,31 @@ export default function HomePage({
               <table className="gov-table">
                 <thead>
                   <tr>
-                    <th className="cell-fit">Notice / Challan No.</th>
-                    <th className="cell-fit">Demand / Pot. No.</th>
-                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                    <th scope="col" className="cell-fit">
+                      Notice / Challan No.
+                    </th>
+                    <th scope="col" className="cell-fit">
+                      Demand / Pot. No.
+                    </th>
+                    <th scope="col" className="cell-fit" style={{ textAlign: "center" }}>
                       Issue Date
                     </th>
-                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                    <th scope="col" className="cell-fit" style={{ textAlign: "center" }}>
                       Due Date
                     </th>
-                    <th className="cell-wrap-text">Profession / Trade Name</th>
-                    <th className="cell-wrap-text">Statutory Classification</th>
-                    <th className="cell-currency">Amount Payable</th>
-                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                    <th scope="col" className="cell-wrap-text">
+                      Profession / Trade Name
+                    </th>
+                    <th scope="col" className="cell-wrap-text">
+                      Statutory Classification
+                    </th>
+                    <th scope="col" className="cell-currency">
+                      Amount Payable
+                    </th>
+                    <th scope="col" className="cell-fit" style={{ textAlign: "center" }}>
                       Status
                     </th>
-                    <th className="col-actions" style={{ textAlign: "right" }}>
+                    <th scope="col" className="col-actions" style={{ textAlign: "right" }}>
                       Actions
                     </th>
                   </tr>
@@ -13507,7 +13880,7 @@ export default function HomePage({
                             style={{
                               textAlign: "center",
                               padding: "3rem 1.5rem",
-                              color: "#64748b"
+                              color: "var(--color-text-muted)"
                             }}
                           >
                             <div style={{ maxWidth: "26rem", margin: "0 auto" }}>
@@ -13646,7 +14019,7 @@ export default function HomePage({
                               style={{
                                 display: "block",
                                 fontSize: "0.6875rem",
-                                color: "#64748b",
+                                color: "var(--color-text-muted)",
                                 marginTop: "0.15rem"
                               }}
                             >
@@ -13703,7 +14076,7 @@ export default function HomePage({
                               style={{
                                 display: "block",
                                 fontSize: "0.72rem",
-                                color: "#64748b",
+                                color: "var(--color-text-muted)",
                                 marginTop: "0.15rem"
                               }}
                             >
@@ -13729,7 +14102,11 @@ export default function HomePage({
                             </span>
                             {challan.tertiarySlab && (
                               <span
-                                style={{ display: "block", fontSize: "0.7rem", color: "#64748b" }}
+                                style={{
+                                  display: "block",
+                                  fontSize: "0.7rem",
+                                  color: "var(--color-text-muted)"
+                                }}
                               >
                                 Slab: {challan.tertiarySlab}
                               </span>
@@ -13855,7 +14232,7 @@ export default function HomePage({
                               <span
                                 style={{
                                   fontSize: "0.75rem",
-                                  color: "#94a3b8",
+                                  color: "#475569",
                                   fontStyle: "italic"
                                 }}
                               >
@@ -14071,6 +14448,7 @@ export default function HomePage({
             >
               <div>
                 <label
+                  htmlFor="ptas-portal-field-17"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -14082,6 +14460,7 @@ export default function HomePage({
                   Search Keyword:
                 </label>
                 <input
+                  id="ptas-portal-field-17"
                   type="text"
                   placeholder="Receipt #, Challan #, Assessee, CPR Ref..."
                   className="form-control"
@@ -14093,6 +14472,7 @@ export default function HomePage({
 
               <div>
                 <label
+                  htmlFor="ptas-portal-field-18"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -14104,6 +14484,7 @@ export default function HomePage({
                   Date of Receipt (From):
                 </label>
                 <input
+                  id="ptas-portal-field-18"
                   type="date"
                   className="form-control"
                   style={{ width: "100%", fontSize: "0.85rem" }}
@@ -14114,6 +14495,7 @@ export default function HomePage({
 
               <div>
                 <label
+                  htmlFor="ptas-portal-field-19"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -14125,6 +14507,7 @@ export default function HomePage({
                   Date of Receipt (To):
                 </label>
                 <input
+                  id="ptas-portal-field-19"
                   type="date"
                   className="form-control"
                   style={{ width: "100%", fontSize: "0.85rem" }}
@@ -14135,6 +14518,7 @@ export default function HomePage({
 
               <div>
                 <label
+                  htmlFor="ptas-portal-field-20"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -14146,6 +14530,7 @@ export default function HomePage({
                   Payment Channel:
                 </label>
                 <select
+                  id="ptas-portal-field-20"
                   aria-label="Filter by Payment Channel"
                   className="form-control"
                   style={{ width: "100%", fontSize: "0.85rem" }}
@@ -14159,6 +14544,7 @@ export default function HomePage({
 
               <div>
                 <label
+                  htmlFor="ptas-portal-field-21"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -14170,6 +14556,7 @@ export default function HomePage({
                   Statutory Category:
                 </label>
                 <select
+                  id="ptas-portal-field-21"
                   aria-label="Filter by Category"
                   className="form-control"
                   style={{ width: "100%", fontSize: "0.85rem" }}
@@ -14187,6 +14574,7 @@ export default function HomePage({
 
               <div>
                 <label
+                  htmlFor="ptas-portal-field-22"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -14198,6 +14586,7 @@ export default function HomePage({
                   Sub-Class:
                 </label>
                 <select
+                  id="ptas-portal-field-22"
                   aria-label="Filter by Sub-Class"
                   className="form-control"
                   style={{ width: "100%", fontSize: "0.85rem" }}
@@ -14231,6 +14620,7 @@ export default function HomePage({
 
               <div>
                 <label
+                  htmlFor="ptas-portal-field-23"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -14242,6 +14632,7 @@ export default function HomePage({
                   Payment Source:
                 </label>
                 <select
+                  id="ptas-portal-field-23"
                   aria-label="Filter by Payment Source"
                   className="form-control"
                   style={{ width: "100%", fontSize: "0.85rem" }}
@@ -14257,6 +14648,7 @@ export default function HomePage({
 
               <div>
                 <label
+                  htmlFor="ptas-portal-field-24"
                   style={{
                     display: "block",
                     fontSize: "0.75rem",
@@ -14268,6 +14660,7 @@ export default function HomePage({
                   Demand Category / Type:
                 </label>
                 <select
+                  id="ptas-portal-field-24"
                   aria-label="Filter by Demand Category"
                   className="form-control"
                   style={{ width: "100%", fontSize: "0.85rem" }}
@@ -14315,20 +14708,34 @@ export default function HomePage({
               <table className="gov-table" style={{ width: "100%" }}>
                 <thead>
                   <tr>
-                    <th className="cell-fit">Receipt # &amp; Date</th>
-                    <th className="cell-fit">Challan &amp; Demand #</th>
-                    <th className="cell-wrap-text">Assessee Profession/Trade Name</th>
-                    <th className="cell-wrap-text">Classification &amp; Slab</th>
-                    <th className="cell-currency">Amount Discharged</th>
-                    <th className="cell-wrap-text">Treasury Channel &amp; CPR</th>
-                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                    <th scope="col" className="cell-fit">
+                      Receipt # &amp; Date
+                    </th>
+                    <th scope="col" className="cell-fit">
+                      Challan &amp; Demand #
+                    </th>
+                    <th scope="col" className="cell-wrap-text">
+                      Assessee Profession/Trade Name
+                    </th>
+                    <th scope="col" className="cell-wrap-text">
+                      Classification &amp; Slab
+                    </th>
+                    <th scope="col" className="cell-currency">
+                      Amount Discharged
+                    </th>
+                    <th scope="col" className="cell-wrap-text">
+                      Treasury Channel &amp; CPR
+                    </th>
+                    <th scope="col" className="cell-fit" style={{ textAlign: "center" }}>
                       Demand Type
                     </th>
-                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                    <th scope="col" className="cell-fit" style={{ textAlign: "center" }}>
                       Payment Source
                     </th>
-                    <th className="cell-fit">Receiving Officer</th>
-                    <th className="col-actions" style={{ textAlign: "right" }}>
+                    <th scope="col" className="cell-fit">
+                      Receiving Officer
+                    </th>
+                    <th scope="col" className="col-actions" style={{ textAlign: "right" }}>
                       Actions
                     </th>
                   </tr>
@@ -14385,7 +14792,11 @@ export default function HomePage({
                         <tr>
                           <td
                             colSpan={10}
-                            style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}
+                            style={{
+                              textAlign: "center",
+                              padding: "2.5rem",
+                              color: "var(--color-text-muted)"
+                            }}
                           >
                             No statutory payment receipts match the active query.
                           </td>
@@ -14416,7 +14827,13 @@ export default function HomePage({
                           >
                             💳 Paid: {rec.dateOfReceipt}
                           </span>
-                          <span style={{ display: "block", fontSize: "0.65rem", color: "#64748b" }}>
+                          <span
+                            style={{
+                              display: "block",
+                              fontSize: "0.65rem",
+                              color: "var(--color-text-muted)"
+                            }}
+                          >
                             🕒 Entry:{" "}
                             {rec.entryTimestamp
                               ? new Date(rec.entryTimestamp).toLocaleDateString("en-PK") +
@@ -14437,7 +14854,11 @@ export default function HomePage({
                           </strong>
                           <span
                             className="cell-token"
-                            style={{ display: "block", fontSize: "0.6875rem", color: "#64748b" }}
+                            style={{
+                              display: "block",
+                              fontSize: "0.6875rem",
+                              color: "var(--color-text-muted)"
+                            }}
                           >
                             PDN: {rec.demandNumber}
                           </span>
@@ -14466,7 +14887,7 @@ export default function HomePage({
                             style={{
                               display: "block",
                               fontSize: "0.75rem",
-                              color: "#64748b"
+                              color: "var(--color-text-muted)"
                             }}
                           >
                             {rec.identifierType}: {rec.identifierValue}
@@ -14608,7 +15029,11 @@ export default function HomePage({
                             {rec.receivingOfficerName}
                           </span>
                           <span
-                            style={{ display: "block", fontSize: "0.6875rem", color: "#64748b" }}
+                            style={{
+                              display: "block",
+                              fontSize: "0.6875rem",
+                              color: "var(--color-text-muted)"
+                            }}
                           >
                             {rec.receivingOfficerTitle}
                           </span>
@@ -14702,20 +15127,33 @@ export default function HomePage({
               <table className="gov-table">
                 <thead>
                   <tr>
-                    <th className="cell-fit">Timestamp</th>
-                    <th className="cell-fit" style={{ textAlign: "center" }}>
+                    <th scope="col" className="cell-fit">
+                      Timestamp
+                    </th>
+                    <th scope="col" className="cell-fit" style={{ textAlign: "center" }}>
                       Event Type
                     </th>
-                    <th className="cell-wrap-text">Actor &amp; Role</th>
-                    <th className="cell-wrap-text">Target Unit</th>
-                    <th className="cell-fit">Correlation ID</th>
-                    <th className="cell-wrap-text">Details</th>
+                    <th scope="col" className="cell-wrap-text">
+                      Actor &amp; Role
+                    </th>
+                    <th scope="col" className="cell-wrap-text">
+                      Target Unit
+                    </th>
+                    <th scope="col" className="cell-fit">
+                      Correlation ID
+                    </th>
+                    <th scope="col" className="cell-wrap-text">
+                      Details
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {auditLogs.map((log) => (
                     <tr key={log.id}>
-                      <td className="cell-fit" style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                      <td
+                        className="cell-fit"
+                        style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}
+                      >
                         {new Date(log.timestamp).toLocaleString()}
                       </td>
                       <td className="cell-fit" style={{ textAlign: "center" }}>
@@ -14737,7 +15175,13 @@ export default function HomePage({
                         <strong style={{ fontSize: "0.8125rem", color: "#0f172a" }}>
                           {log.actorName}
                         </strong>
-                        <span style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}>
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "0.75rem",
+                            color: "var(--color-text-muted)"
+                          }}
+                        >
                           {log.actorRole}
                         </span>
                       </td>
@@ -14749,7 +15193,7 @@ export default function HomePage({
                       <td className="cell-fit">
                         <span
                           className="cell-token"
-                          style={{ fontSize: "0.75rem", color: "#64748b" }}
+                          style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}
                         >
                           {log.correlationId}
                         </span>
@@ -15020,7 +15464,7 @@ export default function HomePage({
                   <span
                     style={{
                       fontSize: "0.8rem",
-                      color: "#64748b",
+                      color: "var(--color-text-muted)",
                       fontWeight: 600,
                       textTransform: "uppercase"
                     }}
@@ -15077,7 +15521,7 @@ export default function HomePage({
                     }}
                   />
                 </div>
-                <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b" }}>
+                <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--color-text-muted)" }}>
                   PKR {misMetrics.kpis.totalRealizedRecovery.toLocaleString()} of PKR{" "}
                   {misMetrics.kpis.baselineBudgetTargetPkr.toLocaleString()} Target
                 </p>
@@ -15104,7 +15548,7 @@ export default function HomePage({
                   <span
                     style={{
                       fontSize: "0.8rem",
-                      color: "#64748b",
+                      color: "var(--color-text-muted)",
                       fontWeight: 600,
                       textTransform: "uppercase"
                     }}
@@ -15155,7 +15599,7 @@ export default function HomePage({
                     }}
                   />
                 </div>
-                <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b" }}>
+                <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--color-text-muted)" }}>
                   PKR {misMetrics.kpis.totalRealizedRecovery.toLocaleString()} of PKR{" "}
                   {misMetrics.kpis.totalAssessedGross.toLocaleString()} Gross Demand
                 </p>
@@ -15182,7 +15626,7 @@ export default function HomePage({
                   <span
                     style={{
                       fontSize: "0.8rem",
-                      color: "#64748b",
+                      color: "var(--color-text-muted)",
                       fontWeight: 600,
                       textTransform: "uppercase"
                     }}
@@ -15245,7 +15689,7 @@ export default function HomePage({
                     }}
                   />
                 </div>
-                <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b" }}>
+                <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--color-text-muted)" }}>
                   PKR {misMetrics.kpis.outstandingArrears.toLocaleString()} Arrears at Risk
                 </p>
               </div>
@@ -15271,7 +15715,7 @@ export default function HomePage({
                   <span
                     style={{
                       fontSize: "0.8rem",
-                      color: "#64748b",
+                      color: "var(--color-text-muted)",
                       fontWeight: 600,
                       textTransform: "uppercase"
                     }}
@@ -15322,7 +15766,7 @@ export default function HomePage({
                     }}
                   />
                 </div>
-                <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b" }}>
+                <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--color-text-muted)" }}>
                   {misMetrics.roleMetrics.inspector.servedNoticesCount} Served &bull;{" "}
                   {misMetrics.roleMetrics.inspector.unservedNoticesCount} Pending Service
                 </p>
@@ -15358,7 +15802,13 @@ export default function HomePage({
                     {effectivePerspective === "DIRECTOR" &&
                       "🏛️ Directorate Governance & Divisional Revenue Integrity"}
                   </h4>
-                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                  <p
+                    style={{
+                      margin: "0.2rem 0 0",
+                      fontSize: "0.8rem",
+                      color: "var(--color-text-muted)"
+                    }}
+                  >
                     Tailored operational intelligence for role:{" "}
                     <strong>{effectivePerspective}</strong>
                   </p>
@@ -15394,7 +15844,13 @@ export default function HomePage({
                       border: "1px solid #e2e8f0"
                     }}
                   >
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-muted)",
+                        fontWeight: 600
+                      }}
+                    >
                       Total Assigned Units
                     </span>
                     <div
@@ -15407,7 +15863,7 @@ export default function HomePage({
                     >
                       {misMetrics.roleMetrics.inspector.totalAssignedUnits}
                     </div>
-                    <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                    <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
                       Circle-Vehari Registry
                     </span>
                   </div>
@@ -15419,7 +15875,13 @@ export default function HomePage({
                       border: "1px solid #e2e8f0"
                     }}
                   >
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-muted)",
+                        fontWeight: 600
+                      }}
+                    >
                       Rule 6 Notices Served
                     </span>
                     <div
@@ -15444,7 +15906,13 @@ export default function HomePage({
                       border: "1px solid #e2e8f0"
                     }}
                   >
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-muted)",
+                        fontWeight: 600
+                      }}
+                    >
                       Unserved Notices
                     </span>
                     <div
@@ -15469,7 +15937,13 @@ export default function HomePage({
                       border: "1px solid #e2e8f0"
                     }}
                   >
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-muted)",
+                        fontWeight: 600
+                      }}
+                    >
                       Pending Inspections
                     </span>
                     <div
@@ -15494,7 +15968,13 @@ export default function HomePage({
                       border: "1px solid #e2e8f0"
                     }}
                   >
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-muted)",
+                        fontWeight: 600
+                      }}
+                    >
                       Field Compliance Rate
                     </span>
                     <div
@@ -15531,7 +16011,13 @@ export default function HomePage({
                       border: "1px solid #e2e8f0"
                     }}
                   >
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-muted)",
+                        fontWeight: 600
+                      }}
+                    >
                       Pending Determinations
                     </span>
                     <div
@@ -15554,7 +16040,13 @@ export default function HomePage({
                       border: "1px solid #e2e8f0"
                     }}
                   >
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-muted)",
+                        fontWeight: 600
+                      }}
+                    >
                       Approved Assessments
                     </span>
                     <div
@@ -15579,7 +16071,13 @@ export default function HomePage({
                       border: "1px solid #e2e8f0"
                     }}
                   >
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-muted)",
+                        fontWeight: 600
+                      }}
+                    >
                       S.3(4) Penalty Eligible
                     </span>
                     <div
@@ -15604,7 +16102,13 @@ export default function HomePage({
                       border: "1px solid #e2e8f0"
                     }}
                   >
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-muted)",
+                        fontWeight: 600
+                      }}
+                    >
                       Land Revenue Warrants
                     </span>
                     <div
@@ -15629,7 +16133,13 @@ export default function HomePage({
                       border: "1px solid #e2e8f0"
                     }}
                   >
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-muted)",
+                        fontWeight: 600
+                      }}
+                    >
                       Total Adjudicated Relief
                     </span>
                     <div
@@ -15666,7 +16176,13 @@ export default function HomePage({
                       border: "1px solid #e2e8f0"
                     }}
                   >
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-muted)",
+                        fontWeight: 600
+                      }}
+                    >
                       Circle Target Pacing
                     </span>
                     <div
@@ -15691,7 +16207,13 @@ export default function HomePage({
                       border: "1px solid #e2e8f0"
                     }}
                   >
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-muted)",
+                        fontWeight: 600
+                      }}
+                    >
                       Divisional Recovery Pool
                     </span>
                     <div
@@ -15705,7 +16227,7 @@ export default function HomePage({
                       PKR{" "}
                       {misMetrics.roleMetrics.director.divisionalCollectionTotalPkr.toLocaleString()}
                     </div>
-                    <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                    <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
                       Multan Division Baseline
                     </span>
                   </div>
@@ -15717,7 +16239,13 @@ export default function HomePage({
                       border: "1px solid #e2e8f0"
                     }}
                   >
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-muted)",
+                        fontWeight: 600
+                      }}
+                    >
                       Total Defaulter Exposure
                     </span>
                     <div
@@ -15743,7 +16271,13 @@ export default function HomePage({
                       border: "1px solid #e2e8f0"
                     }}
                   >
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-muted)",
+                        fontWeight: 600
+                      }}
+                    >
                       Appellate Backlog
                     </span>
                     <div
@@ -15768,7 +16302,13 @@ export default function HomePage({
                       border: "1px solid #e2e8f0"
                     }}
                   >
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-muted)",
+                        fontWeight: 600
+                      }}
+                    >
                       Circle Integrity Status
                     </span>
                     <div
@@ -15809,7 +16349,7 @@ export default function HomePage({
                 <span
                   style={{
                     fontSize: "0.75rem",
-                    color: "#64748b",
+                    color: "var(--color-text-muted)",
                     fontWeight: 600,
                     textTransform: "uppercase"
                   }}
@@ -15826,7 +16366,7 @@ export default function HomePage({
                 >
                   PKR {misMetrics.kpis.totalAssessedGross.toLocaleString()}
                 </div>
-                <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                <span style={{ fontSize: "0.72rem", color: "var(--color-text-muted)" }}>
                   Base: PKR {misMetrics.kpis.assessedDemand.toLocaleString()} &bull; Penalties: PKR{" "}
                   {misMetrics.kpis.penaltyDemand.toLocaleString()}
                 </span>
@@ -15843,7 +16383,7 @@ export default function HomePage({
                 <span
                   style={{
                     fontSize: "0.75rem",
-                    color: "#64748b",
+                    color: "var(--color-text-muted)",
                     fontWeight: 600,
                     textTransform: "uppercase"
                   }}
@@ -15860,7 +16400,7 @@ export default function HomePage({
                 >
                   PKR {misMetrics.kpis.baselineBudgetTargetPkr.toLocaleString()}
                 </div>
-                <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                <span style={{ fontSize: "0.72rem", color: "var(--color-text-muted)" }}>
                   Annual Provincial Finance Allocation
                 </span>
               </div>
@@ -15876,7 +16416,7 @@ export default function HomePage({
                 <span
                   style={{
                     fontSize: "0.75rem",
-                    color: "#64748b",
+                    color: "var(--color-text-muted)",
                     fontWeight: 600,
                     textTransform: "uppercase"
                   }}
@@ -15909,7 +16449,7 @@ export default function HomePage({
                 <span
                   style={{
                     fontSize: "0.75rem",
-                    color: "#64748b",
+                    color: "var(--color-text-muted)",
                     fontWeight: 600,
                     textTransform: "uppercase"
                   }}
@@ -15942,7 +16482,7 @@ export default function HomePage({
                 <span
                   style={{
                     fontSize: "0.75rem",
-                    color: "#64748b",
+                    color: "var(--color-text-muted)",
                     fontWeight: 600,
                     textTransform: "uppercase"
                   }}
@@ -15982,7 +16522,13 @@ export default function HomePage({
                   <h4 style={{ margin: 0, fontSize: "1.05rem", color: "#0d3822", fontWeight: 700 }}>
                     🏢 Statutory Category Yield Distribution (Second Schedule, Section 3)
                   </h4>
-                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                  <p
+                    style={{
+                      margin: "0.2rem 0 0",
+                      fontSize: "0.8rem",
+                      color: "var(--color-text-muted)"
+                    }}
+                  >
                     Comparative visual realization across all 11 schedule entries &bull; Realized vs
                     Assessed
                   </p>
@@ -16077,13 +16623,13 @@ export default function HomePage({
                               fontSize: "0.8rem"
                             }}
                           >
-                            <span style={{ color: "#64748b" }}>
+                            <span style={{ color: "var(--color-text-muted)" }}>
                               Units: <strong>{cat.unitCount}</strong> registered
                             </span>
                             <span style={{ color: "#166534", fontWeight: 700 }}>
                               PKR {cat.realizedRecovery.toLocaleString()}
                             </span>
-                            <span style={{ color: "#64748b" }}>
+                            <span style={{ color: "var(--color-text-muted)" }}>
                               of PKR {cat.totalDemand.toLocaleString()}
                             </span>
                             <span
@@ -16152,7 +16698,13 @@ export default function HomePage({
                     📋 Statutory Second Schedule Sub-Class &amp; Tertiary Slab Distribution (47
                     Entries)
                   </h4>
-                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                  <p
+                    style={{
+                      margin: "0.2rem 0 0",
+                      fontSize: "0.8rem",
+                      color: "var(--color-text-muted)"
+                    }}
+                  >
                     Exact statutory rate tiers, capital thresholds, employee counts, and geographic
                     classifications under Section 3 &amp; Second Schedule
                   </p>
@@ -16211,15 +16763,33 @@ export default function HomePage({
                 <table className="data-table" style={{ width: "100%", fontSize: "0.82rem" }}>
                   <thead>
                     <tr>
-                      <th style={{ textAlign: "left", width: "5.5rem" }}>Class Code</th>
-                      <th style={{ textAlign: "left" }}>Schedule Category</th>
-                      <th style={{ textAlign: "left" }}>Tertiary Slab / Criteria</th>
-                      <th style={{ textAlign: "right" }}>Statutory Rate</th>
-                      <th style={{ textAlign: "center" }}>Units</th>
-                      <th style={{ textAlign: "right" }}>Assessed Demand</th>
-                      <th style={{ textAlign: "right" }}>Realized Recovery</th>
-                      <th style={{ textAlign: "right" }}>Outstanding Arrears</th>
-                      <th style={{ textAlign: "center" }}>Recovery %</th>
+                      <th scope="col" style={{ textAlign: "left", width: "5.5rem" }}>
+                        Class Code
+                      </th>
+                      <th scope="col" style={{ textAlign: "left" }}>
+                        Schedule Category
+                      </th>
+                      <th scope="col" style={{ textAlign: "left" }}>
+                        Tertiary Slab / Criteria
+                      </th>
+                      <th scope="col" style={{ textAlign: "right" }}>
+                        Statutory Rate
+                      </th>
+                      <th scope="col" style={{ textAlign: "center" }}>
+                        Units
+                      </th>
+                      <th scope="col" style={{ textAlign: "right" }}>
+                        Assessed Demand
+                      </th>
+                      <th scope="col" style={{ textAlign: "right" }}>
+                        Realized Recovery
+                      </th>
+                      <th scope="col" style={{ textAlign: "right" }}>
+                        Outstanding Arrears
+                      </th>
+                      <th scope="col" style={{ textAlign: "center" }}>
+                        Recovery %
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -16271,7 +16841,12 @@ export default function HomePage({
                               </span>
                               {slab.subclassificationCode &&
                                 slab.subclassificationCode !== specificCode && (
-                                  <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                                  <span
+                                    style={{
+                                      fontSize: "0.72rem",
+                                      color: "var(--color-text-muted)"
+                                    }}
+                                  >
                                     Entry Clause: {slab.subclassificationCode}
                                   </span>
                                 )}
@@ -16310,7 +16885,7 @@ export default function HomePage({
                                 style={{
                                   display: "block",
                                   fontSize: "0.7rem",
-                                  color: "#64748b",
+                                  color: "var(--color-text-muted)",
                                   fontWeight: 400
                                 }}
                               >
@@ -16396,7 +16971,13 @@ export default function HomePage({
                   <h4 style={{ margin: 0, fontSize: "1.05rem", color: "#0d3822", fontWeight: 700 }}>
                     ⚠️ Statutory Defaulter Recovery &amp; Aging Funnel (Section 3(4) &amp; Rule 12)
                   </h4>
-                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                  <p
+                    style={{
+                      margin: "0.2rem 0 0",
+                      fontSize: "0.8rem",
+                      color: "var(--color-text-muted)"
+                    }}
+                  >
                     Visual progressive enforcement pipeline from notice service to Land Revenue
                     arrears certification
                   </p>
@@ -16437,7 +17018,7 @@ export default function HomePage({
                     <div
                       style={{
                         fontSize: "0.72rem",
-                        color: "#64748b",
+                        color: "var(--color-text-muted)",
                         fontWeight: 700,
                         textTransform: "uppercase"
                       }}
@@ -16464,7 +17045,13 @@ export default function HomePage({
                     >
                       PKR {misMetrics.defaulterFunnel.current.amount.toLocaleString()}
                     </div>
-                    <span style={{ fontSize: "0.7rem", color: "#64748b", display: "block" }}>
+                    <span
+                      style={{
+                        fontSize: "0.7rem",
+                        color: "var(--color-text-muted)",
+                        display: "block"
+                      }}
+                    >
                       Action: Standard Form PFT-2 Active
                     </span>
                   </div>
@@ -16482,7 +17069,7 @@ export default function HomePage({
                     <div
                       style={{
                         fontSize: "0.72rem",
-                        color: "#64748b",
+                        color: "var(--color-text-muted)",
                         fontWeight: 700,
                         textTransform: "uppercase"
                       }}
@@ -16509,7 +17096,13 @@ export default function HomePage({
                     >
                       PKR {misMetrics.defaulterFunnel.overdue30Days.amount.toLocaleString()}
                     </div>
-                    <span style={{ fontSize: "0.7rem", color: "#64748b", display: "block" }}>
+                    <span
+                      style={{
+                        fontSize: "0.7rem",
+                        color: "var(--color-text-muted)",
+                        display: "block"
+                      }}
+                    >
                       Action: Form P.F.T-1 Final Reminder
                     </span>
                   </div>
@@ -16527,7 +17120,7 @@ export default function HomePage({
                     <div
                       style={{
                         fontSize: "0.72rem",
-                        color: "#64748b",
+                        color: "var(--color-text-muted)",
                         fontWeight: 700,
                         textTransform: "uppercase"
                       }}
@@ -16554,7 +17147,13 @@ export default function HomePage({
                     >
                       PKR {misMetrics.defaulterFunnel.penaltyEligible.amount.toLocaleString()}
                     </div>
-                    <span style={{ fontSize: "0.7rem", color: "#64748b", display: "block" }}>
+                    <span
+                      style={{
+                        fontSize: "0.7rem",
+                        color: "var(--color-text-muted)",
+                        display: "block"
+                      }}
+                    >
                       Action: Section 3(4) Show Cause Notice
                     </span>
                   </div>
@@ -16572,7 +17171,7 @@ export default function HomePage({
                     <div
                       style={{
                         fontSize: "0.72rem",
-                        color: "#64748b",
+                        color: "var(--color-text-muted)",
                         fontWeight: 700,
                         textTransform: "uppercase"
                       }}
@@ -16599,7 +17198,13 @@ export default function HomePage({
                     >
                       PKR {misMetrics.defaulterFunnel.penalized.amount.toLocaleString()}
                     </div>
-                    <span style={{ fontSize: "0.7rem", color: "#64748b", display: "block" }}>
+                    <span
+                      style={{
+                        fontSize: "0.7rem",
+                        color: "var(--color-text-muted)",
+                        display: "block"
+                      }}
+                    >
                       Action: 100% Penalty Compounded
                     </span>
                   </div>
@@ -16617,7 +17222,7 @@ export default function HomePage({
                     <div
                       style={{
                         fontSize: "0.72rem",
-                        color: "#64748b",
+                        color: "var(--color-text-muted)",
                         fontWeight: 700,
                         textTransform: "uppercase"
                       }}
@@ -16644,7 +17249,13 @@ export default function HomePage({
                     >
                       PKR {misMetrics.defaulterFunnel.recoveryCertified.amount.toLocaleString()}
                     </div>
-                    <span style={{ fontSize: "0.7rem", color: "#64748b", display: "block" }}>
+                    <span
+                      style={{
+                        fontSize: "0.7rem",
+                        color: "var(--color-text-muted)",
+                        display: "block"
+                      }}
+                    >
                       Action: Land Revenue S.67 Referral
                     </span>
                   </div>
@@ -16685,7 +17296,13 @@ export default function HomePage({
                       Pipeline Only &bull; Non-Demand
                     </span>
                   </div>
-                  <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                  <p
+                    style={{
+                      margin: "0.25rem 0 0",
+                      fontSize: "0.8rem",
+                      color: "var(--color-text-muted)"
+                    }}
+                  >
                     Prospective discovery units and potential commercial entities isolated from
                     statutory demand until formal ETO assessment approval.
                   </p>
@@ -16792,7 +17409,7 @@ export default function HomePage({
                     }{" "}
                     Submitted
                   </div>
-                  <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                  <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
                     {
                       surveyPendingUnits.filter(
                         (u) => !u.assessments[0] || u.assessments[0]?.status === "DRAFT"
@@ -16988,7 +17605,13 @@ export default function HomePage({
                   >
                     Form P.F.T-3 Assessment &amp; Demand Roll
                   </h4>
-                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
+                  <p
+                    style={{
+                      margin: "0 0 0.75rem",
+                      fontSize: "0.8rem",
+                      color: "var(--color-text-muted)"
+                    }}
+                  >
                     Master annual assessment roll of all professions, trades, callings &amp;
                     employments in Circle-Vehari with permanent demand numbers and assessed tax.
                   </p>
@@ -17002,7 +17625,7 @@ export default function HomePage({
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "#64748b" }}>Assessed Units:</span>
+                      <span style={{ color: "var(--color-text-muted)" }}>Assessed Units:</span>
                       <strong style={{ color: "#0f172a" }}>{pft3EnrolledUnits.length} Units</strong>
                     </div>
                     <div
@@ -17036,7 +17659,9 @@ export default function HomePage({
                         marginTop: "0.25rem"
                       }}
                     >
-                      <span style={{ color: "#64748b" }}>Total Assessed Demand:</span>
+                      <span style={{ color: "var(--color-text-muted)" }}>
+                        Total Assessed Demand:
+                      </span>
                       <strong style={{ color: "#0f172a", fontFamily: "monospace" }}>
                         PKR {misMetrics.kpis.totalAssessedGross.toLocaleString()}
                       </strong>
@@ -17123,7 +17748,13 @@ export default function HomePage({
                   >
                     Defaulter &amp; Arrears Recovery Roll
                   </h4>
-                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
+                  <p
+                    style={{
+                      margin: "0 0 0.75rem",
+                      fontSize: "0.8rem",
+                      color: "var(--color-text-muted)"
+                    }}
+                  >
                     Statutory recovery roll with Section 3(4) penalty computations, aging brackets,
                     and Land Revenue Act Section 67 coercive escalation status.
                   </p>
@@ -17237,7 +17868,13 @@ export default function HomePage({
                   >
                     Notice Service &amp; Dispatch Register
                   </h4>
-                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
+                  <p
+                    style={{
+                      margin: "0 0 0.75rem",
+                      fontSize: "0.8rem",
+                      color: "var(--color-text-muted)"
+                    }}
+                  >
                     Official service register for Form P.F.T-1 survey notices, postal registries,
                     bailiff hand delivery receipts, and electronic delivery acknowledgments.
                   </p>
@@ -17251,7 +17888,7 @@ export default function HomePage({
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "#64748b" }}>Dispatched Notices:</span>
+                      <span style={{ color: "var(--color-text-muted)" }}>Dispatched Notices:</span>
                       <strong style={{ color: "#0f172a" }}>
                         {circleDispatchRegisterData.rows.length} Dispatches
                       </strong>
@@ -17263,7 +17900,7 @@ export default function HomePage({
                         marginTop: "0.25rem"
                       }}
                     >
-                      <span style={{ color: "#64748b" }}>Verified Served:</span>
+                      <span style={{ color: "var(--color-text-muted)" }}>Verified Served:</span>
                       <strong style={{ color: "#166534" }}>
                         {
                           circleDispatchRegisterData.rows.filter(
@@ -17355,7 +17992,13 @@ export default function HomePage({
                   >
                     Tax Clearance Certificates Register
                   </h4>
-                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
+                  <p
+                    style={{
+                      margin: "0 0 0.75rem",
+                      fontSize: "0.8rem",
+                      color: "var(--color-text-muted)"
+                    }}
+                  >
                     Departmental log of zero-dues clearance certificates issued for legal title
                     transfers, licensing renewals, and commercial public procurement tenders.
                   </p>
@@ -17471,7 +18114,13 @@ export default function HomePage({
                   >
                     Statutory Relief &amp; Adjustments Register
                   </h4>
-                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
+                  <p
+                    style={{
+                      margin: "0 0 0.75rem",
+                      fontSize: "0.8rem",
+                      color: "var(--color-text-muted)"
+                    }}
+                  >
                     Quasi-judicial record of Rule 10 business closures, frozen demand orders, and
                     Rule 5 statutory future tax credit balance adjustments.
                   </p>
@@ -17582,7 +18231,13 @@ export default function HomePage({
                   >
                     Category &amp; Rate Slab Yield Schedule
                   </h4>
-                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
+                  <p
+                    style={{
+                      margin: "0 0 0.75rem",
+                      fontSize: "0.8rem",
+                      color: "var(--color-text-muted)"
+                    }}
+                  >
                     Macro statutory distribution across 11 legal categories and 47 rate slabs,
                     analyzing collection efficacy against approved budget baselines.
                   </p>
@@ -17698,7 +18353,13 @@ export default function HomePage({
                   >
                     Form P.F.T-S Field Survey Register
                   </h4>
-                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
+                  <p
+                    style={{
+                      margin: "0 0 0.75rem",
+                      fontSize: "0.8rem",
+                      color: "var(--color-text-muted)"
+                    }}
+                  >
                     Secondary operational pipeline register of unassessed commercial establishments
                     discovered during field surveys, pending ETO assessment.
                   </p>
@@ -17811,7 +18472,13 @@ export default function HomePage({
                   >
                     Form P.F.T-P Potential Register
                   </h4>
-                  <p style={{ margin: "0 0 0.75rem", fontSize: "0.8rem", color: "#64748b" }}>
+                  <p
+                    style={{
+                      margin: "0 0 0.75rem",
+                      fontSize: "0.8rem",
+                      color: "var(--color-text-muted)"
+                    }}
+                  >
                     Secondary register of prospective third-party commercial entities earmarked for
                     circle field verification and taxpayer onboarding.
                   </p>
@@ -17904,7 +18571,13 @@ export default function HomePage({
                     >
                       📊 Statutory Classification &amp; Category Yield Schedule
                     </h4>
-                    <p style={{ margin: "0.25rem 0 0", fontSize: "0.825rem", color: "#64748b" }}>
+                    <p
+                      style={{
+                        margin: "0.25rem 0 0",
+                        fontSize: "0.825rem",
+                        color: "var(--color-text-muted)"
+                      }}
+                    >
                       Aggregated statutory assessment metrics &bull; Financial Year 2026-27 &bull;
                       District Vehari
                     </p>
@@ -17933,17 +18606,27 @@ export default function HomePage({
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.825rem" }}>
                   <thead>
                     <tr style={{ background: "#f8fafc", borderBottom: "2px solid #cbd5e1" }}>
-                      <th style={{ padding: "0.65rem", textAlign: "left" }}>Category Code</th>
-                      <th style={{ padding: "0.65rem", textAlign: "left" }}>
+                      <th scope="col" style={{ padding: "0.65rem", textAlign: "left" }}>
+                        Category Code
+                      </th>
+                      <th scope="col" style={{ padding: "0.65rem", textAlign: "left" }}>
                         Statutory Category Name
                       </th>
-                      <th style={{ padding: "0.65rem", textAlign: "center" }}>Units Count</th>
-                      <th style={{ padding: "0.65rem", textAlign: "right" }}>Total Demand (PKR)</th>
-                      <th style={{ padding: "0.65rem", textAlign: "right" }}>Realized (PKR)</th>
-                      <th style={{ padding: "0.65rem", textAlign: "right" }}>
+                      <th scope="col" style={{ padding: "0.65rem", textAlign: "center" }}>
+                        Units Count
+                      </th>
+                      <th scope="col" style={{ padding: "0.65rem", textAlign: "right" }}>
+                        Total Demand (PKR)
+                      </th>
+                      <th scope="col" style={{ padding: "0.65rem", textAlign: "right" }}>
+                        Realized (PKR)
+                      </th>
+                      <th scope="col" style={{ padding: "0.65rem", textAlign: "right" }}>
                         Balance Arrears (PKR)
                       </th>
-                      <th style={{ padding: "0.65rem", textAlign: "right" }}>Compliance %</th>
+                      <th scope="col" style={{ padding: "0.65rem", textAlign: "right" }}>
+                        Compliance %
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -18144,7 +18827,13 @@ export default function HomePage({
                   <h4 style={{ margin: 0, color: "#0d3822", fontSize: "1.1rem" }}>
                     🔍 Desk 1: Universal QR Code &amp; Security Code Authenticator
                   </h4>
-                  <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#64748b" }}>
+                  <p
+                    style={{
+                      margin: "0.25rem 0 0",
+                      fontSize: "0.85rem",
+                      color: "var(--color-text-muted)"
+                    }}
+                  >
                     Instant multi-document authentication for Form P.F.T-1 (Demand Notice), PFT2
                     (3-Copy Challan), Form P.F.T-5 (Tax Clearance Certificate), and Statutory
                     Payment Receipts via 6-digit Security Code or QR Code.
@@ -18440,11 +19129,13 @@ export default function HomePage({
                       }}
                     >
                       <div>
-                        <span style={{ color: "#64748b", display: "block" }}>Document Ref:</span>
+                        <span style={{ color: "var(--color-text-muted)", display: "block" }}>
+                          Document Ref:
+                        </span>
                         <strong>{portalVerificationResult.documentReference}</strong>
                       </div>
                       <div>
-                        <span style={{ color: "#64748b", display: "block" }}>
+                        <span style={{ color: "var(--color-text-muted)", display: "block" }}>
                           Profession/Trade Name:
                         </span>
                         <strong>{portalVerificationResult.unitName}</strong>
@@ -18455,21 +19146,27 @@ export default function HomePage({
                         )}
                       </div>
                       <div>
-                        <span style={{ color: "#64748b", display: "block" }}>Identifier:</span>
+                        <span style={{ color: "var(--color-text-muted)", display: "block" }}>
+                          Identifier:
+                        </span>
                         <strong>{portalVerificationResult.identifier}</strong>
                       </div>
                       <div>
-                        <span style={{ color: "#64748b", display: "block" }}>Classification:</span>
+                        <span style={{ color: "var(--color-text-muted)", display: "block" }}>
+                          Classification:
+                        </span>
                         <strong>{portalVerificationResult.scheduleEntry}</strong>
                       </div>
                       <div>
-                        <span style={{ color: "#64748b", display: "block" }}>Assessed Tax:</span>
+                        <span style={{ color: "var(--color-text-muted)", display: "block" }}>
+                          Assessed Tax:
+                        </span>
                         <strong>
                           PKR {portalVerificationResult.assessedAmount.toLocaleString()}
                         </strong>
                       </div>
                       <div>
-                        <span style={{ color: "#64748b", display: "block" }}>
+                        <span style={{ color: "var(--color-text-muted)", display: "block" }}>
                           Live Ledger Arrears:
                         </span>
                         <strong
@@ -18484,7 +19181,7 @@ export default function HomePage({
                         </strong>
                       </div>
                       <div style={{ gridColumn: "span 2" }}>
-                        <span style={{ color: "#64748b", display: "block" }}>
+                        <span style={{ color: "var(--color-text-muted)", display: "block" }}>
                           Official SHA-256 Digest:
                         </span>
                         <code
@@ -18511,7 +19208,13 @@ export default function HomePage({
                   <h4 style={{ margin: 0, color: "#0d3822", fontSize: "1.1rem" }}>
                     💳 Desk 2: Citizen Tax Liability &amp; Challan Search
                   </h4>
-                  <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#64748b" }}>
+                  <p
+                    style={{
+                      margin: "0.25rem 0 0",
+                      fontSize: "0.85rem",
+                      color: "var(--color-text-muted)"
+                    }}
+                  >
                     Search and inspect outstanding professional tax assessments, payment receipts,
                     and ePay challans by CNIC, NTN, or Demand Number.
                   </p>
@@ -18566,7 +19269,7 @@ export default function HomePage({
                   marginBottom: "1rem"
                 }}
               >
-                <span style={{ color: "#64748b" }}>Try searching:</span>
+                <span style={{ color: "var(--color-text-muted)" }}>Try searching:</span>
                 {units.slice(0, 4).map((u) => (
                   <button
                     key={u.id}
@@ -18612,7 +19315,9 @@ export default function HomePage({
                           Trading as: <em>{portalSearchResult.tradeName}</em>
                         </p>
                       )}
-                      <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                      <p
+                        style={{ margin: 0, fontSize: "0.8rem", color: "var(--color-text-muted)" }}
+                      >
                         {portalSearchResult.address} &bull; Circle-Vehari
                       </p>
                     </div>
@@ -18633,7 +19338,9 @@ export default function HomePage({
                           : portalSearchResult.defaulterStatus}
                       </span>
                       <div style={{ marginTop: "0.4rem" }}>
-                        <span style={{ fontSize: "0.75rem", color: "#64748b" }}>Demand ID: </span>
+                        <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
+                          Demand ID:{" "}
+                        </span>
                         <strong>{portalSearchResult.permanentDemandNo}</strong>
                       </div>
                     </div>
@@ -18653,7 +19360,13 @@ export default function HomePage({
                     }}
                   >
                     <div>
-                      <span style={{ fontSize: "0.7rem", color: "#64748b", display: "block" }}>
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          color: "var(--color-text-muted)",
+                          display: "block"
+                        }}
+                      >
                         Schedule Entry
                       </span>
                       <strong style={{ fontSize: "0.85rem" }}>
@@ -18665,7 +19378,13 @@ export default function HomePage({
                     </div>
 
                     <div>
-                      <span style={{ fontSize: "0.7rem", color: "#64748b", display: "block" }}>
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          color: "var(--color-text-muted)",
+                          display: "block"
+                        }}
+                      >
                         Assessed Tax
                       </span>
                       <strong style={{ fontSize: "0.95rem" }}>
@@ -18674,7 +19393,13 @@ export default function HomePage({
                     </div>
 
                     <div>
-                      <span style={{ fontSize: "0.7rem", color: "#64748b", display: "block" }}>
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          color: "var(--color-text-muted)",
+                          display: "block"
+                        }}
+                      >
                         Penalties
                       </span>
                       <strong
@@ -18688,7 +19413,13 @@ export default function HomePage({
                     </div>
 
                     <div>
-                      <span style={{ fontSize: "0.7rem", color: "#64748b", display: "block" }}>
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          color: "var(--color-text-muted)",
+                          display: "block"
+                        }}
+                      >
                         Total Paid
                       </span>
                       <strong style={{ fontSize: "0.95rem", color: "#166534" }}>
@@ -18697,7 +19428,13 @@ export default function HomePage({
                     </div>
 
                     <div>
-                      <span style={{ fontSize: "0.7rem", color: "#64748b", display: "block" }}>
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          color: "var(--color-text-muted)",
+                          display: "block"
+                        }}
+                      >
                         Outstanding Arrears
                       </span>
                       <strong
@@ -18785,7 +19522,13 @@ export default function HomePage({
                   <h4 style={{ margin: 0, color: "#0d3822", fontSize: "1.1rem" }}>
                     🧮 Desk 3: Rule 4 Statutory Self-Assessment Calculator &amp; Declaration
                   </h4>
-                  <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", color: "#64748b" }}>
+                  <p
+                    style={{
+                      margin: "0.25rem 0 0",
+                      fontSize: "0.85rem",
+                      color: "var(--color-text-muted)"
+                    }}
+                  >
                     Determine legal professional tax liability under the Second Schedule to the
                     Punjab Finance Act, 1977 across all 11 statutory categories.
                   </p>
@@ -18803,6 +19546,7 @@ export default function HomePage({
                 {/* Form Controls */}
                 <div>
                   <label
+                    htmlFor="ptas-portal-field-25"
                     style={{
                       display: "block",
                       fontSize: "0.8rem",
@@ -18813,6 +19557,7 @@ export default function HomePage({
                     Second Schedule Category:
                   </label>
                   <select
+                    id="ptas-portal-field-25"
                     className="form-control"
                     value={portalCalcCriteria.categoryCode}
                     onChange={(e) => handleUpdateSelfAssessment({ categoryCode: e.target.value })}
@@ -18841,10 +19586,14 @@ export default function HomePage({
                   {/* Sub-inputs based on category */}
                   {portalCalcCriteria.categoryCode === "1" && (
                     <div style={{ marginTop: "0.75rem" }}>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600 }}>
+                      <label
+                        htmlFor="ptas-portal-field-26"
+                        style={{ display: "block", fontSize: "0.75rem", fontWeight: 600 }}
+                      >
                         Paid-up Capital (PKR):
                       </label>
                       <select
+                        id="ptas-portal-field-26"
                         className="form-control"
                         onChange={(e) =>
                           handleUpdateSelfAssessment({ paidUpCapitalPkr: Number(e.target.value) })
@@ -18865,10 +19614,14 @@ export default function HomePage({
 
                   {portalCalcCriteria.categoryCode === "2" && (
                     <div style={{ marginTop: "0.75rem" }}>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600 }}>
+                      <label
+                        htmlFor="ptas-portal-field-27"
+                        style={{ display: "block", fontSize: "0.75rem", fontWeight: 600 }}
+                      >
                         Number of Employees:
                       </label>
                       <select
+                        id="ptas-portal-field-27"
                         className="form-control"
                         onChange={(e) =>
                           handleUpdateSelfAssessment({ employeeCount: Number(e.target.value) })
@@ -18884,10 +19637,14 @@ export default function HomePage({
                   {portalCalcCriteria.categoryCode === "3" && (
                     <div style={{ marginTop: "0.75rem", display: "grid", gap: "0.5rem" }}>
                       <div>
-                        <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600 }}>
+                        <label
+                          htmlFor="ptas-portal-field-28"
+                          style={{ display: "block", fontSize: "0.75rem", fontWeight: 600 }}
+                        >
                           Number of Employees:
                         </label>
                         <select
+                          id="ptas-portal-field-28"
                           className="form-control"
                           value={portalCalcCriteria.employeeCount ?? 12}
                           onChange={(e) =>
@@ -18899,10 +19656,14 @@ export default function HomePage({
                         </select>
                       </div>
                       <div>
-                        <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600 }}>
+                        <label
+                          htmlFor="ptas-portal-field-29"
+                          style={{ display: "block", fontSize: "0.75rem", fontWeight: 600 }}
+                        >
                           Territorial Jurisdiction:
                         </label>
                         <select
+                          id="ptas-portal-field-29"
                           className="form-control"
                           value={portalCalcCriteria.isMetropolitan ? "METRO" : "OTHER"}
                           onChange={(e) =>
@@ -18924,10 +19685,14 @@ export default function HomePage({
 
                   {portalCalcCriteria.categoryCode === "6" && (
                     <div style={{ marginTop: "0.75rem" }}>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600 }}>
+                      <label
+                        htmlFor="ptas-portal-field-30"
+                        style={{ display: "block", fontSize: "0.75rem", fontWeight: 600 }}
+                      >
                         Profession / Calling:
                       </label>
                       <select
+                        id="ptas-portal-field-30"
                         className="form-control"
                         onChange={(e) =>
                           handleUpdateSelfAssessment({ professionType: e.target.value })
@@ -19330,7 +20095,7 @@ export default function HomePage({
                     )}
 
                     {/* Assessee Names: Profession/Trade Name (Mandatory) & Taxpayer / Assessee (Secondary) */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                    <div className="form-grid-2">
                       <div className="form-group">
                         <label htmlFor="new-legal-name">Profession/Trade Name *</label>
                         <input
@@ -19411,7 +20176,13 @@ export default function HomePage({
                       >
                         <span>Administrative Circle *</span>
                         {officer.role === "INSPECTOR" && (
-                          <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 400 }}>
+                          <span
+                            style={{
+                              fontSize: "0.75rem",
+                              color: "var(--color-text-muted)",
+                              fontWeight: 400
+                            }}
+                          >
                             🔒 Assigned Circle
                           </span>
                         )}
@@ -19498,7 +20269,7 @@ export default function HomePage({
                       <span
                         style={{
                           fontSize: "0.725rem",
-                          color: "#64748b",
+                          color: "var(--color-text-muted)",
                           display: "block",
                           marginTop: "0.25rem"
                         }}
@@ -19652,7 +20423,7 @@ export default function HomePage({
                       <span
                         style={{
                           fontSize: "0.725rem",
-                          color: "#64748b",
+                          color: "var(--color-text-muted)",
                           display: "block",
                           marginTop: "0.25rem"
                         }}
@@ -19759,7 +20530,11 @@ export default function HomePage({
                             }}
                           >
                             <span
-                              style={{ fontSize: "0.725rem", color: "#64748b", fontWeight: 600 }}
+                              style={{
+                                fontSize: "0.725rem",
+                                color: "var(--color-text-muted)",
+                                fontWeight: 600
+                              }}
                             >
                               ASSIGNED DEMAND NO ({newCircleName.toUpperCase()}):
                             </span>
@@ -19787,7 +20562,7 @@ export default function HomePage({
                                 <span
                                   style={{
                                     fontSize: "0.725rem",
-                                    color: "#64748b",
+                                    color: "var(--color-text-muted)",
                                     fontWeight: 600
                                   }}
                                 >
@@ -19812,7 +20587,7 @@ export default function HomePage({
                               </div>
                             </>
                           )}
-                          <div style={{ fontSize: "0.68rem", color: "#94a3b8" }}>
+                          <div style={{ fontSize: "0.68rem", color: "var(--color-text-muted)" }}>
                             Format: [District]-[Tehsil+Circle+Classification+Sequence]-[Version]
                             (Permanent &amp; Circle-Scoped)
                           </div>
@@ -19990,7 +20765,13 @@ export default function HomePage({
                       >
                         <span>🔒</span>
                         <span>📍 Relevant District:</span>
-                        <span style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 500 }}>
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            color: "var(--color-text-muted)",
+                            fontWeight: 500
+                          }}
+                        >
                           (Jurisdiction Locked)
                         </span>
                       </label>
@@ -20010,7 +20791,13 @@ export default function HomePage({
                         }}
                         title="Administrative district is legally locked to assessee circle jurisdiction"
                       />
-                      <small style={{ color: "#64748b", display: "block", marginTop: "0.2rem" }}>
+                      <small
+                        style={{
+                          color: "var(--color-text-muted)",
+                          display: "block",
+                          marginTop: "0.2rem"
+                        }}
+                      >
                         Legally locked to assessee circle &amp; officer jurisdiction (
                         {paymentDistrict}).
                       </small>
@@ -20194,7 +20981,7 @@ export default function HomePage({
 
             <form onSubmit={handleConfirmReturn}>
               <div className="modal-body">
-                <p style={{ fontSize: "0.875rem", color: "#64748b", margin: 0 }}>
+                <p style={{ fontSize: "0.875rem", color: "var(--color-text-muted)", margin: 0 }}>
                   As Assessing Authority (ETO {officer.name}), specify the statutory or evidentiary
                   reason for returning{" "}
                   {returnTargetUnitIds.length > 1
@@ -20261,7 +21048,7 @@ export default function HomePage({
 
             <form onSubmit={handleConfirmClose}>
               <div className="modal-body">
-                <p style={{ fontSize: "0.875rem", color: "#64748b", margin: 0 }}>
+                <p style={{ fontSize: "0.875rem", color: "var(--color-text-muted)", margin: 0 }}>
                   As authorized officer ({officer.name} &bull; {officer.role}), specify the
                   administrative or factual justification for closing{" "}
                   {closeTargetUnitIds.length > 1
@@ -20344,7 +21131,13 @@ export default function HomePage({
                 }}
               >
                 <div>
-                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      color: "var(--color-text-muted)",
+                      display: "block"
+                    }}
+                  >
                     Assessment No
                   </span>
                   <strong style={{ fontSize: "0.85rem", color: "#0f172a" }}>
@@ -20352,7 +21145,13 @@ export default function HomePage({
                   </strong>
                 </div>
                 <div>
-                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      color: "var(--color-text-muted)",
+                      display: "block"
+                    }}
+                  >
                     Permanent Demand No
                   </span>
                   <strong style={{ fontSize: "0.85rem", color: "#166534" }}>
@@ -20360,7 +21159,13 @@ export default function HomePage({
                   </strong>
                 </div>
                 <div>
-                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      color: "var(--color-text-muted)",
+                      display: "block"
+                    }}
+                  >
                     Taxpayer PIN
                   </span>
                   <strong style={{ fontSize: "0.85rem", color: "#0284c7" }}>
@@ -20368,7 +21173,13 @@ export default function HomePage({
                   </strong>
                 </div>
                 <div>
-                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      color: "var(--color-text-muted)",
+                      display: "block"
+                    }}
+                  >
                     Annual Demand
                   </span>
                   <strong style={{ fontSize: "0.85rem", color: "#0d3822" }}>
@@ -20418,7 +21229,7 @@ export default function HomePage({
                         style={{
                           display: "flex",
                           justifyContent: "space-between",
-                          color: "#64748b",
+                          color: "var(--color-text-muted)",
                           marginBottom: "0.2rem"
                         }}
                       >
@@ -20441,7 +21252,7 @@ export default function HomePage({
                     style={{
                       padding: "1rem",
                       textAlign: "center",
-                      color: "#94a3b8",
+                      color: "#475569",
                       fontSize: "0.8rem"
                     }}
                   >
@@ -20608,17 +21419,24 @@ export default function HomePage({
 
       {/* MODAL 5: NOTICE TO SHOW CAUSE FOR IMPOSITION OF PENALTY (RULE 10) */}
       {showNoticeModal && showCauseNoticeData && noticeTargetUnit && (
-        <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: "48rem" }}>
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="notice-modal-title"
+        >
+          <div className="modal-card modal-card-lg">
             <div className="modal-header">
-              <h3>📜 Notice to Show Cause for Imposition of Penalty (Rule 10)</h3>
+              <h3 id="notice-modal-title">
+                Notice to Show Cause for Imposition of Penalty (Rule 10)
+              </h3>
               <button
                 type="button"
-                className="close-btn"
-                aria-label="Close"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => setShowNoticeModal(false)}
               >
-                &times;
+                <CloseIcon size={18} />
               </button>
             </div>
 
@@ -20822,7 +21640,7 @@ export default function HomePage({
                   paddingTop: "1rem"
                 }}
               >
-                <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                <div style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
                   <div>
                     <strong>Official Seal &amp; Authority:</strong>
                   </div>
@@ -20837,7 +21655,7 @@ export default function HomePage({
                   <div style={{ fontSize: "0.75rem", color: "#475569" }}>
                     {showCauseNoticeData.assessingAuthorityTitle}
                   </div>
-                  <div style={{ fontSize: "0.7rem", color: "#64748b" }}>
+                  <div style={{ fontSize: "0.7rem", color: "var(--color-text-muted)" }}>
                     [Official Seal &amp; Signature]
                   </div>
                 </div>
@@ -20897,16 +21715,22 @@ export default function HomePage({
 
       {/* MODAL 6: IMPOSE STATUTORY PENALTY (SECTION 3(4) / RULE 10) */}
       {showPenaltyModal && (
-        <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: "34rem" }}>
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="penalty-modal-title"
+        >
+          <div className="modal-card modal-card-sm">
             <div className="modal-header">
-              <h3>⚠️ Adjudicate Statutory Penalty (Section 3(4))</h3>
+              <h3 id="penalty-modal-title">Adjudicate Statutory Penalty (Section 3(4))</h3>
               <button
                 type="button"
-                className="close-btn"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => setShowPenaltyModal(false)}
               >
-                &times;
+                <CloseIcon size={18} />
               </button>
             </div>
 
@@ -20941,9 +21765,8 @@ export default function HomePage({
                             : `Class ${target.statutoryRule.category_code}`}
                         </div>
                         <div
+                          className="form-grid-2"
                           style={{
-                            display: "grid",
-                            gridTemplateColumns: "1fr 1fr",
                             gap: "0.5rem",
                             marginTop: "0.5rem",
                             fontSize: "0.85rem"
@@ -20961,7 +21784,16 @@ export default function HomePage({
                       </div>
 
                       <div className="form-group">
-                        <label>Statutory Penalty Percentage (Max 100% per Section 3(4)):</label>
+                        <span
+                          style={{
+                            display: "block",
+                            fontWeight: 600,
+                            fontSize: "0.85rem",
+                            marginBottom: "0.35rem"
+                          }}
+                        >
+                          Statutory Penalty Percentage (Max 100% per Section 3(4)):
+                        </span>
                         <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}>
                           {[25, 50, 75, 100].map((pct) => (
                             <button
@@ -20984,6 +21816,7 @@ export default function HomePage({
                         </div>
                         <input
                           type="range"
+                          aria-label="Custom penalty percentage slider"
                           min="1"
                           max="100"
                           value={penaltyPercentage}
@@ -20995,7 +21828,7 @@ export default function HomePage({
                             display: "flex",
                             justifyContent: "space-between",
                             fontSize: "0.75rem",
-                            color: "#64748b"
+                            color: "var(--color-text-muted)"
                           }}
                         >
                           <span>Min: 1%</span>
@@ -21042,8 +21875,11 @@ export default function HomePage({
                       </div>
 
                       <div className="form-group">
-                        <label>Statutory Adjudication Rationale &amp; Legal Grounds:</label>
+                        <label htmlFor="ptas-portal-field-31">
+                          Statutory Adjudication Rationale &amp; Legal Grounds:
+                        </label>
                         <textarea
+                          id="ptas-portal-field-31"
                           rows={3}
                           value={penaltyReason}
                           onChange={(e) => setPenaltyReason(e.target.value)}
@@ -21080,16 +21916,24 @@ export default function HomePage({
 
       {/* MODAL 7: LAND REVENUE RECOVERY CERTIFICATE (RULE 12) */}
       {showRecoveryModal && recoveryCertData && recoveryTargetUnit && (
-        <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: "48rem" }}>
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="recovery-modal-title"
+        >
+          <div className="modal-card modal-card-lg">
             <div className="modal-header">
-              <h3>🏛️ Certificate of Recovery as Arrears of Land Revenue (Rule 12)</h3>
+              <h3 id="recovery-modal-title">
+                Certificate of Recovery as Arrears of Land Revenue (Rule 12)
+              </h3>
               <button
                 type="button"
-                className="close-btn"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => setShowRecoveryModal(false)}
               >
-                &times;
+                <CloseIcon size={18} />
               </button>
             </div>
 
@@ -21320,7 +22164,7 @@ export default function HomePage({
                   paddingTop: "1rem"
                 }}
               >
-                <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                <div style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
                   <div>
                     <strong>Official Statutory Certificate:</strong>
                   </div>
@@ -21335,7 +22179,7 @@ export default function HomePage({
                   <div style={{ fontSize: "0.75rem", color: "#475569" }}>
                     {recoveryCertData.assessingAuthorityTitle}
                   </div>
-                  <div style={{ fontSize: "0.7rem", color: "#64748b" }}>
+                  <div style={{ fontSize: "0.7rem", color: "var(--color-text-muted)" }}>
                     [Official Seal of Assessing Authority]
                   </div>
                 </div>
@@ -21385,75 +22229,38 @@ export default function HomePage({
           return (
             <div
               className="modal-overlay"
-              style={{
-                position: "fixed",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: "rgba(15, 23, 42, 0.75)",
-                backdropFilter: "blur(4px)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                zIndex: 9999,
-                padding: "1rem"
-              }}
               role="dialog"
               aria-modal="true"
-              aria-label="Form P.F.T-1 Notice of Tax Demand"
+              aria-labelledby="pft1-notice-modal-title"
             >
-              <div
-                className="modal-card"
-                style={{
-                  background: "#ffffff",
-                  borderRadius: "10px",
-                  maxWidth: "52rem",
-                  width: "100%",
-                  maxHeight: "92vh",
-                  overflowY: "auto",
-                  boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
-                  border: "1px solid #cbd5e1"
-                }}
-              >
+              <div className="modal-card modal-card-lg">
                 {/* Header */}
-                <div
-                  style={{
-                    background: "linear-gradient(135deg, #4c1d0c 0%, #92400e 100%)",
-                    color: "#ffffff",
-                    padding: "1.1rem 1.35rem",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center"
-                  }}
-                >
+                <div className="modal-header">
                   <div>
-                    <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700 }}>
-                      📜 Form P.F.T-1 — Notice of Tax Demand
-                    </h3>
-                    <span style={{ fontSize: "0.78rem", color: "#fde68a" }}>
+                    <h3 id="pft1-notice-modal-title">Form P.F.T-1 — Notice of Tax Demand</h3>
+                    <p
+                      style={{
+                        margin: "0.2rem 0 0",
+                        fontSize: "0.78rem",
+                        color: "var(--color-text-on-brand-muted)"
+                      }}
+                    >
                       Statutory Notice under Section 3 of Punjab Finance Act 1977, Rule 6 •
                       Circle-Vehari
-                    </span>
+                    </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setShowPft1NoticeModal(false)}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: "#ffffff",
-                      fontSize: "1.25rem",
-                      cursor: "pointer"
-                    }}
-                    aria-label="Close"
+                    className="modal-close-btn"
+                    aria-label="Close dialog"
                   >
-                    ✕
+                    <CloseIcon size={18} />
                   </button>
                 </div>
 
                 {/* Printable Notice Body */}
-                <div id="single-pft1-notice-printable" style={{ padding: "1.5rem" }}>
+                <div id="single-pft1-notice-printable" className="modal-body">
                   <div className="doc-box">
                     {/* Header Row */}
                     <div
@@ -21636,7 +22443,7 @@ export default function HomePage({
                           }}
                         />
                         <strong>Signature of Assessee / Recipient</strong>
-                        <div style={{ color: "#64748b" }}>Date: ___________</div>
+                        <div style={{ color: "var(--color-text-muted)" }}>Date: ___________</div>
                       </div>
                       <div style={{ textAlign: "right" }}>
                         <div
@@ -21647,7 +22454,7 @@ export default function HomePage({
                           }}
                         />
                         <strong>Excise &amp; Taxation Officer (ETO)</strong>
-                        <div style={{ color: "#64748b" }}>Tax Unit Vehari</div>
+                        <div style={{ color: "var(--color-text-muted)" }}>Tax Unit Vehari</div>
                       </div>
                     </div>
 
@@ -21668,7 +22475,9 @@ export default function HomePage({
                       <span>
                         🔒 Security Code: <strong>{pft1Data.pin ?? "—"}</strong>
                       </span>
-                      <span style={{ color: "#64748b" }}>Verify at public portal or scan QR</span>
+                      <span style={{ color: "var(--color-text-muted)" }}>
+                        Verify at public portal or scan QR
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -21720,27 +22529,36 @@ export default function HomePage({
 
       {/* MODAL 8: BATCH PRINT FORM P.F.T-1 NOTICES BOOK (RULE 6) */}
       {showBatchPft1Modal && (
-        <div className="modal-overlay">
-          <div
-            className="modal-card"
-            style={{ maxWidth: "56rem", maxHeight: "90vh", overflowY: "auto" }}
-          >
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="batch-pft1-modal-title"
+        >
+          <div className="modal-card modal-card-lg">
             <div className="modal-header">
               <div>
-                <h3 style={{ margin: 0 }}>
-                  📚 Batch Print Form P.F.T-1 Demand Notices (Circle-Vehari)
+                <h3 id="batch-pft1-modal-title">
+                  Batch Print Form P.F.T-1 Demand Notices (Circle-Vehari)
                 </h3>
-                <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                <p
+                  style={{
+                    margin: "0.25rem 0 0",
+                    fontSize: "0.8rem",
+                    color: "var(--color-text-on-brand-muted)"
+                  }}
+                >
                   Official batch notice book containing {approvedUnits.length} approved notices with
                   individual service receipt counterfoils and page breaks for physical printing.
                 </p>
               </div>
               <button
                 type="button"
-                className="close-btn"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => setShowBatchPft1Modal(false)}
               >
-                &times;
+                <CloseIcon size={18} />
               </button>
             </div>
 
@@ -21814,7 +22632,11 @@ export default function HomePage({
                             EXCISE &amp; TAXATION DEPARTMENT &bull; DISTRICT VEHARI
                           </p>
                           <p
-                            style={{ margin: "0.15rem 0 0", fontSize: "0.72rem", color: "#64748b" }}
+                            style={{
+                              margin: "0.15rem 0 0",
+                              fontSize: "0.72rem",
+                              color: "var(--color-text-muted)"
+                            }}
                           >
                             [See Rule 6 of the Punjab Professions and Trades Tax Rules, 1977]
                           </p>
@@ -21984,7 +22806,7 @@ export default function HomePage({
                           marginBottom: "1.5rem"
                         }}
                       >
-                        <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                        <div style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
                           <div>Official Record:</div>
                           <div style={{ color: "#047857" }}>
                             Rule 6(2), Punjab Professions &amp; Trades Tax Rules, 1977
@@ -22105,15 +22927,25 @@ export default function HomePage({
 
       {/* MODAL 9: BATCH PRINT FORM P.F.T-2 CHALLANS BOOK (RULE 9) */}
       {showBatchPft2Modal && (
-        <div className="modal-overlay">
-          <div
-            className="modal-card"
-            style={{ maxWidth: "68rem", maxHeight: "90vh", overflowY: "auto" }}
-          >
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="batch-pft2-modal-title"
+        >
+          <div className="modal-card modal-card-xl">
             <div className="modal-header">
               <div>
-                <h3 style={{ margin: 0 }}>📚 Batch Print Form P.F.T-2 Challans (Circle-Vehari)</h3>
-                <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                <h3 id="batch-pft2-modal-title">
+                  Batch Print Form P.F.T-2 Challans (Circle-Vehari)
+                </h3>
+                <p
+                  style={{
+                    margin: "0.25rem 0 0",
+                    fontSize: "0.8rem",
+                    color: "var(--color-text-on-brand-muted)"
+                  }}
+                >
                   Official 3-copy side-by-side challan book containing {approvedUnits.length}{" "}
                   approved challans formatted 1 unit per sheet with cutting lines for bank &amp;
                   department.
@@ -22121,10 +22953,11 @@ export default function HomePage({
               </div>
               <button
                 type="button"
-                className="close-btn"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => setShowBatchPft2Modal(false)}
               >
-                &times;
+                <CloseIcon size={18} />
               </button>
             </div>
 
@@ -22199,34 +23032,42 @@ export default function HomePage({
 
       {/* MODAL 10: CIRCLE NOTICE DISPATCH & SERVICE REGISTER (RULE 6) */}
       {showDispatchRegisterModal && (
-        <div className="modal-overlay">
-          <div
-            className="modal-card"
-            style={{ maxWidth: "64rem", maxHeight: "90vh", overflowY: "auto" }}
-          >
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dispatch-reg-modal-title"
+        >
+          <div className="modal-card modal-card-xl">
             <div className="modal-header">
               <div>
-                <h3 style={{ margin: 0 }}>📋 Circle Notice Dispatch &amp; Service Register</h3>
-                <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                <h3 id="dispatch-reg-modal-title">Circle Notice Dispatch &amp; Service Register</h3>
+                <p
+                  style={{
+                    margin: "0.25rem 0 0",
+                    fontSize: "0.8rem",
+                    color: "var(--color-text-on-brand-muted)"
+                  }}
+                >
                   Official statutory register maintained under Rule 6 of the Punjab Professions and
                   Trades Tax Rules, 1977 for Circle-Vehari.
                 </p>
               </div>
               <button
                 type="button"
-                className="close-btn"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => setShowDispatchRegisterModal(false)}
               >
-                &times;
+                <CloseIcon size={18} />
               </button>
             </div>
 
             <div id="dispatch-register-printable" className="modal-body">
               {/* Summary KPIs */}
               <div
+                className="detail-grid"
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
                   gap: "0.75rem",
                   marginBottom: "1rem"
                 }}
@@ -22239,7 +23080,9 @@ export default function HomePage({
                     border: "1px solid #cbd5e1"
                   }}
                 >
-                  <div style={{ fontSize: "0.75rem", color: "#64748b" }}>Total Dispatched</div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
+                    Total Dispatched
+                  </div>
                   <div style={{ fontSize: "1.25rem", fontWeight: 700 }}>
                     {circleDispatchRegisterData.totalNotices}
                   </div>
@@ -22380,14 +23223,16 @@ export default function HomePage({
                 <table className="data-table" style={{ fontSize: "0.8rem" }}>
                   <thead>
                     <tr>
-                      <th style={{ width: "2.5rem" }}>Select</th>
-                      <th>Notice &amp; Demand Number</th>
-                      <th>Profession/Trade Name &amp; Address</th>
-                      <th>Entry</th>
-                      <th>Assessed Tax</th>
-                      <th>Process Server</th>
-                      <th>Service Status</th>
-                      <th>Delivered On / Recipient</th>
+                      <th scope="col" style={{ width: "2.5rem" }}>
+                        Select
+                      </th>
+                      <th scope="col">Notice &amp; Demand Number</th>
+                      <th scope="col">Profession/Trade Name &amp; Address</th>
+                      <th scope="col">Entry</th>
+                      <th scope="col">Assessed Tax</th>
+                      <th scope="col">Process Server</th>
+                      <th scope="col">Service Status</th>
+                      <th scope="col">Delivered On / Recipient</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -22423,7 +23268,11 @@ export default function HomePage({
                           <td>
                             <strong>{r.noticeNumber}</strong>
                             <span
-                              style={{ display: "block", fontSize: "0.7rem", color: "#64748b" }}
+                              style={{
+                                display: "block",
+                                fontSize: "0.7rem",
+                                color: "var(--color-text-muted)"
+                              }}
                             >
                               {r.demandNumber} &bull; Dispatched: {r.dispatchDate}
                             </span>
@@ -22432,7 +23281,11 @@ export default function HomePage({
                             <strong>{r.assesseeLegalName}</strong>
                             {r.assesseeTradeName && (
                               <span
-                                style={{ display: "block", fontSize: "0.75rem", color: "#64748b" }}
+                                style={{
+                                  display: "block",
+                                  fontSize: "0.75rem",
+                                  color: "var(--color-text-muted)"
+                                }}
                               >
                                 {r.assesseeTradeName}
                               </span>
@@ -22476,7 +23329,7 @@ export default function HomePage({
                                 )}
                               </>
                             ) : (
-                              <span style={{ color: "#94a3b8" }}>—</span>
+                              <span style={{ color: "var(--color-text-muted)" }}>—</span>
                             )}
                           </td>
                         </tr>
@@ -22490,7 +23343,7 @@ export default function HomePage({
                 style={{
                   marginTop: "1rem",
                   fontSize: "0.75rem",
-                  color: "#64748b",
+                  color: "var(--color-text-muted)",
                   display: "flex",
                   justifyContent: "space-between"
                 }}
@@ -22518,16 +23371,22 @@ export default function HomePage({
 
       {/* MODAL 11: RECORD BATCH SERVICE DETAILS */}
       {showRecordBatchServiceModal && (
-        <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: "32rem" }}>
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="record-batch-service-modal-title"
+        >
+          <div className="modal-card modal-card-sm">
             <div className="modal-header">
-              <h3>✍️ Record Batch Notice Service</h3>
+              <h3 id="record-batch-service-modal-title">Record Batch Notice Service</h3>
               <button
                 type="button"
-                className="close-btn"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => setShowRecordBatchServiceModal(false)}
               >
-                &times;
+                <CloseIcon size={18} />
               </button>
             </div>
 
@@ -22548,8 +23407,9 @@ export default function HomePage({
                 </div>
 
                 <div className="form-group">
-                  <label>Date of Delivery / Service in Field:</label>
+                  <label htmlFor="ptas-portal-field-32">Date of Delivery / Service in Field:</label>
                   <input
+                    id="ptas-portal-field-32"
                     type="date"
                     required
                     value={batchServedDate}
@@ -22560,8 +23420,9 @@ export default function HomePage({
                 </div>
 
                 <div className="form-group">
-                  <label>Process Server / Tax Inspector Name:</label>
+                  <label htmlFor="ptas-portal-field-33">Process Server / Tax Inspector Name:</label>
                   <input
+                    id="ptas-portal-field-33"
                     type="text"
                     required
                     value={batchServerName}
@@ -22572,8 +23433,9 @@ export default function HomePage({
                 </div>
 
                 <div className="form-group">
-                  <label>Service Outcome / Status:</label>
+                  <label htmlFor="ptas-portal-field-34">Service Outcome / Status:</label>
                   <select
+                    id="ptas-portal-field-34"
                     value={batchServiceStatus}
                     onChange={(e) =>
                       setBatchServiceStatus(e.target.value as "SERVED" | "REFUSED" | "UNTRACEABLE")
@@ -22588,8 +23450,9 @@ export default function HomePage({
                 </div>
 
                 <div className="form-group">
-                  <label>Recipient Name or Witness Note:</label>
+                  <label htmlFor="ptas-portal-field-35">Recipient Name or Witness Note:</label>
                   <input
+                    id="ptas-portal-field-35"
                     type="text"
                     placeholder="e.g. Received by Proprietor / Witnessed by Market Union"
                     value={batchRecipientNote}
@@ -22619,16 +23482,22 @@ export default function HomePage({
 
       {/* MODAL 12: File New Appeal (Section 7 & Rule 13) */}
       {showFileAppealModal && (
-        <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: "650px", width: "95%" }}>
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="file-appeal-modal-title"
+        >
+          <div className="modal-card">
             <div className="modal-header">
-              <h3>⚖️ File Statutory Appeal (Section 7 &amp; Rule 13)</h3>
+              <h3 id="file-appeal-modal-title">File Statutory Appeal (Section 7 &amp; Rule 13)</h3>
               <button
                 type="button"
-                className="close-btn"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => setShowFileAppealModal(false)}
               >
-                &times;
+                <CloseIcon size={18} />
               </button>
             </div>
 
@@ -22653,8 +23522,11 @@ export default function HomePage({
                 </div>
 
                 <div className="form-group">
-                  <label>Select Impugned Tax Unit / Assessment:</label>
+                  <label htmlFor="ptas-portal-field-36">
+                    Select Impugned Tax Unit / Assessment:
+                  </label>
                   <select
+                    id="ptas-portal-field-36"
                     value={appealUnitId}
                     onChange={(e) => {
                       setAppealUnitId(e.target.value);
@@ -22679,8 +23551,9 @@ export default function HomePage({
                 </div>
 
                 <div className="form-group">
-                  <label>Primary Ground of Appeal:</label>
+                  <label htmlFor="ptas-portal-field-37">Primary Ground of Appeal:</label>
                   <select
+                    id="ptas-portal-field-37"
                     value={appealGroundCategory}
                     onChange={(e) => setAppealGroundCategory(e.target.value)}
                     className="form-control"
@@ -22707,8 +23580,9 @@ export default function HomePage({
                 </div>
 
                 <div className="form-group">
-                  <label>Ground Details &amp; Averments:</label>
+                  <label htmlFor="ptas-portal-field-38">Ground Details &amp; Averments:</label>
                   <textarea
+                    id="ptas-portal-field-38"
                     rows={3}
                     placeholder="State specific facts, employee payroll details, or reasons why the assessment is erroneous..."
                     value={appealGroundDetails}
@@ -22719,8 +23593,11 @@ export default function HomePage({
                 </div>
 
                 <div className="form-group">
-                  <label>Undisputed Tax Deposited into Treasury (PKR):</label>
+                  <label htmlFor="ptas-portal-field-39">
+                    Undisputed Tax Deposited into Treasury (PKR):
+                  </label>
                   <input
+                    id="ptas-portal-field-39"
                     type="number"
                     min={0}
                     required
@@ -22729,7 +23606,13 @@ export default function HomePage({
                     className="form-control"
                     style={{ width: "100%" }}
                   />
-                  <small style={{ color: "#64748b", display: "block", marginTop: "0.25rem" }}>
+                  <small
+                    style={{
+                      color: "var(--color-text-muted)",
+                      display: "block",
+                      marginTop: "0.25rem"
+                    }}
+                  >
                     Mandatory under Rule 13(2): No appeal shall be entertained without payment of
                     undisputed tax.
                   </small>
@@ -22798,16 +23681,22 @@ export default function HomePage({
 
       {/* MODAL 13: Fix Appellate Hearing Date (Schedule Court Session) */}
       {showScheduleHearingModal && (
-        <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: "550px", width: "95%" }}>
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="schedule-hearing-modal-title"
+        >
+          <div className="modal-card modal-card-sm">
             <div className="modal-header">
-              <h3>📅 Schedule Appellate Court Hearing</h3>
+              <h3 id="schedule-hearing-modal-title">Schedule Appellate Court Hearing</h3>
               <button
                 type="button"
-                className="close-btn"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => setShowScheduleHearingModal(false)}
               >
-                &times;
+                <CloseIcon size={18} />
               </button>
             </div>
 
@@ -22829,8 +23718,9 @@ export default function HomePage({
                 </div>
 
                 <div className="form-group">
-                  <label>Date of Appellate Hearing:</label>
+                  <label htmlFor="ptas-portal-field-40">Date of Appellate Hearing:</label>
                   <input
+                    id="ptas-portal-field-40"
                     type="date"
                     required
                     value={hearingDateInput}
@@ -22841,8 +23731,9 @@ export default function HomePage({
                 </div>
 
                 <div className="form-group">
-                  <label>Hearing Directions / Summons Note:</label>
+                  <label htmlFor="ptas-portal-field-41">Hearing Directions / Summons Note:</label>
                   <textarea
+                    id="ptas-portal-field-41"
                     rows={3}
                     value={hearingNotesInput}
                     onChange={(e) => setHearingNotesInput(e.target.value)}
@@ -22871,16 +23762,22 @@ export default function HomePage({
 
       {/* MODAL 14: Appellate Adjudication & Order Pronouncement */}
       {showAdjudicateAppealModal && (
-        <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: "700px", width: "95%" }}>
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="adjudicate-appeal-modal-title"
+        >
+          <div className="modal-card">
             <div className="modal-header">
-              <h3>👨‍⚖️ Appellate Court Adjudication</h3>
+              <h3 id="adjudicate-appeal-modal-title">Appellate Court Adjudication</h3>
               <button
                 type="button"
-                className="close-btn"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => setShowAdjudicateAppealModal(false)}
               >
-                &times;
+                <CloseIcon size={18} />
               </button>
             </div>
 
@@ -22952,8 +23849,9 @@ export default function HomePage({
                       </div>
 
                       <div className="form-group">
-                        <label>Appellate Decision:</label>
+                        <label htmlFor="ptas-portal-field-42">Appellate Decision:</label>
                         <select
+                          id="ptas-portal-field-42"
                           value={decisionType}
                           onChange={(e) =>
                             setDecisionType(
@@ -22992,8 +23890,11 @@ export default function HomePage({
 
                       {(decisionType === "REDUCE" || decisionType === "ENHANCE") && (
                         <div className="form-group">
-                          <label>Revised Assessed Tax Amount (PKR):</label>
+                          <label htmlFor="ptas-portal-field-43">
+                            Revised Assessed Tax Amount (PKR):
+                          </label>
                           <input
+                            id="ptas-portal-field-43"
                             type="number"
                             min={0}
                             required
@@ -23026,8 +23927,11 @@ export default function HomePage({
                       </div>
 
                       <div className="form-group">
-                        <label>Judicial Findings &amp; Operative Reasoning:</label>
+                        <label htmlFor="ptas-portal-field-44">
+                          Judicial Findings &amp; Operative Reasoning:
+                        </label>
                         <textarea
+                          id="ptas-portal-field-44"
                           rows={4}
                           required
                           value={judicialFindingsInput}
@@ -23060,19 +23964,22 @@ export default function HomePage({
 
       {/* MODAL 15: Statutory Appellate Order Document Viewer */}
       {showAppellateOrderModal && activeAppellateOrder && (
-        <div className="modal-overlay">
-          <div
-            className="modal-card"
-            style={{ maxWidth: "800px", width: "95%", maxHeight: "90vh", overflowY: "auto" }}
-          >
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="appellate-order-modal-title"
+        >
+          <div className="modal-card modal-card-lg">
             <div className="modal-header no-print">
-              <h3>📜 Statutory Appellate Order</h3>
+              <h3 id="appellate-order-modal-title">Statutory Appellate Order</h3>
               <button
                 type="button"
-                className="close-btn"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => setShowAppellateOrderModal(false)}
               >
-                &times;
+                <CloseIcon size={18} />
               </button>
             </div>
 
@@ -23240,7 +24147,13 @@ export default function HomePage({
                     borderTop: "1px dashed #cbd5e1"
                   }}
                 >
-                  <div style={{ fontSize: "0.7rem", color: "#64748b", maxWidth: "300px" }}>
+                  <div
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "var(--color-text-muted)",
+                      maxWidth: "300px"
+                    }}
+                  >
                     <strong>Cryptographic Non-Repudiation Digest:</strong>
                     <br />
                     <code style={{ fontSize: "0.65rem", wordBreak: "break-all" }}>
@@ -23257,7 +24170,7 @@ export default function HomePage({
                         alignItems: "center",
                         justifyContent: "center",
                         fontSize: "0.7rem",
-                        color: "#64748b",
+                        color: "var(--color-text-muted)",
                         margin: "0 auto 0.25rem"
                       }}
                     >
@@ -23307,38 +24220,36 @@ export default function HomePage({
 
       {/* MODAL 16: BULK SURVEY IMPORT STUDIO (FORM P.F.T-3 INGESTION) */}
       {showBulkSurveyModal && (
-        <div className="modal-overlay">
-          <div
-            className="modal-card modal-card-xl"
-            style={{ display: "flex", flexDirection: "column", maxHeight: "90vh" }}
-          >
-            <div
-              className="modal-header"
-              style={{
-                background: "linear-gradient(135deg, #0d3822 0%, #166534 100%)",
-                borderBottom: "3px solid #b45309"
-              }}
-            >
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bulk-survey-modal-title"
+        >
+          <div className="modal-card modal-card-xl">
+            <div className="modal-header">
               <div>
                 <h3
-                  style={{
-                    margin: 0,
-                    fontSize: "1.15rem",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem"
-                  }}
+                  id="bulk-survey-modal-title"
+                  style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
                 >
-                  <span>📋</span>
+                  <ClipboardListIcon size={18} />
                   <span>Field Survey Ingestion &bull; Register Form PFT-3</span>
                 </h3>
-                <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#d1fae5" }}>
+                <p
+                  style={{
+                    margin: "0.2rem 0 0",
+                    fontSize: "0.8rem",
+                    color: "var(--color-text-on-brand-muted)"
+                  }}
+                >
                   Bulk Field Survey Ingestion Studio &bull; Circle-Vehari (Rules 4, 5 &amp; 11)
                 </p>
               </div>
               <button
                 type="button"
                 className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => {
                   setShowBulkSurveyModal(false);
                   setBulkSurveyParseResult(null);
@@ -23400,10 +24311,8 @@ export default function HomePage({
 
               {/* Step 1 & 2 Toolbar Cards */}
               <div
+                className="form-grid-2"
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "1rem",
                   background: "#f8fafc",
                   padding: "1rem",
                   borderRadius: "8px",
@@ -23422,7 +24331,14 @@ export default function HomePage({
                     <h4 style={{ margin: "0 0 0.35rem 0", color: "#0f172a", fontSize: "0.95rem" }}>
                       1. Download Official Survey Template
                     </h4>
-                    <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b", lineHeight: 1.4 }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.8rem",
+                        color: "var(--color-text-muted)",
+                        lineHeight: 1.4
+                      }}
+                    >
                       Standard RFC-4180 CSV pre-configured with Punjab Finance Act Second Schedule
                       headers, CNIC/NTN formats, and authentic Circle-Vehari sample trades.
                     </p>
@@ -23546,9 +24462,8 @@ export default function HomePage({
                 <div style={{ marginTop: "0.75rem" }}>
                   {/* Summary Metric Cards */}
                   <div
+                    className="detail-grid"
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(4, 1fr)",
                       gap: "0.75rem",
                       marginBottom: "0.75rem"
                     }}
@@ -23561,7 +24476,13 @@ export default function HomePage({
                         borderRadius: "6px"
                       }}
                     >
-                      <span style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 700 }}>
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          color: "var(--color-text-muted)",
+                          fontWeight: 700
+                        }}
+                      >
                         TOTAL SURVEY ROWS
                       </span>
                       <strong style={{ display: "block", fontSize: "1.25rem", color: "#0f172a" }}>
@@ -23662,7 +24583,7 @@ export default function HomePage({
                       </button>
                     </div>
 
-                    <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                    <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
                       Circle: <strong>Circle-Vehari</strong> &bull; Assessing Authority:{" "}
                       <strong>Tariq Mahmood (ETO)</strong>
                     </span>
@@ -23676,14 +24597,18 @@ export default function HomePage({
                     <table className="gov-table" style={{ fontSize: "0.8rem" }}>
                       <thead>
                         <tr>
-                          <th style={{ width: "2.5rem" }}>#</th>
-                          <th style={{ width: "5.5rem" }}>Status</th>
-                          <th>Profession/Trade Name</th>
-                          <th>Identifier (CNIC/NTN)</th>
-                          <th>Commercial Address</th>
-                          <th>Statutory Rule</th>
-                          <th>Rate (PKR)</th>
-                          <th>Validation Findings / Remarks</th>
+                          <th scope="col" style={{ width: "2.5rem" }}>
+                            #
+                          </th>
+                          <th scope="col" style={{ width: "5.5rem" }}>
+                            Status
+                          </th>
+                          <th scope="col">Profession/Trade Name</th>
+                          <th scope="col">Identifier (CNIC/NTN)</th>
+                          <th scope="col">Commercial Address</th>
+                          <th scope="col">Statutory Rule</th>
+                          <th scope="col">Rate (PKR)</th>
+                          <th scope="col">Validation Findings / Remarks</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -23727,7 +24652,7 @@ export default function HomePage({
                                     style={{
                                       display: "block",
                                       fontSize: "0.7rem",
-                                      color: "#64748b"
+                                      color: "var(--color-text-muted)"
                                     }}
                                   >
                                     {row.rawData["tradeName"]}
@@ -23843,7 +24768,13 @@ export default function HomePage({
                   <strong style={{ fontSize: "1rem", color: "#334155" }}>
                     No field survey data loaded yet
                   </strong>
-                  <p style={{ fontSize: "0.8rem", color: "#64748b", margin: "0.35rem 0 0" }}>
+                  <p
+                    style={{
+                      fontSize: "0.8rem",
+                      color: "var(--color-text-muted)",
+                      margin: "0.35rem 0 0"
+                    }}
+                  >
                     Download the official template above or select a completed CSV survey
                     spreadsheet to validate records.
                   </p>
@@ -23855,7 +24786,7 @@ export default function HomePage({
               className="modal-footer"
               style={{ justifyContent: "space-between", alignItems: "center" }}
             >
-              <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
+              <div style={{ fontSize: "0.8rem", color: "var(--color-text-muted)" }}>
                 {bulkSurveyParseResult && bulkSurveyParseResult.validRowsCount > 0 ? (
                   <span>
                     Ready to import <strong>{bulkSurveyParseResult.validRowsCount}</strong> valid
@@ -23905,41 +24836,39 @@ export default function HomePage({
 
       {/* MODAL 17: OFFICIAL OFFICER LOGIN & AUTHORIZATION STUDIO (PHASE 5) */}
       {showAuthModal && (
-        <div className="modal-overlay">
-          <div
-            className="modal-card modal-card-xl"
-            style={{ display: "flex", flexDirection: "column", maxHeight: "92vh" }}
-          >
-            <div
-              className="modal-header"
-              style={{
-                background: "linear-gradient(135deg, #0d3822 0%, #1e3a8a 100%)",
-                borderBottom: "3px solid #b45309"
-              }}
-            >
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="auth-studio-modal-title"
+        >
+          <div className="modal-card modal-card-xl">
+            <div className="modal-header">
               <div>
                 <h3
-                  style={{
-                    margin: 0,
-                    fontSize: "1.15rem",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem"
-                  }}
+                  id="auth-studio-modal-title"
+                  style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
                 >
-                  <span>🏛️</span>
+                  <LandmarkIcon size={18} />
                   <span>Official Portal Sign In &amp; Session Control</span>
                 </h3>
-                <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#d1fae5" }}>
+                <p
+                  style={{
+                    margin: "0.2rem 0 0",
+                    fontSize: "0.8rem",
+                    color: "var(--color-text-on-brand-muted)"
+                  }}
+                >
                   Official Officer Authentication &amp; Multi-Role Jurisdiction Studio
                 </p>
               </div>
               <button
                 type="button"
                 className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => setShowAuthModal(false)}
               >
-                &times;
+                <CloseIcon size={18} />
               </button>
             </div>
 
@@ -23972,7 +24901,13 @@ export default function HomePage({
               {/* View 1: Quick Switch Cards */}
               {authModeTab === "QUICK" && (
                 <div>
-                  <p style={{ fontSize: "0.825rem", color: "#64748b", margin: "0 0 1rem 0" }}>
+                  <p
+                    style={{
+                      fontSize: "0.825rem",
+                      color: "var(--color-text-muted)",
+                      margin: "0 0 1rem 0"
+                    }}
+                  >
                     Select an official Government officer profile below to authenticate an active
                     session. Each officer role enforces distinct statutory legal powers and
                     jurisdiction boundaries under the Punjab Finance Act 1977.
@@ -24068,7 +25003,7 @@ export default function HomePage({
                             <div
                               style={{
                                 fontSize: "0.75rem",
-                                color: "#64748b",
+                                color: "var(--color-text-muted)",
                                 margin: "0.35rem 0 0.75rem 0"
                               }}
                             >
@@ -24199,7 +25134,13 @@ export default function HomePage({
                         value={authPasswordInput}
                         onChange={(e) => setAuthPasswordInput(e.target.value)}
                       />
-                      <span style={{ fontSize: "0.725rem", color: "#64748b", marginTop: "0.2rem" }}>
+                      <span
+                        style={{
+                          fontSize: "0.725rem",
+                          color: "var(--color-text-muted)",
+                          marginTop: "0.2rem"
+                        }}
+                      >
                         Credentials are issued out-of-band and are never stored in the client.
                       </span>
                     </div>
@@ -24242,7 +25183,7 @@ export default function HomePage({
                   <strong style={{ fontSize: "0.85rem", color: "#0f172a" }}>
                     📜 Server-Enforced Statutory Authority Matrix (AGENTS.md)
                   </strong>
-                  <span style={{ fontSize: "0.7rem", color: "#64748b" }}>
+                  <span style={{ fontSize: "0.7rem", color: "var(--color-text-muted)" }}>
                     Enforced at Domain Layer
                   </span>
                 </div>
@@ -24251,10 +25192,10 @@ export default function HomePage({
                   <table className="gov-table" style={{ fontSize: "0.78rem" }}>
                     <thead>
                       <tr>
-                        <th>Statutory Action / Feature</th>
-                        <th>Tax Inspector</th>
-                        <th>Assessing Authority / ETO</th>
-                        <th>Appellate Authority / Director</th>
+                        <th scope="col">Statutory Action / Feature</th>
+                        <th scope="col">Tax Inspector</th>
+                        <th scope="col">Assessing Authority / ETO</th>
+                        <th scope="col">Appellate Authority / Director</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -24339,33 +25280,41 @@ export default function HomePage({
 
       {/* MODAL 18: FORM P.F.T-5 CLEARANCE CERTIFICATE STUDIO */}
       {showClearanceModal && activeClearanceCert && (
-        <div className="modal-backdrop" onClick={() => setShowClearanceModal(false)}>
-          <div
-            className="modal-content modal-lg"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: "850px" }}
-          >
-            <div className="modal-header">
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="clearance-cert-modal-title"
+          onClick={() => setShowClearanceModal(false)}
+        >
+          <div className="modal-card modal-card-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header no-print">
               <div>
-                <h3>📜 Form P.F.T-5: Professional Tax Clearance Certificate</h3>
-                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                <h3 id="clearance-cert-modal-title">
+                  Form P.F.T-5: Professional Tax Clearance Certificate
+                </h3>
+                <p
+                  style={{
+                    margin: "0.2rem 0 0",
+                    fontSize: "0.8rem",
+                    color: "var(--color-text-on-brand-muted)"
+                  }}
+                >
                   Official statutory certificate issued under Rule 11 &amp; Section 3(1) of Punjab
                   Finance Act 1977
                 </p>
               </div>
               <button
                 type="button"
-                className="btn-close"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => setShowClearanceModal(false)}
               >
-                &times;
+                <CloseIcon size={18} />
               </button>
             </div>
 
-            <div
-              className="modal-body"
-              style={{ maxHeight: "78vh", overflowY: "auto", padding: "1.5rem" }}
-            >
+            <div className="modal-body">
               {/* Printable Clearance Certificate Container */}
               <div
                 id="clearance-certificate-printable"
@@ -24449,7 +25398,13 @@ export default function HomePage({
                   <h3 style={{ margin: "0.6rem 0 0", fontSize: "1.25rem", color: "#0d3822" }}>
                     TAX CLEARANCE CERTIFICATE
                   </h3>
-                  <span style={{ fontSize: "0.8rem", color: "#64748b", fontStyle: "italic" }}>
+                  <span
+                    style={{
+                      fontSize: "0.8rem",
+                      color: "var(--color-text-muted)",
+                      fontStyle: "italic"
+                    }}
+                  >
                     (Issued under Rule 11 of the Punjab Professions and Trades Tax Rules, 1977)
                   </span>
                 </div>
@@ -24589,7 +25544,13 @@ export default function HomePage({
                       border: "1px solid #e2e8f0"
                     }}
                   >
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", display: "block" }}>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-muted)",
+                        display: "block"
+                      }}
+                    >
                       Statutory Demand
                     </span>
                     <strong style={{ fontSize: "1.1rem", color: "#334155" }}>
@@ -24604,7 +25565,13 @@ export default function HomePage({
                       border: "1px solid #e2e8f0"
                     }}
                   >
-                    <span style={{ fontSize: "0.75rem", color: "#64748b", display: "block" }}>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--color-text-muted)",
+                        display: "block"
+                      }}
+                    >
                       Total Recovered / Paid
                     </span>
                     <strong style={{ fontSize: "1.1rem", color: "#166534" }}>
@@ -24697,7 +25664,13 @@ export default function HomePage({
                     <span style={{ display: "block", color: "#475569" }}>
                       {activeClearanceCert.issuingOfficerTitle}
                     </span>
-                    <span style={{ display: "block", color: "#64748b", fontSize: "0.75rem" }}>
+                    <span
+                      style={{
+                        display: "block",
+                        color: "var(--color-text-muted)",
+                        fontSize: "0.75rem"
+                      }}
+                    >
                       Assessing Authority &bull; Circle-Vehari
                     </span>
                   </div>
@@ -24710,7 +25683,7 @@ export default function HomePage({
                     paddingTop: "0.6rem",
                     borderTop: "1px solid #e2e8f0",
                     fontSize: "0.68rem",
-                    color: "#64748b",
+                    color: "var(--color-text-muted)",
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center"
@@ -24766,26 +25739,35 @@ export default function HomePage({
 
       {/* MODAL 19: FILE RULE 10 DISCONTINUANCE NOTICE */}
       {showFileDiscontinuanceModal && (
-        <div className="modal-backdrop" onClick={() => setShowFileDiscontinuanceModal(false)}>
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: "600px" }}
-          >
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="file-disc-modal-title"
+          onClick={() => setShowFileDiscontinuanceModal(false)}
+        >
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h3>🛑 File Rule 10 Notice of Discontinuance</h3>
-                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                <h3 id="file-disc-modal-title">File Rule 10 Notice of Discontinuance</h3>
+                <p
+                  style={{
+                    margin: "0.2rem 0 0",
+                    fontSize: "0.8rem",
+                    color: "var(--color-text-on-brand-muted)"
+                  }}
+                >
                   Notice of trade cessation or business closure under Punjab Professions &amp;
                   Trades Tax Rules, 1977
                 </p>
               </div>
               <button
                 type="button"
-                className="btn-close"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => setShowFileDiscontinuanceModal(false)}
               >
-                &times;
+                <CloseIcon size={18} />
               </button>
             </div>
 
@@ -24835,7 +25817,7 @@ export default function HomePage({
                     style={{ width: "100%", padding: "0.5rem" }}
                     required
                   />
-                  <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                  <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
                     Statutory Rule 10 requires 30 days prior written notice before closure.
                   </span>
                 </div>
@@ -24920,25 +25902,34 @@ export default function HomePage({
 
       {/* MODAL 20: INSPECTOR DISCONTINUANCE FIELD INSPECTION */}
       {showDiscontinuanceInspectionModal && (
-        <div className="modal-backdrop" onClick={() => setShowDiscontinuanceInspectionModal(false)}>
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: "600px" }}
-          >
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="disc-insp-modal-title"
+          onClick={() => setShowDiscontinuanceInspectionModal(false)}
+        >
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h3>🔍 Circle Inspector Field Verification (Rule 10)</h3>
-                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                <h3 id="disc-insp-modal-title">Circle Inspector Field Verification (Rule 10)</h3>
+                <p
+                  style={{
+                    margin: "0.2rem 0 0",
+                    fontSize: "0.8rem",
+                    color: "var(--color-text-on-brand-muted)"
+                  }}
+                >
                   On-site physical inspection by {officer.name || "Circle Inspector"}
                 </p>
               </div>
               <button
                 type="button"
-                className="btn-close"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => setShowDiscontinuanceInspectionModal(false)}
               >
-                &times;
+                <CloseIcon size={18} />
               </button>
             </div>
 
@@ -24995,7 +25986,7 @@ export default function HomePage({
                     placeholder="Detail physical inspection: status of premises, whether shop is shuttered, neighbor inquiries, fixtures removed..."
                     required
                   />
-                  <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                  <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
                     Signed by: {officer.name} ({officer.title}, Circle-Vehari)
                   </span>
                 </div>
@@ -25027,36 +26018,42 @@ export default function HomePage({
 
       {/* MODAL 21: ETO DISCONTINUANCE ORDER PREVIEW / ISSUANCE */}
       {showDiscontinuanceOrderModal && (
-        <div className="modal-backdrop" onClick={() => setShowDiscontinuanceOrderModal(false)}>
-          <div
-            className="modal-content modal-lg"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: "750px" }}
-          >
-            <div className="modal-header">
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="disc-order-modal-title"
+          onClick={() => setShowDiscontinuanceOrderModal(false)}
+        >
+          <div className="modal-card modal-card-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header no-print">
               <div>
-                <h3>⚖️ Statutory Discontinuance Order (Rule 10)</h3>
-                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                <h3 id="disc-order-modal-title">Statutory Discontinuance Order (Rule 10)</h3>
+                <p
+                  style={{
+                    margin: "0.2rem 0 0",
+                    fontSize: "0.8rem",
+                    color: "var(--color-text-on-brand-muted)"
+                  }}
+                >
                   Official Order passed by Assessing Authority (Excise &amp; Taxation Officer,
                   Vehari)
                 </p>
               </div>
               <button
                 type="button"
-                className="btn-close"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => {
                   setShowDiscontinuanceOrderModal(false);
                   setActiveDiscontinuanceOrder(null);
                 }}
               >
-                &times;
+                <CloseIcon size={18} />
               </button>
             </div>
 
-            <div
-              className="modal-body"
-              style={{ maxHeight: "75vh", overflowY: "auto", padding: "1.5rem" }}
-            >
+            <div className="modal-body">
               {/* If previewing a generated document */}
               {activeDiscontinuanceOrder ? (
                 <div
@@ -25203,14 +26200,18 @@ export default function HomePage({
                   >
                     <div>
                       <span
-                        style={{ fontFamily: "monospace", fontSize: "0.7rem", color: "#64748b" }}
+                        style={{
+                          fontFamily: "monospace",
+                          fontSize: "0.7rem",
+                          color: "var(--color-text-muted)"
+                        }}
                       >
                         SHA-256: {activeDiscontinuanceOrder.officialSha256.slice(0, 32)}...
                       </span>
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <strong>{activeDiscontinuanceOrder.etoName}</strong>
-                      <span style={{ display: "block", color: "#64748b" }}>
+                      <span style={{ display: "block", color: "var(--color-text-muted)" }}>
                         {activeDiscontinuanceOrder.etoTitle}, Circle-Vehari
                       </span>
                     </div>
@@ -25247,9 +26248,9 @@ export default function HomePage({
                   })()}
 
                   <div className="form-group" style={{ marginBottom: "1rem" }}>
-                    <label style={{ fontWeight: 600, display: "block", marginBottom: "0.4rem" }}>
+                    <span style={{ fontWeight: 600, display: "block", marginBottom: "0.4rem" }}>
                       Assessing Authority Statutory Decision:
-                    </label>
+                    </span>
                     <div style={{ display: "flex", gap: "1.5rem" }}>
                       <label
                         style={{
@@ -25369,21 +26370,34 @@ export default function HomePage({
 
       {/* MODAL 22: FILE RULE 5 REFUND / ADJUSTMENT APPLICATION */}
       {showRefundModal && (
-        <div className="modal-backdrop" onClick={() => setShowRefundModal(false)}>
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: "600px" }}
-          >
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="refund-file-modal-title"
+          onClick={() => setShowRefundModal(false)}
+        >
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h3>💰 File Rule 5 Refund / Credit Adjustment</h3>
-                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                <h3 id="refund-file-modal-title">File Rule 5 Refund / Credit Adjustment</h3>
+                <p
+                  style={{
+                    margin: "0.2rem 0 0",
+                    fontSize: "0.8rem",
+                    color: "var(--color-text-on-brand-muted)"
+                  }}
+                >
                   Statutory claim for excess deposit or erroneous tax assessment under Rule 5
                 </p>
               </div>
-              <button type="button" className="btn-close" onClick={() => setShowRefundModal(false)}>
-                &times;
+              <button
+                type="button"
+                className="modal-close-btn"
+                aria-label="Close dialog"
+                onClick={() => setShowRefundModal(false)}
+              >
+                <CloseIcon size={18} />
               </button>
             </div>
 
@@ -25558,35 +26572,41 @@ export default function HomePage({
 
       {/* MODAL 23: RULE 5 REFUND ADJUDICATION ORDER STUDIO */}
       {showRefundOrderModal && activeRefundOrder && (
-        <div className="modal-backdrop" onClick={() => setShowRefundOrderModal(false)}>
-          <div
-            className="modal-content modal-lg"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: "750px" }}
-          >
-            <div className="modal-header">
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="refund-order-modal-title"
+          onClick={() => setShowRefundOrderModal(false)}
+        >
+          <div className="modal-card modal-card-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header no-print">
               <div>
-                <h3>📄 Rule 5 Statutory Refund / Adjustment Decree</h3>
-                <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
+                <h3 id="refund-order-modal-title">Rule 5 Statutory Refund / Adjustment Decree</h3>
+                <p
+                  style={{
+                    margin: "0.2rem 0 0",
+                    fontSize: "0.8rem",
+                    color: "var(--color-text-on-brand-muted)"
+                  }}
+                >
                   Adjudication Order issued by Assessing Authority under Rule 5 of 1977 Rules
                 </p>
               </div>
               <button
                 type="button"
-                className="btn-close"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => {
                   setShowRefundOrderModal(false);
                   setActiveRefundOrder(null);
                 }}
               >
-                &times;
+                <CloseIcon size={18} />
               </button>
             </div>
 
-            <div
-              className="modal-body"
-              style={{ maxHeight: "75vh", overflowY: "auto", padding: "1.5rem" }}
-            >
+            <div className="modal-body">
               <div
                 id="refund-order-printable"
                 style={{
@@ -25723,13 +26743,19 @@ export default function HomePage({
                   }}
                 >
                   <div>
-                    <span style={{ fontFamily: "monospace", fontSize: "0.7rem", color: "#64748b" }}>
+                    <span
+                      style={{
+                        fontFamily: "monospace",
+                        fontSize: "0.7rem",
+                        color: "var(--color-text-muted)"
+                      }}
+                    >
                       SHA-256: {activeRefundOrder.officialSha256.slice(0, 32)}...
                     </span>
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <strong>{activeRefundOrder.etoName}</strong>
-                    <span style={{ display: "block", color: "#64748b" }}>
+                    <span style={{ display: "block", color: "var(--color-text-muted)" }}>
                       {activeRefundOrder.etoTitle}, Circle-Vehari
                     </span>
                   </div>
@@ -25908,10 +26934,14 @@ export default function HomePage({
                   }}
                 >
                   <div className="form-group" style={{ marginBottom: "1rem" }}>
-                    <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    <label
+                      htmlFor="ptas-portal-field-45"
+                      style={{ fontWeight: 700, fontSize: "0.85rem" }}
+                    >
                       Select Assessee / Business Unit:
                     </label>
                     <select
+                      id="ptas-portal-field-45"
                       className="form-control"
                       value={citizenPayUnitId}
                       onChange={(e) => {
@@ -25937,10 +26967,14 @@ export default function HomePage({
                   </div>
 
                   <div className="form-group" style={{ marginBottom: "1rem" }}>
-                    <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    <label
+                      htmlFor="ptas-portal-field-46"
+                      style={{ fontWeight: 700, fontSize: "0.85rem" }}
+                    >
                       Payment Gateway Channel:
                     </label>
                     <select
+                      id="ptas-portal-field-46"
                       className="form-control"
                       value={citizenPayChannel}
                       onChange={(e) =>
@@ -25957,10 +26991,14 @@ export default function HomePage({
                   </div>
 
                   <div className="form-group" style={{ marginBottom: "1rem" }}>
-                    <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    <label
+                      htmlFor="citpay-psid-display"
+                      style={{ fontWeight: 700, fontSize: "0.85rem" }}
+                    >
                       Generated 17-Digit ePay PSID:
                     </label>
                     <input
+                      id="citpay-psid-display"
                       type="text"
                       readOnly
                       className="form-control"
@@ -25972,17 +27010,27 @@ export default function HomePage({
                         color: "#1e3a8a"
                       }}
                     />
-                    <small style={{ color: "#64748b", display: "block", marginTop: "0.25rem" }}>
+                    <small
+                      style={{
+                        color: "var(--color-text-muted)",
+                        display: "block",
+                        marginTop: "0.25rem"
+                      }}
+                    >
                       Compliant with Government of Punjab Dept Code &lsquo;1001&rsquo; &amp; Vehari
                       District &lsquo;366&rsquo;.
                     </small>
                   </div>
 
                   <div className="form-group" style={{ marginBottom: "1.25rem" }}>
-                    <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    <label
+                      htmlFor="ptas-portal-field-47"
+                      style={{ fontWeight: 700, fontSize: "0.85rem" }}
+                    >
                       Deposit Amount (PKR):
                     </label>
                     <input
+                      id="ptas-portal-field-47"
                       type="number"
                       min={1}
                       className="form-control"
@@ -26022,66 +27070,31 @@ export default function HomePage({
       {showReceivePft2Modal && receivingChallan && (
         <div
           className="modal-overlay"
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(15, 23, 42, 0.75)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-            padding: "1rem"
-          }}
           role="dialog"
           aria-modal="true"
+          aria-labelledby="receive-pft2-modal-title"
         >
-          <div
-            className="modal-card"
-            style={{
-              background: "#ffffff",
-              borderRadius: "10px",
-              maxWidth: "36rem",
-              width: "100%",
-              maxHeight: "90vh",
-              overflowY: "auto",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
-              border: "1px solid #cbd5e1"
-            }}
-          >
-            <div
-              style={{
-                background: "linear-gradient(135deg, #065f46 0%, #047857 100%)",
-                color: "#ffffff",
-                padding: "1rem 1.25rem",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center"
-              }}
-            >
+          <div className="modal-card modal-card-sm">
+            <div className="modal-header">
               <div>
-                <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700 }}>
-                  📥 Receive Form P.F.T-2 Payment Challan
-                </h3>
-                <span style={{ fontSize: "0.8rem", color: "#d1fae5" }}>
+                <h3 id="receive-pft2-modal-title">Receive Form P.F.T-2 Payment Challan</h3>
+                <p
+                  style={{
+                    margin: "0.2rem 0 0",
+                    fontSize: "0.8rem",
+                    color: "var(--color-text-on-brand-muted)"
+                  }}
+                >
                   Acknowledge Bank Deposit &bull; Convert to Official Statutory Receipt (Rule 10)
-                </span>
+                </p>
               </div>
               <button
                 type="button"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => setShowReceivePft2Modal(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#ffffff",
-                  fontSize: "1.25rem",
-                  cursor: "pointer"
-                }}
               >
-                ✕
+                <CloseIcon size={18} />
               </button>
             </div>
 
@@ -26115,7 +27128,13 @@ export default function HomePage({
                   <strong>{receivingChallan.legalName}</strong> &bull;{" "}
                   {receivingChallan.identifierValue}
                 </div>
-                <div style={{ color: "#64748b", fontSize: "0.75rem", marginTop: "0.25rem" }}>
+                <div
+                  style={{
+                    color: "var(--color-text-muted)",
+                    fontSize: "0.75rem",
+                    marginTop: "0.25rem"
+                  }}
+                >
                   Entry {receivingChallan.subclassificationCode}: {receivingChallan.category} (Slab:{" "}
                   {receivingChallan.tertiarySlab})
                 </div>
@@ -26186,10 +27205,14 @@ export default function HomePage({
                 }}
               >
                 <div className="form-group" style={{ marginBottom: "0.85rem" }}>
-                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                  <label
+                    htmlFor="ptas-portal-field-48"
+                    style={{ fontWeight: 700, fontSize: "0.85rem" }}
+                  >
                     Payment Treasury Channel:
                   </label>
                   <select
+                    id="ptas-portal-field-48"
                     className="form-control"
                     value={receivePaymentChannel}
                     onChange={(e) => setReceivePaymentChannel(e.target.value)}
@@ -26211,6 +27234,7 @@ export default function HomePage({
                 >
                   <div className="form-group">
                     <label
+                      htmlFor="receive-pft2-district"
                       style={{
                         fontWeight: 700,
                         fontSize: "0.85rem",
@@ -26221,11 +27245,18 @@ export default function HomePage({
                     >
                       <span>🔒</span>
                       <span>📍 Relevant District:</span>
-                      <span style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 500 }}>
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          color: "var(--color-text-muted)",
+                          fontWeight: 500
+                        }}
+                      >
                         (Jurisdiction Locked)
                       </span>
                     </label>
                     <input
+                      id="receive-pft2-district"
                       type="text"
                       className="form-control"
                       value={receiveBranchDistrict}
@@ -26240,7 +27271,13 @@ export default function HomePage({
                       }}
                       title="Administrative district is legally locked to assessee circle jurisdiction"
                     />
-                    <small style={{ color: "#64748b", display: "block", marginTop: "0.2rem" }}>
+                    <small
+                      style={{
+                        color: "var(--color-text-muted)",
+                        display: "block",
+                        marginTop: "0.2rem"
+                      }}
+                    >
                       Legally locked to assessee circle &amp; officer jurisdiction (
                       {receiveBranchDistrict}).
                     </small>
@@ -26254,7 +27291,10 @@ export default function HomePage({
                         alignItems: "center"
                       }}
                     >
-                      <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                      <label
+                        htmlFor="receive-pft2-branch"
+                        style={{ fontWeight: 700, fontSize: "0.85rem" }}
+                      >
                         🏛️ Designated NBP Branch ({receiveDistrictBranches.length}):
                       </label>
                       <button
@@ -26276,6 +27316,7 @@ export default function HomePage({
 
                     {isCustomReceiveBranch ? (
                       <input
+                        id="receive-pft2-branch"
                         type="text"
                         className="form-control"
                         placeholder="Enter custom NBP branch or treasury location"
@@ -26285,6 +27326,7 @@ export default function HomePage({
                       />
                     ) : (
                       <select
+                        id="receive-pft2-branch"
                         className="form-control"
                         value={receiveBankBranch}
                         onChange={(e) => setReceiveBankBranch(e.target.value)}
@@ -26304,10 +27346,14 @@ export default function HomePage({
                 </div>
 
                 <div className="form-group" style={{ marginBottom: "0.85rem" }}>
-                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                  <label
+                    htmlFor="ptas-portal-field-49"
+                    style={{ fontWeight: 700, fontSize: "0.85rem" }}
+                  >
                     Bank Scroll / CPR Reference Number:
                   </label>
                   <input
+                    id="ptas-portal-field-49"
                     type="text"
                     className="form-control"
                     placeholder="Enter Bank Scroll / CPR Reference Number (e.g. NBP-CPR-2026-90142)"
@@ -26315,24 +27361,33 @@ export default function HomePage({
                     onChange={(e) => setReceiveBankScrollRef(e.target.value)}
                     required
                   />
-                  <small style={{ color: "#64748b", display: "block", marginTop: "0.2rem" }}>
+                  <small
+                    style={{
+                      color: "var(--color-text-muted)",
+                      display: "block",
+                      marginTop: "0.2rem"
+                    }}
+                  >
                     Computerized Payment Receipt (CPR) or Bank Daily Scroll serial reference.
                   </small>
                 </div>
 
                 <div
+                  className="form-grid-2"
                   style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
                     gap: "0.75rem",
                     marginBottom: "0.85rem"
                   }}
                 >
                   <div className="form-group">
-                    <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                    <label
+                      htmlFor="receive-pft2-date"
+                      style={{ fontWeight: 700, fontSize: "0.85rem" }}
+                    >
                       💳 Date of Receipt (Payment Date):
                     </label>
                     <input
+                      id="receive-pft2-date"
                       type="date"
                       className="form-control"
                       value={receiveDate}
@@ -26361,6 +27416,7 @@ export default function HomePage({
                   </div>
                   <div className="form-group">
                     <label
+                      htmlFor="receive-pft2-amount"
                       style={{
                         fontWeight: 700,
                         fontSize: "0.85rem",
@@ -26371,11 +27427,18 @@ export default function HomePage({
                     >
                       <span>🔒</span>
                       <span>Amount Received (PKR):</span>
-                      <span style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 500 }}>
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          color: "var(--color-text-muted)",
+                          fontWeight: 500
+                        }}
+                      >
                         (Locked)
                       </span>
                     </label>
                     <input
+                      id="receive-pft2-amount"
                       type="text"
                       className="form-control"
                       value={`PKR ${receivingChallan.amountPayable.toLocaleString()}`}
@@ -26391,7 +27454,7 @@ export default function HomePage({
                     />
                     <small
                       style={{
-                        color: "#64748b",
+                        color: "var(--color-text-muted)",
                         fontSize: "0.72rem",
                         display: "block",
                         marginTop: "0.25rem"
@@ -26403,10 +27466,14 @@ export default function HomePage({
                 </div>
 
                 <div className="form-group" style={{ marginBottom: "1.25rem" }}>
-                  <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                  <label
+                    htmlFor="ptas-portal-field-50"
+                    style={{ fontWeight: 700, fontSize: "0.85rem" }}
+                  >
                     Acknowledgement Remarks:
                   </label>
                   <input
+                    id="ptas-portal-field-50"
                     type="text"
                     className="form-control"
                     placeholder="Enter acknowledgement remarks or notes..."
@@ -26444,70 +27511,35 @@ export default function HomePage({
       {showIssuePft2Modal && (
         <div
           className="modal-overlay"
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(15, 23, 42, 0.75)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-            padding: "1rem"
-          }}
           role="dialog"
           aria-modal="true"
+          aria-labelledby="issue-pft2-modal-title"
         >
-          <div
-            className="modal-card"
-            style={{
-              background: "#ffffff",
-              borderRadius: "10px",
-              maxWidth: "42rem",
-              width: "100%",
-              maxHeight: "92vh",
-              overflowY: "auto",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
-              border: "1px solid #cbd5e1"
-            }}
-          >
-            <div
-              style={{
-                background: "linear-gradient(135deg, #0d3822 0%, #166534 100%)",
-                color: "#ffffff",
-                padding: "1.1rem 1.35rem",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center"
-              }}
-            >
+          <div className="modal-card" style={{ maxWidth: "42rem" }}>
+            <div className="modal-header">
               <div>
-                <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>
-                  ➕ Issue Form P.F.T-2 Payment Challan
-                </h3>
-                <span style={{ fontSize: "0.8rem", color: "#bbf7d0" }}>
+                <h3 id="issue-pft2-modal-title">Issue Form P.F.T-2 Payment Challan</h3>
+                <p
+                  style={{
+                    margin: "0.2rem 0 0",
+                    fontSize: "0.8rem",
+                    color: "var(--color-text-on-brand-muted)"
+                  }}
+                >
                   Official Statutory 3-Copy Payment Instrument under Rule 9 &bull; Circle-Vehari
-                </span>
+                </p>
               </div>
               <button
                 type="button"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => setShowIssuePft2Modal(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#ffffff",
-                  fontSize: "1.25rem",
-                  cursor: "pointer"
-                }}
               >
-                ✕
+                <CloseIcon size={18} />
               </button>
             </div>
 
-            <div style={{ padding: "1.35rem" }}>
+            <div className="modal-body">
               {(() => {
                 const selectedUnit = units.find((u) => u.id === issuePft2UnitId) ?? units[0];
                 const latestVersion = selectedUnit?.assessmentVersions[0];
@@ -26559,10 +27591,14 @@ export default function HomePage({
                   >
                     {/* Taxpayer Selection */}
                     <div className="form-group" style={{ marginBottom: "1rem" }}>
-                      <label style={{ fontWeight: 700, fontSize: "0.85rem", color: "#0d3822" }}>
+                      <label
+                        htmlFor="ptas-portal-field-51"
+                        style={{ fontWeight: 700, fontSize: "0.85rem", color: "#0d3822" }}
+                      >
                         Taxpayer Establishment / Demand Unit:
                       </label>
                       <select
+                        id="ptas-portal-field-51"
                         className="form-control"
                         value={issuePft2UnitId}
                         onChange={(e) => {
@@ -26594,6 +27630,7 @@ export default function HomePage({
 
                     {selectedUnit && (
                       <div
+                        className="form-grid-2"
                         style={{
                           background: "#f0fdf4",
                           border: "1px solid #bbf7d0",
@@ -26601,8 +27638,6 @@ export default function HomePage({
                           padding: "0.75rem 1rem",
                           marginBottom: "1rem",
                           fontSize: "0.825rem",
-                          display: "grid",
-                          gridTemplateColumns: "1fr 1fr",
                           gap: "0.5rem"
                         }}
                       >
@@ -26614,7 +27649,7 @@ export default function HomePage({
                         </div>
                         <div
                           style={{
-                            gridColumn: "span 2",
+                            gridColumn: "1 / -1",
                             whiteSpace: "normal",
                             wordBreak: "break-word"
                           }}
@@ -26643,7 +27678,7 @@ export default function HomePage({
 
                     {/* Streamlined Scope Radio Check Buttons & Due Date */}
                     <div style={{ marginBottom: "1rem" }}>
-                      <label
+                      <span
                         style={{
                           fontWeight: 700,
                           fontSize: "0.85rem",
@@ -26653,7 +27688,7 @@ export default function HomePage({
                         }}
                       >
                         Challan Scope:
-                      </label>
+                      </span>
                       <div
                         style={{
                           display: "flex",
@@ -26732,6 +27767,7 @@ export default function HomePage({
 
                     <div className="form-group" style={{ marginBottom: "1rem" }}>
                       <label
+                        htmlFor="ptas-portal-field-52"
                         style={{
                           fontWeight: 700,
                           fontSize: "0.85rem",
@@ -26742,6 +27778,7 @@ export default function HomePage({
                         Statutory Due Date (Calendar Month):
                       </label>
                       <input
+                        id="ptas-portal-field-52"
                         type="date"
                         className="form-control"
                         style={{ maxWidth: "16rem" }}
@@ -26761,7 +27798,7 @@ export default function HomePage({
                         marginBottom: "1rem"
                       }}
                     >
-                      <label
+                      <span
                         style={{
                           fontWeight: 700,
                           fontSize: "0.85rem",
@@ -26770,7 +27807,7 @@ export default function HomePage({
                         }}
                       >
                         Payment Amount Mode:
-                      </label>
+                      </span>
                       <div style={{ display: "flex", gap: "1.5rem", alignItems: "center" }}>
                         <label
                           style={{
@@ -26814,21 +27851,21 @@ export default function HomePage({
 
                       {issuePft2PaymentScope === "PARTIAL" && (
                         <div
+                          className="form-grid-2"
                           style={{
                             marginTop: "0.75rem",
-                            display: "grid",
-                            gridTemplateColumns: "1fr 1fr",
-                            gap: "1rem",
                             alignItems: "center"
                           }}
                         >
                           <div>
                             <label
+                              htmlFor="ptas-portal-field-53"
                               style={{ fontWeight: 700, fontSize: "0.8rem", color: "#92400e" }}
                             >
                               Enter Partial Challan Amount (PKR):
                             </label>
                             <input
+                              id="ptas-portal-field-53"
                               type="number"
                               min={100}
                               max={fullAssessed}
@@ -26906,7 +27943,13 @@ export default function HomePage({
                       </div>
 
                       <div style={{ marginBottom: "0.4rem" }}>
-                        <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
+                        <span
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "var(--color-text-muted)",
+                            fontWeight: 600
+                          }}
+                        >
                           Statutory Notice Number Pattern:
                         </span>
                         <div
@@ -27015,52 +28058,16 @@ export default function HomePage({
       {showPrintChallanModal && activePrintChallan && (
         <div
           className="modal-overlay"
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(15, 23, 42, 0.75)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-            padding: "1rem"
-          }}
           role="dialog"
           aria-modal="true"
+          aria-labelledby="print-challan-modal-title"
         >
-          <div
-            className="modal-card"
-            style={{
-              background: "#ffffff",
-              borderRadius: "10px",
-              maxWidth: "76rem",
-              width: "100%",
-              maxHeight: "94vh",
-              overflowY: "auto",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
-              border: "1px solid #cbd5e1"
-            }}
-          >
-            <div
-              style={{
-                background: "linear-gradient(135deg, #0d3822 0%, #166534 100%)",
-                color: "#ffffff",
-                padding: "1rem 1.35rem",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: "0.5rem"
-              }}
-            >
+          <div className="modal-card modal-card-xl" style={{ maxWidth: "76rem" }}>
+            <div className="modal-header no-print">
               <div>
-                <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700 }}>
-                  📑 Form P.F.T-2: Punjab Professional Tax Payment Challan &bull;{" "}
-                  <span style={{ color: "#86efac" }}>
+                <h3 id="print-challan-modal-title">
+                  Form P.F.T-2: Punjab Professional Tax Payment Challan &bull;{" "}
+                  <span style={{ color: "#bbf7d0" }}>
                     {activePrintChallan.demandScope === "ARREAR"
                       ? "ARREARS"
                       : activePrintChallan.demandScope === "COMBINED"
@@ -27068,17 +28075,24 @@ export default function HomePage({
                         : "CURRENT"}
                   </span>
                 </h3>
-                <span style={{ fontSize: "0.8rem", color: "#bbf7d0" }}>
-                  Notice No: {activePrintChallan.noticeNumber} &bull; Security Code: 🔐{" "}
+                <p
+                  style={{
+                    margin: "0.2rem 0 0",
+                    fontSize: "0.8rem",
+                    color: "var(--color-text-on-brand-muted)"
+                  }}
+                >
+                  Notice No: {activePrintChallan.noticeNumber} &bull; Security Code:{" "}
                   {activePrintChallan.pin}
-                </span>
+                </p>
               </div>
 
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <div
+                style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}
+              >
                 <button
                   type="button"
-                  className="btn-secondary btn-sm"
-                  style={{ backgroundColor: "#ffffff", color: "#0d3822", fontWeight: 700 }}
+                  className="btn-on-dark"
                   onClick={() =>
                     downloadOfficialPdf({
                       type: "FORM_PFT2_CHALLAN",
@@ -27102,26 +28116,20 @@ export default function HomePage({
                   }
                   title="Download authoritative 3-copy Form PFT-2 challan as vector PDF"
                 >
-                  📥 Download Official PDF (A4 Landscape)
+                  Download Official PDF (A4 Landscape)
                 </button>
                 <button
                   type="button"
+                  className="modal-close-btn"
+                  aria-label="Close dialog"
                   onClick={() => setShowPrintChallanModal(false)}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: "#ffffff",
-                    fontSize: "1.25rem",
-                    cursor: "pointer",
-                    marginLeft: "0.5rem"
-                  }}
                 >
-                  ✕
+                  <CloseIcon size={18} />
                 </button>
               </div>
             </div>
 
-            <div style={{ padding: "1.25rem" }}>
+            <div className="modal-body">
               {(() => {
                 const targetUnit =
                   units.find((u) => u.id === activePrintChallan.unitId) ?? units[0];
@@ -27207,63 +28215,27 @@ export default function HomePage({
       {showCancelPft2Modal && cancellingChallan && (
         <div
           className="modal-overlay"
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(15, 23, 42, 0.75)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-            padding: "1rem"
-          }}
           role="dialog"
           aria-modal="true"
+          aria-labelledby="cancel-pft2-modal-title"
         >
-          <div
-            className="modal-card"
-            style={{
-              background: "#ffffff",
-              borderRadius: "10px",
-              maxWidth: "30rem",
-              width: "100%",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
-              border: "1px solid #cbd5e1"
-            }}
-          >
+          <div className="modal-card modal-card-sm">
             <div
-              style={{
-                background: "#b91c1c",
-                color: "#ffffff",
-                padding: "1rem 1.25rem",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center"
-              }}
+              className="modal-header"
+              style={{ background: "var(--color-danger-solid)", borderBottomColor: "#fecaca" }}
             >
-              <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700 }}>
-                ❌ Cancel Form P.F.T-2 Challan
-              </h3>
+              <h3 id="cancel-pft2-modal-title">Cancel Form P.F.T-2 Challan</h3>
               <button
                 type="button"
+                className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => setShowCancelPft2Modal(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#ffffff",
-                  fontSize: "1.25rem",
-                  cursor: "pointer"
-                }}
               >
-                ✕
+                <CloseIcon size={18} />
               </button>
             </div>
 
-            <div style={{ padding: "1.25rem" }}>
+            <div className="modal-body">
               <p style={{ margin: "0 0 1rem", fontSize: "0.85rem", color: "#475569" }}>
                 Are you sure you want to cancel challan{" "}
                 <strong>{cancellingChallan.challanNumber}</strong> issued to{" "}
@@ -27271,17 +28243,27 @@ export default function HomePage({
               </p>
 
               <div className="form-group" style={{ marginBottom: "1.25rem" }}>
-                <label style={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                <label
+                  htmlFor="ptas-portal-field-54"
+                  style={{ fontWeight: 700, fontSize: "0.85rem" }}
+                >
                   Cancellation Justification / Reason:
                 </label>
                 <input
+                  id="ptas-portal-field-54"
                   type="text"
                   className="form-control"
                   value={cancelPft2Reason}
                   onChange={(e) => setCancelPft2Reason(e.target.value)}
                   required
                 />
-                <small style={{ color: "#64748b", display: "block", marginTop: "0.25rem" }}>
+                <small
+                  style={{
+                    color: "var(--color-text-muted)",
+                    display: "block",
+                    marginTop: "0.25rem"
+                  }}
+                >
                   Mandatory for statutory audit compliance under Rule 11.
                 </small>
               </div>
@@ -27315,58 +28297,30 @@ export default function HomePage({
       {showReceiptDocumentModal && activeReceiptRecord && (
         <div
           className="modal-overlay"
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(15, 23, 42, 0.75)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-            padding: "1rem"
-          }}
           role="dialog"
           aria-modal="true"
+          aria-labelledby="receipt-doc-modal-title"
         >
-          <div
-            className="modal-card modal-card-lg"
-            style={{
-              background: "#ffffff",
-              borderRadius: "10px",
-              maxWidth: "52rem",
-              width: "100%",
-              maxHeight: "90vh",
-              overflowY: "auto",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
-              border: "1px solid #cbd5e1"
-            }}
-          >
-            <div
-              style={{
-                background: "linear-gradient(135deg, #0d3822 0%, #14532d 100%)",
-                color: "#ffffff",
-                padding: "1rem 1.5rem",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center"
-              }}
-            >
+          <div className="modal-card modal-card-lg">
+            <div className="modal-header no-print">
               <div>
-                <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>
-                  Statutory Payment Receipt (Rule 10)
-                </h3>
-                <span style={{ fontSize: "0.8rem", color: "#d1fae5" }}>
+                <h3 id="receipt-doc-modal-title">Statutory Payment Receipt (Rule 10)</h3>
+                <p
+                  style={{
+                    margin: "0.2rem 0 0",
+                    fontSize: "0.8rem",
+                    color: "var(--color-text-on-brand-muted)"
+                  }}
+                >
                   Official Treasury Acknowledgement &bull; Head B01601 &bull; Permanent Record
-                </span>
+                </p>
               </div>
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <div
+                style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}
+              >
                 <button
                   type="button"
-                  className="btn-secondary btn-sm"
+                  className="btn-on-dark"
                   onClick={() =>
                     downloadOfficialPdf({
                       type: "STATUTORY_RECEIPT",
@@ -27379,33 +28333,26 @@ export default function HomePage({
                       )
                     )
                   }
-                  style={{ background: "#ffffff", color: "#0d3822", fontWeight: 700 }}
                   title="Download clean standalone PDF file"
                 >
-                  📥 Download PDF
+                  Download PDF
                 </button>
                 <button
                   type="button"
+                  className="modal-close-btn"
                   onClick={() => {
                     setShowReceiptDocumentModal(false);
                     setActiveReceiptRecord(null);
                   }}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: "#ffffff",
-                    fontSize: "1.25rem",
-                    cursor: "pointer"
-                  }}
-                  aria-label="Close"
+                  aria-label="Close dialog"
                 >
-                  ✕
+                  <CloseIcon size={18} />
                 </button>
               </div>
             </div>
 
             {/* Document Body Target */}
-            <div style={{ padding: "1rem" }}>
+            <div className="modal-body">
               <div
                 id="receipt-document-card"
                 className="printable-document receipt-document"
@@ -27476,7 +28423,13 @@ export default function HomePage({
                   >
                     STATUTORY PAYMENT RECEIPT / ACKNOWLEDGEMENT
                   </h3>
-                  <p style={{ margin: "0.15rem 0 0", fontSize: "0.72rem", color: "#64748b" }}>
+                  <p
+                    style={{
+                      margin: "0.15rem 0 0",
+                      fontSize: "0.72rem",
+                      color: "var(--color-text-muted)"
+                    }}
+                  >
                     (Issued under Rule 10 of the Punjab Professions and Trades Tax Rules, 1977)
                   </p>
                 </div>
@@ -27496,7 +28449,13 @@ export default function HomePage({
                   }}
                 >
                   <div>
-                    <span style={{ color: "#64748b", display: "block", fontSize: "0.7rem" }}>
+                    <span
+                      style={{
+                        color: "var(--color-text-muted)",
+                        display: "block",
+                        fontSize: "0.7rem"
+                      }}
+                    >
                       Receipt Number:
                     </span>
                     <strong style={{ color: "#065f46", fontSize: "0.95rem" }}>
@@ -27523,7 +28482,13 @@ export default function HomePage({
                     )}
                   </div>
                   <div>
-                    <span style={{ color: "#64748b", display: "block", fontSize: "0.7rem" }}>
+                    <span
+                      style={{
+                        color: "var(--color-text-muted)",
+                        display: "block",
+                        fontSize: "0.7rem"
+                      }}
+                    >
                       💳 Date of Receipt (Payment Date):
                     </span>
                     <strong style={{ color: "#065f46" }}>
@@ -27531,7 +28496,13 @@ export default function HomePage({
                     </strong>
                   </div>
                   <div>
-                    <span style={{ color: "#64748b", display: "block", fontSize: "0.7rem" }}>
+                    <span
+                      style={{
+                        color: "var(--color-text-muted)",
+                        display: "block",
+                        fontSize: "0.7rem"
+                      }}
+                    >
                       🕒 System Entry (Date &amp; Time):
                     </span>
                     <strong style={{ color: "#1e293b", fontSize: "0.75rem" }}>
@@ -27544,7 +28515,13 @@ export default function HomePage({
                     </strong>
                   </div>
                   <div>
-                    <span style={{ color: "#64748b", display: "block", fontSize: "0.7rem" }}>
+                    <span
+                      style={{
+                        color: "var(--color-text-muted)",
+                        display: "block",
+                        fontSize: "0.7rem"
+                      }}
+                    >
                       Challan Reference (Form P.F.T-2):
                     </span>
                     <strong>{activeReceiptRecord.challanNumber}</strong>
@@ -27565,7 +28542,13 @@ export default function HomePage({
                     )}
                   </div>
                   <div>
-                    <span style={{ color: "#64748b", display: "block", fontSize: "0.7rem" }}>
+                    <span
+                      style={{
+                        color: "var(--color-text-muted)",
+                        display: "block",
+                        fontSize: "0.7rem"
+                      }}
+                    >
                       Permanent Demand No (PDN):
                     </span>
                     <strong>{activeReceiptRecord.demandNumber}</strong>
@@ -27583,7 +28566,13 @@ export default function HomePage({
                 >
                   <tbody>
                     <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                      <td style={{ padding: "0.3rem 0", color: "#64748b", width: "28%" }}>
+                      <td
+                        style={{
+                          padding: "0.3rem 0",
+                          color: "var(--color-text-muted)",
+                          width: "28%"
+                        }}
+                      >
                         Assessee Profession/Trade Name:
                       </td>
                       <td style={{ padding: "0.3rem 0", fontWeight: 700, color: "#0f172a" }}>
@@ -27592,7 +28581,7 @@ export default function HomePage({
                     </tr>
                     {activeReceiptRecord.assesseeTradeName && (
                       <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                        <td style={{ padding: "0.3rem 0", color: "#64748b" }}>
+                        <td style={{ padding: "0.3rem 0", color: "var(--color-text-muted)" }}>
                           Trade / Business Name:
                         </td>
                         <td style={{ padding: "0.3rem 0", fontWeight: 600 }}>
@@ -27601,7 +28590,7 @@ export default function HomePage({
                       </tr>
                     )}
                     <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                      <td style={{ padding: "0.3rem 0", color: "#64748b" }}>
+                      <td style={{ padding: "0.3rem 0", color: "var(--color-text-muted)" }}>
                         Registration / Tax Identifier:
                       </td>
                       <td style={{ padding: "0.3rem 0", fontFamily: "monospace", fontWeight: 600 }}>
@@ -27609,11 +28598,13 @@ export default function HomePage({
                       </td>
                     </tr>
                     <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                      <td style={{ padding: "0.3rem 0", color: "#64748b" }}>Commercial Address:</td>
+                      <td style={{ padding: "0.3rem 0", color: "var(--color-text-muted)" }}>
+                        Commercial Address:
+                      </td>
                       <td style={{ padding: "0.3rem 0" }}>{activeReceiptRecord.address}</td>
                     </tr>
                     <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                      <td style={{ padding: "0.3rem 0", color: "#64748b" }}>
+                      <td style={{ padding: "0.3rem 0", color: "var(--color-text-muted)" }}>
                         Second Schedule Classification:
                       </td>
                       <td style={{ padding: "0.3rem 0", fontWeight: 600 }}>
@@ -27623,7 +28614,7 @@ export default function HomePage({
                       </td>
                     </tr>
                     <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                      <td style={{ padding: "0.3rem 0", color: "#64748b" }}>
+                      <td style={{ padding: "0.3rem 0", color: "var(--color-text-muted)" }}>
                         Provincial Account Head:
                       </td>
                       <td style={{ padding: "0.3rem 0", fontFamily: "monospace" }}>
@@ -27687,7 +28678,7 @@ export default function HomePage({
                       style={{
                         display: "block",
                         fontSize: "0.7rem",
-                        color: "#64748b",
+                        color: "var(--color-text-muted)",
                         marginTop: "0.25rem"
                       }}
                     >
@@ -27759,7 +28750,7 @@ export default function HomePage({
                         style={{
                           display: "block",
                           fontSize: "0.62rem",
-                          color: "#64748b",
+                          color: "var(--color-text-muted)",
                           maxWidth: "15rem",
                           marginTop: "0.15rem"
                         }}
@@ -27783,7 +28774,13 @@ export default function HomePage({
                     <strong style={{ display: "block", fontSize: "0.82rem" }}>
                       {activeReceiptRecord.receivingOfficerName}
                     </strong>
-                    <span style={{ display: "block", fontSize: "0.7rem", color: "#64748b" }}>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: "0.7rem",
+                        color: "var(--color-text-muted)"
+                      }}
+                    >
                       {activeReceiptRecord.receivingOfficerTitle}
                     </span>
                     <span
@@ -27812,7 +28809,7 @@ export default function HomePage({
                 alignItems: "center"
               }}
             >
-              <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+              <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
                 Statutory Receipt &bull; Rule 10, Punjab Professions and Trades Tax Rules, 1977
               </span>
               <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -27854,57 +28851,37 @@ export default function HomePage({
       {showPft2ExecutiveModal && (
         <div
           className="modal-overlay"
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(15, 23, 42, 0.75)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-            padding: "1rem"
-          }}
           role="dialog"
           aria-modal="true"
+          aria-labelledby="pft2-exec-modal-title"
         >
           <div
             className="modal-card"
-            style={{
-              background: "#ffffff",
-              borderRadius: "10px",
-              maxWidth: "40rem",
-              width: "100%",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
-              border: "1px solid #cbd5e1",
-              padding: "1.5rem"
-            }}
+            style={{ maxWidth: "40rem", padding: "1.5rem", overflowY: "auto" }}
           >
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                marginBottom: "1rem"
+                marginBottom: "1rem",
+                paddingBottom: "0.75rem",
+                borderBottom: "1px solid var(--color-border-subtle)"
               }}
             >
-              <h3 style={{ margin: 0, color: "#0d3822", fontSize: "1.2rem" }}>
-                📊 Form P.F.T-2 Executive Management Brief
+              <h3
+                id="pft2-exec-modal-title"
+                style={{ margin: 0, color: "var(--color-brand-900)", fontSize: "1.15rem" }}
+              >
+                Form P.F.T-2 Executive Management Brief
               </h3>
               <button
                 type="button"
+                className="btn-ghost btn-sm"
+                aria-label="Close dialog"
                 onClick={() => setShowPft2ExecutiveModal(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  fontSize: "1.25rem",
-                  cursor: "pointer"
-                }}
               >
-                ✕
+                <CloseIcon size={18} />
               </button>
             </div>
 
@@ -27919,10 +28896,8 @@ export default function HomePage({
                     </p>
 
                     <div
+                      className="form-grid-2"
                       style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "1rem",
                         marginBottom: "1.25rem"
                       }}
                     >
@@ -27934,7 +28909,7 @@ export default function HomePage({
                           border: "1px solid #e2e8f0"
                         }}
                       >
-                        <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                        <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
                           Total Assessed Demand
                         </span>
                         <h3 style={{ margin: "0.25rem 0", color: "#0d3822" }}>
@@ -27997,7 +28972,7 @@ export default function HomePage({
                         <h3 style={{ margin: "0.25rem 0", color: "#1e3a8a" }}>
                           {summary.realizationRate}%
                         </h3>
-                        <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                        <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
                           {summary.cancelledCount} superseded / cancelled
                         </span>
                       </div>
@@ -28085,57 +29060,37 @@ export default function HomePage({
       {showReceiptsExecutiveModal && (
         <div
           className="modal-overlay"
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(15, 23, 42, 0.75)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-            padding: "1rem"
-          }}
           role="dialog"
           aria-modal="true"
+          aria-labelledby="receipts-exec-modal-title"
         >
           <div
             className="modal-card"
-            style={{
-              background: "#ffffff",
-              borderRadius: "10px",
-              maxWidth: "42rem",
-              width: "100%",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
-              border: "1px solid #cbd5e1",
-              padding: "1.5rem"
-            }}
+            style={{ maxWidth: "42rem", padding: "1.5rem", overflowY: "auto" }}
           >
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                marginBottom: "1rem"
+                marginBottom: "1rem",
+                paddingBottom: "0.75rem",
+                borderBottom: "1px solid var(--color-border-subtle)"
               }}
             >
-              <h3 style={{ margin: 0, color: "#0d3822", fontSize: "1.2rem" }}>
-                📊 Statutory Receipts Executive Collection Brief
+              <h3
+                id="receipts-exec-modal-title"
+                style={{ margin: 0, color: "var(--color-brand-900)", fontSize: "1.15rem" }}
+              >
+                Statutory Receipts Executive Collection Brief
               </h3>
               <button
                 type="button"
+                className="btn-ghost btn-sm"
+                aria-label="Close dialog"
                 onClick={() => setShowReceiptsExecutiveModal(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  fontSize: "1.25rem",
-                  cursor: "pointer"
-                }}
               >
-                ✕
+                <CloseIcon size={18} />
               </button>
             </div>
 
@@ -28144,10 +29099,8 @@ export default function HomePage({
               return (
                 <div>
                   <div
+                    className="form-grid-2"
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "1rem",
                       marginBottom: "1.25rem"
                     }}
                   >
@@ -28177,13 +29130,13 @@ export default function HomePage({
                         border: "1px solid #e2e8f0"
                       }}
                     >
-                      <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                      <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
                         Average Receipt Yield
                       </span>
                       <h2 style={{ margin: "0.25rem 0", color: "#1e3a8a" }}>
                         PKR {summary.averageReceiptPkr.toLocaleString()}
                       </h2>
-                      <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                      <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
                         Per discharged assessee
                       </span>
                     </div>
@@ -28202,11 +29155,13 @@ export default function HomePage({
                   >
                     <thead>
                       <tr style={{ background: "#f8fafc", borderBottom: "1px solid #cbd5e1" }}>
-                        <th style={{ padding: "0.5rem", textAlign: "left" }}>
+                        <th scope="col" style={{ padding: "0.5rem", textAlign: "left" }}>
                           Demand / Challan Type
                         </th>
-                        <th style={{ padding: "0.5rem", textAlign: "center" }}>Receipts Issued</th>
-                        <th style={{ padding: "0.5rem", textAlign: "right" }}>
+                        <th scope="col" style={{ padding: "0.5rem", textAlign: "center" }}>
+                          Receipts Issued
+                        </th>
+                        <th scope="col" style={{ padding: "0.5rem", textAlign: "right" }}>
                           Total Revenue Realized
                         </th>
                       </tr>
@@ -28264,9 +29219,15 @@ export default function HomePage({
                   >
                     <thead>
                       <tr style={{ background: "#f8fafc", borderBottom: "1px solid #cbd5e1" }}>
-                        <th style={{ padding: "0.5rem", textAlign: "left" }}>Payment Channel</th>
-                        <th style={{ padding: "0.5rem", textAlign: "center" }}>Transactions</th>
-                        <th style={{ padding: "0.5rem", textAlign: "right" }}>Total Collected</th>
+                        <th scope="col" style={{ padding: "0.5rem", textAlign: "left" }}>
+                          Payment Channel
+                        </th>
+                        <th scope="col" style={{ padding: "0.5rem", textAlign: "center" }}>
+                          Transactions
+                        </th>
+                        <th scope="col" style={{ padding: "0.5rem", textAlign: "right" }}>
+                          Total Collected
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -28327,36 +29288,13 @@ export default function HomePage({
           return (
             <div
               className="modal-overlay"
-              style={{
-                position: "fixed",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: "rgba(15, 23, 42, 0.75)",
-                backdropFilter: "blur(4px)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                zIndex: 9999,
-                padding: "1rem"
-              }}
               role="dialog"
               aria-modal="true"
+              aria-labelledby="add-potential-modal-title"
             >
               <div
                 className="modal-card"
-                style={{
-                  background: "#ffffff",
-                  borderRadius: "12px",
-                  maxWidth: "42rem",
-                  width: "100%",
-                  maxHeight: "90vh",
-                  overflowY: "auto",
-                  boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)",
-                  border: "1px solid #cbd5e1",
-                  padding: "1.5rem"
-                }}
+                style={{ maxWidth: "42rem", padding: "1.5rem", overflowY: "auto" }}
               >
                 <div
                   style={{
@@ -28364,19 +29302,25 @@ export default function HomePage({
                     justifyContent: "space-between",
                     alignItems: "center",
                     marginBottom: "0.75rem",
-                    borderBottom: "1px solid #e2e8f0",
+                    borderBottom: "1px solid var(--color-border-subtle)",
                     paddingBottom: "0.75rem"
                   }}
                 >
                   <div>
                     <h3
-                      style={{ margin: 0, fontSize: "1.25rem", color: "#0f172a", fontWeight: 800 }}
+                      id="add-potential-modal-title"
+                      style={{
+                        margin: 0,
+                        fontSize: "1.15rem",
+                        color: "var(--color-text)",
+                        fontWeight: 800
+                      }}
                     >
                       {editingPotentialUnitId
-                        ? `✏️ Edit Potential Assessee Particulars — ${potNewLegalName || potNewCircleName}`
-                        : `➕ Register Potential Taxable Unit — ${potNewCircleName}`}
+                        ? `Edit Potential Assessee Particulars — ${potNewLegalName || potNewCircleName}`
+                        : `Register Potential Taxable Unit — ${potNewCircleName}`}
                     </h3>
-                    <p style={{ margin: "0.25rem 0 0", fontSize: "0.78rem", color: "#64748b" }}>
+                    <p className="form-help" style={{ marginTop: "0.25rem" }}>
                       {editingPotentialUnitId
                         ? "Update unmigrated prospective survey unit particulars and classification."
                         : "Enrolls an unassessed commercial unit into the discovery pipeline with a provisional PIN."}
@@ -28384,19 +29328,14 @@ export default function HomePage({
                   </div>
                   <button
                     type="button"
+                    className="btn-ghost btn-sm"
+                    aria-label="Close dialog"
                     onClick={() => {
                       setShowAddPotentialModal(false);
                       setEditingPotentialUnitId(null);
                     }}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      fontSize: "1.25rem",
-                      cursor: "pointer",
-                      color: "#64748b"
-                    }}
                   >
-                    ✕
+                    <CloseIcon size={18} />
                   </button>
                 </div>
 
@@ -28462,15 +29401,14 @@ export default function HomePage({
 
                   {/* Assessee Names */}
                   <div
+                    className="form-grid-2"
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "1rem",
                       marginBottom: "1rem"
                     }}
                   >
                     <div>
                       <label
+                        htmlFor="ptas-portal-field-55"
                         style={{
                           display: "block",
                           fontSize: "0.8rem",
@@ -28482,6 +29420,7 @@ export default function HomePage({
                         Profession/Trade Name *
                       </label>
                       <input
+                        id="ptas-portal-field-55"
                         type="text"
                         required
                         disabled={!isPotEditable}
@@ -28498,6 +29437,7 @@ export default function HomePage({
                     </div>
                     <div>
                       <label
+                        htmlFor="ptas-portal-field-56"
                         style={{
                           display: "block",
                           fontSize: "0.8rem",
@@ -28509,6 +29449,7 @@ export default function HomePage({
                         Taxpayer / Assessee
                       </label>
                       <input
+                        id="ptas-portal-field-56"
                         type="text"
                         disabled={!isPotEditable}
                         value={potNewTradeName}
@@ -28535,6 +29476,7 @@ export default function HomePage({
                   >
                     <div>
                       <label
+                        htmlFor="ptas-portal-field-57"
                         style={{
                           display: "block",
                           fontSize: "0.8rem",
@@ -28546,6 +29488,7 @@ export default function HomePage({
                         Tax ID Type
                       </label>
                       <select
+                        id="ptas-portal-field-57"
                         disabled={!isPotEditable}
                         value={potNewIdType}
                         onChange={(e) => {
@@ -28566,6 +29509,7 @@ export default function HomePage({
                     </div>
                     <div>
                       <label
+                        htmlFor="ptas-portal-field-58"
                         style={{
                           display: "block",
                           fontSize: "0.8rem",
@@ -28577,6 +29521,7 @@ export default function HomePage({
                         Tax Identifier Value
                       </label>
                       <input
+                        id="ptas-portal-field-58"
                         type="text"
                         disabled={!isPotEditable}
                         value={potNewIdValue}
@@ -28597,6 +29542,7 @@ export default function HomePage({
                   {/* Administrative Circle */}
                   <div style={{ marginBottom: "1rem" }}>
                     <label
+                      htmlFor="ptas-portal-field-59"
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
@@ -28608,12 +29554,19 @@ export default function HomePage({
                     >
                       <span>Administrative Circle *</span>
                       {officer.role === "INSPECTOR" && (
-                        <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 400 }}>
+                        <span
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "var(--color-text-muted)",
+                            fontWeight: 400
+                          }}
+                        >
                           🔒 Assigned Circle
                         </span>
                       )}
                     </label>
                     <select
+                      id="ptas-portal-field-59"
                       disabled={!isPotEditable || officer.role === "INSPECTOR"}
                       value={potNewCircleName}
                       onChange={(e) => {
@@ -28641,6 +29594,7 @@ export default function HomePage({
                   {/* Assigned Locality from System Database for this Circle */}
                   <div style={{ marginBottom: "1rem" }}>
                     <label
+                      htmlFor="pot-locality-select"
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
@@ -28657,6 +29611,7 @@ export default function HomePage({
                     </label>
                     <div style={{ display: "flex", gap: "0.5rem" }}>
                       <select
+                        id="pot-locality-select"
                         disabled={!isPotEditable}
                         value={
                           potCircleLocalities.includes(potNewLocality)
@@ -28689,6 +29644,7 @@ export default function HomePage({
                       </select>
                       <input
                         type="text"
+                        aria-label="Custom locality name"
                         disabled={!isPotEditable}
                         value={potNewLocality}
                         onChange={(e) => setPotNewLocality(e.target.value)}
@@ -28704,7 +29660,7 @@ export default function HomePage({
                     <span
                       style={{
                         fontSize: "0.72rem",
-                        color: "#64748b",
+                        color: "var(--color-text-muted)",
                         display: "block",
                         marginTop: "0.25rem"
                       }}
@@ -28718,6 +29674,7 @@ export default function HomePage({
                   {/* Physical Address */}
                   <div style={{ marginBottom: "1rem" }}>
                     <label
+                      htmlFor="ptas-portal-field-60"
                       style={{
                         display: "block",
                         fontSize: "0.8rem",
@@ -28729,6 +29686,7 @@ export default function HomePage({
                       Physical Business Address
                     </label>
                     <input
+                      id="ptas-portal-field-60"
                       type="text"
                       disabled={!isPotEditable}
                       value={potNewAddress}
@@ -28745,15 +29703,14 @@ export default function HomePage({
 
                   {/* 1. Category (Class) */}
                   <div
+                    className="form-grid-2"
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "1rem",
                       marginBottom: "1rem"
                     }}
                   >
                     <div>
                       <label
+                        htmlFor="ptas-portal-field-61"
                         style={{
                           display: "block",
                           fontSize: "0.8rem",
@@ -28765,6 +29722,7 @@ export default function HomePage({
                         1. Statutory Schedule Category *
                       </label>
                       <select
+                        id="ptas-portal-field-61"
                         disabled={!isPotEditable}
                         value={potNewCategoryCode}
                         onChange={(e) => handlePotCategoryChange(e.target.value)}
@@ -28783,19 +29741,35 @@ export default function HomePage({
                       </select>
                     </div>
                     <div>
-                      <label
-                        style={{
-                          display: "block",
-                          fontSize: "0.8rem",
-                          fontWeight: 600,
-                          color: "#334155",
-                          marginBottom: "0.25rem"
-                        }}
-                      >
-                        2. Sub-Classification *
-                      </label>
+                      {potAvailableSubclasses.length > 0 ? (
+                        <label
+                          htmlFor="pot-subclass-select"
+                          style={{
+                            display: "block",
+                            fontSize: "0.8rem",
+                            fontWeight: 600,
+                            color: "#334155",
+                            marginBottom: "0.25rem"
+                          }}
+                        >
+                          2. Sub-Classification *
+                        </label>
+                      ) : (
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: "0.8rem",
+                            fontWeight: 600,
+                            color: "#334155",
+                            marginBottom: "0.25rem"
+                          }}
+                        >
+                          2. Sub-Classification *
+                        </span>
+                      )}
                       {potAvailableSubclasses.length > 0 ? (
                         <select
+                          id="pot-subclass-select"
                           disabled={!isPotEditable}
                           value={potNewSubclassCode}
                           onChange={(e) => handlePotSubclassChange(e.target.value)}
@@ -28835,6 +29809,7 @@ export default function HomePage({
                   {potAvailableTertiaryRules.length > 0 ? (
                     <div style={{ marginBottom: "1rem" }}>
                       <label
+                        htmlFor="ptas-portal-field-62"
                         style={{
                           display: "block",
                           fontSize: "0.8rem",
@@ -28846,6 +29821,7 @@ export default function HomePage({
                         3. Tertiary Tier / Operational Scope &amp; Slabs *
                       </label>
                       <select
+                        id="ptas-portal-field-62"
                         disabled={!isPotEditable}
                         value={potNewTertiaryCode}
                         onChange={(e) => handlePotTertiaryChange(e.target.value)}
@@ -28867,7 +29843,7 @@ export default function HomePage({
                     </div>
                   ) : (
                     <div style={{ marginBottom: "1rem" }}>
-                      <label
+                      <span
                         style={{
                           display: "block",
                           fontSize: "0.8rem",
@@ -28877,7 +29853,7 @@ export default function HomePage({
                         }}
                       >
                         3. Tertiary Tier / Operational Scope &amp; Slabs
-                      </label>
+                      </span>
                       <div
                         style={{
                           padding: "0.55rem 0.75rem",
@@ -28931,7 +29907,7 @@ export default function HomePage({
                         display: "block",
                         marginTop: "0.25rem",
                         fontSize: "0.72rem",
-                        color: "#64748b"
+                        color: "var(--color-text-muted)"
                       }}
                     >
                       Specify any prior-year unrecovered professional tax arrears brought forward.
@@ -29033,7 +30009,11 @@ export default function HomePage({
                             }}
                           >
                             <span
-                              style={{ fontSize: "0.725rem", color: "#64748b", fontWeight: 600 }}
+                              style={{
+                                fontSize: "0.725rem",
+                                color: "var(--color-text-muted)",
+                                fontWeight: 600
+                              }}
                             >
                               PROVISIONAL PIN (POTENTIAL PIPELINE):
                             </span>
@@ -29107,49 +30087,27 @@ export default function HomePage({
       {showImportPotentialModal && (
         <div
           className="modal-overlay"
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(15, 23, 42, 0.75)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-            padding: "1rem"
-          }}
           role="dialog"
           aria-modal="true"
+          aria-labelledby="import-potential-modal-title"
         >
-          <div
-            className="modal-card modal-card-xl"
-            style={{ display: "flex", flexDirection: "column", maxHeight: "90vh" }}
-          >
-            <div
-              className="modal-header"
-              style={{
-                background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
-                borderBottom: "3px solid #3b82f6"
-              }}
-            >
+          <div className="modal-card modal-card-xl">
+            <div className="modal-header">
               <div>
                 <h3
-                  style={{
-                    margin: 0,
-                    fontSize: "1.15rem",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    color: "#ffffff"
-                  }}
+                  id="import-potential-modal-title"
+                  style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
                 >
-                  <span>⚡</span>
+                  <TargetIcon size={18} />
                   <span>Field Discovery Ingestion &bull; Potential Assessment Register</span>
                 </h3>
-                <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#93c5fd" }}>
+                <p
+                  style={{
+                    margin: "0.2rem 0 0",
+                    fontSize: "0.8rem",
+                    color: "var(--color-text-on-brand-muted)"
+                  }}
+                >
                   Standardized Discovery Studio &bull; Vehari Jurisdiction (Immediate Operational
                   Activation)
                 </p>
@@ -29157,6 +30115,7 @@ export default function HomePage({
               <button
                 type="button"
                 className="modal-close-btn"
+                aria-label="Close dialog"
                 onClick={() => {
                   setShowImportPotentialModal(false);
                   setBulkPotentialParseResult(null);
@@ -29171,10 +30130,8 @@ export default function HomePage({
             <div className="modal-body" style={{ overflowY: "auto", padding: "1.25rem" }}>
               {/* Step 1 & 2 Toolbar Cards */}
               <div
+                className="form-grid-2"
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "1rem",
                   background: "#f8fafc",
                   padding: "1rem",
                   borderRadius: "8px",
@@ -29193,7 +30150,14 @@ export default function HomePage({
                     <h4 style={{ margin: "0 0 0.35rem 0", color: "#0f172a", fontSize: "0.95rem" }}>
                       1. Download Official Potential Template
                     </h4>
-                    <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b", lineHeight: 1.4 }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "0.8rem",
+                        color: "var(--color-text-muted)",
+                        lineHeight: 1.4
+                      }}
+                    >
                       Standardized template aligned with Survey Ingestion columns, Punjab Finance
                       Act categories, and authentic Circle-Vehari sample discovery trades.
                     </p>
@@ -29317,9 +30281,8 @@ export default function HomePage({
                 <div style={{ marginTop: "0.75rem" }}>
                   {/* Summary Metric Cards */}
                   <div
+                    className="detail-grid"
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(4, 1fr)",
                       gap: "0.75rem",
                       marginBottom: "0.75rem"
                     }}
@@ -29332,7 +30295,13 @@ export default function HomePage({
                         borderRadius: "6px"
                       }}
                     >
-                      <span style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 700 }}>
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          color: "var(--color-text-muted)",
+                          fontWeight: 700
+                        }}
+                      >
                         TOTAL DISCOVERY ROWS
                       </span>
                       <strong style={{ display: "block", fontSize: "1.25rem", color: "#0f172a" }}>
@@ -29433,7 +30402,7 @@ export default function HomePage({
                       </button>
                     </div>
 
-                    <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                    <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
                       Assigned Officer:{" "}
                       <strong>
                         {officer.name} ({officer.role})
@@ -29450,14 +30419,18 @@ export default function HomePage({
                     <table className="gov-table" style={{ fontSize: "0.8rem" }}>
                       <thead>
                         <tr>
-                          <th style={{ width: "2.5rem" }}>#</th>
-                          <th style={{ width: "5.5rem" }}>Status</th>
-                          <th>Profession/Trade Name</th>
-                          <th>Identifier (CNIC/NTN)</th>
-                          <th>Commercial Address &amp; Circle</th>
-                          <th>Statutory Rule</th>
-                          <th>Rate (PKR)</th>
-                          <th>Validation Findings / Remarks</th>
+                          <th scope="col" style={{ width: "2.5rem" }}>
+                            #
+                          </th>
+                          <th scope="col" style={{ width: "5.5rem" }}>
+                            Status
+                          </th>
+                          <th scope="col">Profession/Trade Name</th>
+                          <th scope="col">Identifier (CNIC/NTN)</th>
+                          <th scope="col">Commercial Address &amp; Circle</th>
+                          <th scope="col">Statutory Rule</th>
+                          <th scope="col">Rate (PKR)</th>
+                          <th scope="col">Validation Findings / Remarks</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -29501,7 +30474,7 @@ export default function HomePage({
                                     style={{
                                       display: "block",
                                       fontSize: "0.7rem",
-                                      color: "#64748b"
+                                      color: "var(--color-text-muted)"
                                     }}
                                   >
                                     {row.rawData["tradeName"]}
@@ -29617,7 +30590,13 @@ export default function HomePage({
                   <strong style={{ fontSize: "1rem", color: "#334155" }}>
                     No discovery data loaded yet
                   </strong>
-                  <p style={{ fontSize: "0.8rem", color: "#64748b", margin: "0.35rem 0 0" }}>
+                  <p
+                    style={{
+                      fontSize: "0.8rem",
+                      color: "var(--color-text-muted)",
+                      margin: "0.35rem 0 0"
+                    }}
+                  >
                     Download the official template above or select a completed CSV / XLSX survey
                     spreadsheet to validate discovery records.
                   </p>
@@ -29629,7 +30608,7 @@ export default function HomePage({
               className="modal-footer"
               style={{ justifyContent: "space-between", alignItems: "center" }}
             >
-              <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
+              <div style={{ fontSize: "0.8rem", color: "var(--color-text-muted)" }}>
                 {bulkPotentialParseResult && bulkPotentialParseResult.validRowsCount > 0 ? (
                   <span>
                     Ready to import <strong>{bulkPotentialParseResult.validRowsCount}</strong> valid
@@ -29681,87 +30660,71 @@ export default function HomePage({
       {showMigratePotentialModal && targetMigratePotential && (
         <div
           className="modal-overlay"
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(15, 23, 42, 0.75)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-            padding: "1rem"
-          }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="migrate-potential-modal-title"
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowMigratePotentialModal(false);
           }}
         >
-          <div
-            className="modal-container"
-            style={{
-              backgroundColor: "#ffffff",
-              borderRadius: "10px",
-              width: "100%",
-              maxWidth: "38rem",
-              maxHeight: "90vh",
-              overflowY: "auto",
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-              border: "1px solid #cbd5e1",
-              padding: "1.5rem"
-            }}
-          >
+          <div className="modal-card" style={{ padding: "1.5rem", overflowY: "auto" }}>
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
                 marginBottom: "1rem",
-                borderBottom: "1px solid #e2e8f0",
+                borderBottom: "1px solid var(--color-border-subtle)",
                 paddingBottom: "0.75rem"
               }}
             >
               <div>
-                <h3 style={{ margin: 0, color: "#065f46", fontSize: "1.2rem", fontWeight: 800 }}>
-                  📥 Migrate to Form P.F.T-3 Assessment Register
+                <h3
+                  id="migrate-potential-modal-title"
+                  style={{
+                    margin: 0,
+                    color: "var(--color-brand-900)",
+                    fontSize: "1.15rem",
+                    fontWeight: 800
+                  }}
+                >
+                  Migrate to Form P.F.T-3 Assessment Register
                 </h3>
-                <p style={{ margin: "0.25rem 0 0", fontSize: "0.78rem", color: "#64748b" }}>
+                <p className="form-help" style={{ marginTop: "0.25rem" }}>
                   Promote prospective unit from Potential Register to statutory Form P.F.T-3
                   Register
                 </p>
               </div>
               <button
                 type="button"
+                className="btn-ghost btn-sm"
+                aria-label="Close dialog"
                 onClick={() => setShowMigratePotentialModal(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  fontSize: "1.25rem",
-                  cursor: "pointer",
-                  color: "#64748b"
-                }}
               >
-                ✕
+                <CloseIcon size={18} />
               </button>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
               <div
+                className="form-grid-2"
                 style={{
                   background: "#f8fafc",
                   border: "1px solid #e2e8f0",
                   borderRadius: "6px",
                   padding: "0.85rem",
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
                   gap: "0.6rem",
                   fontSize: "0.82rem"
                 }}
               >
                 <div>
-                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      color: "var(--color-text-muted)",
+                      display: "block"
+                    }}
+                  >
                     Prospective Identifier
                   </span>
                   <strong style={{ color: "#0f172a", fontFamily: "monospace" }}>
@@ -29769,7 +30732,13 @@ export default function HomePage({
                   </strong>
                 </div>
                 <div>
-                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      color: "var(--color-text-muted)",
+                      display: "block"
+                    }}
+                  >
                     Statutory PIN
                   </span>
                   <strong style={{ color: "#0f172a", fontFamily: "monospace" }}>
@@ -29777,13 +30746,25 @@ export default function HomePage({
                   </strong>
                 </div>
                 <div>
-                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      color: "var(--color-text-muted)",
+                      display: "block"
+                    }}
+                  >
                     Assessee Profession/Trade Name
                   </span>
                   <strong style={{ color: "#0f172a" }}>{targetMigratePotential.legalName}</strong>
                 </div>
                 <div>
-                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      color: "var(--color-text-muted)",
+                      display: "block"
+                    }}
+                  >
                     Trade / Business Name
                   </span>
                   <strong style={{ color: "#0f172a" }}>
@@ -29791,7 +30772,13 @@ export default function HomePage({
                   </strong>
                 </div>
                 <div>
-                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      color: "var(--color-text-muted)",
+                      display: "block"
+                    }}
+                  >
                     Tax Identifier ({targetMigratePotential.identifierType})
                   </span>
                   <strong style={{ color: "#0f172a", fontFamily: "monospace" }}>
@@ -29799,7 +30786,13 @@ export default function HomePage({
                   </strong>
                 </div>
                 <div>
-                  <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block" }}>
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      color: "var(--color-text-muted)",
+                      display: "block"
+                    }}
+                  >
                     Commercial Location
                   </span>
                   <span style={{ color: "#334155" }}>

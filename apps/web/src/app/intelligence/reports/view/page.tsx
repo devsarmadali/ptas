@@ -22,6 +22,7 @@ import {
   loadPersistedPotentialUnits,
   type PotentialUnitRecord
 } from "../../../../lib/potential-units-storage";
+import { StandalonePageHeader } from "../../../../components/ui/StandalonePageHeader";
 
 function ReportViewContent() {
   const searchParams = useSearchParams();
@@ -89,14 +90,25 @@ function ReportViewContent() {
   }, []);
 
   if (loadError) {
-    return <div style={{ padding: "3rem", color: "#991b1b" }}>{loadError}</div>;
+    return (
+      <main id="main-content" tabIndex={-1} className="standalone-page">
+        <div role="alert" className="alert alert-error">
+          {loadError}
+        </div>
+      </main>
+    );
   }
 
   if (!isLoaded || !pilotState) {
     return (
-      <div style={{ padding: "3rem", textAlign: "center", color: "#64748b" }}>
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="standalone-page"
+        style={{ padding: "3rem", textAlign: "center", color: "var(--color-text-muted)" }}
+      >
         Loading verified statutory report context...
-      </div>
+      </main>
     );
   }
 
@@ -175,42 +187,18 @@ function ReportViewContent() {
   };
 
   return (
-    <div style={{ maxWidth: "75rem", margin: "1.5rem auto", padding: "1rem" }}>
-      {/* Decoupled Top Navigation Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "1.25rem",
-          background: "#ffffff",
-          padding: "0.85rem 1.25rem",
-          borderRadius: "8px",
-          border: "1px solid #e2e8f0",
-          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
-          flexWrap: "wrap",
-          gap: "0.75rem"
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <span style={{ fontSize: "1.25rem" }}>📑</span>
-          <div>
-            <span
-              style={{ fontSize: "0.9rem", fontWeight: 700, color: "#0d3822", display: "block" }}
-            >
-              Statutory Reports Studio &bull; Official Gazetted Document
-            </span>
-            <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
-              {currentOfficer.jurisdictionName || "Vehari Circle I (City / Commercial)"} &bull;
-              Financial Year 2026-2027
-            </span>
-          </div>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+    <div className="standalone-page" style={{ maxWidth: "75rem" }}>
+      <StandalonePageHeader
+        eyebrow="Statutory Reports Studio • Official Gazetted Document"
+        title={getReportTitle()}
+        subtitle={`${currentOfficer.jurisdictionName || "Vehari Circle I (City / Commercial)"} • Financial Year 2026-2027`}
+        backHref="/intelligence/reports"
+        backLabel="Return to Reports Studio"
+        topLinks={[{ label: "Main Dashboard", href: "/" }]}
+        bannerActions={
           <button
             type="button"
-            className="btn-primary"
+            className="btn-on-dark"
             onClick={() =>
               downloadOfficialPdf({
                 type: "FORM_PFT3_REGISTER",
@@ -220,208 +208,879 @@ function ReportViewContent() {
             }
             title="Download this authoritative gazetted report as a PDF"
           >
-            📥 Download Official PDF (A4 Landscape)
+            Download Official PDF (A4 Landscape)
           </button>
-          <a
-            href="/intelligence/reports"
-            style={{
-              fontSize: "0.8rem",
-              fontWeight: 600,
-              padding: "0.45rem 0.75rem",
-              borderRadius: "6px",
-              background: "#0d3822",
-              color: "#ffffff",
-              textDecoration: "none",
-              display: "inline-flex",
-              alignItems: "center"
-            }}
-          >
-            ← Reports Studio
-          </a>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Printable Report Target */}
-      <div
-        id="official-statutory-report-target"
-        style={{
-          background: "#ffffff",
-          border: "2px solid #0d3822",
-          borderRadius: "8px",
-          padding: "2rem",
-          boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)",
-          fontFamily: "Georgia, serif"
-        }}
-      >
-        {/* Official Letterhead Header */}
+      <main id="main-content" tabIndex={-1}>
+        {/* Printable Report Target */}
         <div
+          id="official-statutory-report-target"
           style={{
-            textAlign: "center",
-            borderBottom: "2px solid #0d3822",
-            paddingBottom: "1.25rem",
-            marginBottom: "1.25rem"
+            background: "#ffffff",
+            border: "2px solid #0d3822",
+            borderRadius: "8px",
+            padding: "2rem",
+            boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)",
+            fontFamily: "Georgia, serif"
           }}
         >
-          <div style={{ fontSize: "1.75rem", marginBottom: "0.25rem" }}>🏛️</div>
-          <h3
-            style={{
-              margin: "0.15rem 0",
-              color: "#0d3822",
-              fontSize: "1.25rem",
-              letterSpacing: "0.05em"
-            }}
-          >
-            GOVERNMENT OF THE PUNJAB
-          </h3>
-          <p
-            style={{
-              margin: "0.15rem 0",
-              fontSize: "0.9rem",
-              color: "#334155",
-              fontWeight: 600
-            }}
-          >
-            DIRECTORATE GENERAL OF EXCISE, TAXATION &amp; NARCOTICS CONTROL
-          </p>
-          <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>
-            MULTAN DIVISION &bull; DISTRICT VEHARI &bull; VEHARI CIRCLE I (CITY / COMMERCIAL)
-          </p>
-
+          {/* Official Letterhead Header */}
           <div
             style={{
-              background: "#0d3822",
-              color: "#ffffff",
-              display: "inline-block",
-              padding: "0.35rem 1.25rem",
-              borderRadius: "4px",
-              marginTop: "0.75rem",
-              fontSize: "0.95rem",
-              fontWeight: 700,
-              letterSpacing: "0.03em"
+              textAlign: "center",
+              borderBottom: "2px solid #0d3822",
+              paddingBottom: "1.25rem",
+              marginBottom: "1.25rem"
             }}
           >
-            {getReportTitle()}
-          </div>
-        </div>
-
-        {/* Meta Details Row */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(14rem, 1fr))",
-            gap: "0.5rem 1.5rem",
-            fontSize: "0.8rem",
-            borderBottom: "1px solid #cbd5e1",
-            paddingBottom: "0.75rem",
-            marginBottom: "1.25rem",
-            color: "#334155"
-          }}
-        >
-          <div>
-            <strong>Financial Year:</strong> 2026–2027
-            <br />
-            <strong>Jurisdiction:</strong>{" "}
-            {currentOfficer.jurisdictionName || "Vehari Circle I (City / Commercial)"} (District
-            Vehari)
-          </div>
-          <div>
-            <strong>Statutory Baseline:</strong> Section 3, Second Schedule
-            <br />
-            <strong>Accounting Head:</strong> B01601 - Tax on Professions
-          </div>
-          <div>
-            <strong>Date of Run:</strong> {new Date().toLocaleDateString("en-GB")}
-            <br />
-            <strong>Generated By:</strong> {currentOfficer.name} ({currentOfficer.role})
-          </div>
-        </div>
-
-        {/* Dynamic Report Content */}
-        {reportKey === "EXECUTIVE_MIS_SUMMARY" && (
-          <div>
-            {/* Executive Synopsis */}
-            <div
+            <div style={{ fontSize: "1.75rem", marginBottom: "0.25rem" }}>🏛️</div>
+            <h3
               style={{
-                background: "#f0fdf4",
-                border: "1px solid #bbf7d0",
-                padding: "1rem",
-                borderRadius: "6px",
-                marginBottom: "1.25rem"
+                margin: "0.15rem 0",
+                color: "#0d3822",
+                fontSize: "1.25rem",
+                letterSpacing: "0.05em"
               }}
             >
-              <h4 style={{ margin: "0 0 0.5rem", color: "#166534", fontSize: "0.95rem" }}>
-                1. EXECUTIVE REVENUE REALIZATION SYNOPSIS:
-              </h4>
+              GOVERNMENT OF THE PUNJAB
+            </h3>
+            <p
+              style={{
+                margin: "0.15rem 0",
+                fontSize: "0.9rem",
+                color: "#334155",
+                fontWeight: 600
+              }}
+            >
+              DIRECTORATE GENERAL OF EXCISE, TAXATION &amp; NARCOTICS CONTROL
+            </p>
+            <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--color-text-muted)" }}>
+              MULTAN DIVISION &bull; DISTRICT VEHARI &bull; VEHARI CIRCLE I (CITY / COMMERCIAL)
+            </p>
+
+            <div
+              style={{
+                background: "#0d3822",
+                color: "#ffffff",
+                display: "inline-block",
+                padding: "0.35rem 1.25rem",
+                borderRadius: "4px",
+                marginTop: "0.75rem",
+                fontSize: "0.95rem",
+                fontWeight: 700,
+                letterSpacing: "0.03em"
+              }}
+            >
+              {getReportTitle()}
+            </div>
+          </div>
+
+          {/* Meta Details Row */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(14rem, 1fr))",
+              gap: "0.5rem 1.5rem",
+              fontSize: "0.8rem",
+              borderBottom: "1px solid #cbd5e1",
+              paddingBottom: "0.75rem",
+              marginBottom: "1.25rem",
+              color: "#334155"
+            }}
+          >
+            <div>
+              <strong>Financial Year:</strong> 2026–2027
+              <br />
+              <strong>Jurisdiction:</strong>{" "}
+              {currentOfficer.jurisdictionName || "Vehari Circle I (City / Commercial)"} (District
+              Vehari)
+            </div>
+            <div>
+              <strong>Statutory Baseline:</strong> Section 3, Second Schedule
+              <br />
+              <strong>Accounting Head:</strong> B01601 - Tax on Professions
+            </div>
+            <div>
+              <strong>Date of Run:</strong> {new Date().toLocaleDateString("en-GB")}
+              <br />
+              <strong>Generated By:</strong> {currentOfficer.name} ({currentOfficer.role})
+            </div>
+          </div>
+
+          {/* Dynamic Report Content */}
+          {reportKey === "EXECUTIVE_MIS_SUMMARY" && (
+            <div>
+              {/* Executive Synopsis */}
               <div
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(12rem, 1fr))",
-                  gap: "0.75rem",
-                  fontSize: "0.85rem"
+                  background: "#f0fdf4",
+                  border: "1px solid #bbf7d0",
+                  padding: "1rem",
+                  borderRadius: "6px",
+                  marginBottom: "1.25rem"
                 }}
               >
-                <div>
-                  <span style={{ color: "#64748b" }}>Registered Assessees:</span>
-                  <br />
-                  <strong>{misMetrics.kpis.totalUnitsCount} Commercial Units</strong>
-                </div>
-                <div>
-                  <span style={{ color: "#64748b" }}>Gross Assessed Demand:</span>
-                  <br />
-                  <strong>PKR {misMetrics.kpis.totalAssessedGross.toLocaleString()}</strong>
-                </div>
-                <div>
-                  <span style={{ color: "#64748b" }}>Realized Collections:</span>
-                  <br />
-                  <strong style={{ color: "#166534" }}>
-                    PKR {misMetrics.kpis.totalRealizedRecovery.toLocaleString()}
-                  </strong>
-                </div>
-                <div>
-                  <span style={{ color: "#64748b" }}>Recovery Yield Rate:</span>
-                  <br />
-                  <strong>{misMetrics.kpis.recoveryRatePct}% Realized</strong>
-                </div>
-                <div>
-                  <span style={{ color: "#64748b" }}>Remaining Arrears:</span>
-                  <br />
-                  <strong style={{ color: "#b91c1c" }}>
-                    PKR {misMetrics.kpis.outstandingArrears.toLocaleString()}
-                  </strong>
+                <h4 style={{ margin: "0 0 0.5rem", color: "#166534", fontSize: "0.95rem" }}>
+                  1. EXECUTIVE REVENUE REALIZATION SYNOPSIS:
+                </h4>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(12rem, 1fr))",
+                    gap: "0.75rem",
+                    fontSize: "0.85rem"
+                  }}
+                >
+                  <div>
+                    <span style={{ color: "var(--color-text-muted)" }}>Registered Assessees:</span>
+                    <br />
+                    <strong>{misMetrics.kpis.totalUnitsCount} Commercial Units</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "var(--color-text-muted)" }}>Gross Assessed Demand:</span>
+                    <br />
+                    <strong>PKR {misMetrics.kpis.totalAssessedGross.toLocaleString()}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "var(--color-text-muted)" }}>Realized Collections:</span>
+                    <br />
+                    <strong style={{ color: "#166534" }}>
+                      PKR {misMetrics.kpis.totalRealizedRecovery.toLocaleString()}
+                    </strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "var(--color-text-muted)" }}>Recovery Yield Rate:</span>
+                    <br />
+                    <strong>{misMetrics.kpis.recoveryRatePct}% Realized</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "var(--color-text-muted)" }}>Remaining Arrears:</span>
+                    <br />
+                    <strong style={{ color: "#b91c1c" }}>
+                      PKR {misMetrics.kpis.outstandingArrears.toLocaleString()}
+                    </strong>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Category Yield Breakdown */}
-            <h4 style={{ margin: "1rem 0 0.5rem", color: "#0d3822", fontSize: "0.95rem" }}>
-              2. SECOND SCHEDULE STATUTORY CATEGORY REVENUE YIELD:
-            </h4>
+              {/* Category Yield Breakdown */}
+              <h4 style={{ margin: "1rem 0 0.5rem", color: "#0d3822", fontSize: "0.95rem" }}>
+                2. SECOND SCHEDULE STATUTORY CATEGORY REVENUE YIELD:
+              </h4>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  fontSize: "0.8rem",
+                  marginBottom: "1.25rem"
+                }}
+              >
+                <thead>
+                  <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                      Entry
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                      Category Name
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "center" }}>
+                      Units
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "right" }}>
+                      Demand (PKR)
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "right" }}>
+                      Realized (PKR)
+                    </th>
+                    <th scope="col" style={{ padding: "0.4rem", textAlign: "right" }}>
+                      Compliance
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {misMetrics.categoryYields.map((cat: CategoryYieldSummary) => (
+                    <tr key={cat.categoryCode} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                      <td style={{ padding: "0.35rem" }}>{cat.categoryCode}</td>
+                      <td style={{ padding: "0.35rem" }}>{cat.categoryName}</td>
+                      <td style={{ padding: "0.35rem", textAlign: "center" }}>{cat.unitCount}</td>
+                      <td
+                        style={{ padding: "0.35rem", textAlign: "right", fontFamily: "monospace" }}
+                      >
+                        {cat.totalDemand.toLocaleString()}
+                      </td>
+                      <td
+                        style={{
+                          padding: "0.35rem",
+                          textAlign: "right",
+                          fontFamily: "monospace",
+                          color: "#166534"
+                        }}
+                      >
+                        {cat.realizedRecovery.toLocaleString()}
+                      </td>
+                      <td style={{ padding: "0.35rem", textAlign: "right", fontWeight: 700 }}>
+                        {cat.compliancePct}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {reportKey === "PFT3_REGISTER" &&
+            (() => {
+              let totalCurrentDemand = 0;
+              let totalArrears = 0;
+              let totalDemand = 0;
+              let totalPaid = 0;
+              let outstandingBalance = 0;
+
+              for (const u of pft3Units) {
+                const s = computeUnitFinancialSummary(u);
+                totalCurrentDemand += s.assessedCurrentTax;
+                totalArrears += s.arrears;
+                totalDemand += s.totalDemand;
+                totalPaid += s.totalPaid;
+                outstandingBalance += s.outstandingBalance;
+              }
+
+              return (
+                <div>
+                  {/* Statutory Summary KPI banner */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
+                      gap: "0.85rem",
+                      marginBottom: "1.25rem",
+                      fontFamily: "system-ui, -apple-system, sans-serif"
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: "#f0fdf4",
+                        border: "1px solid #bbf7d0",
+                        padding: "0.85rem",
+                        borderRadius: "6px"
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#166534",
+                          fontWeight: 700,
+                          display: "block"
+                        }}
+                      >
+                        TOTAL UNITS ASSESSED
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: "1.3rem",
+                          color: "#14532d",
+                          marginTop: "0.2rem",
+                          display: "block"
+                        }}
+                      >
+                        {pft3Units.length.toLocaleString()} Units
+                      </strong>
+                    </div>
+
+                    <div
+                      style={{
+                        background: "#f0f9ff",
+                        border: "1px solid #bae6fd",
+                        padding: "0.85rem",
+                        borderRadius: "6px"
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#0369a1",
+                          fontWeight: 700,
+                          display: "block"
+                        }}
+                      >
+                        CURRENT YEAR DEMAND
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: "1.3rem",
+                          color: "#0c4a6e",
+                          marginTop: "0.2rem",
+                          display: "block"
+                        }}
+                      >
+                        PKR {totalCurrentDemand.toLocaleString()}
+                      </strong>
+                    </div>
+
+                    <div
+                      style={{
+                        background: "#fef2f2",
+                        border: "1px solid #fecaca",
+                        padding: "0.85rem",
+                        borderRadius: "6px"
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#b91c1c",
+                          fontWeight: 700,
+                          display: "block"
+                        }}
+                      >
+                        ARREARS
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: "1.3rem",
+                          color: "#991b1b",
+                          marginTop: "0.2rem",
+                          display: "block"
+                        }}
+                      >
+                        PKR {totalArrears.toLocaleString()}
+                      </strong>
+                    </div>
+
+                    <div
+                      style={{
+                        background: "#eff6ff",
+                        border: "1px solid #bfdbfe",
+                        padding: "0.85rem",
+                        borderRadius: "6px"
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#1e40af",
+                          fontWeight: 700,
+                          display: "block"
+                        }}
+                      >
+                        TOTAL ASSESSED DEMAND
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: "1.3rem",
+                          color: "#1e3a8a",
+                          marginTop: "0.2rem",
+                          display: "block"
+                        }}
+                      >
+                        PKR {totalDemand.toLocaleString()}
+                      </strong>
+                    </div>
+
+                    <div
+                      style={{
+                        background: "#ecfdf5",
+                        border: "1px solid #a7f3d0",
+                        padding: "0.85rem",
+                        borderRadius: "6px"
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#065f46",
+                          fontWeight: 700,
+                          display: "block"
+                        }}
+                      >
+                        TOTAL REALIZED / RECOVERED
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: "1.3rem",
+                          color: "#064e3b",
+                          marginTop: "0.2rem",
+                          display: "block"
+                        }}
+                      >
+                        PKR {totalPaid.toLocaleString()}
+                      </strong>
+                    </div>
+
+                    <div
+                      style={{
+                        background: "#fffbeb",
+                        border: "1px solid #fde68a",
+                        padding: "0.85rem",
+                        borderRadius: "6px"
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#92400e",
+                          fontWeight: 700,
+                          display: "block"
+                        }}
+                      >
+                        OUTSTANDING BALANCE
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: "1.3rem",
+                          color: "#78350f",
+                          marginTop: "0.2rem",
+                          display: "block"
+                        }}
+                      >
+                        PKR {outstandingBalance.toLocaleString()}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      fontSize: "0.75rem",
+                      marginBottom: "1.25rem"
+                    }}
+                  >
+                    <thead>
+                      <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                        <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                          PDN
+                        </th>
+                        <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                          Assessee Profession/Trade Name
+                        </th>
+                        <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                          CNIC / NTN
+                        </th>
+                        <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                          Category / Entry
+                        </th>
+                        <th scope="col" style={{ padding: "0.35rem", textAlign: "right" }}>
+                          Demand (PKR)
+                        </th>
+                        <th scope="col" style={{ padding: "0.35rem", textAlign: "right" }}>
+                          Penalty (PKR)
+                        </th>
+                        <th scope="col" style={{ padding: "0.35rem", textAlign: "right" }}>
+                          Paid (PKR)
+                        </th>
+                        <th scope="col" style={{ padding: "0.35rem", textAlign: "right" }}>
+                          Balance (PKR)
+                        </th>
+                        <th scope="col" style={{ padding: "0.35rem", textAlign: "center" }}>
+                          Status
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pft3Units.map((u) => {
+                        const baseTax = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
+                        let penalty = 0;
+                        let paid = 0;
+                        for (const e of u.ledgerEntries) {
+                          if (e.entryType === "PENALTY_DEMAND") penalty += e.amount;
+                          if (e.entryType === "PAYMENT_CREDIT" || e.amount < 0)
+                            paid += Math.abs(e.amount);
+                        }
+                        const bal = computeLedgerBalance(u.ledgerEntries);
+                        return (
+                          <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                            <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                              {u.demandUnit.permanentDemandNo}
+                              {u.provincialUin ? (
+                                <span
+                                  style={{ display: "block", fontSize: "0.7rem", color: "#0369a1" }}
+                                >
+                                  {u.provincialUin}
+                                </span>
+                              ) : null}
+                            </td>
+                            <td style={{ padding: "0.35rem" }}>
+                              <strong>{u.legalName}</strong>
+                            </td>
+                            <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                              {u.identifierValue}
+                            </td>
+                            <td style={{ padding: "0.35rem" }}>
+                              Class {u.statutoryRule.subclassification_code}
+                            </td>
+                            <td
+                              style={{
+                                padding: "0.35rem",
+                                textAlign: "right",
+                                fontFamily: "monospace"
+                              }}
+                            >
+                              {baseTax.toLocaleString()}
+                            </td>
+                            <td
+                              style={{
+                                padding: "0.35rem",
+                                textAlign: "right",
+                                fontFamily: "monospace",
+                                color: penalty > 0 ? "#b91c1c" : undefined
+                              }}
+                            >
+                              {penalty > 0 ? penalty.toLocaleString() : "0"}
+                            </td>
+                            <td
+                              style={{
+                                padding: "0.35rem",
+                                textAlign: "right",
+                                fontFamily: "monospace",
+                                color: "#166534"
+                              }}
+                            >
+                              {paid.toLocaleString()}
+                            </td>
+                            <td
+                              style={{
+                                padding: "0.35rem",
+                                textAlign: "right",
+                                fontFamily: "monospace",
+                                fontWeight: 700,
+                                color: bal > 0 ? "#b91c1c" : "#166534"
+                              }}
+                            >
+                              {bal.toLocaleString()}
+                            </td>
+                            <td style={{ padding: "0.35rem", textAlign: "center" }}>
+                              {bal <= 0 ? "PAID" : "ARREARS"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+
+          {reportKey === "DEFAULTER_ROLL" && (
             <table
               style={{
                 width: "100%",
                 borderCollapse: "collapse",
-                fontSize: "0.8rem",
+                fontSize: "0.75rem",
                 marginBottom: "1.25rem"
               }}
             >
               <thead>
                 <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                  <th style={{ padding: "0.4rem", textAlign: "left" }}>Entry</th>
-                  <th style={{ padding: "0.4rem", textAlign: "left" }}>Category Name</th>
-                  <th style={{ padding: "0.4rem", textAlign: "center" }}>Units</th>
-                  <th style={{ padding: "0.4rem", textAlign: "right" }}>Demand (PKR)</th>
-                  <th style={{ padding: "0.4rem", textAlign: "right" }}>Realized (PKR)</th>
-                  <th style={{ padding: "0.4rem", textAlign: "right" }}>Compliance</th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Demand Number
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Profession/Trade Name
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Address
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Schedule Entry
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "right" }}>
+                    Days Overdue
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "right" }}>
+                    Original Tax
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "right" }}>
+                    Penalty
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "right" }}>
+                    Total Arrears
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "center" }}>
+                    Recovery Stage
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {misMetrics.categoryYields.map((cat: CategoryYieldSummary) => (
-                  <tr key={cat.categoryCode} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                    <td style={{ padding: "0.35rem" }}>{cat.categoryCode}</td>
-                    <td style={{ padding: "0.35rem" }}>{cat.categoryName}</td>
-                    <td style={{ padding: "0.35rem", textAlign: "center" }}>{cat.unitCount}</td>
+                {units
+                  .filter((u) => computeUnitFinancialSummary(u).outstandingBalance > 0)
+                  .map((u) => {
+                    const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
+                    return (
+                      <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                        <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                          {u.demandUnit.permanentDemandNo}
+                          {u.provincialUin ? (
+                            <span
+                              style={{ display: "block", fontSize: "0.7rem", color: "#0369a1" }}
+                            >
+                              {u.provincialUin}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td style={{ padding: "0.35rem" }}>
+                          <strong>{u.legalName}</strong>
+                        </td>
+                        <td style={{ padding: "0.35rem" }}>{u.address}</td>
+                        <td style={{ padding: "0.35rem" }}>
+                          Class {u.statutoryRule.subclassification_code}
+                        </td>
+                        <td style={{ padding: "0.35rem", textAlign: "right" }}>
+                          {aging.daysOverdue} days
+                        </td>
+                        <td
+                          style={{
+                            padding: "0.35rem",
+                            textAlign: "right",
+                            fontFamily: "monospace"
+                          }}
+                        >
+                          {aging.originalDemand.toLocaleString()}
+                        </td>
+                        <td
+                          style={{
+                            padding: "0.35rem",
+                            textAlign: "right",
+                            fontFamily: "monospace",
+                            color: "#b91c1c"
+                          }}
+                        >
+                          {aging.penaltyDemand.toLocaleString()}
+                        </td>
+                        <td
+                          style={{
+                            padding: "0.35rem",
+                            textAlign: "right",
+                            fontFamily: "monospace",
+                            fontWeight: 700,
+                            color: "#b91c1c"
+                          }}
+                        >
+                          {aging.remainingBalance.toLocaleString()}
+                        </td>
+                        <td style={{ padding: "0.35rem", textAlign: "center", fontWeight: 700 }}>
+                          {aging.status}
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          )}
+
+          {reportKey === "NOTICE_DISPATCH" && (
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: "0.75rem",
+                marginBottom: "1.25rem"
+              }}
+            >
+              <thead>
+                <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Notice No
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Demand Number
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Profession/Trade Name
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Address
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "right" }}>
+                    Amount (PKR)
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "center" }}>
+                    Status
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Served Date
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Serving Officer
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {units.map((u) => (
+                  <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                    <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                      PFT-1/VEH/2026/{u.id.slice(-4)}
+                    </td>
+                    <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                      {u.demandUnit.permanentDemandNo}
+                    </td>
+                    <td style={{ padding: "0.35rem" }}>
+                      <strong>{u.legalName}</strong>
+                    </td>
+                    <td style={{ padding: "0.35rem" }}>{u.address}</td>
                     <td style={{ padding: "0.35rem", textAlign: "right", fontFamily: "monospace" }}>
-                      {cat.totalDemand.toLocaleString()}
+                      {(u.assessmentVersions[0]?.snapshot.taxAmount ?? 0).toLocaleString()}
+                    </td>
+                    <td style={{ padding: "0.35rem", textAlign: "center" }}>
+                      <span
+                        className={
+                          u.serviceStatus === "SERVED"
+                            ? "badge badge-approved"
+                            : "badge badge-draft"
+                        }
+                      >
+                        {u.serviceStatus ?? "PENDING"}
+                      </span>
+                    </td>
+                    <td style={{ padding: "0.35rem" }}>{u.servedAt ?? "—"}</td>
+                    <td style={{ padding: "0.35rem" }}>
+                      {u.servedBy ??
+                        (currentOfficer.role === "INSPECTOR"
+                          ? currentOfficer.name
+                          : "Authorized Process Server")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {reportKey === "CLEARANCE_LOG" && (
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: "0.75rem",
+                marginBottom: "1.25rem"
+              }}
+            >
+              <thead>
+                <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Certificate No
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Issue Date
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Valid Until
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Profession/Trade Name
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    CNIC / NTN
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "right" }}>
+                    Cleared (PKR)
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "center" }}>
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {clearanceCertificates.map((cert) => (
+                  <tr key={cert.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                    <td style={{ padding: "0.35rem", fontFamily: "monospace", fontWeight: 700 }}>
+                      {cert.certificateNumber}
+                    </td>
+                    <td style={{ padding: "0.35rem" }}>{cert.issueDate}</td>
+                    <td style={{ padding: "0.35rem" }}>{cert.validUntil}</td>
+                    <td style={{ padding: "0.35rem" }}>
+                      <strong>{cert.assesseeLegalName}</strong>
+                    </td>
+                    <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                      {cert.cnicOrNtn}
+                    </td>
+                    <td
+                      style={{
+                        padding: "0.35rem",
+                        textAlign: "right",
+                        fontFamily: "monospace",
+                        color: "#166534",
+                        fontWeight: 700
+                      }}
+                    >
+                      {cert.clearedAmountPkr.toLocaleString()}
+                    </td>
+                    <td style={{ padding: "0.35rem", textAlign: "center" }}>
+                      <span className="badge badge-approved">VERIFIED CLEAR</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {reportKey === "RELIEF_REGISTER" && (
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: "0.75rem",
+                marginBottom: "1.25rem"
+              }}
+            >
+              <thead>
+                <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Reference No
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Relief Type
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Profession/Trade Name
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Filing Date
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "center" }}>
+                    Status
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "right" }}>
+                    Relief (PKR)
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Order Number &amp; Date
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {discontinuances.map((d) => (
+                  <tr key={d.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                    <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                      {d.noticeNumber}
+                    </td>
+                    <td style={{ padding: "0.35rem" }}>Rule 10 Discontinuance</td>
+                    <td style={{ padding: "0.35rem" }}>
+                      <strong>{d.assesseeLegalName}</strong>
+                    </td>
+                    <td style={{ padding: "0.35rem" }}>{d.discontinuanceDate}</td>
+                    <td style={{ padding: "0.35rem", textAlign: "center" }}>
+                      <span className="badge badge-approved">{d.status}</span>
+                    </td>
+                    <td style={{ padding: "0.35rem", textAlign: "right" }}>Closure</td>
+                    <td style={{ padding: "0.35rem" }}>
+                      {d.etoOrderNumber ?? "Pending"} ({d.etoOrderDate ?? "—"})
+                    </td>
+                  </tr>
+                ))}
+                {refundAdjustments.map((r) => (
+                  <tr key={r.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                    <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                      {r.applicationNumber}
+                    </td>
+                    <td style={{ padding: "0.35rem" }}>Rule 5 {r.type}</td>
+                    <td style={{ padding: "0.35rem" }}>
+                      <strong>{r.assesseeLegalName}</strong>
+                    </td>
+                    <td style={{ padding: "0.35rem" }}>{r.filedAt.split("T")[0]}</td>
+                    <td style={{ padding: "0.35rem", textAlign: "center" }}>
+                      <span className="badge badge-approved">{r.status}</span>
                     </td>
                     <td
                       style={{
@@ -431,1147 +1090,617 @@ function ReportViewContent() {
                         color: "#166534"
                       }}
                     >
-                      {cat.realizedRecovery.toLocaleString()}
+                      {r.amount.toLocaleString()}
                     </td>
-                    <td style={{ padding: "0.35rem", textAlign: "right", fontWeight: 700 }}>
-                      {cat.compliancePct}%
+                    <td style={{ padding: "0.35rem" }}>
+                      {r.orderNumber ?? "Pending"} ({r.orderDate ?? "—"})
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
+          )}
 
-        {reportKey === "PFT3_REGISTER" &&
-          (() => {
-            let totalCurrentDemand = 0;
-            let totalArrears = 0;
-            let totalDemand = 0;
-            let totalPaid = 0;
-            let outstandingBalance = 0;
+          {reportKey === "SLAB_DISTRIBUTION" && (
+            <table
+              style={{
+                width: "100%",
+                fontSize: "0.75rem",
+                borderCollapse: "collapse",
+                marginBottom: "1.25rem"
+              }}
+            >
+              <thead>
+                <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Sub-Class
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Category
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "left" }}>
+                    Tertiary Slab / Criteria
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "right" }}>
+                    Statutory Rate
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "center" }}>
+                    Units
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "right" }}>
+                    Demand (PKR)
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "right" }}>
+                    Recovery (PKR)
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "right" }}>
+                    Arrears (PKR)
+                  </th>
+                  <th scope="col" style={{ padding: "0.35rem", textAlign: "center" }}>
+                    Rate %
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {misMetrics.slabYields.map((s: SlabYieldSummary) => (
+                  <tr key={s.ruleId} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                    <td style={{ padding: "0.35rem", fontWeight: 700 }}>
+                      {s.ruleCode ??
+                        s.statutoryTertiaryCode ??
+                        s.subclassificationCode ??
+                        s.categoryCode}
+                    </td>
+                    <td style={{ padding: "0.35rem" }}>{s.categoryName}</td>
+                    <td style={{ padding: "0.35rem", color: "#475569" }}>
+                      {s.statutoryTertiaryClassification ??
+                        s.subclassificationLabel ??
+                        s.tertiarySlab}
+                    </td>
+                    <td style={{ padding: "0.35rem", textAlign: "right", fontFamily: "monospace" }}>
+                      {s.slabRatePkr.toLocaleString()}
+                    </td>
+                    <td style={{ padding: "0.35rem", textAlign: "center" }}>{s.unitCount}</td>
+                    <td style={{ padding: "0.35rem", textAlign: "right", fontFamily: "monospace" }}>
+                      {s.totalDemand.toLocaleString()}
+                    </td>
+                    <td
+                      style={{
+                        padding: "0.35rem",
+                        textAlign: "right",
+                        fontFamily: "monospace",
+                        color: "#166534"
+                      }}
+                    >
+                      {s.realizedRecovery.toLocaleString()}
+                    </td>
+                    <td
+                      style={{
+                        padding: "0.35rem",
+                        textAlign: "right",
+                        fontFamily: "monospace",
+                        color: s.outstandingArrears > 0 ? "#b91c1c" : undefined
+                      }}
+                    >
+                      {s.outstandingArrears.toLocaleString()}
+                    </td>
+                    <td style={{ padding: "0.35rem", textAlign: "center", fontWeight: 700 }}>
+                      {s.compliancePct}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
 
-            for (const u of pft3Units) {
-              const s = computeUnitFinancialSummary(u);
-              totalCurrentDemand += s.assessedCurrentTax;
-              totalArrears += s.arrears;
-              totalDemand += s.totalDemand;
-              totalPaid += s.totalPaid;
-              outstandingBalance += s.outstandingBalance;
-            }
+          {reportKey === "SURVEY_REGISTER" &&
+            (() => {
+              let totalProspective = 0;
+              let draftCount = 0;
+              let submittedCount = 0;
 
-            return (
-              <div>
-                {/* Statutory Summary KPI banner */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
-                    gap: "0.85rem",
-                    marginBottom: "1.25rem",
-                    fontFamily: "system-ui, -apple-system, sans-serif"
-                  }}
-                >
+              for (const u of surveyUnits) {
+                totalProspective += u.statutoryRule?.annual_rate_pkr ?? 0;
+                const st = u.assessments[0]?.status;
+                if (st === "SUBMITTED") submittedCount++;
+                else draftCount++;
+              }
+
+              return (
+                <div>
+                  {/* Pipeline Summary Banner */}
                   <div
                     style={{
-                      background: "#f0fdf4",
-                      border: "1px solid #bbf7d0",
-                      padding: "0.85rem",
-                      borderRadius: "6px"
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
+                      gap: "0.85rem",
+                      marginBottom: "1.25rem",
+                      fontFamily: "system-ui, -apple-system, sans-serif"
                     }}
                   >
-                    <span
+                    <div
                       style={{
-                        fontSize: "0.75rem",
-                        color: "#166534",
-                        fontWeight: 700,
-                        display: "block"
+                        background: "#f0f9ff",
+                        border: "1px solid #bae6fd",
+                        padding: "0.85rem",
+                        borderRadius: "6px"
                       }}
                     >
-                      TOTAL UNITS ASSESSED
-                    </span>
-                    <strong
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#0369a1",
+                          fontWeight: 700,
+                          display: "block"
+                        }}
+                      >
+                        DISCOVERY PIPELINE UNITS
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: "1.3rem",
+                          color: "#0c4a6e",
+                          marginTop: "0.2rem",
+                          display: "block"
+                        }}
+                      >
+                        {surveyUnits.length.toLocaleString()} Units
+                      </strong>
+                    </div>
+
+                    <div
                       style={{
-                        fontSize: "1.3rem",
-                        color: "#14532d",
-                        marginTop: "0.2rem",
-                        display: "block"
+                        background: "#f8fafc",
+                        border: "1px solid #cbd5e1",
+                        padding: "0.85rem",
+                        borderRadius: "6px"
                       }}
                     >
-                      {pft3Units.length.toLocaleString()} Units
-                    </strong>
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#475569",
+                          fontWeight: 700,
+                          display: "block"
+                        }}
+                      >
+                        PROSPECTIVE DEMAND
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: "1.3rem",
+                          color: "#1e293b",
+                          marginTop: "0.2rem",
+                          display: "block"
+                        }}
+                      >
+                        PKR {totalProspective.toLocaleString()}
+                      </strong>
+                    </div>
+
+                    <div
+                      style={{
+                        background: "#fffbeb",
+                        border: "1px solid #fde68a",
+                        padding: "0.85rem",
+                        borderRadius: "6px"
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#b45309",
+                          fontWeight: 700,
+                          display: "block"
+                        }}
+                      >
+                        DRAFT SURVEYS
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: "1.3rem",
+                          color: "#92400e",
+                          marginTop: "0.2rem",
+                          display: "block"
+                        }}
+                      >
+                        {draftCount} Units
+                      </strong>
+                    </div>
+
+                    <div
+                      style={{
+                        background: "#f0fdf4",
+                        border: "1px solid #bbf7d0",
+                        padding: "0.85rem",
+                        borderRadius: "6px"
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#166534",
+                          fontWeight: 700,
+                          display: "block"
+                        }}
+                      >
+                        SUBMITTED FOR APPROVAL
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: "1.3rem",
+                          color: "#14532d",
+                          marginTop: "0.2rem",
+                          display: "block"
+                        }}
+                      >
+                        {submittedCount} Units
+                      </strong>
+                    </div>
                   </div>
 
-                  <div
+                  {/* Table */}
+                  <table
                     style={{
-                      background: "#f0f9ff",
-                      border: "1px solid #bae6fd",
-                      padding: "0.85rem",
-                      borderRadius: "6px"
+                      width: "100%",
+                      fontSize: "0.75rem",
+                      borderCollapse: "collapse",
+                      marginBottom: "1.25rem"
                     }}
                   >
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#0369a1",
-                        fontWeight: 700,
-                        display: "block"
-                      }}
-                    >
-                      CURRENT YEAR DEMAND
-                    </span>
-                    <strong
-                      style={{
-                        fontSize: "1.3rem",
-                        color: "#0c4a6e",
-                        marginTop: "0.2rem",
-                        display: "block"
-                      }}
-                    >
-                      PKR {totalCurrentDemand.toLocaleString()}
-                    </strong>
-                  </div>
-
-                  <div
-                    style={{
-                      background: "#fef2f2",
-                      border: "1px solid #fecaca",
-                      padding: "0.85rem",
-                      borderRadius: "6px"
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#b91c1c",
-                        fontWeight: 700,
-                        display: "block"
-                      }}
-                    >
-                      ARREARS
-                    </span>
-                    <strong
-                      style={{
-                        fontSize: "1.3rem",
-                        color: "#991b1b",
-                        marginTop: "0.2rem",
-                        display: "block"
-                      }}
-                    >
-                      PKR {totalArrears.toLocaleString()}
-                    </strong>
-                  </div>
-
-                  <div
-                    style={{
-                      background: "#eff6ff",
-                      border: "1px solid #bfdbfe",
-                      padding: "0.85rem",
-                      borderRadius: "6px"
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#1e40af",
-                        fontWeight: 700,
-                        display: "block"
-                      }}
-                    >
-                      TOTAL ASSESSED DEMAND
-                    </span>
-                    <strong
-                      style={{
-                        fontSize: "1.3rem",
-                        color: "#1e3a8a",
-                        marginTop: "0.2rem",
-                        display: "block"
-                      }}
-                    >
-                      PKR {totalDemand.toLocaleString()}
-                    </strong>
-                  </div>
-
-                  <div
-                    style={{
-                      background: "#ecfdf5",
-                      border: "1px solid #a7f3d0",
-                      padding: "0.85rem",
-                      borderRadius: "6px"
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#065f46",
-                        fontWeight: 700,
-                        display: "block"
-                      }}
-                    >
-                      TOTAL REALIZED / RECOVERED
-                    </span>
-                    <strong
-                      style={{
-                        fontSize: "1.3rem",
-                        color: "#064e3b",
-                        marginTop: "0.2rem",
-                        display: "block"
-                      }}
-                    >
-                      PKR {totalPaid.toLocaleString()}
-                    </strong>
-                  </div>
-
-                  <div
-                    style={{
-                      background: "#fffbeb",
-                      border: "1px solid #fde68a",
-                      padding: "0.85rem",
-                      borderRadius: "6px"
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#92400e",
-                        fontWeight: 700,
-                        display: "block"
-                      }}
-                    >
-                      OUTSTANDING BALANCE
-                    </span>
-                    <strong
-                      style={{
-                        fontSize: "1.3rem",
-                        color: "#78350f",
-                        marginTop: "0.2rem",
-                        display: "block"
-                      }}
-                    >
-                      PKR {outstandingBalance.toLocaleString()}
-                    </strong>
-                  </div>
-                </div>
-
-                <table
-                  style={{
-                    width: "100%",
-                    borderCollapse: "collapse",
-                    fontSize: "0.75rem",
-                    marginBottom: "1.25rem"
-                  }}
-                >
-                  <thead>
-                    <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                      <th style={{ padding: "0.35rem", textAlign: "left" }}>PDN</th>
-                      <th style={{ padding: "0.35rem", textAlign: "left" }}>
-                        Assessee Profession/Trade Name
-                      </th>
-                      <th style={{ padding: "0.35rem", textAlign: "left" }}>CNIC / NTN</th>
-                      <th style={{ padding: "0.35rem", textAlign: "left" }}>Category / Entry</th>
-                      <th style={{ padding: "0.35rem", textAlign: "right" }}>Demand (PKR)</th>
-                      <th style={{ padding: "0.35rem", textAlign: "right" }}>Penalty (PKR)</th>
-                      <th style={{ padding: "0.35rem", textAlign: "right" }}>Paid (PKR)</th>
-                      <th style={{ padding: "0.35rem", textAlign: "right" }}>Balance (PKR)</th>
-                      <th style={{ padding: "0.35rem", textAlign: "center" }}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pft3Units.map((u) => {
-                      const baseTax = u.assessmentVersions[0]?.snapshot.taxAmount ?? 0;
-                      let penalty = 0;
-                      let paid = 0;
-                      for (const e of u.ledgerEntries) {
-                        if (e.entryType === "PENALTY_DEMAND") penalty += e.amount;
-                        if (e.entryType === "PAYMENT_CREDIT" || e.amount < 0)
-                          paid += Math.abs(e.amount);
-                      }
-                      const bal = computeLedgerBalance(u.ledgerEntries);
-                      return (
+                    <thead>
+                      <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                          S.No
+                        </th>
+                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                          Discovery Ref / PIN
+                        </th>
+                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                          Profession / Trade Name
+                        </th>
+                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                          Proprietor
+                        </th>
+                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                          Commercial Address
+                        </th>
+                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                          Proposed Category
+                        </th>
+                        <th scope="col" style={{ padding: "0.4rem", textAlign: "right" }}>
+                          Proposed Rate
+                        </th>
+                        <th scope="col" style={{ padding: "0.4rem", textAlign: "center" }}>
+                          Pipeline Status
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {surveyUnits.map((u, idx) => (
                         <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                          <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                            {u.demandUnit.permanentDemandNo}
-                            {u.provincialUin ? (
-                              <span
-                                style={{ display: "block", fontSize: "0.7rem", color: "#0369a1" }}
-                              >
-                                {u.provincialUin}
-                              </span>
-                            ) : null}
+                          <td style={{ padding: "0.35rem" }}>{idx + 1}</td>
+                          <td
+                            style={{ padding: "0.35rem", fontFamily: "monospace", fontWeight: 700 }}
+                          >
+                            {u.provincialUin ?? u.demandUnit?.permanentDemandNo ?? u.id}
                           </td>
                           <td style={{ padding: "0.35rem" }}>
                             <strong>{u.legalName}</strong>
                           </td>
-                          <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                            {u.identifierValue}
-                          </td>
+                          <td style={{ padding: "0.35rem" }}>{u.tradeName ?? "—"}</td>
+                          <td style={{ padding: "0.35rem", color: "#475569" }}>{u.address}</td>
                           <td style={{ padding: "0.35rem" }}>
-                            Class {u.statutoryRule.subclassification_code}
-                          </td>
-                          <td
-                            style={{
-                              padding: "0.35rem",
-                              textAlign: "right",
-                              fontFamily: "monospace"
-                            }}
-                          >
-                            {baseTax.toLocaleString()}
-                          </td>
-                          <td
-                            style={{
-                              padding: "0.35rem",
-                              textAlign: "right",
-                              fontFamily: "monospace",
-                              color: penalty > 0 ? "#b91c1c" : undefined
-                            }}
-                          >
-                            {penalty > 0 ? penalty.toLocaleString() : "0"}
+                            <span className="badge badge-draft">
+                              Class {u.statutoryRule?.category_code ?? u.categoryCode ?? "1"}
+                            </span>
+                            <span style={{ marginLeft: "0.4rem" }}>
+                              {u.statutoryRule?.category ?? "General"}
+                            </span>
                           </td>
                           <td
                             style={{
                               padding: "0.35rem",
                               textAlign: "right",
                               fontFamily: "monospace",
-                              color: "#166534"
+                              fontWeight: 700
                             }}
                           >
-                            {paid.toLocaleString()}
-                          </td>
-                          <td
-                            style={{
-                              padding: "0.35rem",
-                              textAlign: "right",
-                              fontFamily: "monospace",
-                              fontWeight: 700,
-                              color: bal > 0 ? "#b91c1c" : "#166534"
-                            }}
-                          >
-                            {bal.toLocaleString()}
+                            PKR {(u.statutoryRule?.annual_rate_pkr ?? 0).toLocaleString()}
                           </td>
                           <td style={{ padding: "0.35rem", textAlign: "center" }}>
-                            {bal <= 0 ? "PAID" : "ARREARS"}
+                            <span
+                              className={`badge ${
+                                u.assessments[0]?.status === "SUBMITTED"
+                                  ? "badge-pending"
+                                  : "badge-draft"
+                              }`}
+                            >
+                              {u.assessments[0]?.status ?? "DRAFT"}
+                            </span>
                           </td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            );
-          })()}
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
 
-        {reportKey === "DEFAULTER_ROLL" && (
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: "0.75rem",
-              marginBottom: "1.25rem"
-            }}
-          >
-            <thead>
-              <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Demand Number</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Profession/Trade Name</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Address</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Schedule Entry</th>
-                <th style={{ padding: "0.35rem", textAlign: "right" }}>Days Overdue</th>
-                <th style={{ padding: "0.35rem", textAlign: "right" }}>Original Tax</th>
-                <th style={{ padding: "0.35rem", textAlign: "right" }}>Penalty</th>
-                <th style={{ padding: "0.35rem", textAlign: "right" }}>Total Arrears</th>
-                <th style={{ padding: "0.35rem", textAlign: "center" }}>Recovery Stage</th>
-              </tr>
-            </thead>
-            <tbody>
-              {units
-                .filter((u) => computeUnitFinancialSummary(u).outstandingBalance > 0)
-                .map((u) => {
-                  const aging = computeUnitDefaulterAging(u, "2026-08-31", undefined);
-                  return (
-                    <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                      <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                        {u.demandUnit.permanentDemandNo}
-                        {u.provincialUin ? (
-                          <span style={{ display: "block", fontSize: "0.7rem", color: "#0369a1" }}>
-                            {u.provincialUin}
-                          </span>
-                        ) : null}
-                      </td>
-                      <td style={{ padding: "0.35rem" }}>
-                        <strong>{u.legalName}</strong>
-                      </td>
-                      <td style={{ padding: "0.35rem" }}>{u.address}</td>
-                      <td style={{ padding: "0.35rem" }}>
-                        Class {u.statutoryRule.subclassification_code}
-                      </td>
-                      <td style={{ padding: "0.35rem", textAlign: "right" }}>
-                        {aging.daysOverdue} days
-                      </td>
-                      <td
-                        style={{ padding: "0.35rem", textAlign: "right", fontFamily: "monospace" }}
-                      >
-                        {aging.originalDemand.toLocaleString()}
-                      </td>
-                      <td
+          {reportKey === "POTENTIAL_REGISTER" &&
+            (() => {
+              let totalProjected = 0;
+              let verifiedCount = 0;
+              let pendingCount = 0;
+
+              for (const p of potentialUnits) {
+                totalProjected += p.annualRatePkr ?? p.statutoryRule?.annual_rate_pkr ?? 0;
+                if (p.status === "ACTIVE") verifiedCount++;
+                else pendingCount++;
+              }
+
+              return (
+                <div>
+                  {/* Potential Summary Banner */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
+                      gap: "0.85rem",
+                      marginBottom: "1.25rem",
+                      fontFamily: "system-ui, -apple-system, sans-serif"
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: "#fffbeb",
+                        border: "1px solid #fde68a",
+                        padding: "0.85rem",
+                        borderRadius: "6px"
+                      }}
+                    >
+                      <span
                         style={{
-                          padding: "0.35rem",
-                          textAlign: "right",
-                          fontFamily: "monospace",
-                          color: "#b91c1c"
-                        }}
-                      >
-                        {aging.penaltyDemand.toLocaleString()}
-                      </td>
-                      <td
-                        style={{
-                          padding: "0.35rem",
-                          textAlign: "right",
-                          fontFamily: "monospace",
+                          fontSize: "0.75rem",
+                          color: "#b45309",
                           fontWeight: 700,
-                          color: "#b91c1c"
+                          display: "block"
                         }}
                       >
-                        {aging.remainingBalance.toLocaleString()}
-                      </td>
-                      <td style={{ padding: "0.35rem", textAlign: "center", fontWeight: 700 }}>
-                        {aging.status}
-                      </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-        )}
+                        POTENTIAL ENTITIES
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: "1.3rem",
+                          color: "#92400e",
+                          marginTop: "0.2rem",
+                          display: "block"
+                        }}
+                      >
+                        {potentialUnits.length.toLocaleString()} Entities
+                      </strong>
+                    </div>
 
-        {reportKey === "NOTICE_DISPATCH" && (
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: "0.75rem",
-              marginBottom: "1.25rem"
-            }}
-          >
-            <thead>
-              <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Notice No</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Demand Number</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Profession/Trade Name</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Address</th>
-                <th style={{ padding: "0.35rem", textAlign: "right" }}>Amount (PKR)</th>
-                <th style={{ padding: "0.35rem", textAlign: "center" }}>Status</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Served Date</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Serving Officer</th>
-              </tr>
-            </thead>
-            <tbody>
-              {units.map((u) => (
-                <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                  <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                    PFT-1/VEH/2026/{u.id.slice(-4)}
-                  </td>
-                  <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                    {u.demandUnit.permanentDemandNo}
-                  </td>
-                  <td style={{ padding: "0.35rem" }}>
-                    <strong>{u.legalName}</strong>
-                  </td>
-                  <td style={{ padding: "0.35rem" }}>{u.address}</td>
-                  <td style={{ padding: "0.35rem", textAlign: "right", fontFamily: "monospace" }}>
-                    {(u.assessmentVersions[0]?.snapshot.taxAmount ?? 0).toLocaleString()}
-                  </td>
-                  <td style={{ padding: "0.35rem", textAlign: "center" }}>
-                    <span
-                      className={
-                        u.serviceStatus === "SERVED" ? "badge badge-approved" : "badge badge-draft"
-                      }
-                    >
-                      {u.serviceStatus ?? "PENDING"}
-                    </span>
-                  </td>
-                  <td style={{ padding: "0.35rem" }}>{u.servedAt ?? "—"}</td>
-                  <td style={{ padding: "0.35rem" }}>
-                    {u.servedBy ??
-                      (currentOfficer.role === "INSPECTOR"
-                        ? currentOfficer.name
-                        : "Authorized Process Server")}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        {reportKey === "CLEARANCE_LOG" && (
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: "0.75rem",
-              marginBottom: "1.25rem"
-            }}
-          >
-            <thead>
-              <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Certificate No</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Issue Date</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Valid Until</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Profession/Trade Name</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>CNIC / NTN</th>
-                <th style={{ padding: "0.35rem", textAlign: "right" }}>Cleared (PKR)</th>
-                <th style={{ padding: "0.35rem", textAlign: "center" }}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clearanceCertificates.map((cert) => (
-                <tr key={cert.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                  <td style={{ padding: "0.35rem", fontFamily: "monospace", fontWeight: 700 }}>
-                    {cert.certificateNumber}
-                  </td>
-                  <td style={{ padding: "0.35rem" }}>{cert.issueDate}</td>
-                  <td style={{ padding: "0.35rem" }}>{cert.validUntil}</td>
-                  <td style={{ padding: "0.35rem" }}>
-                    <strong>{cert.assesseeLegalName}</strong>
-                  </td>
-                  <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>{cert.cnicOrNtn}</td>
-                  <td
-                    style={{
-                      padding: "0.35rem",
-                      textAlign: "right",
-                      fontFamily: "monospace",
-                      color: "#166534",
-                      fontWeight: 700
-                    }}
-                  >
-                    {cert.clearedAmountPkr.toLocaleString()}
-                  </td>
-                  <td style={{ padding: "0.35rem", textAlign: "center" }}>
-                    <span className="badge badge-approved">VERIFIED CLEAR</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        {reportKey === "RELIEF_REGISTER" && (
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: "0.75rem",
-              marginBottom: "1.25rem"
-            }}
-          >
-            <thead>
-              <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Reference No</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Relief Type</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Profession/Trade Name</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Filing Date</th>
-                <th style={{ padding: "0.35rem", textAlign: "center" }}>Status</th>
-                <th style={{ padding: "0.35rem", textAlign: "right" }}>Relief (PKR)</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Order Number &amp; Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {discontinuances.map((d) => (
-                <tr key={d.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                  <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>{d.noticeNumber}</td>
-                  <td style={{ padding: "0.35rem" }}>Rule 10 Discontinuance</td>
-                  <td style={{ padding: "0.35rem" }}>
-                    <strong>{d.assesseeLegalName}</strong>
-                  </td>
-                  <td style={{ padding: "0.35rem" }}>{d.discontinuanceDate}</td>
-                  <td style={{ padding: "0.35rem", textAlign: "center" }}>
-                    <span className="badge badge-approved">{d.status}</span>
-                  </td>
-                  <td style={{ padding: "0.35rem", textAlign: "right" }}>Closure</td>
-                  <td style={{ padding: "0.35rem" }}>
-                    {d.etoOrderNumber ?? "Pending"} ({d.etoOrderDate ?? "—"})
-                  </td>
-                </tr>
-              ))}
-              {refundAdjustments.map((r) => (
-                <tr key={r.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                  <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                    {r.applicationNumber}
-                  </td>
-                  <td style={{ padding: "0.35rem" }}>Rule 5 {r.type}</td>
-                  <td style={{ padding: "0.35rem" }}>
-                    <strong>{r.assesseeLegalName}</strong>
-                  </td>
-                  <td style={{ padding: "0.35rem" }}>{r.filedAt.split("T")[0]}</td>
-                  <td style={{ padding: "0.35rem", textAlign: "center" }}>
-                    <span className="badge badge-approved">{r.status}</span>
-                  </td>
-                  <td
-                    style={{
-                      padding: "0.35rem",
-                      textAlign: "right",
-                      fontFamily: "monospace",
-                      color: "#166534"
-                    }}
-                  >
-                    {r.amount.toLocaleString()}
-                  </td>
-                  <td style={{ padding: "0.35rem" }}>
-                    {r.orderNumber ?? "Pending"} ({r.orderDate ?? "—"})
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        {reportKey === "SLAB_DISTRIBUTION" && (
-          <table
-            style={{
-              width: "100%",
-              fontSize: "0.75rem",
-              borderCollapse: "collapse",
-              marginBottom: "1.25rem"
-            }}
-          >
-            <thead>
-              <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Sub-Class</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Category</th>
-                <th style={{ padding: "0.35rem", textAlign: "left" }}>Tertiary Slab / Criteria</th>
-                <th style={{ padding: "0.35rem", textAlign: "right" }}>Statutory Rate</th>
-                <th style={{ padding: "0.35rem", textAlign: "center" }}>Units</th>
-                <th style={{ padding: "0.35rem", textAlign: "right" }}>Demand (PKR)</th>
-                <th style={{ padding: "0.35rem", textAlign: "right" }}>Recovery (PKR)</th>
-                <th style={{ padding: "0.35rem", textAlign: "right" }}>Arrears (PKR)</th>
-                <th style={{ padding: "0.35rem", textAlign: "center" }}>Rate %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {misMetrics.slabYields.map((s: SlabYieldSummary) => (
-                <tr key={s.ruleId} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                  <td style={{ padding: "0.35rem", fontWeight: 700 }}>
-                    {s.ruleCode ??
-                      s.statutoryTertiaryCode ??
-                      s.subclassificationCode ??
-                      s.categoryCode}
-                  </td>
-                  <td style={{ padding: "0.35rem" }}>{s.categoryName}</td>
-                  <td style={{ padding: "0.35rem", color: "#475569" }}>
-                    {s.statutoryTertiaryClassification ??
-                      s.subclassificationLabel ??
-                      s.tertiarySlab}
-                  </td>
-                  <td style={{ padding: "0.35rem", textAlign: "right", fontFamily: "monospace" }}>
-                    {s.slabRatePkr.toLocaleString()}
-                  </td>
-                  <td style={{ padding: "0.35rem", textAlign: "center" }}>{s.unitCount}</td>
-                  <td style={{ padding: "0.35rem", textAlign: "right", fontFamily: "monospace" }}>
-                    {s.totalDemand.toLocaleString()}
-                  </td>
-                  <td
-                    style={{
-                      padding: "0.35rem",
-                      textAlign: "right",
-                      fontFamily: "monospace",
-                      color: "#166534"
-                    }}
-                  >
-                    {s.realizedRecovery.toLocaleString()}
-                  </td>
-                  <td
-                    style={{
-                      padding: "0.35rem",
-                      textAlign: "right",
-                      fontFamily: "monospace",
-                      color: s.outstandingArrears > 0 ? "#b91c1c" : undefined
-                    }}
-                  >
-                    {s.outstandingArrears.toLocaleString()}
-                  </td>
-                  <td style={{ padding: "0.35rem", textAlign: "center", fontWeight: 700 }}>
-                    {s.compliancePct}%
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        {reportKey === "SURVEY_REGISTER" &&
-          (() => {
-            let totalProspective = 0;
-            let draftCount = 0;
-            let submittedCount = 0;
-
-            for (const u of surveyUnits) {
-              totalProspective += u.statutoryRule?.annual_rate_pkr ?? 0;
-              const st = u.assessments[0]?.status;
-              if (st === "SUBMITTED") submittedCount++;
-              else draftCount++;
-            }
-
-            return (
-              <div>
-                {/* Pipeline Summary Banner */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
-                    gap: "0.85rem",
-                    marginBottom: "1.25rem",
-                    fontFamily: "system-ui, -apple-system, sans-serif"
-                  }}
-                >
-                  <div
-                    style={{
-                      background: "#f0f9ff",
-                      border: "1px solid #bae6fd",
-                      padding: "0.85rem",
-                      borderRadius: "6px"
-                    }}
-                  >
-                    <span
+                    <div
                       style={{
-                        fontSize: "0.75rem",
-                        color: "#0369a1",
-                        fontWeight: 700,
-                        display: "block"
+                        background: "#f8fafc",
+                        border: "1px solid #cbd5e1",
+                        padding: "0.85rem",
+                        borderRadius: "6px"
                       }}
                     >
-                      DISCOVERY PIPELINE UNITS
-                    </span>
-                    <strong
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#475569",
+                          fontWeight: 700,
+                          display: "block"
+                        }}
+                      >
+                        PROJECTED TAX POTENTIAL
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: "1.3rem",
+                          color: "#1e293b",
+                          marginTop: "0.2rem",
+                          display: "block"
+                        }}
+                      >
+                        PKR {totalProjected.toLocaleString()}
+                      </strong>
+                    </div>
+
+                    <div
                       style={{
-                        fontSize: "1.3rem",
-                        color: "#0c4a6e",
-                        marginTop: "0.2rem",
-                        display: "block"
+                        background: "#f0fdf4",
+                        border: "1px solid #bbf7d0",
+                        padding: "0.85rem",
+                        borderRadius: "6px"
                       }}
                     >
-                      {surveyUnits.length.toLocaleString()} Units
-                    </strong>
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#166534",
+                          fontWeight: 700,
+                          display: "block"
+                        }}
+                      >
+                        VERIFIED FOR ONBOARDING
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: "1.3rem",
+                          color: "#14532d",
+                          marginTop: "0.2rem",
+                          display: "block"
+                        }}
+                      >
+                        {verifiedCount} Entities
+                      </strong>
+                    </div>
+
+                    <div
+                      style={{
+                        background: "#fef2f2",
+                        border: "1px solid #fecaca",
+                        padding: "0.85rem",
+                        borderRadius: "6px"
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#b91c1c",
+                          fontWeight: 700,
+                          display: "block"
+                        }}
+                      >
+                        PENDING VERIFICATION
+                      </span>
+                      <strong
+                        style={{
+                          fontSize: "1.3rem",
+                          color: "#991b1b",
+                          marginTop: "0.2rem",
+                          display: "block"
+                        }}
+                      >
+                        {pendingCount} Entities
+                      </strong>
+                    </div>
                   </div>
 
-                  <div
+                  {/* Table */}
+                  <table
                     style={{
-                      background: "#f8fafc",
-                      border: "1px solid #cbd5e1",
-                      padding: "0.85rem",
-                      borderRadius: "6px"
+                      width: "100%",
+                      fontSize: "0.75rem",
+                      borderCollapse: "collapse",
+                      marginBottom: "1.25rem"
                     }}
                   >
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#475569",
-                        fontWeight: 700,
-                        display: "block"
-                      }}
-                    >
-                      PROSPECTIVE DEMAND
-                    </span>
-                    <strong
-                      style={{
-                        fontSize: "1.3rem",
-                        color: "#1e293b",
-                        marginTop: "0.2rem",
-                        display: "block"
-                      }}
-                    >
-                      PKR {totalProspective.toLocaleString()}
-                    </strong>
-                  </div>
-
-                  <div
-                    style={{
-                      background: "#fffbeb",
-                      border: "1px solid #fde68a",
-                      padding: "0.85rem",
-                      borderRadius: "6px"
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#b45309",
-                        fontWeight: 700,
-                        display: "block"
-                      }}
-                    >
-                      DRAFT SURVEYS
-                    </span>
-                    <strong
-                      style={{
-                        fontSize: "1.3rem",
-                        color: "#92400e",
-                        marginTop: "0.2rem",
-                        display: "block"
-                      }}
-                    >
-                      {draftCount} Units
-                    </strong>
-                  </div>
-
-                  <div
-                    style={{
-                      background: "#f0fdf4",
-                      border: "1px solid #bbf7d0",
-                      padding: "0.85rem",
-                      borderRadius: "6px"
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#166534",
-                        fontWeight: 700,
-                        display: "block"
-                      }}
-                    >
-                      SUBMITTED FOR APPROVAL
-                    </span>
-                    <strong
-                      style={{
-                        fontSize: "1.3rem",
-                        color: "#14532d",
-                        marginTop: "0.2rem",
-                        display: "block"
-                      }}
-                    >
-                      {submittedCount} Units
-                    </strong>
-                  </div>
-                </div>
-
-                {/* Table */}
-                <table
-                  style={{
-                    width: "100%",
-                    fontSize: "0.75rem",
-                    borderCollapse: "collapse",
-                    marginBottom: "1.25rem"
-                  }}
-                >
-                  <thead>
-                    <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                      <th style={{ padding: "0.4rem", textAlign: "left" }}>S.No</th>
-                      <th style={{ padding: "0.4rem", textAlign: "left" }}>Discovery Ref / PIN</th>
-                      <th style={{ padding: "0.4rem", textAlign: "left" }}>
-                        Profession / Trade Name
-                      </th>
-                      <th style={{ padding: "0.4rem", textAlign: "left" }}>Proprietor</th>
-                      <th style={{ padding: "0.4rem", textAlign: "left" }}>Commercial Address</th>
-                      <th style={{ padding: "0.4rem", textAlign: "left" }}>Proposed Category</th>
-                      <th style={{ padding: "0.4rem", textAlign: "right" }}>Proposed Rate</th>
-                      <th style={{ padding: "0.4rem", textAlign: "center" }}>Pipeline Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {surveyUnits.map((u, idx) => (
-                      <tr key={u.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                        <td style={{ padding: "0.35rem" }}>{idx + 1}</td>
-                        <td
-                          style={{ padding: "0.35rem", fontFamily: "monospace", fontWeight: 700 }}
-                        >
-                          {u.provincialUin ?? u.demandUnit?.permanentDemandNo ?? u.id}
-                        </td>
-                        <td style={{ padding: "0.35rem" }}>
-                          <strong>{u.legalName}</strong>
-                        </td>
-                        <td style={{ padding: "0.35rem" }}>{u.tradeName ?? "—"}</td>
-                        <td style={{ padding: "0.35rem", color: "#475569" }}>{u.address}</td>
-                        <td style={{ padding: "0.35rem" }}>
-                          <span className="badge badge-draft">
-                            Class {u.statutoryRule?.category_code ?? u.categoryCode ?? "1"}
-                          </span>
-                          <span style={{ marginLeft: "0.4rem" }}>
-                            {u.statutoryRule?.category ?? "General"}
-                          </span>
-                        </td>
-                        <td
-                          style={{
-                            padding: "0.35rem",
-                            textAlign: "right",
-                            fontFamily: "monospace",
-                            fontWeight: 700
-                          }}
-                        >
-                          PKR {(u.statutoryRule?.annual_rate_pkr ?? 0).toLocaleString()}
-                        </td>
-                        <td style={{ padding: "0.35rem", textAlign: "center" }}>
-                          <span
-                            className={`badge ${
-                              u.assessments[0]?.status === "SUBMITTED"
-                                ? "badge-pending"
-                                : "badge-draft"
-                            }`}
-                          >
-                            {u.assessments[0]?.status ?? "DRAFT"}
-                          </span>
-                        </td>
+                    <thead>
+                      <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
+                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                          S.No
+                        </th>
+                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                          Potential ID
+                        </th>
+                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                          Commercial Name
+                        </th>
+                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                          Proprietor
+                        </th>
+                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                          CNIC / NTN
+                        </th>
+                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                          Commercial Address
+                        </th>
+                        <th scope="col" style={{ padding: "0.4rem", textAlign: "left" }}>
+                          Category
+                        </th>
+                        <th scope="col" style={{ padding: "0.4rem", textAlign: "right" }}>
+                          Projected Rate
+                        </th>
+                        <th scope="col" style={{ padding: "0.4rem", textAlign: "center" }}>
+                          Verification
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            );
-          })()}
-
-        {reportKey === "POTENTIAL_REGISTER" &&
-          (() => {
-            let totalProjected = 0;
-            let verifiedCount = 0;
-            let pendingCount = 0;
-
-            for (const p of potentialUnits) {
-              totalProjected += p.annualRatePkr ?? p.statutoryRule?.annual_rate_pkr ?? 0;
-              if (p.status === "ACTIVE") verifiedCount++;
-              else pendingCount++;
-            }
-
-            return (
-              <div>
-                {/* Potential Summary Banner */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
-                    gap: "0.85rem",
-                    marginBottom: "1.25rem",
-                    fontFamily: "system-ui, -apple-system, sans-serif"
-                  }}
-                >
-                  <div
-                    style={{
-                      background: "#fffbeb",
-                      border: "1px solid #fde68a",
-                      padding: "0.85rem",
-                      borderRadius: "6px"
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#b45309",
-                        fontWeight: 700,
-                        display: "block"
-                      }}
-                    >
-                      POTENTIAL ENTITIES
-                    </span>
-                    <strong
-                      style={{
-                        fontSize: "1.3rem",
-                        color: "#92400e",
-                        marginTop: "0.2rem",
-                        display: "block"
-                      }}
-                    >
-                      {potentialUnits.length.toLocaleString()} Entities
-                    </strong>
-                  </div>
-
-                  <div
-                    style={{
-                      background: "#f8fafc",
-                      border: "1px solid #cbd5e1",
-                      padding: "0.85rem",
-                      borderRadius: "6px"
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#475569",
-                        fontWeight: 700,
-                        display: "block"
-                      }}
-                    >
-                      PROJECTED TAX POTENTIAL
-                    </span>
-                    <strong
-                      style={{
-                        fontSize: "1.3rem",
-                        color: "#1e293b",
-                        marginTop: "0.2rem",
-                        display: "block"
-                      }}
-                    >
-                      PKR {totalProjected.toLocaleString()}
-                    </strong>
-                  </div>
-
-                  <div
-                    style={{
-                      background: "#f0fdf4",
-                      border: "1px solid #bbf7d0",
-                      padding: "0.85rem",
-                      borderRadius: "6px"
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#166534",
-                        fontWeight: 700,
-                        display: "block"
-                      }}
-                    >
-                      VERIFIED FOR ONBOARDING
-                    </span>
-                    <strong
-                      style={{
-                        fontSize: "1.3rem",
-                        color: "#14532d",
-                        marginTop: "0.2rem",
-                        display: "block"
-                      }}
-                    >
-                      {verifiedCount} Entities
-                    </strong>
-                  </div>
-
-                  <div
-                    style={{
-                      background: "#fef2f2",
-                      border: "1px solid #fecaca",
-                      padding: "0.85rem",
-                      borderRadius: "6px"
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#b91c1c",
-                        fontWeight: 700,
-                        display: "block"
-                      }}
-                    >
-                      PENDING VERIFICATION
-                    </span>
-                    <strong
-                      style={{
-                        fontSize: "1.3rem",
-                        color: "#991b1b",
-                        marginTop: "0.2rem",
-                        display: "block"
-                      }}
-                    >
-                      {pendingCount} Entities
-                    </strong>
-                  </div>
-                </div>
-
-                {/* Table */}
-                <table
-                  style={{
-                    width: "100%",
-                    fontSize: "0.75rem",
-                    borderCollapse: "collapse",
-                    marginBottom: "1.25rem"
-                  }}
-                >
-                  <thead>
-                    <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #0d3822" }}>
-                      <th style={{ padding: "0.4rem", textAlign: "left" }}>S.No</th>
-                      <th style={{ padding: "0.4rem", textAlign: "left" }}>Potential ID</th>
-                      <th style={{ padding: "0.4rem", textAlign: "left" }}>Commercial Name</th>
-                      <th style={{ padding: "0.4rem", textAlign: "left" }}>Proprietor</th>
-                      <th style={{ padding: "0.4rem", textAlign: "left" }}>CNIC / NTN</th>
-                      <th style={{ padding: "0.4rem", textAlign: "left" }}>Commercial Address</th>
-                      <th style={{ padding: "0.4rem", textAlign: "left" }}>Category</th>
-                      <th style={{ padding: "0.4rem", textAlign: "right" }}>Projected Rate</th>
-                      <th style={{ padding: "0.4rem", textAlign: "center" }}>Verification</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {potentialUnits.map((p, idx) => (
-                      <tr key={p.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                        <td style={{ padding: "0.35rem" }}>{idx + 1}</td>
-                        <td
-                          style={{ padding: "0.35rem", fontFamily: "monospace", fontWeight: 700 }}
-                        >
-                          {p.potentialNumber || p.id}
-                        </td>
-                        <td style={{ padding: "0.35rem" }}>
-                          <strong>{p.legalName}</strong>
-                        </td>
-                        <td style={{ padding: "0.35rem" }}>
-                          {p.tradeName ?? p.taxpayerName ?? "—"}
-                        </td>
-                        <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
-                          {p.identifierType}: {p.identifierValue}
-                        </td>
-                        <td style={{ padding: "0.35rem", color: "#475569" }}>
-                          {p.address} {p.locality ? `(${p.locality})` : ""}
-                        </td>
-                        <td style={{ padding: "0.35rem" }}>
-                          <span className="badge badge-draft">Class {p.categoryCode || "1"}</span>
-                          <span style={{ marginLeft: "0.4rem" }}>
-                            {p.categoryName || "Commercial"}
-                          </span>
-                        </td>
-                        <td
-                          style={{
-                            padding: "0.35rem",
-                            textAlign: "right",
-                            fontFamily: "monospace",
-                            fontWeight: 700
-                          }}
-                        >
-                          PKR{" "}
-                          {(
-                            p.annualRatePkr ??
-                            p.statutoryRule?.annual_rate_pkr ??
-                            0
-                          ).toLocaleString()}
-                        </td>
-                        <td style={{ padding: "0.35rem", textAlign: "center" }}>
-                          <span
-                            className={`badge ${
-                              p.status === "ACTIVE" ? "badge-approved" : "badge-draft"
-                            }`}
+                    </thead>
+                    <tbody>
+                      {potentialUnits.map((p, idx) => (
+                        <tr key={p.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                          <td style={{ padding: "0.35rem" }}>{idx + 1}</td>
+                          <td
+                            style={{ padding: "0.35rem", fontFamily: "monospace", fontWeight: 700 }}
                           >
-                            {p.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            );
-          })()}
+                            {p.potentialNumber || p.id}
+                          </td>
+                          <td style={{ padding: "0.35rem" }}>
+                            <strong>{p.legalName}</strong>
+                          </td>
+                          <td style={{ padding: "0.35rem" }}>
+                            {p.tradeName ?? p.taxpayerName ?? "—"}
+                          </td>
+                          <td style={{ padding: "0.35rem", fontFamily: "monospace" }}>
+                            {p.identifierType}: {p.identifierValue}
+                          </td>
+                          <td style={{ padding: "0.35rem", color: "#475569" }}>
+                            {p.address} {p.locality ? `(${p.locality})` : ""}
+                          </td>
+                          <td style={{ padding: "0.35rem" }}>
+                            <span className="badge badge-draft">Class {p.categoryCode || "1"}</span>
+                            <span style={{ marginLeft: "0.4rem" }}>
+                              {p.categoryName || "Commercial"}
+                            </span>
+                          </td>
+                          <td
+                            style={{
+                              padding: "0.35rem",
+                              textAlign: "right",
+                              fontFamily: "monospace",
+                              fontWeight: 700
+                            }}
+                          >
+                            PKR{" "}
+                            {(
+                              p.annualRatePkr ??
+                              p.statutoryRule?.annual_rate_pkr ??
+                              0
+                            ).toLocaleString()}
+                          </td>
+                          <td style={{ padding: "0.35rem", textAlign: "center" }}>
+                            <span
+                              className={`badge ${
+                                p.status === "ACTIVE" ? "badge-approved" : "badge-draft"
+                              }`}
+                            >
+                              {p.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
 
-        {/* Official Authentication Footer */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-end",
-            borderTop: "1px solid #0d3822",
-            paddingTop: "1.25rem",
-            marginTop: "1.5rem"
-          }}
-        >
-          <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
-            <div>
-              <strong>Official Gazetted Record:</strong> Punjab Professional Tax Administration
-              System
+          {/* Official Authentication Footer */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-end",
+              borderTop: "1px solid #0d3822",
+              paddingTop: "1.25rem",
+              marginTop: "1.5rem"
+            }}
+          >
+            <div style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
+              <div>
+                <strong>Official Gazetted Record:</strong> Punjab Professional Tax Administration
+                System
+              </div>
+              <div>
+                <strong>Provincial Accounting Head:</strong> B01601 &bull; Permanent Statutory
+                Gazette
+              </div>
             </div>
-            <div>
-              <strong>Provincial Accounting Head:</strong> B01601 &bull; Permanent Statutory Gazette
-            </div>
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>{currentOfficer.name}</div>
-            <div style={{ fontSize: "0.8rem", color: "#475569" }}>{currentOfficer.title}</div>
-            <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
-              Assessing Authority &bull; {currentOfficer.jurisdictionName}
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>{currentOfficer.name}</div>
+              <div style={{ fontSize: "0.8rem", color: "#475569" }}>{currentOfficer.title}</div>
+              <div style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
+                Assessing Authority &bull; {currentOfficer.jurisdictionName}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
@@ -1580,7 +1709,7 @@ export default function StatutoryReportViewPage() {
   return (
     <Suspense
       fallback={
-        <div style={{ padding: "3rem", textAlign: "center", color: "#64748b" }}>
+        <div style={{ padding: "3rem", textAlign: "center", color: "var(--color-text-muted)" }}>
           Loading Official Gazetted Report...
         </div>
       }

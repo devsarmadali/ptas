@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
+import { ChevronDownIcon, ChevronUpIcon } from "./ui/Icons";
 
 export interface RowAction {
   readonly id: string;
@@ -24,10 +25,9 @@ export interface RowActionMenuProps {
 
 /**
  * Universal Floating Popover Row Action Menu.
- * Replaces cluttered inline row buttons with an overlay action dropdown.
- * - Renders as an overlay popover with zIndex 10000 without nesting or inner scrollbars.
- * - Single-action exception: renders direct button if exactly 1 action exists.
- * - Closes on click, outside click, and Escape key.
+ * - Single-action exception: renders direct button/link if exactly 1 action exists.
+ * - Full WAI-ARIA keyboard menu navigation (ArrowDown, ArrowUp, Home, End, Escape).
+ * - Focuses trigger button on Escape close and cleans up stacking context on unmount.
  */
 export function RowActionMenu({
   actions,
@@ -37,8 +37,19 @@ export function RowActionMenu({
   ariaLabel
 }: RowActionMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const menuId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const getEnabledMenuItems = () => {
+    if (!dropdownRef.current) return [];
+    return Array.from(
+      dropdownRef.current.querySelectorAll<HTMLElement>(
+        '[role="menuitem"]:not([disabled]):not([aria-disabled="true"])'
+      )
+    );
+  };
 
   // Close on outside click and Escape key
   useEffect(() => {
@@ -52,7 +63,9 @@ export function RowActionMenu({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        e.stopPropagation();
         setIsOpen(false);
+        triggerRef.current?.focus();
       }
     };
 
@@ -67,7 +80,7 @@ export function RowActionMenu({
     };
   }, [isOpen]);
 
-  // Elevate parent td and tr stacking contexts while dropdown is open so it stays above subsequent sticky cells
+  // Elevate parent td and tr stacking contexts while dropdown is open so it stays above sticky cells
   useEffect(() => {
     if (!isOpen) return;
 
@@ -98,36 +111,54 @@ export function RowActionMenu({
     };
   }, [isOpen]);
 
-  // Auto-scroll to bring the opened dropdown panel completely into view
+  // Auto-scroll to bring the opened dropdown panel cleanly into view
   useEffect(() => {
     if (!isOpen) return;
 
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       if (!dropdownRef.current) return;
 
-      // 1. Native smooth scrollIntoView (respects scrollMargin)
       dropdownRef.current.scrollIntoView({
         behavior: "smooth",
         block: "nearest",
         inline: "nearest"
       });
 
-      // 2. Extra viewport check to ensure at least 28px bottom breathing room
       const rect = dropdownRef.current.getBoundingClientRect();
       const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
       const margin = 28;
 
       if (rect.bottom > viewportHeight - margin) {
-        const deltaY = rect.bottom - viewportHeight + margin;
-        window.scrollBy({ top: deltaY, behavior: "smooth" });
+        window.scrollBy({ top: rect.bottom - viewportHeight + margin, behavior: "smooth" });
       } else if (rect.top < margin + 60) {
-        const deltaY = rect.top - margin - 60;
-        window.scrollBy({ top: deltaY, behavior: "smooth" });
+        window.scrollBy({ top: rect.top - margin - 60, behavior: "smooth" });
       }
     }, 40);
 
-    return () => clearTimeout(timer);
+    return () => window.clearTimeout(timer);
   }, [isOpen]);
+
+  const handleMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = getEnabledMenuItems();
+    if (items.length === 0) return;
+
+    const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const next = items[(currentIndex + 1) % items.length];
+      next?.focus();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const prev = items[(currentIndex - 1 + items.length) % items.length];
+      prev?.focus();
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      items[0]?.focus();
+    } else if (e.key === "End") {
+      e.preventDefault();
+      items[items.length - 1]?.focus();
+    }
+  };
 
   if (actions.length === 0) {
     return null;
@@ -136,193 +167,132 @@ export function RowActionMenu({
   // Single-action exception: render directly if only 1 action
   if (actions.length === 1) {
     const action = actions[0]!;
+    const singleVariantClass =
+      action.variant === "primary"
+        ? "btn-primary"
+        : action.variant === "danger"
+          ? "btn-outline-danger"
+          : "btn-secondary";
+
     if (action.href) {
       return (
         <a
-          href={action.href}
+          href={action.disabled ? undefined : action.href}
           target={action.target ?? "_blank"}
           rel="noopener noreferrer"
-          className={`btn-sm ${
-            action.variant === "primary"
-              ? "btn-primary"
-              : action.variant === "danger"
-                ? "btn-secondary text-danger"
-                : "btn-secondary"
-          }`}
-          style={{
-            textDecoration: "none",
-            display: "inline-flex",
-            alignItems: "center",
-            ...(action.disabled ? { opacity: 0.5, pointerEvents: "none" } : {})
-          }}
+          aria-disabled={action.disabled || undefined}
+          className={`btn-sm ${singleVariantClass}`}
+          style={action.disabled ? { opacity: 0.5, pointerEvents: "none" } : undefined}
           title={action.title ?? action.label}
           aria-label={action.label}
           onClick={action.onClick}
         >
-          {action.icon && <span style={{ marginRight: "0.3rem" }}>{action.icon}</span>}
+          {action.icon && <span className="row-action-menu-icon">{action.icon}</span>}
           <span>{action.label}</span>
         </a>
       );
     }
+
     return (
       <button
         type="button"
         disabled={action.disabled}
-        className={`btn-sm ${
-          action.variant === "primary"
-            ? "btn-primary"
-            : action.variant === "danger"
-              ? "btn-secondary text-danger"
-              : "btn-secondary"
-        }`}
-        style={action.disabled ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+        className={`btn-sm ${singleVariantClass}`}
         onClick={action.onClick}
         title={action.title ?? action.label}
         aria-label={action.label}
       >
-        {action.icon && <span style={{ marginRight: "0.3rem" }}>{action.icon}</span>}
+        {action.icon && <span className="row-action-menu-icon">{action.icon}</span>}
         <span>{action.label}</span>
       </button>
     );
   }
 
+  const alignClass =
+    align === "right" ? "row-action-menu-dropdown--right" : "row-action-menu-dropdown--left";
+
   return (
-    <div
-      ref={containerRef}
-      className={`row-action-menu-container ${isOpen ? "is-open" : ""}`}
-      style={{
-        position: "relative",
-        display: "inline-block",
-        textAlign: "left",
-        zIndex: isOpen ? 130 : undefined
-      }}
-    >
+    <div ref={containerRef} className={`row-action-menu-container ${isOpen ? "is-open" : ""}`}>
       <button
+        ref={triggerRef}
         type="button"
         className={buttonClassName}
         onClick={(e) => {
           e.stopPropagation();
           setIsOpen((prev) => !prev);
         }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" && !isOpen) {
+            e.preventDefault();
+            setIsOpen(true);
+            window.setTimeout(() => {
+              getEnabledMenuItems()[0]?.focus();
+            }, 0);
+          }
+        }}
         aria-expanded={isOpen}
-        aria-haspopup="true"
+        aria-haspopup="menu"
+        aria-controls={isOpen ? menuId : undefined}
         aria-label={ariaLabel ?? label}
         title={ariaLabel ?? label}
       >
         <span>{label}</span>
-        <span style={{ fontSize: "0.7rem", marginLeft: "0.25rem" }}>{isOpen ? "▴" : "▾"}</span>
+        {isOpen ? <ChevronUpIcon size={13} /> : <ChevronDownIcon size={13} />}
       </button>
 
       {isOpen && (
         <div
+          id={menuId}
           ref={dropdownRef}
-          className="row-action-menu-dropdown"
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            [align === "right" ? "right" : "left"]: 0,
-            zIndex: 10000,
-            minWidth: "14.5rem",
-            maxWidth: "20rem",
-            background: "#ffffff",
-            border: "1px solid #cbd5e1",
-            borderRadius: "8px",
-            boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.15)",
-            padding: "0.35rem 0",
-            overflow: "hidden",
-            scrollMargin: "32px"
-          }}
+          className={`row-action-menu-dropdown ${alignClass}`}
           onClick={(e) => e.stopPropagation()}
+          onKeyDown={handleMenuKeyDown}
           role="menu"
+          aria-label={ariaLabel ?? label}
         >
-          {actions.map((action) =>
-            action.href ? (
-              <a
-                key={action.id}
-                href={action.href}
-                target={action.target ?? "_blank"}
-                rel="noopener noreferrer"
-                className={`row-action-menu-item ${action.variant === "danger" ? "danger" : ""}`}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  width: "100%",
-                  padding: "0.5rem 0.85rem",
-                  fontSize: "0.8rem",
-                  color: action.disabled
-                    ? "#94a3b8"
-                    : action.variant === "danger"
-                      ? "#b91c1c"
-                      : action.variant === "primary"
-                        ? "#0d3822"
-                        : action.variant === "success"
-                          ? "#15803d"
-                          : "#1e293b",
-                  background: "none",
-                  border: "none",
-                  textAlign: "left",
-                  textDecoration: "none",
-                  cursor: action.disabled ? "not-allowed" : "pointer",
-                  opacity: action.disabled ? 0.6 : 1,
-                  fontWeight: action.variant === "primary" ? 600 : 500,
-                  transition: "background-color 0.12s ease"
-                }}
-                onClick={(e) => {
-                  if (action.disabled) {
-                    e.preventDefault();
-                    return;
-                  }
-                  setTimeout(() => setIsOpen(false), 80);
-                  action.onClick?.();
-                }}
-                title={action.title}
-                role="menuitem"
-              >
-                {action.icon && (
-                  <span
-                    style={{
-                      fontSize: "0.95rem",
-                      width: "1.25rem",
-                      textAlign: "center",
-                      flexShrink: 0
-                    }}
-                  >
-                    {action.icon}
-                  </span>
-                )}
-                <span style={{ flex: 1, whiteSpace: "nowrap" }}>{action.label}</span>
-              </a>
-            ) : (
+          {actions.map((action) => {
+            const variantClass =
+              action.variant === "danger"
+                ? "danger"
+                : action.variant === "primary"
+                  ? "primary"
+                  : action.variant === "success"
+                    ? "success"
+                    : "";
+            const disabledClass = action.disabled ? "is-disabled" : "";
+
+            if (action.href) {
+              return (
+                <a
+                  key={action.id}
+                  href={action.disabled ? undefined : action.href}
+                  target={action.target ?? "_blank"}
+                  rel="noopener noreferrer"
+                  aria-disabled={action.disabled || undefined}
+                  className={`row-action-menu-item ${variantClass} ${disabledClass}`.trim()}
+                  onClick={(e) => {
+                    if (action.disabled) {
+                      e.preventDefault();
+                      return;
+                    }
+                    window.setTimeout(() => setIsOpen(false), 80);
+                    action.onClick?.();
+                  }}
+                  title={action.title}
+                  role="menuitem"
+                >
+                  {action.icon && <span className="row-action-menu-icon">{action.icon}</span>}
+                  <span className="row-action-menu-label">{action.label}</span>
+                </a>
+              );
+            }
+
+            return (
               <button
                 key={action.id}
                 type="button"
                 disabled={action.disabled}
-                className={`row-action-menu-item ${action.variant === "danger" ? "danger" : ""}`}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  width: "100%",
-                  padding: "0.5rem 0.85rem",
-                  fontSize: "0.8rem",
-                  color: action.disabled
-                    ? "#94a3b8"
-                    : action.variant === "danger"
-                      ? "#b91c1c"
-                      : action.variant === "primary"
-                        ? "#0d3822"
-                        : action.variant === "success"
-                          ? "#15803d"
-                          : "#1e293b",
-                  background: "none",
-                  border: "none",
-                  textAlign: "left",
-                  cursor: action.disabled ? "not-allowed" : "pointer",
-                  opacity: action.disabled ? 0.6 : 1,
-                  fontWeight: action.variant === "primary" ? 600 : 500,
-                  transition: "background-color 0.12s ease"
-                }}
+                className={`row-action-menu-item ${variantClass} ${disabledClass}`.trim()}
                 onClick={() => {
                   if (action.disabled) return;
                   setIsOpen(false);
@@ -331,22 +301,11 @@ export function RowActionMenu({
                 title={action.title}
                 role="menuitem"
               >
-                {action.icon && (
-                  <span
-                    style={{
-                      fontSize: "0.95rem",
-                      width: "1.25rem",
-                      textAlign: "center",
-                      flexShrink: 0
-                    }}
-                  >
-                    {action.icon}
-                  </span>
-                )}
-                <span style={{ flex: 1, whiteSpace: "nowrap" }}>{action.label}</span>
+                {action.icon && <span className="row-action-menu-icon">{action.icon}</span>}
+                <span className="row-action-menu-label">{action.label}</span>
               </button>
-            )
-          )}
+            );
+          })}
         </div>
       )}
     </div>
