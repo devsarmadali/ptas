@@ -270,6 +270,8 @@ function DocumentIssuanceContent() {
       }
 
       const isProvisional =
+        freshUnit.pft3Registered === false ||
+        freshUnit.assessmentNumber?.startsWith("POT-ASM-") ||
         freshUnit.pinNumber?.startsWith("Potential-") ||
         freshUnit.demandUnit?.permanentDemandNo?.startsWith("POT-");
 
