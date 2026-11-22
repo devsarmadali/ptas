@@ -5,6 +5,7 @@ import { generateDocumentPin } from "@ptas/domain";
 import { loadPersistedMigratedUnits } from "./potential-units-storage";
 import { buildVerificationUrl } from "./site-url";
 import { getSupabaseAuthClient } from "./supabase-auth";
+import { PTAS_CACHE_KEYS, getOrFetchCached, invalidateQueryCache } from "./query-cache";
 import type { Json } from "@ptas/database/types";
 
 export const PFT2_CHALLANS_STORAGE_KEY = "ptas_pft2_challans_v4";
@@ -23,46 +24,63 @@ export interface ChallanJurisdictionCodes {
 
 /** Resolve registered numbering identifiers through the server-authorized hierarchy. */
 export async function loadChallanJurisdictionCodes(
-  jurisdictionId: string
+  jurisdictionId: string,
+  options?: { readonly force?: boolean | undefined }
 ): Promise<ChallanJurisdictionCodes> {
-  const supabase = getSupabaseAuthClient();
-  const { data, error } = await supabase.rpc("get_challan_jurisdiction_codes", {
-    p_jurisdiction_id: jurisdictionId
-  });
-  if (error) throw new Error(`Unable to resolve challan jurisdiction codes: ${error.message}`);
-  if (!isRecord(data)) throw new Error("Jurisdiction code registry returned an invalid record");
-  const districtCode = String(data.district_code ?? "").trim();
-  const circleCode = String(data.circle_code ?? "").trim();
-  if (!districtCode || !circleCode) {
-    throw new Error("District and circle challan codes are not configured");
-  }
-  return { districtCode, circleCode };
+  return getOrFetchCached(
+    `${PTAS_CACHE_KEYS.CHALLAN_JURISDICTION_CODES_PREFIX}${jurisdictionId}`,
+    600_000,
+    async () => {
+      const supabase = getSupabaseAuthClient();
+      const { data, error } = await supabase.rpc("get_challan_jurisdiction_codes", {
+        p_jurisdiction_id: jurisdictionId
+      });
+      if (error) throw new Error(`Unable to resolve challan jurisdiction codes: ${error.message}`);
+      if (!isRecord(data)) throw new Error("Jurisdiction code registry returned an invalid record");
+      const districtCode = String(data.district_code ?? "").trim();
+      const circleCode = String(data.circle_code ?? "").trim();
+      if (!districtCode || !circleCode) {
+        throw new Error("District and circle challan codes are not configured");
+      }
+      return { districtCode, circleCode };
+    },
+    { force: options?.force }
+  );
 }
 
 /** Load the jurisdiction-scoped statutory registers from PostgreSQL. */
-export async function loadDurableChallanRegistry(): Promise<{
+export async function loadDurableChallanRegistry(options?: {
+  readonly force?: boolean | undefined;
+}): Promise<{
   challans: Pft2ChallanRecord[];
   receipts: StatutoryReceiptRecord[];
 }> {
-  const supabase = getSupabaseAuthClient();
-  const [challansResult, receiptsResult] = await Promise.all([
-    supabase.rpc("list_pft2_challan_registry"),
-    supabase.rpc("list_pft2_receipt_registry")
-  ]);
-  if (challansResult.error) {
-    throw new Error(`Unable to load PFT-2 challans: ${challansResult.error.message}`);
-  }
-  if (receiptsResult.error) {
-    throw new Error(`Unable to load statutory receipts: ${receiptsResult.error.message}`);
-  }
-  return {
-    challans: Array.isArray(challansResult.data)
-      ? (challansResult.data as unknown as Pft2ChallanRecord[])
-      : [],
-    receipts: Array.isArray(receiptsResult.data)
-      ? (receiptsResult.data as unknown as StatutoryReceiptRecord[])
-      : []
-  };
+  return getOrFetchCached(
+    PTAS_CACHE_KEYS.CHALLAN_REGISTRY,
+    45_000,
+    async () => {
+      const supabase = getSupabaseAuthClient();
+      const [challansResult, receiptsResult] = await Promise.all([
+        supabase.rpc("list_pft2_challan_registry"),
+        supabase.rpc("list_pft2_receipt_registry")
+      ]);
+      if (challansResult.error) {
+        throw new Error(`Unable to load PFT-2 challans: ${challansResult.error.message}`);
+      }
+      if (receiptsResult.error) {
+        throw new Error(`Unable to load statutory receipts: ${receiptsResult.error.message}`);
+      }
+      return {
+        challans: Array.isArray(challansResult.data)
+          ? (challansResult.data as unknown as Pft2ChallanRecord[])
+          : [],
+        receipts: Array.isArray(receiptsResult.data)
+          ? (receiptsResult.data as unknown as StatutoryReceiptRecord[])
+          : []
+      };
+    },
+    { force: options?.force }
+  );
 }
 
 /** Issue a challan transactionally; the canonical Notice No. is also its Challan No. */
@@ -82,6 +100,7 @@ export async function issueDurablePft2Challan(
   });
   if (error) throw new Error(`Unable to issue PFT-2 challan: ${error.message}`);
   if (!isRecord(data)) throw new Error("PFT-2 issuance returned an invalid record");
+  invalidateQueryCache([PTAS_CACHE_KEYS.CHALLAN_REGISTRY, PTAS_CACHE_KEYS.AUDIT_LOGS]);
   return data as unknown as Pft2ChallanRecord;
 }
 
@@ -102,6 +121,12 @@ export async function receiveDurablePft2Challan(
   if (error) throw new Error(`Unable to receive PFT-2 challan: ${error.message}`);
   const payload = isRecord(data) ? data : {};
   if (!isRecord(payload.receipt)) throw new Error("Receipt command returned an invalid record");
+  invalidateQueryCache([
+    PTAS_CACHE_KEYS.CHALLAN_REGISTRY,
+    PTAS_CACHE_KEYS.OPERATIONAL_UNITS,
+    PTAS_CACHE_KEYS.POTENTIAL_UNITS,
+    PTAS_CACHE_KEYS.AUDIT_LOGS
+  ]);
   return payload.receipt as unknown as StatutoryReceiptRecord;
 }
 
@@ -125,6 +150,12 @@ export async function recordDurableManualReceipt(
   );
   if (error) throw new Error(`Unable to record manual receipt: ${error.message}`);
   if (!isRecord(data)) throw new Error("Manual receipt command returned an invalid record");
+  invalidateQueryCache([
+    PTAS_CACHE_KEYS.CHALLAN_REGISTRY,
+    PTAS_CACHE_KEYS.OPERATIONAL_UNITS,
+    PTAS_CACHE_KEYS.POTENTIAL_UNITS,
+    PTAS_CACHE_KEYS.AUDIT_LOGS
+  ]);
   return data as unknown as StatutoryReceiptRecord;
 }
 
@@ -144,6 +175,7 @@ export async function cancelDurablePft2Challan(
   });
   if (error) throw new Error(`Unable to cancel PFT-2 challan: ${error.message}`);
   if (!isRecord(data)) throw new Error("PFT-2 cancellation returned an invalid record");
+  invalidateQueryCache([PTAS_CACHE_KEYS.CHALLAN_REGISTRY, PTAS_CACHE_KEYS.AUDIT_LOGS]);
   return data as unknown as Pft2ChallanRecord;
 }
 

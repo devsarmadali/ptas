@@ -7,6 +7,7 @@
 import type { Json } from "@ptas/database/types";
 import type { StoredUnit, PilotAuditItem } from "./pilot-store";
 import { getSupabaseAuthClient } from "./supabase-auth";
+import { PTAS_CACHE_KEYS, getOrFetchCached } from "./query-cache";
 
 const SYNC_BATCH_SIZE = 100;
 
@@ -124,37 +125,46 @@ export async function pushPilotStateToSupabase(
 /**
  * Fetches recent audit events from Supabase PostgreSQL using an explicit column projection.
  */
-export async function fetchAuditLogsFromDatabase(): Promise<PilotAuditItem[] | null> {
-  try {
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase
-      .from("audit_events")
-      .select(
-        "id, event_type, actor_id, actor_role, aggregate_id, occurred_at, correlation_id, payload"
-      )
-      .order("occurred_at", { ascending: false })
-      .limit(100);
+export async function fetchAuditLogsFromDatabase(options?: {
+  readonly force?: boolean | undefined;
+}): Promise<PilotAuditItem[] | null> {
+  return getOrFetchCached(
+    PTAS_CACHE_KEYS.AUDIT_LOGS,
+    60_000,
+    async () => {
+      try {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+          .from("audit_events")
+          .select(
+            "id, event_type, actor_id, actor_role, aggregate_id, occurred_at, correlation_id, payload"
+          )
+          .order("occurred_at", { ascending: false })
+          .limit(100);
 
-    if (error || !data) return null;
+        if (error || !data) return null;
 
-    return data.map((row) => {
-      const payload =
-        row.payload && typeof row.payload === "object"
-          ? (row.payload as Record<string, unknown>)
-          : {};
+        return data.map((row) => {
+          const payload =
+            row.payload && typeof row.payload === "object"
+              ? (row.payload as Record<string, unknown>)
+              : {};
 
-      return {
-        id: String(row.id),
-        eventType: String(row.event_type || "SYSTEM_AUDIT"),
-        actorName: String(row.actor_id || "Authorized Officer"),
-        actorRole: String(row.actor_role || "SYSTEM"),
-        target: String(payload.target ?? row.aggregate_id ?? "Tax Administration Unit"),
-        timestamp: String(row.occurred_at || new Date().toISOString()),
-        correlationId: String(row.correlation_id || "corr-audit"),
-        details: String(payload.details ?? "Statutory event recorded.")
-      };
-    });
-  } catch {
-    return null;
-  }
+          return {
+            id: String(row.id),
+            eventType: String(row.event_type || "SYSTEM_AUDIT"),
+            actorName: String(row.actor_id || "Authorized Officer"),
+            actorRole: String(row.actor_role || "SYSTEM"),
+            target: String(payload.target ?? row.aggregate_id ?? "Tax Administration Unit"),
+            timestamp: String(row.occurred_at || new Date().toISOString()),
+            correlationId: String(row.correlation_id || "corr-audit"),
+            details: String(payload.details ?? "Statutory event recorded.")
+          };
+        });
+      } catch {
+        return null;
+      }
+    },
+    { force: options?.force, shouldCache: (value) => value !== null }
+  );
 }

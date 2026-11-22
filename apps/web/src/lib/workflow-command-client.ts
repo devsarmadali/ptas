@@ -1,4 +1,5 @@
 import { getSupabaseAuthClient } from "./supabase-auth";
+import { PTAS_CACHE_KEYS, invalidateQueryCache } from "./query-cache";
 
 const WORKFLOW_REQUEST_TIMEOUT_MS = 30_000;
 const MAX_IDEMPOTENT_RETRIES = 2;
@@ -48,6 +49,11 @@ export async function executeWorkflowCommand<T>(
       }
 
       if (response.ok && body.data !== undefined) {
+        invalidateQueryCache([
+          PTAS_CACHE_KEYS.OPERATIONAL_UNITS,
+          PTAS_CACHE_KEYS.CHALLAN_REGISTRY,
+          PTAS_CACHE_KEYS.AUDIT_LOGS
+        ]);
         return body.data;
       }
 

@@ -6,6 +6,7 @@ import type {
   StatutoryRuleDefinition
 } from "@ptas/domain";
 import type { Json } from "@ptas/database/types";
+import { PTAS_CACHE_KEYS, getOrFetchCached, invalidateQueryCache } from "./query-cache";
 import type { StoredUnit, StoredUnitSnapshot } from "./pilot-store";
 import { getSupabaseAuthClient, resolveAuthenticatedOfficer } from "./supabase-auth";
 import type { MockOfficer } from "./pilot-store";
@@ -278,17 +279,26 @@ export function mapOperationalUnit(value: unknown): StoredUnit {
   };
 }
 
-export async function loadOperationalSurveyUnits(): Promise<StoredUnit[]> {
-  const supabase = getSupabaseAuthClient();
-  const { data, error } = await supabase.rpc("list_operational_survey_units");
-  if (error) {
-    throw new Error(`Unable to load operational survey units: ${error.message}`);
-  }
-  if (!Array.isArray(data)) {
-    if (data === null) return [];
-    throw new Error("Operational survey query returned an invalid response");
-  }
-  return (data as Json[]).map(mapOperationalUnit);
+export async function loadOperationalSurveyUnits(options?: {
+  readonly force?: boolean | undefined;
+}): Promise<StoredUnit[]> {
+  return getOrFetchCached(
+    PTAS_CACHE_KEYS.OPERATIONAL_UNITS,
+    45_000,
+    async () => {
+      const supabase = getSupabaseAuthClient();
+      const { data, error } = await supabase.rpc("list_operational_survey_units");
+      if (error) {
+        throw new Error(`Unable to load operational survey units: ${error.message}`);
+      }
+      if (!Array.isArray(data)) {
+        if (data === null) return [];
+        throw new Error("Operational survey query returned an invalid response");
+      }
+      return (data as Json[]).map(mapOperationalUnit);
+    },
+    { force: options?.force }
+  );
 }
 
 export async function loadOperationalContext(): Promise<{
@@ -341,6 +351,7 @@ export async function updateIndividualSurveyUnit(
     if (error) {
       return { success: false, id: unitId, error: error.message };
     }
+    invalidateQueryCache(PTAS_CACHE_KEYS.OPERATIONAL_UNITS);
     const res = data as Record<string, unknown> | null;
     return { success: true, id: String(res?.id ?? unitId) };
   } catch (err) {

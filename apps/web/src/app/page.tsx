@@ -996,6 +996,21 @@ function ColumnFilterPopover({
   );
 }
 
+type RefreshScope = "ALL" | "UNITS" | "POTENTIAL" | "CHALLANS";
+
+function resolveRefreshScopeForTab(tab: TabId): RefreshScope {
+  if (tab === "REGISTER_POTENTIAL") {
+    return "POTENTIAL";
+  }
+  if (tab === "PFT2" || tab === "POTENTIAL_PFT2" || tab === "RECEIPTS" || tab === "EPAY") {
+    return "CHALLANS";
+  }
+  if (tab === "ANALYTICS" || tab === "REPORTS" || tab === "MIS_HUB") {
+    return "ALL";
+  }
+  return "UNITS";
+}
+
 export default function HomePage({
   initialRouteHub,
   initialTab
@@ -1011,7 +1026,9 @@ export default function HomePage({
     "CHECKING"
   );
   const refreshInFlightRef = useRef<Promise<void> | null>(null);
+  const refreshInFlightScopeRef = useRef<RefreshScope | null>(null);
   const lastRefreshAtRef = useRef<number>(0);
+  const loadedAuthUserIdRef = useRef<string | null>(null);
   const authStatusRef = useRef(authStatus);
   authStatusRef.current = authStatus;
   const hasAnyModalOpenRef = useRef(false);
@@ -1024,6 +1041,8 @@ export default function HomePage({
   const resolvedFromPath = pathname ? PATH_TO_TAB[pathname] : null;
   const activeRouteHub: RouteHubId = resolvedFromPath?.hub ?? initialRouteHub ?? "demand";
   const activeTab: TabId = resolvedFromPath?.tab ?? initialTab ?? "REGISTER_PFT3";
+  const activeTabRef = useRef<TabId>(activeTab);
+  activeTabRef.current = activeTab;
 
   // URL-based Navigation
   const switchTab = (tab: TabId) => {
@@ -1685,54 +1704,103 @@ export default function HomePage({
     showMigratePotentialModal
   ]);
 
-  const refreshOperationalSurveyUnits = () => {
-    if (refreshInFlightRef.current) {
+  const refreshOperationalSurveyUnits = (options?: {
+    readonly force?: boolean | undefined;
+    readonly scope?: RefreshScope | undefined;
+  }) => {
+    const scope: RefreshScope = options?.scope ?? "ALL";
+    const force = options?.force ?? false;
+
+    if (
+      refreshInFlightRef.current &&
+      (!force ||
+        refreshInFlightScopeRef.current === scope ||
+        refreshInFlightScopeRef.current === "ALL")
+    ) {
       return refreshInFlightRef.current;
     }
+
+    const previousInFlight = refreshInFlightRef.current;
+    let runPromise: Promise<void> | null = null;
     const run = (async () => {
+      if (previousInFlight) {
+        await previousInFlight.catch(() => undefined);
+      }
       setIsLoadingOperationalUnits(true);
       setOperationalUnitsError(null);
       try {
-        const [liveUnits, dbPotential, challanRegistry, cloudAudits] = await Promise.all([
-          loadOperationalSurveyUnits(),
-          fetchPotentialAssessmentUnitsFromDatabase(),
-          loadDurableChallanRegistry(),
-          fetchAuditLogsFromDatabase().catch(() => null)
-        ]);
-        if (dbPotential === null) throw new Error("Unable to load the potential register");
-        setUnits(liveUnits);
-        setPotentialUnits(dbPotential);
-        setPft2Challans(challanRegistry.challans);
-        setStatutoryReceipts(challanRegistry.receipts);
-        const firstId = liveUnits[0]?.id ?? "";
-        setSelectedUnitId(firstId);
-        setPaymentUnitId(firstId);
-        setAppealUnitId(firstId);
-        setDiscUnitId(firstId);
-        setRefUnitId(firstId);
-        lastRefreshAtRef.current = Date.now();
+        const needUnits = scope === "ALL" || scope === "UNITS";
+        const needPotential = scope === "ALL" || scope === "POTENTIAL";
+        const needChallans = scope === "ALL" || scope === "CHALLANS";
 
-        if (cloudAudits && cloudAudits.length > 0) {
-          setAuditLogs((prev) => {
-            const existingIds = new Set(cloudAudits.map((a) => a.id));
-            const merged = [...cloudAudits, ...prev.filter((p) => !existingIds.has(p.id))];
-            savePersistedAuditLogs(merged);
-            return merged;
-          });
+        const [liveUnits, dbPotential, challanRegistry] = await Promise.all([
+          needUnits ? loadOperationalSurveyUnits({ force }) : Promise.resolve(null),
+          needPotential
+            ? fetchPotentialAssessmentUnitsFromDatabase({ force })
+            : Promise.resolve(undefined),
+          needChallans ? loadDurableChallanRegistry({ force }) : Promise.resolve(null)
+        ]);
+
+        if (needPotential && dbPotential === null) {
+          throw new Error("Unable to load the potential register");
         }
+        if (liveUnits !== null) {
+          setUnits(liveUnits);
+          const firstId = liveUnits[0]?.id ?? "";
+          setSelectedUnitId(firstId);
+          setPaymentUnitId(firstId);
+          setAppealUnitId(firstId);
+          setDiscUnitId(firstId);
+          setRefUnitId(firstId);
+        }
+        if (dbPotential) {
+          setPotentialUnits(dbPotential);
+        }
+        if (challanRegistry !== null) {
+          setPft2Challans(challanRegistry.challans);
+          setStatutoryReceipts(challanRegistry.receipts);
+        }
+        lastRefreshAtRef.current = Date.now();
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unable to load operational units";
-        setUnits([]);
+        if (scope === "ALL" || scope === "UNITS") {
+          setUnits([]);
+        }
         setOperationalUnitsError(message);
         throw error;
       } finally {
         setIsLoadingOperationalUnits(false);
-        refreshInFlightRef.current = null;
+        if (refreshInFlightRef.current === runPromise) {
+          refreshInFlightRef.current = null;
+          refreshInFlightScopeRef.current = null;
+        }
       }
     })();
+    runPromise = run;
     refreshInFlightRef.current = run;
+    refreshInFlightScopeRef.current = scope;
     return run;
   };
+
+  // Load recent cloud audit events strictly on demand when an officer opens the Audit tab.
+  useEffect(() => {
+    if (authStatus !== "AUTHENTICATED" || activeTab !== "AUDIT") return;
+    let cancelled = false;
+    void fetchAuditLogsFromDatabase()
+      .then((cloudAudits) => {
+        if (cancelled || !cloudAudits || cloudAudits.length === 0) return;
+        setAuditLogs((prev) => {
+          const existingIds = new Set(cloudAudits.map((a) => a.id));
+          const merged = [...cloudAudits, ...prev.filter((p) => !existingIds.has(p.id))];
+          savePersistedAuditLogs(merged);
+          return merged;
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [authStatus, activeTab]);
 
   // Resolve the Supabase session first, then load only the database rows allowed
   // by the authenticated officer's active role and jurisdiction assignment.
@@ -1740,8 +1808,12 @@ export default function HomePage({
     let sub: { unsubscribe: () => void } | undefined;
     const handleFocus = () => {
       if (authStatusRef.current !== "AUTHENTICATED" || hasAnyModalOpenRef.current) return;
-      if (Date.now() - lastRefreshAtRef.current < 60_000) return;
-      void refreshOperationalSurveyUnits().catch(() => undefined);
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      if (Date.now() - lastRefreshAtRef.current < 180_000) return;
+      void refreshOperationalSurveyUnits({
+        force: true,
+        scope: resolveRefreshScopeForTab(activeTabRef.current)
+      }).catch(() => undefined);
     };
     const handleAuditEvent = (event: Event) => {
       const customEvent = event as CustomEvent<PilotAuditItem>;
@@ -1783,6 +1855,7 @@ export default function HomePage({
       }
 
       const rejectUnauthenticatedSession = () => {
+        loadedAuthUserIdRef.current = null;
         setOfficer(UNAUTHENTICATED_OFFICER_CONTEXT);
         setAuthenticatedSessionType("OFFLINE");
         setUnits([]);
@@ -1800,8 +1873,12 @@ export default function HomePage({
       const acceptAuthenticatedUser = async (
         user: Parameters<typeof resolveAuthenticatedOfficer>[0]
       ) => {
+        if (loadedAuthUserIdRef.current === user.id && authStatusRef.current === "AUTHENTICATED") {
+          return;
+        }
         try {
           const matching = await resolveAuthenticatedOfficer(user);
+          loadedAuthUserIdRef.current = user.id;
           setOfficer(matching);
           setAuthenticatedSessionType("CLOUD");
           setAuthStatus("AUTHENTICATED");
@@ -1839,8 +1916,12 @@ export default function HomePage({
         })
         .catch(rejectUnauthenticatedSession);
 
-      // Keep the protected shell synchronized with later session changes.
-      sub = subscribeToAuthChanges((_event, session) => {
+      // Keep the protected shell synchronized with later session changes without
+      // re-fetching operational data on silent token refreshes for the same user.
+      sub = subscribeToAuthChanges((event, session) => {
+        if (event === "TOKEN_REFRESHED" && session?.user?.id === loadedAuthUserIdRef.current) {
+          return;
+        }
         if (session?.user?.email) {
           void acceptAuthenticatedUser(session.user);
         } else {
@@ -2457,7 +2538,7 @@ export default function HomePage({
         return;
       }
 
-      await refreshOperationalSurveyUnits();
+      await refreshOperationalSurveyUnits({ force: true, scope: "UNITS" });
 
       const targetPin = target.provincialUin || target.pinNumber || "";
       const currentPin = isApprovedUnit ? setPinVersion(targetPin, "02") : targetPin;
@@ -2663,7 +2744,7 @@ export default function HomePage({
       permanent_demand_no?: string;
       direct_enrolled?: boolean;
     } | null;
-    await refreshOperationalSurveyUnits();
+    await refreshOperationalSurveyUnits({ force: true, scope: "UNITS" });
 
     // Reset Form
     setNewLegalName("");
@@ -2750,7 +2831,7 @@ export default function HomePage({
           p_idempotency_key: `survey-sub:${officer.id}:${unitId}:${Date.now()}`,
           p_correlation_id: `survey-sub:${crypto.randomUUID()}`
         });
-        await refreshOperationalSurveyUnits();
+        await refreshOperationalSurveyUnits({ force: true, scope: "UNITS" });
       }
 
       const updatedUnits = units.map((u) => (u.id === unitId ? updatedUnit : u));
@@ -2817,7 +2898,7 @@ export default function HomePage({
           p_correlation_id: `survey-resub:${crypto.randomUUID()}`,
           p_reason: "Resubmitted with addressed statutory observations"
         });
-        await refreshOperationalSurveyUnits();
+        await refreshOperationalSurveyUnits({ force: true, scope: "UNITS" });
       }
 
       const updatedUnits = units.map((u) => (u.id === unitId ? updatedUnit : u));
@@ -2974,7 +3055,7 @@ export default function HomePage({
           p_correlation_id: `survey-appr:${crypto.randomUUID()}`,
           p_reason: "Statutory assessment approval by ETO"
         });
-        await refreshOperationalSurveyUnits();
+        await refreshOperationalSurveyUnits({ force: true, scope: "UNITS" });
       }
 
       const updatedUnits = units.map((u) => (u.id === unitId ? updatedUnit : u));
@@ -5215,7 +5296,10 @@ export default function HomePage({
         return;
       }
       showToast("success", "✓ Batch units submitted successfully for ETO statutory review.");
-      await Promise.all([refreshOperationalSurveyUnits(), refreshActionableSurveyImportBatches()]);
+      await Promise.all([
+        refreshOperationalSurveyUnits({ force: true, scope: "UNITS" }),
+        refreshActionableSurveyImportBatches()
+      ]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       showToast("error", `Batch submission error: ${msg}`);
@@ -5250,7 +5334,10 @@ export default function HomePage({
         return;
       }
       showToast("success", "✓ Batch units approved under Rule 11 with statutory PINs allocated.");
-      await Promise.all([refreshOperationalSurveyUnits(), refreshActionableSurveyImportBatches()]);
+      await Promise.all([
+        refreshOperationalSurveyUnits({ force: true, scope: "UNITS" }),
+        refreshActionableSurveyImportBatches()
+      ]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       showToast("error", `Bulk approval error: ${msg}`);
@@ -5390,8 +5477,10 @@ export default function HomePage({
       setBulkSurveyRawCsv("");
       setBulkSurveyFileName("");
       setBulkSurveyFileSha256("");
-      await refreshActionableSurveyImportBatches();
-      await refreshOperationalSurveyUnits();
+      await Promise.all([
+        refreshActionableSurveyImportBatches(),
+        refreshOperationalSurveyUnits({ force: true, scope: "UNITS" })
+      ]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       showToast("error", `Bulk survey import failed: ${msg}`);
@@ -6285,7 +6374,7 @@ export default function HomePage({
 
       // Record migration in live database first
       await recordPotentialUnitMigrationInDatabase(targetMigratePotential.id, assignedDemandNo);
-      await refreshOperationalSurveyUnits();
+      await refreshOperationalSurveyUnits({ force: true, scope: "ALL" });
 
       const nowIso = new Date().toISOString();
       const updatedPotentialUnits = potentialUnits.map((p) =>
@@ -7842,7 +7931,7 @@ export default function HomePage({
                   className="btn-secondary btn-sm"
                   disabled={isLoadingOperationalUnits}
                   onClick={() => {
-                    void refreshOperationalSurveyUnits();
+                    void refreshOperationalSurveyUnits({ force: true, scope: "ALL" });
                     void refreshActionableSurveyImportBatches();
                   }}
                 >

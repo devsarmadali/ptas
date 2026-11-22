@@ -11,6 +11,7 @@ import {
 import type { StoredUnit, MockOfficer } from "./pilot-store";
 import { DISTRICT_VEHARI_CIRCLES } from "./pilot-store";
 import { getSupabaseAuthClient } from "./supabase-auth";
+import { PTAS_CACHE_KEYS, getOrFetchCached, invalidateQueryCache } from "./query-cache";
 import type { Json } from "@ptas/database/types";
 import {
   MAX_BULK_IMPORT_ROWS,
@@ -485,77 +486,86 @@ export function savePersistedPotentialUnits(units: readonly PotentialUnitRecord[
  * Load potential assessment units from Supabase RPC list_potential_assessment_units.
  * Returns null if network/session error occurs (falling back to localStorage).
  */
-export async function fetchPotentialAssessmentUnitsFromDatabase(): Promise<
-  PotentialUnitRecord[] | null
-> {
+export async function fetchPotentialAssessmentUnitsFromDatabase(options?: {
+  readonly force?: boolean | undefined;
+}): Promise<PotentialUnitRecord[] | null> {
   if (typeof window === "undefined") return null;
-  try {
-    const supabase = getSupabaseAuthClient();
-    const { data, error } = await supabase.rpc("list_potential_assessment_units");
-    if (error || !Array.isArray(data)) {
-      return null;
-    }
-    if (data.length === 0) {
-      return [];
-    }
-    const rows = data as unknown as Array<Record<string, unknown>>;
-    const units: PotentialUnitRecord[] = rows.map((row) => {
-      const catCode = String(row.category_code || "1");
-      const subCode = row.subclassification_code ? String(row.subclassification_code) : undefined;
-      const rule = resolveRule(catCode, subCode);
-      const potNum = String(row.potential_number || "");
-      const pinNum = formatPotentialPin(String(row.pin_number || potNum));
-      return {
-        id: String(row.id),
-        potentialNumber: potNum,
-        pinNumber: pinNum,
-        provincialUin: pinNum,
-        legalName: String(row.legal_name || "Unnamed Unit"),
-        tradeName: row.trade_name ? String(row.trade_name) : undefined,
-        taxpayerName: row.taxpayer_name ? String(row.taxpayer_name) : undefined,
-        identifierType: String(row.identifier_type).toUpperCase() === "NTN" ? "NTN" : "CNIC",
-        identifierValue: String(row.identifier_value || ""),
-        address: String(row.address || ""),
-        locality: row.locality ? String(row.locality) : undefined,
-        circleId: String(row.circle_id || "00000000-0000-4000-8000-000000000004"),
-        circleName: String(row.circle_name || "Circle 1"),
-        tehsil: row.tehsil ? String(row.tehsil) : undefined,
-        districtName: String(row.district_name || "Vehari"),
-        categoryCode: catCode,
-        categoryName: String(row.category_name || rule.category),
-        subclassificationCode: subCode ?? rule.subclassification_code,
-        subclassificationName: row.subclassification_name
-          ? String(row.subclassification_name)
-          : rule.subcategory,
-        statutoryTertiaryCode: row.statutory_tertiary_code
-          ? String(row.statutory_tertiary_code)
-          : rule.statutory_tertiary_code,
-        statutoryTertiaryClassification: row.statutory_tertiary_classification
-          ? String(row.statutory_tertiary_classification)
-          : rule.statutory_tertiary_classification,
-        statutoryRuleId: String(row.statutory_rule_id || rule.rule_id),
-        statutoryRule: rule,
-        annualRatePkr: Number(row.annual_rate_pkr) || rule.annual_rate_pkr || 4000,
-        openingArrears: Number(row.opening_arrears) || 0,
-        remarks: row.remarks ? String(row.remarks) : undefined,
-        status:
-          row.status === "MIGRATED" || row.status === "CANCELLED"
-            ? (row.status as "MIGRATED" | "CANCELLED")
-            : ("ACTIVE" as const),
-        migratedToDemandNo: row.migrated_to_demand_no
-          ? String(row.migrated_to_demand_no)
-          : undefined,
-        migratedAt: row.migrated_at ? String(row.migrated_at) : undefined,
-        createdAt: String(row.created_at || new Date().toISOString()),
-        createdBy: row.created_by ? String(row.created_by) : undefined
-      };
-    });
-    savePersistedPotentialUnits(units);
-    return units;
-  } catch (err) {
-    console.warn("fetchPotentialAssessmentUnitsFromDatabase encountered error:", err);
-    return null;
-  }
+  return getOrFetchCached(
+    PTAS_CACHE_KEYS.POTENTIAL_UNITS,
+    60_000,
+    async () => {
+      try {
+        const supabase = getSupabaseAuthClient();
+        const { data, error } = await supabase.rpc("list_potential_assessment_units");
+        if (error || !Array.isArray(data)) {
+          return null;
+        }
+        if (data.length === 0) {
+          return [];
+        }
+        const rows = data as unknown as Array<Record<string, unknown>>;
+        const units: PotentialUnitRecord[] = rows.map((row) => {
+          const catCode = String(row.category_code || "1");
+          const subCode = row.subclassification_code
+            ? String(row.subclassification_code)
+            : undefined;
+          const rule = resolveRule(catCode, subCode);
+          const potNum = String(row.potential_number || "");
+          const pinNum = formatPotentialPin(String(row.pin_number || potNum));
+          return {
+            id: String(row.id),
+            potentialNumber: potNum,
+            pinNumber: pinNum,
+            provincialUin: pinNum,
+            legalName: String(row.legal_name || "Unnamed Unit"),
+            tradeName: row.trade_name ? String(row.trade_name) : undefined,
+            taxpayerName: row.taxpayer_name ? String(row.taxpayer_name) : undefined,
+            identifierType: String(row.identifier_type).toUpperCase() === "NTN" ? "NTN" : "CNIC",
+            identifierValue: String(row.identifier_value || ""),
+            address: String(row.address || ""),
+            locality: row.locality ? String(row.locality) : undefined,
+            circleId: String(row.circle_id || "00000000-0000-4000-8000-000000000004"),
+            circleName: String(row.circle_name || "Circle 1"),
+            tehsil: row.tehsil ? String(row.tehsil) : undefined,
+            districtName: String(row.district_name || "Vehari"),
+            categoryCode: catCode,
+            categoryName: String(row.category_name || rule.category),
+            subclassificationCode: subCode ?? rule.subclassification_code,
+            subclassificationName: row.subclassification_name
+              ? String(row.subclassification_name)
+              : rule.subcategory,
+            statutoryTertiaryCode: row.statutory_tertiary_code
+              ? String(row.statutory_tertiary_code)
+              : rule.statutory_tertiary_code,
+            statutoryTertiaryClassification: row.statutory_tertiary_classification
+              ? String(row.statutory_tertiary_classification)
+              : rule.statutory_tertiary_classification,
+            statutoryRuleId: String(row.statutory_rule_id || rule.rule_id),
+            statutoryRule: rule,
+            annualRatePkr: Number(row.annual_rate_pkr) || rule.annual_rate_pkr || 4000,
+            openingArrears: Number(row.opening_arrears) || 0,
+            remarks: row.remarks ? String(row.remarks) : undefined,
+            status:
+              row.status === "MIGRATED" || row.status === "CANCELLED"
+                ? (row.status as "MIGRATED" | "CANCELLED")
+                : ("ACTIVE" as const),
+            migratedToDemandNo: row.migrated_to_demand_no
+              ? String(row.migrated_to_demand_no)
+              : undefined,
+            migratedAt: row.migrated_at ? String(row.migrated_at) : undefined,
+            createdAt: String(row.created_at || new Date().toISOString()),
+            createdBy: row.created_by ? String(row.created_by) : undefined
+          };
+        });
+        savePersistedPotentialUnits(units);
+        return units;
+      } catch (err) {
+        console.warn("fetchPotentialAssessmentUnitsFromDatabase encountered error:", err);
+        return null;
+      }
+    },
+    { force: options?.force, shouldCache: (value) => value !== null }
+  );
 }
 
 /**
@@ -604,7 +614,8 @@ export async function persistPotentialUnitToDatabase(
     }
     if (!data || typeof data !== "object" || Array.isArray(data)) return null;
     const createdId = String((data as Record<string, unknown>).id ?? "");
-    const refreshed = await fetchPotentialAssessmentUnitsFromDatabase();
+    invalidateQueryCache(PTAS_CACHE_KEYS.POTENTIAL_UNITS);
+    const refreshed = await fetchPotentialAssessmentUnitsFromDatabase({ force: true });
     return refreshed?.find((candidate) => candidate.id === createdId) ?? null;
   } catch (err) {
     console.warn("persistPotentialUnitToDatabase failed:", err);
@@ -658,7 +669,8 @@ export async function persistBulkPotentialUnitsToDatabase(
       console.warn("persistBulkPotentialUnitsToDatabase error:", error.message);
       return null;
     }
-    const refreshed = await fetchPotentialAssessmentUnitsFromDatabase();
+    invalidateQueryCache(PTAS_CACHE_KEYS.POTENTIAL_UNITS);
+    const refreshed = await fetchPotentialAssessmentUnitsFromDatabase({ force: true });
     return refreshed;
   } catch (err) {
     console.warn("persistBulkPotentialUnitsToDatabase failed:", err);
@@ -712,7 +724,8 @@ export async function persistPotentialUnitUpdateToDatabase(
     console.error("persistPotentialUnitUpdateToDatabase error:", error.message);
     throw new Error(error.message);
   }
-  const refreshed = await fetchPotentialAssessmentUnitsFromDatabase();
+  invalidateQueryCache(PTAS_CACHE_KEYS.POTENTIAL_UNITS);
+  const refreshed = await fetchPotentialAssessmentUnitsFromDatabase({ force: true });
   return (
     refreshed?.find(
       (candidate) =>
@@ -741,6 +754,7 @@ export async function recordPotentialUnitMigrationInDatabase(
       console.error("recordPotentialUnitMigrationInDatabase error:", error);
       throw error;
     }
+    invalidateQueryCache([PTAS_CACHE_KEYS.POTENTIAL_UNITS, PTAS_CACHE_KEYS.OPERATIONAL_UNITS]);
   } catch (err) {
     console.warn("recordPotentialUnitMigrationInDatabase failed:", err);
     throw err;

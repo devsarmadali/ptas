@@ -13,6 +13,7 @@ import {
   createBrowserSupabaseClient
 } from "@ptas/database/client";
 import type { MockOfficer, MockRole } from "./pilot-store";
+import { clearAllQueryCaches } from "./query-cache";
 
 /** @deprecated Login identities are provisioned in Supabase Auth and are never embedded here. */
 export interface OfficerCredentialInfo {
@@ -147,6 +148,7 @@ export function clearAuthenticatedOfficerCache(userId?: string): void {
   } else {
     resolvedOfficerCache.clear();
     officerLookupInFlight.clear();
+    clearAllQueryCaches();
   }
 }
 
@@ -293,6 +295,9 @@ export async function signInOfficer(email: string, password?: string): Promise<S
     }
 
     try {
+      if (resolvedOfficerCache.size > 0 && !resolvedOfficerCache.has(data.user.id)) {
+        clearAllQueryCaches();
+      }
       const officer = await resolveAuthenticatedOfficer(data.user);
       return {
         success: true,
