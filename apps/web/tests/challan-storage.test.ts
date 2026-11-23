@@ -1,8 +1,15 @@
-import { describe, expect, it, beforeEach, beforeAll } from "vitest";
+import { describe, expect, it, beforeEach, beforeAll, vi } from "vitest";
+
+const rpcMock = vi.hoisted(() => vi.fn());
+vi.mock("../src/lib/supabase-auth", () => ({
+  getSupabaseAuthClient: () => ({ rpc: rpcMock })
+}));
+
 import {
   loadPersistedPft2Challans,
   savePersistedPft2Challans,
   saveIssuedPft2Challan,
+  issueDurablePft2Challan,
   loadPersistedStatutoryReceipts,
   savePersistedStatutoryReceipts,
   ensureChallansAndReceiptsForUnits,
@@ -59,6 +66,7 @@ describe("Form P.F.T-2 Challans & Statutory Receipts Persistence Layer", () => {
 
   beforeEach(() => {
     localStorage.clear();
+    vi.clearAllMocks();
   });
 
   it("loads empty arrays when localStorage is pristine", () => {
@@ -321,5 +329,56 @@ describe("Form P.F.T-2 Challans & Statutory Receipts Persistence Layer", () => {
     );
     expect(matchingCredits).toHaveLength(1);
     expect(matchingCredits[0]?.amount).toBe(-3500);
+  });
+
+  it("rejects cancelled challan replays and returns active issued records cleanly", async () => {
+    const draft: Pft2ChallanRecord = {
+      id: "unit-01",
+      challanNumber: "237-21126110001-01",
+      noticeNumber: "237-21126110001-01",
+      demandNumber: "0001",
+      unitId: "unit-01",
+      legalName: "Test Unit",
+      identifierType: "NTN",
+      identifierValue: "1234567-8",
+      address: "Vehari",
+      category: "Companies",
+      subclassificationCode: "1.i",
+      tertiarySlab: null,
+      amountPayable: 10000,
+      issueDate: "2026-11-22",
+      dueDate: "2026-11-30",
+      status: "ISSUED",
+      officialSha256: "sha-draft",
+      qrPayload: "/verify"
+    };
+
+    rpcMock.mockResolvedValueOnce({
+      data: { ...draft, status: "CANCELLED" },
+      error: null
+    });
+
+    await expect(
+      issueDurablePft2Challan(draft, "pft2-issue:unit-01:req-1", "pft2-issue:req-1")
+    ).rejects.toThrow("already-cancelled record");
+
+    rpcMock.mockResolvedValueOnce({
+      data: {
+        ...draft,
+        id: "challan-fresh-01",
+        challanNumber: "237-21126110005-01",
+        noticeNumber: "237-21126110005-01",
+        status: "ISSUED"
+      },
+      error: null
+    });
+
+    const issued = await issueDurablePft2Challan(
+      draft,
+      "pft2-issue:unit-01:req-2",
+      "pft2-issue:req-2"
+    );
+    expect(issued.status).toBe("ISSUED");
+    expect(issued.noticeNumber).toBe("237-21126110005-01");
   });
 });

@@ -100,8 +100,14 @@ export async function issueDurablePft2Challan(
   });
   if (error) throw new Error(`Unable to issue PFT-2 challan: ${error.message}`);
   if (!isRecord(data)) throw new Error("PFT-2 issuance returned an invalid record");
+  const issuedRecord = data as unknown as Pft2ChallanRecord;
+  if (String(issuedRecord.status ?? "").toUpperCase() === "CANCELLED") {
+    throw new Error(
+      "Challan issuance matched an already-cancelled record. Please retry issuance to allocate a fresh notice number."
+    );
+  }
   invalidateQueryCache([PTAS_CACHE_KEYS.CHALLAN_REGISTRY, PTAS_CACHE_KEYS.AUDIT_LOGS]);
-  return data as unknown as Pft2ChallanRecord;
+  return issuedRecord;
 }
 
 export async function receiveDurablePft2Challan(

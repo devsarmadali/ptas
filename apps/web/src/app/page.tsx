@@ -6247,10 +6247,11 @@ export default function HomePage({
         })
       };
 
+      const requestId = crypto.randomUUID();
       const issued = await issueDurablePft2Challan(
         provisionalChallan,
-        `pft2-issue:${unit.id}:${noticeNumber}`,
-        `pft2-issue:${crypto.randomUUID()}`
+        `pft2-issue:${unit.id}:${requestId}`,
+        `pft2-issue:${requestId}`
       );
       setPft2Challans((current) => [issued, ...current.filter((c) => c.id !== issued.id)]);
 
@@ -7282,10 +7283,11 @@ export default function HomePage({
       qrPayload: `PTAS-PUNJAB:PFT-2:${noticeNumber}:DEMAND=${targetUnit.demandUnit.permanentDemandNo}:AMOUNT=${amountPayable}:DUE=${issuePft2DueDate}:PIN=${pin}`
     };
     try {
+      const requestId = crypto.randomUUID();
       const issued = await issueDurablePft2Challan(
         newChallanRecord,
-        `pft2-issue:${targetUnit.id}:${noticeNumber}`,
-        `pft2-issue:${crypto.randomUUID()}`
+        `pft2-issue:${targetUnit.id}:${requestId}`,
+        `pft2-issue:${requestId}`
       );
       setPft2Challans((current) => [issued, ...current.filter((c) => c.id !== issued.id)]);
       setShowIssuePft2Modal(false);
@@ -23273,9 +23275,12 @@ export default function HomePage({
                   type="button"
                   className="btn-primary"
                   onClick={() => {
-                    const batchChallan = pft2Challans[0];
+                    const batchChallan = pft2Challans.find((c) => c.status !== "CANCELLED");
                     if (!batchChallan) {
-                      showToast("error", "No issued PFT-2 Challans available for batch download.");
+                      showToast(
+                        "error",
+                        "No active issued PFT-2 Challans available for batch download."
+                      );
                       return;
                     }
                     downloadOfficialPdf({
@@ -28370,6 +28375,7 @@ export default function HomePage({
                 <button
                   type="button"
                   className="btn-on-dark"
+                  disabled={activePrintChallan.status === "CANCELLED"}
                   onClick={() =>
                     downloadOfficialPdf({
                       type: "FORM_PFT2_CHALLAN",
@@ -28391,7 +28397,11 @@ export default function HomePage({
                       )
                     )
                   }
-                  title="Download authoritative 3-copy Form PFT-2 challan as vector PDF"
+                  title={
+                    activePrintChallan.status === "CANCELLED"
+                      ? "Cancelled Form PFT-2 Challans cannot be downloaded as official PDFs"
+                      : "Download authoritative 3-copy Form PFT-2 challan as vector PDF"
+                  }
                 >
                   Download Official PDF (A4 Landscape)
                 </button>
