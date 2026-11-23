@@ -12,6 +12,7 @@ import {
   type User,
   createBrowserSupabaseClient
 } from "@ptas/database/client";
+import { normalizeCadreCode, type OfficerCadreCode, type PostChargeType } from "@ptas/domain";
 import type { MockOfficer, MockRole } from "./pilot-store";
 import { clearAllQueryCaches } from "./query-cache";
 
@@ -84,53 +85,111 @@ type ActorAssignment = {
   user_id?: unknown;
   display_name?: unknown;
   role?: unknown;
+  cadre_code?: unknown;
+  bps_scale?: unknown;
+  post_id?: unknown;
+  post_code?: unknown;
+  post_title?: unknown;
+  charge_type?: unknown;
   jurisdiction_id?: unknown;
+  jurisdiction_code?: unknown;
   jurisdiction_name?: unknown;
   jurisdiction_tier?: unknown;
 };
 
-const ALLOWED_ROLES: readonly MockRole[] = ["INSPECTOR", "ETO", "DIRECTOR", "ADMIN"];
 const ALLOWED_JURISDICTION_TIERS: readonly MockOfficer["jurisdictionTier"][] = [
   "REGION",
+  "DIVISION",
   "DISTRICT",
   "OFFICE",
   "CIRCLE"
 ];
 
+function mapRawRoleToMockRole(rawRole: string): MockRole | null {
+  switch (rawRole) {
+    case "INSPECTOR":
+    case "ETI":
+      return "INSPECTOR";
+    case "ETO":
+      return "ETO";
+    case "DIRECTOR":
+    case "DET":
+      return "DIRECTOR";
+    case "ADMIN":
+      return "ADMIN";
+    case "ETC":
+      return "ETC";
+    default:
+      return null;
+  }
+}
+
 export function mapActorAssignmentToOfficer(
   assignment: ActorAssignment,
   user: Pick<User, "id" | "email">
 ): MockOfficer {
-  const role = String(assignment.role ?? "").toUpperCase() as MockRole;
-  const jurisdictionTier = String(
-    assignment.jurisdiction_tier ?? ""
-  ).toUpperCase() as MockOfficer["jurisdictionTier"];
+  const rawRole = String(assignment.role ?? "")
+    .trim()
+    .toUpperCase();
+  const role = mapRawRoleToMockRole(rawRole);
+  const jurisdictionTier = String(assignment.jurisdiction_tier ?? "")
+    .trim()
+    .toUpperCase() as MockOfficer["jurisdictionTier"];
   const jurisdictionId = String(assignment.jurisdiction_id ?? "").trim();
 
-  if (!ALLOWED_ROLES.includes(role) || !ALLOWED_JURISDICTION_TIERS.includes(jurisdictionTier)) {
+  if (!role || !ALLOWED_JURISDICTION_TIERS.includes(jurisdictionTier)) {
     throw new Error("Authenticated account has an unsupported PTAS role or jurisdiction tier");
   }
   if (!jurisdictionId) {
     throw new Error("Authenticated account has no active PTAS jurisdiction assignment");
   }
 
+  const cadreCode: OfficerCadreCode =
+    normalizeCadreCode(String(assignment.cadre_code ?? rawRole)) ??
+    (role === "DIRECTOR" ? "DET" : role === "INSPECTOR" ? "ETI" : role);
+  const bpsScale =
+    typeof assignment.bps_scale === "number" && Number.isFinite(assignment.bps_scale)
+      ? assignment.bps_scale
+      : undefined;
+  const postId = assignment.post_id ? String(assignment.post_id) : null;
+  const postCode = assignment.post_code ? String(assignment.post_code) : null;
+  const postTitle = assignment.post_title ? String(assignment.post_title) : null;
+  const chargeType = assignment.charge_type
+    ? (String(assignment.charge_type).toUpperCase() as PostChargeType)
+    : null;
+  const jurisdictionCode = assignment.jurisdiction_code
+    ? String(assignment.jurisdiction_code)
+    : null;
+
   return {
     id: String(assignment.user_id ?? user.id),
     name: String(assignment.display_name ?? user.email ?? "PTAS Officer"),
     email: user.email ?? "",
     role,
+    cadreCode,
+    bpsScale,
+    postId,
+    postCode,
+    postTitle,
+    chargeType,
     title:
-      role === "ETO"
-        ? "Excise & Taxation Officer"
+      postTitle ??
+      (role === "ETO"
+        ? "Excise & Taxation Officer (BPS-17)"
         : role === "INSPECTOR"
           ? "Excise & Taxation Inspector"
-          : role === "DIRECTOR"
-            ? "Director Excise & Taxation"
-            : "System Administrator",
+          : role === "ETC"
+            ? "Excise & Taxation Constable (BPS-05 — Notice Delivery)"
+            : role === "DIRECTOR"
+              ? "Director Excise & Taxation (BPS-19)"
+              : "System Administrator"),
     jurisdictionId,
+    jurisdictionCode,
     jurisdictionName: String(assignment.jurisdiction_name ?? "Assigned Jurisdiction"),
     jurisdictionTier,
-    badgeText: `${role} — authenticated database assignment`
+    badgeText: postCode
+      ? `${cadreCode} • ${postCode}`
+      : `${cadreCode} — authenticated database assignment`
   };
 }
 

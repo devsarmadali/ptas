@@ -58,45 +58,82 @@ export function evaluateJurisdictionAccess({
 }
 
 export type DomainAction =
-  "VIEW" | "DRAFT" | "SUBMIT" | "RETURN" | "APPROVE" | "REVISE" | "ADMINISTER_USERS" | "VIEW_AUDIT";
+  | "VIEW"
+  | "DRAFT"
+  | "SUBMIT"
+  | "RETURN"
+  | "APPROVE"
+  | "REVISE"
+  | "DELIVER_NOTICE"
+  | "MANAGE_JURISDICTION_POSTS"
+  | "ADMINISTER_USERS"
+  | "VIEW_AUDIT";
 
 export interface EvaluateActionAccessParams extends EvaluateJurisdictionAccessParams {
   readonly action: DomainAction;
 }
 
+function normalizeRoleCode(roleCode: string): string {
+  const upper = roleCode.trim().toUpperCase();
+  if (upper === "DIRECTOR") return "DET";
+  if (upper === "INSPECTOR") return "ETI";
+  return upper;
+}
+
 const ACTION_ROLES: Readonly<Record<DomainAction, ReadonlySet<string>>> = {
-  VIEW: new Set(["INSPECTOR", "ETO", "DIRECTOR", "AUDITOR", "FINANCE"]),
-  DRAFT: new Set(["INSPECTOR"]),
-  SUBMIT: new Set(["INSPECTOR"]),
+  VIEW: new Set(["ETI", "ETO", "DET", "AUDITOR", "FINANCE"]),
+  DRAFT: new Set(["ETI"]),
+  SUBMIT: new Set(["ETI"]),
   RETURN: new Set(["ETO"]),
   APPROVE: new Set(["ETO"]),
-  REVISE: new Set(["INSPECTOR"]),
-  ADMINISTER_USERS: new Set(["ADMIN"]),
-  VIEW_AUDIT: new Set(["DIRECTOR", "AUDITOR"])
+  REVISE: new Set(["ETI"]),
+  DELIVER_NOTICE: new Set(["ETC", "ETI"]),
+  MANAGE_JURISDICTION_POSTS: new Set(["ADMIN", "DET", "ETO"]),
+  ADMINISTER_USERS: new Set(["ADMIN", "DET", "ETO"]),
+  VIEW_AUDIT: new Set(["DET", "AUDITOR", "ADMIN"])
 };
 
 export function evaluateActionAccess(params: EvaluateActionAccessParams): AccessDecision {
-  const jurisdictionDecision = evaluateJurisdictionAccess(params);
-  if (!jurisdictionDecision.allowed) {
-    return jurisdictionDecision;
+  const activeAssignments = params.subject.assignments.filter((a) =>
+    isAssignmentActiveAt(a, params.asOf)
+  );
+  if (activeAssignments.length === 0) {
+    return {
+      allowed: false,
+      reason: "NO_ACTIVE_ASSIGNMENT",
+      message: `User ${params.subject.userId} has no active jurisdiction assignments as of ${new Date(params.asOf).toISOString()}`
+    };
   }
 
-  const role = jurisdictionDecision.matchedAssignment?.roleCode;
+  const matchingAssignments = activeAssignments.filter((assignment) =>
+    isDescendantOrSelf(params.targetJurisdictionId, assignment.jurisdictionId, params.jurisdictions)
+  );
+  if (matchingAssignments.length === 0) {
+    return {
+      allowed: false,
+      reason: "UNRELATED_JURISDICTION",
+      message: `User ${params.subject.userId} does not have jurisdiction over ${params.targetJurisdictionId}`
+    };
+  }
 
   const allowedRoles = ACTION_ROLES[params.action];
-  if (!role || !allowedRoles.has(role)) {
+  const authorizedAssignment = matchingAssignments.find((a) =>
+    allowedRoles.has(normalizeRoleCode(a.roleCode))
+  );
+
+  if (!authorizedAssignment) {
     return {
       allowed: false,
       reason: "INSUFFICIENT_ROLE",
-      matchedAssignment: jurisdictionDecision.matchedAssignment,
-      message: `Role ${role ?? "UNASSIGNED"} is not authorized to perform ${params.action}`
+      matchedAssignment: matchingAssignments[0],
+      message: `Role ${matchingAssignments[0]?.roleCode ?? "UNASSIGNED"} is not authorized to perform ${params.action}`
     };
   }
 
   return {
     allowed: true,
     reason: "ALLOWED",
-    matchedAssignment: jurisdictionDecision.matchedAssignment,
+    matchedAssignment: authorizedAssignment,
     message: `Authorized to perform ${params.action} on jurisdiction ${params.targetJurisdictionId}`
   };
 }

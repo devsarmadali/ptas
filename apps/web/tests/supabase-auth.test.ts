@@ -57,7 +57,55 @@ describe("Supabase Auth and server-side PTAS assignment enforcement", () => {
 
     expect(officer.email).toBe("any.valid@example.com");
     expect(officer.role).toBe("INSPECTOR");
+    expect(officer.cadreCode).toBe("ETI");
     expect(officer.jurisdictionName).toBe("Circle 1");
+
+    const detOfficer = mapActorAssignmentToOfficer(
+      {
+        user_id: "det-user-id",
+        display_name: "Director Multan",
+        role: "DET",
+        cadre_code: "DET",
+        bps_scale: 19,
+        post_id: "post-det-mtn",
+        post_code: "DET-MTN",
+        post_title: "Director Excise & Taxation, Multan Division (BPS-19)",
+        charge_type: "SUBSTANTIVE",
+        jurisdiction_id: "div-mtn",
+        jurisdiction_code: "MTN",
+        jurisdiction_name: "Multan Division",
+        jurisdiction_tier: "DIVISION"
+      },
+      { id: "auth-det", email: "det.mtn@example.com" }
+    );
+    expect(detOfficer.role).toBe("DIRECTOR");
+    expect(detOfficer.cadreCode).toBe("DET");
+    expect(detOfficer.bpsScale).toBe(19);
+    expect(detOfficer.postCode).toBe("DET-MTN");
+    expect(detOfficer.jurisdictionTier).toBe("DIVISION");
+
+    const etcOfficer = mapActorAssignmentToOfficer(
+      {
+        user_id: "etc-user-id",
+        display_name: "Constable Ali",
+        role: "ETC",
+        cadre_code: "ETC",
+        bps_scale: 5,
+        post_id: "post-etc-vhr-1",
+        post_code: "ETC-VHR-1",
+        post_title: "Excise & Taxation Constable (Notice Delivery), Circle 1 Vehari",
+        charge_type: "SUBSTANTIVE",
+        jurisdiction_id: "cir-vhr-1",
+        jurisdiction_code: "VHR-1",
+        jurisdiction_name: "Circle 1 Vehari",
+        jurisdiction_tier: "CIRCLE"
+      },
+      { id: "auth-etc", email: "etc.vhr1@example.com" }
+    );
+    expect(etcOfficer.role).toBe("ETC");
+    expect(etcOfficer.cadreCode).toBe("ETC");
+    expect(etcOfficer.bpsScale).toBe(5);
+    expect(etcOfficer.postCode).toBe("ETC-VHR-1");
   });
 
   it("rejects unsupported client-controlled role or incomplete jurisdiction data", () => {

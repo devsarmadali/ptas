@@ -548,4 +548,53 @@ describe("Comprehensive Security Audit & Integrity Controls", () => {
     expect(body.error).not.toContain("stale workflow version");
     expect(body.requestId).toBeTruthy();
   });
+
+  it("excludes ETC (BS-05 Notice Delivery Only) from statutory PDFs and bulk survey imports", () => {
+    const etcCtx = {
+      role: "ETC" as const,
+      district: "Vehari",
+      circle: "VHR-1"
+    };
+    for (const docType of [
+      "FORM_PFT1_NOTICE",
+      "FORM_PFT2_CHALLAN",
+      "FORM_PFT3_REGISTER",
+      "STATUTORY_RECEIPT",
+      "STATUTORY_REPORT",
+      "TAX_CLEARANCE_CERTIFICATE",
+      "LAND_REVENUE_RECOVERY",
+      "APPELLATE_ORDER"
+    ] as const) {
+      const decision = validateDocumentAuthorization(docType, etcCtx, {
+        district: "Vehari",
+        circle: "VHR-1"
+      });
+      expect(decision.authorized).toBe(false);
+    }
+
+    const etcOfficer: MockOfficer = {
+      id: "officer-etc-1",
+      name: "Constable Bilal",
+      email: "etc.vhr1@punjab.gov.pk",
+      role: "ETC",
+      cadreCode: "ETC",
+      bpsScale: 5,
+      postCode: "ETC-VHR-1",
+      title: "Excise & Taxation Constable (BPS-05 — Notice Delivery)",
+      jurisdictionId: "cir-vhr-1",
+      jurisdictionName: "Circle 1 Vehari",
+      jurisdictionTier: "CIRCLE",
+      badgeText: "ETC • ETC-VHR-1"
+    };
+    const importDecision = validateOfficerImportJurisdiction(
+      etcOfficer,
+      "Circle 1",
+      "Vehari",
+      "Multan"
+    );
+    expect(importDecision.allowed).toBe(false);
+    expect(importDecision.error).toContain(
+      "strictly for field Inspectors and Assessing Authorities"
+    );
+  });
 });

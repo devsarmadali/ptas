@@ -306,4 +306,108 @@ describe("jurisdiction-based authorization policy", () => {
     expect(approval.allowed).toBe(false);
     expect(approval.reason).toBe("INSUFFICIENT_ROLE");
   });
+
+  it("isolates ETC (BS-05) strictly to DELIVER_NOTICE within assigned circle and supports DET/ETI normalization", () => {
+    const etcSubject: AuthSubject = {
+      userId: "usr-etc-1",
+      assignments: [
+        {
+          id: "asgn-etc",
+          userId: "usr-etc-1",
+          roleCode: "ETC",
+          jurisdictionId: "circ-a",
+          validFrom: "2026-01-01T00:00:00.000Z",
+          validTo: null
+        }
+      ]
+    };
+
+    expect(
+      evaluateActionAccess({
+        subject: etcSubject,
+        targetJurisdictionId: "circ-a",
+        action: "DELIVER_NOTICE",
+        jurisdictions,
+        asOf
+      }).allowed
+    ).toBe(true);
+
+    expect(
+      evaluateActionAccess({
+        subject: etcSubject,
+        targetJurisdictionId: "circ-b",
+        action: "DELIVER_NOTICE",
+        jurisdictions,
+        asOf
+      }).allowed
+    ).toBe(false);
+
+    for (const deniedAction of [
+      "VIEW",
+      "DRAFT",
+      "SUBMIT",
+      "RETURN",
+      "APPROVE",
+      "REVISE",
+      "MANAGE_JURISDICTION_POSTS",
+      "ADMINISTER_USERS",
+      "VIEW_AUDIT"
+    ] as const) {
+      const decision = evaluateActionAccess({
+        subject: etcSubject,
+        targetJurisdictionId: "circ-a",
+        action: deniedAction,
+        jurisdictions,
+        asOf
+      });
+      expect(decision.allowed).toBe(false);
+      expect(decision.reason).toBe("INSUFFICIENT_ROLE");
+    }
+
+    const etiSubject: AuthSubject = {
+      userId: "usr-eti-1",
+      assignments: [
+        {
+          id: "asgn-eti",
+          userId: "usr-eti-1",
+          roleCode: "ETI",
+          jurisdictionId: "circ-a",
+          validFrom: "2026-01-01T00:00:00.000Z",
+          validTo: null
+        }
+      ]
+    };
+    expect(
+      evaluateActionAccess({
+        subject: etiSubject,
+        targetJurisdictionId: "circ-a",
+        action: "SUBMIT",
+        jurisdictions,
+        asOf
+      }).allowed
+    ).toBe(true);
+
+    const detSubject: AuthSubject = {
+      userId: "usr-det-1",
+      assignments: [
+        {
+          id: "asgn-det",
+          userId: "usr-det-1",
+          roleCode: "DET",
+          jurisdictionId: "reg-lahore",
+          validFrom: "2026-01-01T00:00:00.000Z",
+          validTo: null
+        }
+      ]
+    };
+    expect(
+      evaluateActionAccess({
+        subject: detSubject,
+        targetJurisdictionId: "circ-a",
+        action: "MANAGE_JURISDICTION_POSTS",
+        jurisdictions,
+        asOf
+      }).allowed
+    ).toBe(true);
+  });
 });

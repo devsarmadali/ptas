@@ -8,6 +8,66 @@ export type Database = {
   };
   public: {
     Tables: {
+      app_users: {
+        Row: {
+          active: boolean;
+          auth_user_id: string | null;
+          bps_scale: number | null;
+          cadre_code: string;
+          cnic: string | null;
+          created_at: string;
+          deactivated_at: string | null;
+          designation: string | null;
+          display_name: string;
+          email: string | null;
+          father_name: string | null;
+          id: string;
+          must_change_password: boolean | null;
+          office_address: string | null;
+          phone: string | null;
+          ppo_number: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          active?: boolean;
+          auth_user_id?: string | null;
+          bps_scale?: number | null;
+          cadre_code?: string;
+          cnic?: string | null;
+          created_at?: string;
+          deactivated_at?: string | null;
+          designation?: string | null;
+          display_name: string;
+          email?: string | null;
+          father_name?: string | null;
+          id?: string;
+          must_change_password?: boolean | null;
+          office_address?: string | null;
+          phone?: string | null;
+          ppo_number?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          active?: boolean;
+          auth_user_id?: string | null;
+          bps_scale?: number | null;
+          cadre_code?: string;
+          cnic?: string | null;
+          created_at?: string;
+          deactivated_at?: string | null;
+          designation?: string | null;
+          display_name?: string;
+          email?: string | null;
+          father_name?: string | null;
+          id?: string;
+          must_change_password?: boolean | null;
+          office_address?: string | null;
+          phone?: string | null;
+          ppo_number?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
       assessment_versions: {
         Row: {
           approval_evidence_id: string | null;
@@ -230,10 +290,58 @@ export type Database = {
           }
         ];
       };
+      geo_circles: {
+        Row: {
+          circle_code: string;
+          circle_number: number;
+          created_at: string;
+          district_id: string;
+          division_id: string;
+          id: string;
+          is_active: boolean;
+          is_immutable: boolean;
+          name: string;
+          office_address: string | null;
+          tehsil_id: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          circle_code: string;
+          circle_number: number;
+          created_at?: string;
+          district_id: string;
+          division_id: string;
+          id?: string;
+          is_active?: boolean;
+          is_immutable?: boolean;
+          name: string;
+          office_address?: string | null;
+          tehsil_id?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          circle_code?: string;
+          circle_number?: number;
+          created_at?: string;
+          district_id?: string;
+          division_id?: string;
+          id?: string;
+          is_active?: boolean;
+          is_immutable?: boolean;
+          name?: string;
+          office_address?: string | null;
+          tehsil_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       jurisdictions: {
         Row: {
           code: string;
           created_at: string;
+          geo_circle_id: string | null;
+          geo_district_id: string | null;
+          geo_division_id: string | null;
           id: string;
           name: string;
           parent_id: string | null;
@@ -242,6 +350,9 @@ export type Database = {
         Insert: {
           code: string;
           created_at?: string;
+          geo_circle_id?: string | null;
+          geo_district_id?: string | null;
+          geo_division_id?: string | null;
           id: string;
           name: string;
           parent_id?: string | null;
@@ -250,6 +361,9 @@ export type Database = {
         Update: {
           code?: string;
           created_at?: string;
+          geo_circle_id?: string | null;
+          geo_district_id?: string | null;
+          geo_division_id?: string | null;
           id?: string;
           name?: string;
           parent_id?: string | null;
@@ -264,6 +378,126 @@ export type Database = {
             referencedColumns: ["id"];
           }
         ];
+      };
+      post_assignments: {
+        Row: {
+          assigned_by: string | null;
+          charge_type: string;
+          created_at: string;
+          handing_over_notes: string | null;
+          id: string;
+          post_id: string;
+          relieved_by: string | null;
+          transfer_order_number: string;
+          user_id: string;
+          valid_from: string;
+          valid_to: string | null;
+        };
+        Insert: {
+          assigned_by?: string | null;
+          charge_type?: string;
+          created_at?: string;
+          handing_over_notes?: string | null;
+          id?: string;
+          post_id: string;
+          relieved_by?: string | null;
+          transfer_order_number: string;
+          user_id: string;
+          valid_from?: string;
+          valid_to?: string | null;
+        };
+        Update: {
+          assigned_by?: string | null;
+          charge_type?: string;
+          created_at?: string;
+          handing_over_notes?: string | null;
+          id?: string;
+          post_id?: string;
+          relieved_by?: string | null;
+          transfer_order_number?: string;
+          user_id?: string;
+          valid_from?: string;
+          valid_to?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "post_assignments_post_id_fkey";
+            columns: ["post_id"];
+            isOneToOne: false;
+            referencedRelation: "sanctioned_posts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "post_assignments_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "app_users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      sanctioned_posts: {
+        Row: {
+          cadre_code: string;
+          circle_id: string | null;
+          created_at: string;
+          district_id: string | null;
+          division_id: string;
+          id: string;
+          is_permanent: boolean;
+          jurisdiction_tier: string;
+          legacy_jurisdiction_id: string | null;
+          max_bps: number;
+          min_bps: number;
+          post_code: string;
+          post_sequence: number;
+          post_title: string;
+          role_code: string;
+          sanctioned_order_no: string | null;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          cadre_code: string;
+          circle_id?: string | null;
+          created_at?: string;
+          district_id?: string | null;
+          division_id: string;
+          id?: string;
+          is_permanent?: boolean;
+          jurisdiction_tier: string;
+          legacy_jurisdiction_id?: string | null;
+          max_bps: number;
+          min_bps: number;
+          post_code: string;
+          post_sequence?: number;
+          post_title: string;
+          role_code: string;
+          sanctioned_order_no?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          cadre_code?: string;
+          circle_id?: string | null;
+          created_at?: string;
+          district_id?: string | null;
+          division_id?: string;
+          id?: string;
+          is_permanent?: boolean;
+          jurisdiction_tier?: string;
+          legacy_jurisdiction_id?: string | null;
+          max_bps?: number;
+          min_bps?: number;
+          post_code?: string;
+          post_sequence?: number;
+          post_title?: string;
+          role_code?: string;
+          sanctioned_order_no?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       payment_receipts: {
         Row: {
@@ -625,12 +859,53 @@ export type Database = {
         Args: Record<PropertyKey, never>;
         Returns: Json;
       };
+      get_jurisdiction_governance_overview: {
+        Args: Record<PropertyKey, never>;
+        Returns: Json;
+      };
       get_district_governance_matrix: {
         Args: Record<PropertyKey, never>;
         Returns: Json;
       };
       get_user_management_audit_log: {
         Args: { p_limit?: number };
+        Returns: Json;
+      };
+      assign_officer_to_post: {
+        Args: {
+          p_post_id: string;
+          p_user_id: string;
+          p_charge_type?: string | null;
+          p_transfer_order_number?: string | null;
+          p_handing_over_notes?: string | null;
+          p_relieve_current_incumbent?: boolean | null;
+        };
+        Returns: Json;
+      };
+      relieve_officer_from_post: {
+        Args: {
+          p_post_id: string;
+          p_reason: string;
+          p_transfer_order_number?: string | null;
+        };
+        Returns: Json;
+      };
+      rename_jurisdiction_entity: {
+        Args: {
+          p_entity_type: string;
+          p_entity_id: string;
+          p_new_name: string;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
+      sanction_circle_post: {
+        Args: {
+          p_circle_id: string;
+          p_role_code: string;
+          p_sanctioned_order_no: string;
+          p_reason?: string | null;
+        };
         Returns: Json;
       };
       update_officer_profile: {
@@ -658,7 +933,7 @@ export type Database = {
       attach_circle_to_tehsil: {
         Args: {
           p_circle_id: string;
-          p_tehsil_id: string;
+          p_tehsil_id: string | null;
           p_reason: string;
         };
         Returns: Json;
@@ -684,7 +959,7 @@ export type Database = {
           p_name: string;
           p_email: string;
           p_role: string;
-          p_circle_id: string;
+          p_circle_id: string | null;
           p_phone: string;
           p_cnic: string;
           p_designation: string;
@@ -694,6 +969,7 @@ export type Database = {
           p_father_name?: string | null;
           p_bps_scale?: number | null;
           p_transfer_order_number?: string | null;
+          p_post_id?: string | null;
         };
         Returns: Json;
       };

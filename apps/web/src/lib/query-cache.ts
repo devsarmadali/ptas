@@ -15,6 +15,7 @@ export const PTAS_CACHE_KEYS = {
   CHALLAN_JURISDICTION_CODES_PREFIX: "challan_jurisdiction_codes:",
   OFFICERS_DIRECTORY: "officers_directory",
   GOVERNANCE_MATRIX: "governance_matrix",
+  JURISDICTION_GOVERNANCE_OVERVIEW: "jurisdiction_governance_overview",
   USER_MGMT_AUDIT_PREFIX: "user_mgmt_audit:"
 } as const;
 

@@ -42,10 +42,56 @@ export interface GeoCircle {
   readonly isImmutable: true;
 }
 
+export type OfficerCadreCode = "ADMIN" | "DET" | "ETO" | "ETI" | "ETC" | "FINANCE" | "AUDITOR";
+
+export type SanctionedPostRoleCode = "DET" | "ETO" | "ETI" | "ETC";
+
+export type PostChargeType = "SUBSTANTIVE" | "ADDITIONAL_CHARGE" | "LOOK_AFTER";
+
+export interface CadreBpsBounds {
+  readonly min: number;
+  readonly max: number;
+  readonly label: string;
+}
+
+export const CADRE_BPS_BOUNDS: Readonly<Record<SanctionedPostRoleCode, CadreBpsBounds>> = {
+  DET: { min: 19, max: 19, label: "Director Excise & Taxation (BPS-19)" },
+  ETO: { min: 17, max: 17, label: "Excise & Taxation Officer (BPS-17)" },
+  ETI: { min: 16, max: 16, label: "Excise & Taxation Inspector (BPS-16)" },
+  ETC: { min: 5, max: 5, label: "Excise & Taxation Constable (BPS-05 — Notice Delivery Only)" }
+} as const;
+
+export interface SanctionedPost {
+  readonly id: string;
+  readonly postCode: string;
+  readonly postTitle: string;
+  readonly roleCode: SanctionedPostRoleCode;
+  readonly cadreCode: SanctionedPostRoleCode;
+  readonly jurisdictionTier: "DIVISION" | "DISTRICT" | "CIRCLE";
+  readonly divisionId: string;
+  readonly districtId?: string | null;
+  readonly circleId?: string | null;
+  readonly postSequence: number;
+  readonly minBps: number;
+  readonly maxBps: number;
+  readonly isPermanent: boolean;
+  readonly status: "ACTIVE" | "ABOLISHED";
+}
+
+export interface PostAssignment {
+  readonly id: string;
+  readonly postId: string;
+  readonly userId: string;
+  readonly chargeType: PostChargeType;
+  readonly transferOrderNumber: string;
+  readonly validFrom: string;
+  readonly validTo?: string | null;
+}
+
 export interface UserJurisdictionAssignment {
   readonly id: string;
   readonly userId: string;
-  readonly roleCode: "ETI" | "ETO" | "DET" | "ADMIN" | "AUDITOR";
+  readonly roleCode: "ETI" | "ETC" | "ETO" | "DET" | "ADMIN" | "AUDITOR";
   readonly circleId?: string | null;
   readonly districtId?: string | null;
   readonly divisionId?: string | null;
@@ -5081,4 +5127,128 @@ export function resolveCircleCode(districtCode: string, circleNumber: number): s
  */
 export function isValidCircleCode(circleCode: string): boolean {
   return circleByCodeMap.has(circleCode.toUpperCase().trim());
+}
+
+/**
+ * Normalizes legacy role aliases (DIRECTOR -> DET, INSPECTOR -> ETI) to canonical cadre codes.
+ */
+export function normalizeCadreCode(
+  roleOrCadre: string | null | undefined
+): OfficerCadreCode | null {
+  const upper = String(roleOrCadre ?? "")
+    .trim()
+    .toUpperCase();
+  switch (upper) {
+    case "ADMIN":
+      return "ADMIN";
+    case "DIRECTOR":
+    case "DET":
+      return "DET";
+    case "ETO":
+      return "ETO";
+    case "INSPECTOR":
+    case "ETI":
+      return "ETI";
+    case "ETC":
+      return "ETC";
+    case "FINANCE":
+      return "FINANCE";
+    case "AUDITOR":
+      return "AUDITOR";
+    default:
+      return null;
+  }
+}
+
+/**
+ * Validates that a BPS grade is permissible for the officer's cadre.
+ */
+export function isBpsValidForCadre(cadre: OfficerCadreCode, bpsScale: number): boolean {
+  if (!Number.isInteger(bpsScale) || bpsScale < 1 || bpsScale > 22) {
+    return false;
+  }
+  if (cadre === "DET" || cadre === "ETO" || cadre === "ETI" || cadre === "ETC") {
+    const bounds = CADRE_BPS_BOUNDS[cadre];
+    return bpsScale >= bounds.min && bpsScale <= bounds.max;
+  }
+  return true;
+}
+
+/**
+ * Determines whether an officer's cadre and BPS qualify them to hold a permanent sanctioned post.
+ */
+export function canCadreHoldPost(
+  officerCadre: OfficerCadreCode,
+  officerBps: number,
+  post: Pick<SanctionedPost, "cadreCode" | "minBps" | "maxBps" | "status">
+): boolean {
+  if (post.status !== "ACTIVE") {
+    return false;
+  }
+  if (officerCadre !== post.cadreCode) {
+    return false;
+  }
+  return officerBps >= post.minBps && officerBps <= post.maxBps;
+}
+
+/**
+ * Strict supervisory hierarchy:
+ * - ADMIN -> DET, ETO, ETI, ETC, FINANCE, AUDITOR
+ * - DET   -> ETO, ETI, ETC, FINANCE, AUDITOR
+ * - ETO   -> ETI, ETC
+ */
+export function canAuthorityManageCadre(
+  actorRole: string | null | undefined,
+  targetRole: string | null | undefined
+): boolean {
+  const actor = normalizeCadreCode(actorRole);
+  const target = normalizeCadreCode(targetRole);
+  if (!actor || !target) return false;
+  switch (actor) {
+    case "ADMIN":
+      return ["DET", "ETO", "ETI", "ETC", "FINANCE", "AUDITOR"].includes(target);
+    case "DET":
+      return ["ETO", "ETI", "ETC", "FINANCE", "AUDITOR"].includes(target);
+    case "ETO":
+      return target === "ETI" || target === "ETC";
+    default:
+      return false;
+  }
+}
+
+/**
+ * Only superior jurisdiction authority may rename permanent geographical display names:
+ * - CIRCLE   -> ETO, DET, ADMIN
+ * - DISTRICT -> DET, ADMIN
+ * - DIVISION -> ADMIN
+ */
+export function canAuthorityRenameEntity(
+  actorRole: string | null | undefined,
+  entityType: "CIRCLE" | "DISTRICT" | "DIVISION"
+): boolean {
+  const actor = normalizeCadreCode(actorRole);
+  if (!actor) return false;
+  if (entityType === "CIRCLE") {
+    return actor === "ETO" || actor === "DET" || actor === "ADMIN";
+  }
+  if (entityType === "DISTRICT") {
+    return actor === "DET" || actor === "ADMIN";
+  }
+  return actor === "ADMIN";
+}
+
+/**
+ * Strict no-self-profile-edit rule: NO user (including Admin/DET/ETO) may modify their own profile.
+ * Only a superior authority within jurisdiction may edit a subordinate officer's profile.
+ */
+export function canEditOfficerProfile(
+  actorUserId: string | null | undefined,
+  actorRole: string | null | undefined,
+  targetUserId: string | null | undefined,
+  targetRole: string | null | undefined
+): boolean {
+  if (!actorUserId || !targetUserId || actorUserId === targetUserId) {
+    return false;
+  }
+  return canAuthorityManageCadre(actorRole, targetRole);
 }

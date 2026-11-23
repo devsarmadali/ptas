@@ -52,7 +52,7 @@ export interface DocumentAuthorizationContext {
   readonly district?: string | undefined;
   readonly circle?: string | undefined;
   readonly jurisdictionId?: string | undefined;
-  readonly jurisdictionTier?: "REGION" | "DISTRICT" | "OFFICE" | "CIRCLE" | undefined;
+  readonly jurisdictionTier?: "REGION" | "DIVISION" | "DISTRICT" | "OFFICE" | "CIRCLE" | undefined;
 }
 
 export interface DocumentLifecycleValidationResult {

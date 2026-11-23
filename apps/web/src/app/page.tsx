@@ -4706,7 +4706,9 @@ export default function HomePage({
     dashboardPerspective === "AUTO"
       ? officer.role === "ADMIN"
         ? "DIRECTOR"
-        : officer.role
+        : officer.role === "ETC"
+          ? "INSPECTOR"
+          : officer.role
       : dashboardPerspective;
 
   // Helpers for Statutory Reports Export & Print
@@ -7692,6 +7694,72 @@ export default function HomePage({
       >
         <p>{authStatus === "CHECKING" ? "Verifying secure PTAS session…" : "Redirecting…"}</p>
       </main>
+    );
+  }
+
+  if (officer.role === "ETC") {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+        <header className="gov-header no-print">
+          <div className="gov-header-inner">
+            <div className="gov-title-group">
+              <div className="gov-crest" aria-hidden="true">
+                <LandmarkIcon size={20} />
+              </div>
+              <div className="gov-titles">
+                <h1>Government of the Punjab — PTAS Notice Delivery Desk</h1>
+                <p className="gov-subtitle">Excise &amp; Taxation Constable (BPS-05)</p>
+              </div>
+            </div>
+            <div className="gov-officer-controls">
+              <div className="officer-identity">
+                <span className="officer-name">{officer.name}</span>
+                <span className="role-pill role-pill--inspector">ETC (BPS-05)</span>
+                <span className="officer-jurisdiction">
+                  &bull; Post: <strong>{officer.postCode || "Notice Delivery"}</strong> (
+                  {officer.jurisdictionName})
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleOfficerSignOut}
+                className="btn-signout"
+                title="Sign out of current officer session"
+              >
+                <LogOutIcon size={14} />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          </div>
+        </header>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="page-shell"
+          style={{ maxWidth: "48rem", paddingTop: "2.5rem" }}
+        >
+          <div className="surface-card">
+            <h2 style={{ margin: "0 0 0.75rem", color: "#0d3822", fontSize: "1.25rem" }}>
+              Notice Delivery Constable Portal (Least-Privilege Mode)
+            </h2>
+            <p style={{ margin: "0 0 1rem", color: "#334155", lineHeight: 1.6 }}>
+              Your permanent sanctioned post{" "}
+              <strong>{officer.postCode || officer.jurisdictionCode || "ETC"}</strong> in{" "}
+              <strong>{officer.jurisdictionName}</strong> is scoped exclusively to statutory notice
+              delivery duties. Survey drafting, assessment approvals, challan issuance, receipts,
+              and personnel administration are disabled by statutory policy.
+            </p>
+            <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+              <Link href="/account/update-password" className="btn-secondary">
+                Change My Password
+              </Link>
+              <button type="button" onClick={handleOfficerSignOut} className="btn-primary">
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
     );
   }
 

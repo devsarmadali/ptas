@@ -2,7 +2,16 @@ import { createHash } from "node:crypto";
 import { createPtasSupabaseClient } from "@ptas/database/client";
 import type { DocumentAuthorizationContext } from "./pdf/types";
 
-const ALLOWED_ROLES = new Set(["INSPECTOR", "ETO", "DIRECTOR", "FINANCE", "AUDITOR"]);
+// Note: ETC (BS-05 Notice Delivery Only) and ADMIN are explicitly excluded from statutory PDF endpoints.
+const CANONICAL_DOCUMENT_ROLE_MAP: Readonly<Record<string, string>> = {
+  INSPECTOR: "INSPECTOR",
+  ETI: "INSPECTOR",
+  ETO: "ETO",
+  DIRECTOR: "DIRECTOR",
+  DET: "DIRECTOR",
+  FINANCE: "FINANCE",
+  AUDITOR: "AUDITOR"
+};
 const ACTOR_CACHE_TTL_MS = 15_000;
 const ACTOR_CACHE_MAX_ENTRIES = 512;
 
@@ -115,9 +124,12 @@ export async function resolveDocumentActor(
     }
 
     const actor = assignment as { role?: unknown; jurisdiction_id?: unknown; user_id?: unknown };
-    const role = String(actor.role ?? "").toUpperCase();
+    const rawRole = String(actor.role ?? "")
+      .trim()
+      .toUpperCase();
+    const role = CANONICAL_DOCUMENT_ROLE_MAP[rawRole];
     const jurisdictionId = String(actor.jurisdiction_id ?? "").trim();
-    if (!ALLOWED_ROLES.has(role) || !jurisdictionId) {
+    if (!role || !jurisdictionId) {
       throw new Error(
         "Authorization denied: active PTAS role and jurisdiction assignment required"
       );

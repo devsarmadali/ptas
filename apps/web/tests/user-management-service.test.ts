@@ -13,9 +13,15 @@ import { clearAllQueryCaches } from "../src/lib/query-cache.js";
 import {
   adminCreateOfficer,
   adminSetOfficerPassword,
+  assignOfficerToPost,
+  attachCircleToTehsil,
   fetchDistrictGovernanceMatrix,
+  fetchJurisdictionGovernanceOverview,
   fetchOfficersDirectory,
   fetchUserManagementAuditLog,
+  relieveOfficerFromPost,
+  renameJurisdictionEntity,
+  sanctionCirclePost,
   setOfficerStatus,
   transferOfficerPosting,
   updateOfficerProfile
@@ -229,5 +235,142 @@ describe("PTAS User Management & Cadre Service", () => {
     expect(rpc).toHaveBeenCalledWith("get_user_management_audit_log", { p_limit: 50 });
     expect(logs).toHaveLength(1);
     expect(logs[0]!.event_type).toBe("OFFICER_TRANSFERRED");
+  });
+
+  it("loads consolidated jurisdiction governance overview and manages sanctioned posts, tehsils, and renames", async () => {
+    const mockOverview = {
+      actor: {
+        user_id: "u-eto",
+        role_code: "ETO",
+        cadre_code: "ETO",
+        bps_scale: 17,
+        jurisdiction_id: "dist-vhr",
+        jurisdiction_tier: "DISTRICT",
+        can_manage_posts: true,
+        can_rename_circles: true,
+        can_rename_districts: false,
+        can_rename_divisions: false,
+        can_sanction_circle_posts: false
+      },
+      divisions: [],
+      districts: [],
+      tehsils: [
+        {
+          id: "teh-jallah",
+          district_id: "dist-vhr",
+          division_id: "div-mtn",
+          tehsil_code: 105,
+          name: "Jallah jeem",
+          attached_circles_count: 0
+        }
+      ],
+      circles: [],
+      supervisory_posts: [],
+      posts: []
+    };
+    rpc.mockResolvedValueOnce({ data: mockOverview, error: null });
+    const loaded = await fetchJurisdictionGovernanceOverview();
+    expect(rpc).toHaveBeenCalledWith("get_jurisdiction_governance_overview");
+    expect(loaded.tehsils[0]!.name).toBe("Jallah jeem");
+
+    rpc.mockResolvedValue({ data: { success: true }, error: null });
+
+    await assignOfficerToPost({
+      postId: "post-etc-vhr-1",
+      userId: "u-constable",
+      chargeType: "SUBSTANTIVE",
+      transferOrderNumber: "ETO(Admin)VHR/2026/101",
+      handingOverNotes: "Posted to Circle 1 notice delivery",
+      relieveCurrentIncumbent: false
+    });
+    expect(rpc).toHaveBeenCalledWith("assign_officer_to_post", {
+      p_post_id: "post-etc-vhr-1",
+      p_user_id: "u-constable",
+      p_charge_type: "SUBSTANTIVE",
+      p_transfer_order_number: "ETO(Admin)VHR/2026/101",
+      p_handing_over_notes: "Posted to Circle 1 notice delivery",
+      p_relieve_current_incumbent: false
+    });
+
+    await relieveOfficerFromPost({
+      postId: "post-eti-vhr-1",
+      reason: "Transferred to Divisional Pool",
+      transferOrderNumber: "SO(Admin)2026/99"
+    });
+    expect(rpc).toHaveBeenCalledWith("relieve_officer_from_post", {
+      p_post_id: "post-eti-vhr-1",
+      p_reason: "Transferred to Divisional Pool",
+      p_transfer_order_number: "SO(Admin)2026/99"
+    });
+
+    await renameJurisdictionEntity({
+      entityType: "CIRCLE",
+      entityId: "cir-vhr-1",
+      newName: "Circle Mailsi",
+      reason: "District reorganization order"
+    });
+    expect(rpc).toHaveBeenCalledWith("rename_jurisdiction_entity", {
+      p_entity_type: "CIRCLE",
+      p_entity_id: "cir-vhr-1",
+      p_new_name: "Circle Mailsi",
+      p_reason: "District reorganization order"
+    });
+
+    await attachCircleToTehsil({
+      circleId: "cir-vhr-1",
+      tehsilId: null,
+      reason: "Placed directly under District HQ"
+    });
+    expect(rpc).toHaveBeenCalledWith("attach_circle_to_tehsil", {
+      p_circle_id: "cir-vhr-1",
+      p_tehsil_id: null,
+      p_reason: "Placed directly under District HQ"
+    });
+
+    await sanctionCirclePost({
+      circleId: "cir-vhr-1",
+      roleCode: "ETC",
+      sanctionedOrderNo: "FD-SANCTION-2026-02",
+      reason: "Additional constable needed"
+    });
+    expect(rpc).toHaveBeenCalledWith("sanction_circle_post", {
+      p_circle_id: "cir-vhr-1",
+      p_role_code: "ETC",
+      p_sanctioned_order_no: "FD-SANCTION-2026-02",
+      p_reason: "Additional constable needed"
+    });
+
+    rpc.mockResolvedValueOnce({
+      data: { id: "u-etc-new", name: "Sajid Ali", email: "sajid@example.com" },
+      error: null
+    });
+    await adminCreateOfficer({
+      name: "Sajid Ali",
+      email: "sajid@example.com",
+      role: "ETC",
+      circleId: "cir-vhr-1",
+      postId: "post-etc-vhr-1",
+      phone: "0300-0000001",
+      cnic: "36603-0000001-1",
+      designation: "Excise & Taxation Constable (Notice Delivery)",
+      officeAddress: "Vehari",
+      initialPassword: "StrongPassword123!"
+    });
+    expect(rpc).toHaveBeenLastCalledWith("admin_create_officer", {
+      p_name: "Sajid Ali",
+      p_email: "sajid@example.com",
+      p_role: "ETC",
+      p_circle_id: "cir-vhr-1",
+      p_post_id: "post-etc-vhr-1",
+      p_phone: "0300-0000001",
+      p_cnic: "36603-0000001-1",
+      p_designation: "Excise & Taxation Constable (Notice Delivery)",
+      p_office_address: "Vehari",
+      p_initial_password: "StrongPassword123!",
+      p_ppo_number: null,
+      p_father_name: null,
+      p_bps_scale: 5,
+      p_transfer_order_number: null
+    });
   });
 });

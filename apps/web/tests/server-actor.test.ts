@@ -144,4 +144,49 @@ describe("server document actor resolution", () => {
     expect(getUser).toHaveBeenCalledTimes(1);
     expect(rpc).toHaveBeenCalledTimes(1);
   });
+
+  it("normalizes DET and ETI canonical cadres while denying ETC (BS-05) and ADMIN from PDF generation", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "publishable-test-key";
+    getUser.mockResolvedValue({
+      data: { user: { id: "auth-user" } },
+      error: null
+    });
+
+    rpc.mockResolvedValueOnce({
+      data: { user_id: "u-det", role: "DET", jurisdiction_id: "div-mtn" },
+      error: null
+    });
+    await expect(resolveDocumentActor("Bearer det-token")).resolves.toEqual({
+      officerId: "u-det",
+      role: "DIRECTOR",
+      jurisdictionId: "div-mtn"
+    });
+
+    rpc.mockResolvedValueOnce({
+      data: { user_id: "u-eti", role: "ETI", jurisdiction_id: "cir-1" },
+      error: null
+    });
+    await expect(resolveDocumentActor("Bearer eti-token")).resolves.toEqual({
+      officerId: "u-eti",
+      role: "INSPECTOR",
+      jurisdictionId: "cir-1"
+    });
+
+    rpc.mockResolvedValueOnce({
+      data: { user_id: "u-etc", role: "ETC", jurisdiction_id: "cir-1" },
+      error: null
+    });
+    await expect(resolveDocumentActor("Bearer etc-token")).rejects.toThrow(
+      "active PTAS role and jurisdiction assignment required"
+    );
+
+    rpc.mockResolvedValueOnce({
+      data: { user_id: "u-admin", role: "ADMIN", jurisdiction_id: "div-mtn" },
+      error: null
+    });
+    await expect(resolveDocumentActor("Bearer admin-token")).rejects.toThrow(
+      "active PTAS role and jurisdiction assignment required"
+    );
+  });
 });

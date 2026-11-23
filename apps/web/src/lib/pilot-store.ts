@@ -10,6 +10,8 @@ import {
   type AuditActor,
   type DemandLedgerEntry,
   type DemandUnit,
+  type OfficerCadreCode,
+  type PostChargeType,
   type StatutoryRuleDefinition,
   approveAssessmentVersion,
   createAssessment,
@@ -25,17 +27,24 @@ import {
 import { formatStandardDocNumber, generatePft2NoticeNumber } from "./statutory-forms";
 import { buildVerificationUrl } from "./site-url";
 
-export type MockRole = "INSPECTOR" | "ETO" | "DIRECTOR" | "ADMIN";
+export type MockRole = "INSPECTOR" | "ETO" | "DIRECTOR" | "ADMIN" | "ETC";
 
 export interface MockOfficer {
   readonly id: string;
   readonly name: string;
   readonly email: string;
   readonly role: MockRole;
+  readonly cadreCode?: OfficerCadreCode | undefined;
+  readonly bpsScale?: number | undefined;
+  readonly postId?: string | null | undefined;
+  readonly postCode?: string | null | undefined;
+  readonly postTitle?: string | null | undefined;
+  readonly chargeType?: PostChargeType | null | undefined;
   readonly title: string;
   readonly jurisdictionId: string;
+  readonly jurisdictionCode?: string | null | undefined;
   readonly jurisdictionName: string;
-  readonly jurisdictionTier: "REGION" | "DISTRICT" | "OFFICE" | "CIRCLE";
+  readonly jurisdictionTier: "REGION" | "DIVISION" | "DISTRICT" | "OFFICE" | "CIRCLE";
   readonly badgeText: string;
 }
 
