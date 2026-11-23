@@ -244,11 +244,11 @@ export function validateOfficerImportJurisdiction(
     };
   }
 
-  // Director / Admin role: allow across all Vehari circles
-  const effectiveCircle = resolvedCircle ?? DISTRICT_VEHARI_CIRCLES[0]!;
+  // All other roles (including Director/Admin/Finance/Auditor) are not authorized to stage bulk survey imports
   return {
-    allowed: true,
-    resolvedCircle: effectiveCircle,
-    resolvedDistrict: "Vehari"
+    allowed: false,
+    error:
+      "Bulk survey import is authorized strictly for field Inspectors and Assessing Authorities (ETO) within their assigned jurisdiction.",
+    resolvedDistrict: rowDistrictStr?.trim() || "Unknown"
   };
 }

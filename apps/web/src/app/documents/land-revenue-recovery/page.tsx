@@ -4,6 +4,7 @@ import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { type StoredUnit } from "../../../lib/pilot-store";
 import { loadOperationalSurveyUnitByIdentifier } from "../../../lib/operational-survey";
+import { getSupabaseAuthClient, resolveAuthenticatedOfficer } from "../../../lib/supabase-auth";
 import { generateLandRevenueRecoveryCertificate } from "../../../lib/statutory-forms";
 import { downloadOfficialPdf } from "../../../lib/pdf";
 import { StandalonePageHeader } from "../../../components/ui/StandalonePageHeader";
@@ -29,7 +30,27 @@ function LandRevenueRecoveryContent() {
       setIsLoaded(true);
       return;
     }
-    void loadOperationalSurveyUnitByIdentifier(unitParam)
+
+    const loadAuthorizedRecoveryUnit = async () => {
+      const supabase = getSupabaseAuthClient();
+      const { data: userData, error: authError } = await supabase.auth.getUser();
+      if (authError || !userData.user) {
+        throw new Error(
+          "Authentication required: sign in with an ETO or Director account to access Land Revenue Recovery Certificates."
+        );
+      }
+
+      const officer = await resolveAuthenticatedOfficer(userData.user);
+      if (officer.role !== "ETO" && officer.role !== "DIRECTOR") {
+        throw new Error(
+          "Statutory authority violation: Land Revenue Recovery Certificates require Assessing Authority (ETO) or Director clearance."
+        );
+      }
+
+      return loadOperationalSurveyUnitByIdentifier(unitParam);
+    };
+
+    void loadAuthorizedRecoveryUnit()
       .then((found) => {
         if (!cancelled) {
           setUnit(found);

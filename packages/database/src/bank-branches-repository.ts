@@ -43,11 +43,16 @@ export class InMemoryDesignatedBankBranchesRepository implements DesignatedBankB
   }
 }
 
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
+
 export class PostgresDesignatedBankBranchesRepository implements DesignatedBankBranchesRepository {
   constructor(private readonly sql: Sql) {}
 
   async listByDistrict(district?: string): Promise<readonly DesignatedBankBranchRecord[]> {
     const clean = district ? district.trim().toLowerCase() : null;
+    const escapedPattern = clean ? `%${escapeLikePattern(clean)}%` : null;
     const rows = await this.sql<
       Array<{
         id: string;
@@ -67,8 +72,8 @@ export class PostgresDesignatedBankBranchesRepository implements DesignatedBankB
         AND (
           ${clean} IS NULL
           OR lower(district) = ${clean}
-          OR lower(district) LIKE ${"%" + (clean || "") + "%"}
-          OR ${clean} LIKE '%' || lower(district) || '%'
+          OR lower(district) LIKE ${escapedPattern} ESCAPE '\'
+          OR ${clean} LIKE ('%' || replace(replace(replace(lower(district), '\', '\\'), '%', '\%'), '_', '\_') || '%') ESCAPE '\'
         )
       ORDER BY district, branch_name
     `;

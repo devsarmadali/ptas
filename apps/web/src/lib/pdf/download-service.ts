@@ -65,13 +65,11 @@ async function resolveBrowserDocumentActor(): Promise<{
  */
 export async function downloadOfficialPdf(params: DownloadPdfParams): Promise<boolean> {
   try {
-    // Browser callers cannot self-assert their role. Resolve it from the active
-    // Supabase session and the server-controlled PTAS assignment RPC.
+    // Browser callers cannot self-assert their role. Fail closed if the authenticated
+    // PTAS session or server role resolution fails instead of falling back to params.authContext.
     const browserActor =
-      typeof window !== "undefined"
-        ? await resolveBrowserDocumentActor().catch(() => undefined)
-        : undefined;
-    const verifiedAuthContext = browserActor?.authContext ?? params.authContext;
+      typeof window !== "undefined" ? await resolveBrowserDocumentActor() : undefined;
+    const verifiedAuthContext = browserActor ? browserActor.authContext : params.authContext;
 
     const { generateAuthoritativePdf } = await import("./document-engine");
     const doc = await generateAuthoritativePdf(

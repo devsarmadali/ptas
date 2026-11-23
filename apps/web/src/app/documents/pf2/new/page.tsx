@@ -331,10 +331,11 @@ function DocumentIssuanceContent() {
         })
       };
 
+      const requestId = crypto.randomUUID();
       const issued = await issueDurablePft2Challan(
         newChallan,
-        `pft2-issue:${freshUnit.id}:${noticeNumber}`,
-        `pft2-issue:${crypto.randomUUID()}`
+        `pft2-issue:${freshUnit.id}:${requestId}`,
+        `pft2-issue:${requestId}`
       );
       setIssuedChallan(issued);
       setErrorMessage("");
@@ -435,11 +436,6 @@ function DocumentIssuanceContent() {
                     await downloadOfficialPdf({
                       type: "FORM_PFT2_CHALLAN",
                       documentIdOrData: challanModel,
-                      authContext: {
-                        role: "ETO",
-                        district: "Vehari",
-                        circle: "Vehari Circle I (City / Commercial)"
-                      },
                       defaultFilename: `Form_PFT2_${issuedChallan.challanNumber.replace(/\//g, "_")}.pdf`
                     });
                   } catch (err: unknown) {

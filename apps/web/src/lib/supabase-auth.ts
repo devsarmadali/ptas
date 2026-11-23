@@ -232,8 +232,7 @@ export async function signInOfficer(email: string, password?: string): Promise<S
     };
   }
 
-  const effectivePassword = password?.trim();
-  if (!effectivePassword) {
+  if (!password || password.trim().length === 0) {
     return {
       success: false,
       isCloudAuth: false,
@@ -271,7 +270,7 @@ export async function signInOfficer(email: string, password?: string): Promise<S
     const { data, error } = await Promise.race([
       supabase.auth.signInWithPassword({
         email: normalizedEmail,
-        password: effectivePassword
+        password
       }),
       networkTimeout
     ]);

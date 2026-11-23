@@ -654,7 +654,7 @@ export function verifyStatutoryDocument(
         ? "Authentic Form P.F.T-1 Notice of Demand"
         : "Unapproved Draft Notice",
       message: pft1.isApproved
-        ? `✓ Official Notice of Demand verified under Rule 6 of 1977 Rules. Assessed Tax: PKR ${pft1.taxAmount.toLocaleString()} &bull; Current Ledger Balance: PKR ${balance.toLocaleString()}.`
+        ? `✓ Official Notice of Demand verified under Rule 6 of 1977 Rules. Assessed Tax: PKR ${pft1.taxAmount.toLocaleString()} • Current Ledger Balance: PKR ${balance.toLocaleString()}.`
         : "Notice: This demand notice reflects a draft assessment not yet approved by the Assessing Authority.",
       documentReference: pft1.noticeNumber,
       unitName: matchingUnit.legalName,
@@ -708,6 +708,9 @@ export function lookupTaxpayerLiability(
   const trimmed = searchQuery.trim();
   if (!trimmed) return null;
   const normalized = normalizeQuery(trimmed);
+  if (normalized.length < 4) return null;
+
+  const queryDigits = normalized.replace(/\D/g, "");
 
   const unit = units.find((u) => {
     const idClean = normalizeQuery(u.identifierValue);
@@ -716,25 +719,25 @@ export function lookupTaxpayerLiability(
     const legalClean = normalizeQuery(u.legalName);
     const tradeClean = u.tradeName ? normalizeQuery(u.tradeName) : "";
 
-    const queryDigits = normalized.replace(/\D/g, "");
     const pdnDigits = pdnClean.replace(/\D/g, "");
+    const identifierMatches =
+      idClean === normalized ||
+      (normalized.length >= 7 &&
+        (idClean === `NTN${normalized}` ||
+          idClean === `CNIC${normalized}` ||
+          normalized === `NTN${idClean}` ||
+          normalized === `CNIC${idClean}`));
+
     const pdnMatches =
       pdnClean === normalized ||
-      pdnClean.includes(normalized) ||
-      normalized.includes(pdnClean) ||
-      (queryDigits.length >= 4 && pdnDigits.length >= 4 && queryDigits.endsWith(pdnDigits));
+      (queryDigits.length >= 4 && pdnDigits.length >= 4 && queryDigits === pdnDigits);
 
-    return (
-      idClean === normalized ||
-      idClean.includes(normalized) ||
-      normalized.includes(idClean) ||
-      pdnMatches ||
-      (uinClean
-        ? uinClean === normalized || uinClean.includes(normalized) || normalized.includes(uinClean)
-        : false) ||
-      legalClean.includes(normalized) ||
-      (tradeClean ? tradeClean.includes(normalized) : false)
-    );
+    const uinMatches = uinClean.length >= 6 && uinClean === normalized;
+    const nameMatches =
+      normalized.length >= 6 &&
+      (legalClean === normalized || (Boolean(tradeClean) && tradeClean === normalized));
+
+    return identifierMatches || pdnMatches || uinMatches || nameMatches;
   });
 
   if (!unit) return null;

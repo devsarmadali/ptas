@@ -8,6 +8,7 @@
  */
 
 import type { MockOfficer, MockRole, StoredUnit } from "../pilot-store";
+import type { OperationalRpcClient } from "../operational-survey";
 
 export type OfficialDocumentType =
   | "FORM_PFT1_NOTICE"
@@ -41,6 +42,7 @@ export interface DocumentGenerationOptions {
   readonly officer?: MockOfficer | undefined;
   readonly circle?: string | undefined;
   readonly district?: string | undefined;
+  readonly supabaseClient?: OperationalRpcClient | undefined;
 }
 
 export interface DocumentAuthorizationContext {

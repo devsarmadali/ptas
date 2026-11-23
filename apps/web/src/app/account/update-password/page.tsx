@@ -28,11 +28,13 @@ export default function UpdatePasswordPage() {
     if (recoveryErrorCode || recoveryErrorDescription) {
       window.history.replaceState(null, "", window.location.pathname);
       setHasRecoverySession(false);
-      setError(
+      const safeErrorMessage =
         recoveryErrorCode === "otp_expired"
           ? "This one-time password setup link has expired or was already used. Request a new link from the PTAS sign-in page."
-          : recoveryErrorDescription || "This password setup link is invalid. Request a new link."
-      );
+          : recoveryErrorCode === "access_denied"
+            ? "Password setup access was denied or cancelled. Request a new link from the PTAS sign-in page."
+            : "This password setup link is invalid or expired. Request a new link from the PTAS sign-in page.";
+      setError(safeErrorMessage);
       return;
     }
 
@@ -73,8 +75,8 @@ export default function UpdatePasswordPage() {
     event.preventDefault();
     setMessage(null);
     setError(null);
-    if (password.length < 6) {
-      setError("Use at least 6 characters for the new password.");
+    if (password.length < 12) {
+      setError("Use at least 12 characters for the new password.");
       return;
     }
     if (password !== confirmation) {
@@ -161,11 +163,11 @@ export default function UpdatePasswordPage() {
                   autoComplete="new-password"
                   className="form-control"
                   required
-                  minLength={6}
+                  minLength={12}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                 />
-                <p className="form-help">Minimum 6 characters required.</p>
+                <p className="form-help">Minimum 12 characters required.</p>
               </div>
 
               <div className="form-group">
@@ -176,7 +178,7 @@ export default function UpdatePasswordPage() {
                   autoComplete="new-password"
                   className="form-control"
                   required
-                  minLength={6}
+                  minLength={12}
                   value={confirmation}
                   onChange={(event) => setConfirmation(event.target.value)}
                 />

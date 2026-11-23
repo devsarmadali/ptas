@@ -481,14 +481,14 @@ export class PostgresAssessmentRepository implements AssessmentRepository {
     version: AssessmentVersion,
     auditContext: AuditContext
   ): Promise<{ assessment: Assessment; version: AssessmentVersion }> {
-    await this.sql.begin(async (tx) => {
-      await tx`
-        UPDATE assessment
-        SET status = ${assessment.status}
-        WHERE id = ${assessment.id}
-      `;
+    // Non-negotiable domain rule & schema invariant: approved versions require approval metadata
+    // and approved versions must never be edited in place.
+    if (version.status === "APPROVED" && (!version.approvedBy || !version.approvedAt)) {
+      throw new Error("Approved assessment version requires approvedBy and approvedAt");
+    }
 
-      await tx`
+    await this.sql.begin(async (tx) => {
+      const updatedVersions = await tx<{ id: string }[]>`
         UPDATE assessment_version
         SET
           status = ${version.status},
@@ -497,6 +497,20 @@ export class PostgresAssessmentRepository implements AssessmentRepository {
           approved_at = ${version.approvedAt ?? null},
           approval_evidence_id = ${version.approvalEvidenceId ?? null}
         WHERE id = ${version.id}
+          AND status <> 'APPROVED'
+        RETURNING id
+      `;
+
+      if (updatedVersions.length === 0) {
+        throw new Error(
+          `Cannot update assessment version ${version.id}: version not found or already APPROVED (immutable)`
+        );
+      }
+
+      await tx`
+        UPDATE assessment
+        SET status = ${assessment.status}
+        WHERE id = ${assessment.id}
       `;
 
       const auditEvent = createAuditEvent({

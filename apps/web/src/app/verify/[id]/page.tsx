@@ -7,9 +7,17 @@ interface VerifyIdPageProps {
   params: Promise<{ id: string }>;
 }
 
+function safeDecodeParam(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 function VerifyIdInner({ params }: VerifyIdPageProps) {
   const resolvedParams = use(params);
-  const id = resolvedParams.id ? decodeURIComponent(resolvedParams.id) : "";
+  const id = resolvedParams.id ? safeDecodeParam(resolvedParams.id) : "";
 
   return <PublicVerificationContent defaultQuery={id} />;
 }

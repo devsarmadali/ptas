@@ -27,12 +27,16 @@ import {
   type FormPFT3RowModel
 } from "../statutory-forms";
 import { buildStatutoryReceiptDocument } from "../receipt-generator";
-import { loadOperationalSurveyUnits } from "../operational-survey";
+import {
+  loadOperationalSurveyUnitByIdentifier,
+  loadOperationalSurveyUnits
+} from "../operational-survey";
 import {
   loadPersistedPotentialUnits,
   convertPotentialUnitToStoredUnit,
   type PotentialUnitRecord
 } from "../potential-units-storage";
+import type { MockOfficer } from "../pilot-store";
 import type {
   OfficialDocumentType,
   DocumentAuthorizationContext,
@@ -138,12 +142,17 @@ export function validateDocumentAuthorization(
 
   // Assistant Excise Officer / Inspector
   if (role === "ASSISTANT_EXCISE_OFFICER" || role === "INSPECTOR") {
-    // Judicial Appellate Orders are restricted from field inspection officers
-    if (docType === "APPELLATE_ORDER") {
+    // Judicial appellate orders, tax clearance certificates, and land revenue recovery warrants
+    // require ETO / Director statutory authority per role-action matrix.
+    if (
+      docType === "APPELLATE_ORDER" ||
+      docType === "TAX_CLEARANCE_CERTIFICATE" ||
+      docType === "LAND_REVENUE_RECOVERY"
+    ) {
       return {
         allowed: false,
         authorized: false,
-        reason: "Insufficient clearance: Inspector role cannot access judicial appellate orders."
+        reason: `Insufficient clearance: Inspector role cannot issue ${docType}.`
       };
     }
 
@@ -169,6 +178,25 @@ export function validateDocumentAuthorization(
     }
 
     return { allowed: true, authorized: true, reason: "AUTHORIZED_INSPECTOR_CIRCLE" };
+  }
+
+  // Finance / Audit roles are limited strictly to read-only registers, receipts, briefs, and dossiers
+  if (role === "FINANCE" || role === "AUDITOR") {
+    const readOnlyAllowed = new Set<OfficialDocumentType>([
+      "FORM_PFT3_REGISTER",
+      "STATUTORY_REPORT",
+      "EXECUTIVE_PFT2_BRIEF",
+      "STATUTORY_RECEIPT",
+      "UNIT_DOSSIER"
+    ]);
+    if (!docType || !readOnlyAllowed.has(docType)) {
+      return {
+        allowed: false,
+        authorized: false,
+        reason: `Insufficient clearance: ${role} role is restricted to read-only financial/audit documents.`
+      };
+    }
+    return { allowed: true, authorized: true, reason: `AUTHORIZED_${role}_READONLY` };
   }
 
   return { allowed: false, authorized: false, reason: "UNSUPPORTED_ROLE" };
@@ -343,6 +371,69 @@ export function validateDocumentLifecycleState(
 
 export const validateDocumentLifecycle = validateDocumentLifecycleState;
 
+function assertDocumentAuthorized(
+  docType: OfficialDocumentType,
+  authContext: DocumentAuthorizationContext,
+  targetRecord?: StoredUnit | { district?: string; circle?: string; circleId?: string } | null
+): void {
+  const auth = validateDocumentAuthorization(docType, authContext, targetRecord);
+  if (!auth.allowed) {
+    throw new Error(`Authorization Error: ${auth.reason}`);
+  }
+}
+
+function assertDocumentLifecycleValid(
+  docType: OfficialDocumentType,
+  entity: unknown,
+  options?: DocumentGenerationOptions
+): void {
+  const lifecycle = validateDocumentLifecycleState(docType, entity);
+  if (!lifecycle.isValid && !options?.isProvisional) {
+    throw new Error(
+      `Document lifecycle violation [${lifecycle.code}]: ${lifecycle.message || lifecycle.reason}`
+    );
+  }
+}
+
+function resolveVerifiedSigningOfficer(
+  effectiveAuth: DocumentAuthorizationContext,
+  options?: DocumentGenerationOptions
+): MockOfficer {
+  if (options?.officer) {
+    return options.officer;
+  }
+  const roleUpper = (effectiveAuth.role || effectiveAuth.officerRole || "").toUpperCase();
+  if (!roleUpper || !effectiveAuth.officerId) {
+    throw new Error(
+      "Authorization Error: verified signing officer context is required to generate this certificate."
+    );
+  }
+  const mappedRole: MockOfficer["role"] =
+    roleUpper === "ETO" || roleUpper === "EXCISE_TAXATION_OFFICER"
+      ? "ETO"
+      : roleUpper === "DIRECTOR"
+        ? "DIRECTOR"
+        : roleUpper === "ADMIN" || roleUpper === "SYSTEM_ADMIN"
+          ? "ADMIN"
+          : "INSPECTOR";
+  return {
+    id: effectiveAuth.officerId,
+    name: `${mappedRole} (${effectiveAuth.officerId.slice(0, 8)})`,
+    email: "",
+    role: mappedRole,
+    title:
+      mappedRole === "ETO"
+        ? "Excise & Taxation Officer (Assessing Authority)"
+        : mappedRole === "DIRECTOR"
+          ? "Director Excise & Taxation"
+          : "Authorized PTAS Officer",
+    jurisdictionId: effectiveAuth.jurisdictionId ?? "",
+    jurisdictionName: effectiveAuth.district || effectiveAuth.circle || "Authorized Jurisdiction",
+    jurisdictionTier: effectiveAuth.jurisdictionTier ?? "DISTRICT",
+    badgeText: mappedRole
+  };
+}
+
 /**
  * Authoritative PDF Generation Engine
  * Reconstructs the complete document from database values and renders deterministic vector PDF.
@@ -371,37 +462,65 @@ export async function generateAuthoritativePdf(
   const effectiveAuth: DocumentAuthorizationContext = authContext ?? {};
   let operationalUnits: StoredUnit[] | undefined;
   const getOperationalUnits = async (): Promise<StoredUnit[]> => {
-    operationalUnits ??= await loadOperationalSurveyUnits();
+    operationalUnits ??= await loadOperationalSurveyUnits({ client: options?.supabaseClient });
     return operationalUnits;
   };
-
-  // Lifecycle check
-  const lifecycle = validateDocumentLifecycleState(docType, targetData);
-  if (!lifecycle.isValid && !options?.isProvisional) {
-    throw new Error(
-      `Document lifecycle violation [${lifecycle.code}]: ${lifecycle.message || lifecycle.reason}`
+  const findUnitByIdentifier = async (identifier: string): Promise<StoredUnit | undefined> => {
+    if (options?.supabaseClient) {
+      const direct = await loadOperationalSurveyUnitByIdentifier(identifier, {
+        client: options.supabaseClient
+      });
+      if (direct) return direct;
+    }
+    const list = await getOperationalUnits();
+    return list.find(
+      (u) =>
+        u.id === identifier ||
+        u.demandUnit?.permanentDemandNo === identifier ||
+        u.provincialUin === identifier ||
+        u.pinNumber === identifier ||
+        u.demandNumber === identifier
     );
+  };
+
+  const isStringIdentifier = typeof targetData === "string";
+  if (!isStringIdentifier) {
+    assertDocumentLifecycleValid(docType, targetData, options);
   }
 
-  // Authorization check — use effectiveAuth built above
-  const authTarget = (targetData as { unit?: StoredUnit })?.unit || (targetData as StoredUnit);
-  const auth = validateDocumentAuthorization(docType, effectiveAuth, authTarget);
-  if (!auth.allowed) {
-    throw new Error(`Authorization Error: ${auth.reason}`);
-  }
+  const initialAuthTarget = isStringIdentifier
+    ? null
+    : (targetData as { unit?: StoredUnit })?.unit || (targetData as StoredUnit);
+  assertDocumentAuthorized(docType, effectiveAuth, initialAuthTarget);
 
   switch (docType) {
     case "FORM_PFT2_CHALLAN": {
-      // Check if structured FormPFT2Model is provided directly
       if (typeof targetData === "object" && targetData !== null && "copies" in targetData) {
         return generatePft2ChallanPdf(targetData as FormPFT2Model, options);
       }
 
       let challanRecord: Pft2ChallanRecord | undefined;
       if (typeof targetData === "string") {
-        throw new Error(
-          "Cannot generate Form PFT-2 PDF from an identifier alone; an authorized challan record is required."
+        if (!options?.supabaseClient) {
+          throw new Error(
+            "Cannot generate Form PFT-2 PDF from an identifier alone; an authorized challan record is required."
+          );
+        }
+        const { data: challanRows, error: challanErr } = await options.supabaseClient.rpc(
+          "list_pft2_challan_registry"
         );
+        if (challanErr) {
+          throw new Error(`Unable to look up challan record: ${challanErr.message}`);
+        }
+        const list = Array.isArray(challanRows) ? (challanRows as Pft2ChallanRecord[]) : [];
+        challanRecord = list.find(
+          (c) =>
+            c.id === targetData || c.challanNumber === targetData || c.noticeNumber === targetData
+        );
+        if (!challanRecord) {
+          throw new Error("Form PFT-2 Challan record not found in accessible jurisdiction.");
+        }
+        assertDocumentLifecycleValid(docType, challanRecord, options);
       } else {
         challanRecord = targetData as Pft2ChallanRecord;
       }
@@ -410,8 +529,8 @@ export async function generateAuthoritativePdf(
       let freshUnit = units.find(
         (unit) =>
           unit.id === challanRecord?.unitId ||
-          unit.pinNumber === challanRecord?.pin ||
-          unit.provincialUin === challanRecord?.pin ||
+          (challanRecord?.pin &&
+            (unit.pinNumber === challanRecord.pin || unit.provincialUin === challanRecord.pin)) ||
           (challanRecord?.demandNumber &&
             unit.demandUnit?.permanentDemandNo === challanRecord?.demandNumber)
       );
@@ -421,82 +540,25 @@ export async function generateAuthoritativePdf(
         const pot = potentialUnits.find(
           (p: PotentialUnitRecord) =>
             p.id === challanRecord?.unitId ||
-            p.pinNumber === challanRecord?.pin ||
+            (challanRecord?.pin &&
+              (p.pinNumber === challanRecord.pin || p.provincialUin === challanRecord.pin)) ||
             p.potentialNumber === challanRecord?.demandNumber ||
-            p.provincialUin === challanRecord?.pin ||
-            p.identifierValue === challanRecord?.identifierValue
+            (challanRecord?.identifierValue && p.identifierValue === challanRecord.identifierValue)
         );
         if (pot) {
           freshUnit = convertPotentialUnitToStoredUnit(pot);
         }
       }
 
-      if (!freshUnit && challanRecord) {
-        // Fallback: Synthesize unit from authoritative challan record itself so valid challans never fail to generate PDF
-        freshUnit = {
-          id: challanRecord.unitId || `unit-${Date.now()}`,
-          provincialUin: challanRecord.provincialUin || challanRecord.pin,
-          pinNumber: challanRecord.pin || challanRecord.provincialUin,
-          legalName: challanRecord.legalName,
-          tradeName: challanRecord.tradeName || challanRecord.legalName,
-          address: challanRecord.address,
-          locality: "",
-          circleName: "Circle-Vehari",
-          districtName: "Vehari",
-          category: challanRecord.category,
-          subclass: challanRecord.subclassificationCode || "",
-          statutoryRule: {
-            category: challanRecord.category,
-            subclassification_code: challanRecord.subclassificationCode,
-            subclassification_label: challanRecord.subclassificationCode,
-            statutory_rate_pkr: challanRecord.amountPayable,
-            annual_rate_pkr: challanRecord.amountPayable,
-            schedule_entry: challanRecord.subclassificationCode || ""
-          },
-          openingArrears: 0,
-          identifiers: [
-            { type: challanRecord.identifierType, value: challanRecord.identifierValue }
-          ],
-          demandUnit: {
-            id: challanRecord.unitId,
-            permanentDemandNo: challanRecord.demandNumber,
-            taxpayerUnitId: challanRecord.unitId,
-            circleId: "vehari-circle-1",
-            status: "ACTIVE"
-          },
-          assessments: [
-            {
-              id: `ass-${challanRecord.unitId}`,
-              status: "APPROVED",
-              taxpayerUnitId: challanRecord.unitId,
-              financialYear: "2025-2026"
-            }
-          ],
-          assessmentVersions: [
-            {
-              id: `ver-${challanRecord.unitId}`,
-              versionNumber: 1,
-              approvedBy: "Excise & Taxation Officer",
-              snapshot: {
-                taxAmount: challanRecord.amountPayable,
-                category: challanRecord.category,
-                subclass: challanRecord.subclassificationCode
-              }
-            }
-          ],
-          ledgerEntries: [],
-          surveys: []
-        } as unknown as StoredUnit;
-      }
-
       if (!freshUnit) {
         throw new Error(
-          "Cannot generate Form PFT-2 PDF: no taxpayer unit found in the authoritative database. " +
-            "Ensure the challan belongs to a taxpayer unit in the authenticated officer's jurisdiction."
+          "Cannot generate Form PFT-2 PDF: authorized taxpayer unit not found in database. " +
+            "Ensure the challan belongs to an active unit in the authenticated officer's jurisdiction."
         );
       }
 
-      // Reconstruct structured Form PFT2 Model from database
+      assertDocumentAuthorized(docType, effectiveAuth, freshUnit);
+
       const challanModel = generateFormPFT2(freshUnit, {
         dueDate: challanRecord?.dueDate,
         issueDate: challanRecord?.issueDate,
@@ -514,7 +576,6 @@ export async function generateAuthoritativePdf(
     }
 
     case "FORM_PFT1_NOTICE": {
-      // Check if structured FormPFT1Model is provided directly (must have noticeNumber and serviceReceipt)
       if (
         typeof targetData === "object" &&
         targetData !== null &&
@@ -526,35 +587,31 @@ export async function generateAuthoritativePdf(
 
       let unit: StoredUnit | undefined;
       if (typeof targetData === "string") {
-        unit = (await getOperationalUnits()).find(
-          (u) =>
-            u.id === targetData ||
-            u.demandUnit?.permanentDemandNo === targetData ||
-            u.provincialUin === targetData
-        );
+        unit = await findUnitByIdentifier(targetData);
       } else {
         unit = targetData as StoredUnit;
       }
 
-      if (!unit && typeof window !== "undefined") {
-        const query = typeof targetData === "string" ? targetData : "";
-        if (query) {
-          const pot = loadPersistedPotentialUnits().find(
-            (p: PotentialUnitRecord) =>
-              p.id === query ||
-              p.pinNumber === query ||
-              p.potentialNumber === query ||
-              p.provincialUin === query
-          );
-          if (pot) {
-            unit = convertPotentialUnitToStoredUnit(pot);
-          }
+      if (!unit && typeof window !== "undefined" && typeof targetData === "string") {
+        const pot = loadPersistedPotentialUnits().find(
+          (p: PotentialUnitRecord) =>
+            p.id === targetData ||
+            p.pinNumber === targetData ||
+            p.potentialNumber === targetData ||
+            p.provincialUin === targetData
+        );
+        if (pot) {
+          unit = convertPotentialUnitToStoredUnit(pot);
         }
       }
 
       if (!unit) {
         throw new Error("Cannot generate Form PFT-1 PDF: authorized taxpayer unit not found.");
       }
+
+      assertDocumentAuthorized(docType, effectiveAuth, unit);
+      assertDocumentLifecycleValid(docType, unit, options);
+
       const pft1Model = generateFormPFT1(unit);
       return generatePft1DemandNoticePdf(pft1Model, options);
     }
@@ -590,7 +647,7 @@ export async function generateAuthoritativePdf(
 
       let unit: StoredUnit | undefined;
       if (typeof targetData === "string") {
-        unit = (await getOperationalUnits()).find((candidate) => candidate.id === targetData);
+        unit = await findUnitByIdentifier(targetData);
       } else {
         unit = targetData as StoredUnit;
       }
@@ -598,6 +655,7 @@ export async function generateAuthoritativePdf(
       if (!unit) {
         throw new Error("Cannot generate Show Cause Notice: authorized taxpayer unit not found.");
       }
+      assertDocumentAuthorized(docType, effectiveAuth, unit);
       const notice = generateShowCausePenaltyNotice(unit);
       return generateShowCauseNoticePdf(notice, options);
     }
@@ -617,9 +675,19 @@ export async function generateAuthoritativePdf(
 
       let receiptRecord: StatutoryReceiptRecord | undefined;
       if (typeof targetData === "string") {
-        throw new Error(
-          "Cannot generate a statutory receipt from an identifier alone; an authorized receipt record is required."
+        if (!options?.supabaseClient) {
+          throw new Error(
+            "Cannot generate a statutory receipt from an identifier alone; an authorized receipt record is required."
+          );
+        }
+        const { data: receiptRows, error: receiptErr } = await options.supabaseClient.rpc(
+          "list_pft2_receipt_registry"
         );
+        if (receiptErr) {
+          throw new Error(`Unable to look up statutory receipt: ${receiptErr.message}`);
+        }
+        const list = Array.isArray(receiptRows) ? (receiptRows as StatutoryReceiptRecord[]) : [];
+        receiptRecord = list.find((r) => r.id === targetData || r.receiptNumber === targetData);
       } else if (
         typeof targetData === "object" &&
         targetData !== null &&
@@ -661,30 +729,23 @@ export async function generateAuthoritativePdf(
 
       let unit: StoredUnit | undefined;
       if (typeof targetData === "string") {
-        unit = (await getOperationalUnits()).find((candidate) => candidate.id === targetData);
+        unit = await findUnitByIdentifier(targetData);
       } else if (typeof targetData === "object" && targetData !== null && "unit" in targetData) {
         unit = (targetData as { unit: StoredUnit }).unit;
       } else {
         unit = targetData as StoredUnit;
       }
 
-      const officer = options?.officer || {
-        id: "a0000000-0000-4000-8000-000000000002",
-        name: "Excise & Taxation Officer (Vehari)",
-        email: "eto.vehari@punjab.gov.pk",
-        role: "ETO",
-        title: "Excise & Taxation Officer (Assessing Authority)",
-        jurisdictionId: "00000000-0000-4000-8000-000000000003",
-        jurisdictionName: "Tehsil Vehari",
-        jurisdictionTier: "OFFICE",
-        badgeText: "Assessing Authority"
-      };
-
       if (!unit) {
         throw new Error(
           "Cannot generate tax clearance certificate: authorized taxpayer unit not found."
         );
       }
+
+      assertDocumentAuthorized(docType, effectiveAuth, unit);
+      assertDocumentLifecycleValid(docType, unit, options);
+
+      const officer = resolveVerifiedSigningOfficer(effectiveAuth, options);
       const certModel = generateTaxClearanceCertificate(unit, officer);
       return generateTaxClearanceCertificatePdf(certModel, options);
     }
@@ -703,7 +764,7 @@ export async function generateAuthoritativePdf(
 
       let unit: StoredUnit | undefined;
       if (typeof targetData === "string") {
-        unit = (await getOperationalUnits()).find((candidate) => candidate.id === targetData);
+        unit = await findUnitByIdentifier(targetData);
       } else {
         unit = targetData as StoredUnit;
       }
@@ -713,6 +774,7 @@ export async function generateAuthoritativePdf(
           "Cannot generate land revenue recovery certificate: authorized taxpayer unit not found."
         );
       }
+      assertDocumentAuthorized(docType, effectiveAuth, unit);
       const cert = generateLandRevenueRecoveryCertificate(unit);
       return generateLandRevenueRecoveryPdf(cert, options);
     }
@@ -734,7 +796,7 @@ export async function generateAuthoritativePdf(
 
       let unit: StoredUnit | undefined;
       if (typeof targetData === "string") {
-        unit = (await getOperationalUnits()).find((candidate) => candidate.id === targetData);
+        unit = await findUnitByIdentifier(targetData);
       } else {
         unit = targetData as StoredUnit;
       }
@@ -742,12 +804,15 @@ export async function generateAuthoritativePdf(
       if (!unit) {
         throw new Error("Cannot generate unit dossier: authorized taxpayer unit not found.");
       }
+      assertDocumentAuthorized(docType, effectiveAuth, unit);
       const effectiveUnit = unit;
       const dossierData: UnitDossierData = {
         unit: effectiveUnit,
         generatedAt: new Date().toISOString(),
-        officerName: options?.officer?.name || "Excise & Taxation Officer (Assessing Authority)",
-        officerTitle: options?.officer?.title || "Excise & Taxation Officer / Assessing Authority",
+        officerName:
+          options?.officer?.name ||
+          `${(effectiveAuth.role || effectiveAuth.officerRole || "OFFICER").toUpperCase()}`,
+        officerTitle: options?.officer?.title || "Authorized Excise & Taxation Officer / PTAS Desk",
         officialSha256: `sha256-dossier-${effectiveUnit?.id || "unit"}`
       };
       return generateUnitDossierPdf(dossierData, options);

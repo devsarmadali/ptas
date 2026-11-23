@@ -118,7 +118,7 @@ describe("PTAS User Management & Cadre Service", () => {
     expect(res.id).toBe("u-new");
   });
 
-  it("rejects officer provisioning if initial password is less than 6 characters", async () => {
+  it("rejects officer provisioning if initial password is less than 12 characters", async () => {
     await expect(
       adminCreateOfficer({
         name: "Test",
@@ -131,7 +131,7 @@ describe("PTAS User Management & Cadre Service", () => {
         officeAddress: "Office",
         initialPassword: "123"
       })
-    ).rejects.toThrow("Initial password must be at least 6 characters.");
+    ).rejects.toThrow("Initial password must be at least 12 characters.");
   });
 
   it("executes official circle transfer and posting order", async () => {

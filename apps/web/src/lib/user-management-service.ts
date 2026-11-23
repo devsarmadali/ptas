@@ -262,8 +262,8 @@ export async function adminSetOfficerPassword(params: {
   newPassword: string;
   mustChange?: boolean;
 }): Promise<void> {
-  if (params.newPassword.length < 6) {
-    throw new Error("Password must be at least 6 characters.");
+  if (params.newPassword.length < 12) {
+    throw new Error("Password must be at least 12 characters.");
   }
   const supabase = getSupabaseAuthClient();
   const { error } = await supabase.rpc("admin_set_officer_password", {
@@ -292,8 +292,8 @@ export async function adminCreateOfficer(params: {
   bpsScale?: number;
   transferOrderNumber?: string;
 }): Promise<{ id: string; name: string; email: string }> {
-  if (params.initialPassword.length < 6) {
-    throw new Error("Initial password must be at least 6 characters.");
+  if (params.initialPassword.length < 12) {
+    throw new Error("Initial password must be at least 12 characters.");
   }
   const supabase = getSupabaseAuthClient();
   const { data, error } = await supabase.rpc("admin_create_officer", {

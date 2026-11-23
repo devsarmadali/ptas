@@ -19,7 +19,6 @@ import {
 } from "../../../../lib/statutory-forms";
 import {
   fetchPotentialAssessmentUnitsFromDatabase,
-  loadPersistedPotentialUnits,
   type PotentialUnitRecord
 } from "../../../../lib/potential-units-storage";
 import { StandalonePageHeader } from "../../../../components/ui/StandalonePageHeader";
@@ -64,12 +63,14 @@ function ReportViewContent() {
     const shouldLoadPotential = reportKey === "POTENTIAL_REGISTER";
     void Promise.all([
       loadOperationalContext(),
-      shouldLoadPotential
-        ? fetchPotentialAssessmentUnitsFromDatabase().catch(() => null)
-        : Promise.resolve(null)
+      shouldLoadPotential ? fetchPotentialAssessmentUnitsFromDatabase() : Promise.resolve([])
     ])
       .then(([{ officer, units }, dbPotential]) => {
         if (!cancelled) {
+          if (shouldLoadPotential && dbPotential === null) {
+            setLoadError("Unable to load potential assessment register from database.");
+            return;
+          }
           setPilotState({
             ...loadPilotState(),
             currentOfficer: officer,
@@ -77,9 +78,7 @@ function ReportViewContent() {
             pft2Challans: [],
             statutoryReceipts: []
           });
-          setPotentialUnits(
-            shouldLoadPotential ? (dbPotential ?? loadPersistedPotentialUnits()) : []
-          );
+          setPotentialUnits(shouldLoadPotential && dbPotential ? dbPotential : []);
         }
       })
       .catch((error: unknown) => {

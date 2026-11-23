@@ -147,14 +147,22 @@ describe("API Security, Rate Limiting, Actor Caching & Concurrency Invariants", 
 
     const arrayPayloadReq = new Request("https://ptas.gov.pk/api/workflows", {
       method: "POST",
-      headers: { host: "ptas.gov.pk", authorization: "Bearer token-valid" },
+      headers: {
+        host: "ptas.gov.pk",
+        authorization: "Bearer token-valid",
+        "content-type": "application/json"
+      },
       body: JSON.stringify({ type: "SURVEY_TRANSITION", payload: ["bad"] })
     });
     expect((await workflowsPost(arrayPayloadReq)).status).toBe(400);
 
     const validReq = new Request("https://ptas.gov.pk/api/workflows", {
       method: "POST",
-      headers: { host: "ptas.gov.pk", authorization: "Bearer token-ok" },
+      headers: {
+        host: "ptas.gov.pk",
+        authorization: "Bearer token-ok",
+        "content-type": "application/json"
+      },
       body: JSON.stringify({ type: "SURVEY_TRANSITION", payload: { p_unit_id: "u-1" } })
     });
     const validRes = await workflowsPost(validReq);
@@ -169,7 +177,8 @@ describe("API Security, Rate Limiting, Actor Caching & Concurrency Invariants", 
           headers: {
             host: "ptas.gov.pk",
             authorization: "Bearer burst-token",
-            "x-forwarded-for": "10.0.0.5"
+            "x-forwarded-for": "10.0.0.5",
+            "content-type": "application/json"
           },
           body: JSON.stringify({ type: "SURVEY_TRANSITION", payload: { p_unit_id: "u-1" } })
         })
@@ -181,7 +190,8 @@ describe("API Security, Rate Limiting, Actor Caching & Concurrency Invariants", 
         headers: {
           host: "ptas.gov.pk",
           authorization: "Bearer burst-token",
-          "x-forwarded-for": "10.0.0.5"
+          "x-forwarded-for": "10.0.0.5",
+          "content-type": "application/json"
         },
         body: JSON.stringify({ type: "SURVEY_TRANSITION", payload: { p_unit_id: "u-1" } })
       })

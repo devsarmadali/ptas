@@ -3,10 +3,11 @@ import { NextResponse } from "next/server";
 import {
   MAX_WORKFLOW_BODY_BYTES,
   buildNoStoreHeaders,
-  checkSlidingWindowRateLimit,
+  checkDistributedRateLimit,
   createRequestId,
   extractClientIp,
-  hashRateLimitSubject
+  hashRateLimitSubject,
+  validateWorkflowCommandPayload
 } from "../../../lib/api-security";
 
 type WorkflowCommand =
@@ -68,6 +69,24 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
   }
 
+  const clientIp = extractClientIp(request.headers);
+  const ipRateLimit = await checkDistributedRateLimit(`wf-ip:${hashRateLimitSubject(clientIp)}`, {
+    limit: 120,
+    windowMs: 60_000
+  });
+  if (!ipRateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many workflow requests from this address. Please retry shortly.", requestId },
+      {
+        status: 429,
+        headers: {
+          ...baseHeaders,
+          "Retry-After": String(ipRateLimit.retryAfterSeconds)
+        }
+      }
+    );
+  }
+
   const authorization = request.headers.get("authorization");
   if (!authorization?.startsWith("Bearer ")) {
     return NextResponse.json(
@@ -83,8 +102,16 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  const rateKey = `wf:${hashRateLimitSubject(`${accessToken}:${extractClientIp(request.headers)}`)}`;
-  const rateLimit = checkSlidingWindowRateLimit(rateKey, { limit: 60, windowMs: 60_000 });
+  const contentType = request.headers.get("content-type");
+  if (contentType && !contentType.toLowerCase().includes("application/json")) {
+    return NextResponse.json(
+      { error: "Unsupported Content-Type; application/json required", requestId },
+      { status: 415, headers: baseHeaders }
+    );
+  }
+
+  const rateKey = `wf:${hashRateLimitSubject(`${accessToken}:${clientIp}`)}`;
+  const rateLimit = await checkDistributedRateLimit(rateKey, { limit: 60, windowMs: 60_000 });
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: "Too many workflow requests. Please retry shortly.", requestId },
@@ -159,13 +186,21 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
+  const payloadValidation = validateWorkflowCommandPayload(command.type, command.payload);
+  if (!payloadValidation.valid) {
+    return NextResponse.json(
+      { error: payloadValidation.error ?? "Invalid workflow command payload", requestId },
+      { status: 400, headers: baseHeaders }
+    );
+  }
+
   const { data, error } = await supabase.rpc(rpc, command.payload as never);
   if (error) {
     console.error(`[PTAS Workflow RPC Error] req=${requestId} rpc=${rpc}:`, {
       code: error.code,
       message: error.message
     });
-    const conflict = error.code === "40001" || error.code === "23505";
+    const conflict = error.code === "PT409" || error.code === "40001" || error.code === "23505";
     const forbidden = error.code === "42501";
     const sanitizedMessage = conflict
       ? "Conflict: Record has been concurrently updated or duplicate identifier exists."

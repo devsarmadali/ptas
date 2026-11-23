@@ -13,6 +13,7 @@ import type {
 import { getReceiptCategory } from "./pilot-store";
 import { numberToWordsPkr, formatStandardDocNumber, formatDemandNumber } from "./statutory-forms";
 import { buildVerificationUrl } from "./site-url";
+import { neutralizeCsvFormula } from "./csv-security";
 
 export function generateStandardReceiptNumber(sequence: number | string): string {
   return formatStandardDocNumber({ docCode: "RCPT", sequence });
@@ -148,7 +149,7 @@ export function buildStatutoryReceiptDocument(
  */
 function escapeCsv(value: string | number | undefined | null): string {
   if (value === undefined || value === null) return '""';
-  const str = String(value);
+  const str = neutralizeCsvFormula(String(value));
   if (/[",\n\r]/.test(str)) {
     return `"${str.replace(/"/g, '""')}"`;
   }

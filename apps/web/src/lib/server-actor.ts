@@ -40,6 +40,27 @@ export function clearDocumentActorCache(): void {
   inFlightActorLookups.clear();
 }
 
+export function extractBearerToken(authorizationHeader: string | null): string | null {
+  if (!authorizationHeader?.startsWith("Bearer ")) {
+    return null;
+  }
+  const token = authorizationHeader.slice("Bearer ".length).trim();
+  return token.length > 0 ? token : null;
+}
+
+export function createScopedSupabaseClient(authorizationHeader: string | null) {
+  const accessToken = extractBearerToken(authorizationHeader);
+  if (!accessToken) {
+    throw new Error("Authorization required: verified bearer session missing");
+  }
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    throw new Error("Authorization service is not configured");
+  }
+  return createPtasSupabaseClient({ url, key, accessToken });
+}
+
 export async function resolveDocumentActor(
   authorizationHeader: string | null
 ): Promise<DocumentAuthorizationContext> {
@@ -75,8 +96,10 @@ export async function resolveDocumentActor(
 
   const lookupPromise = (async (): Promise<DocumentAuthorizationContext> => {
     const supabase = createPtasSupabaseClient({ url, key, accessToken });
-    const { data, error } = await supabase.auth.getUser(accessToken);
-    if (error || !data.user) {
+    const authResult = await supabase.auth.getUser(accessToken);
+    const data = authResult?.data;
+    const error = authResult?.error;
+    if (error || !data?.user) {
       throw new Error("Authorization required: invalid or expired session");
     }
 

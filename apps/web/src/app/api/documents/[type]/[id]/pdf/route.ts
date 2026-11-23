@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   buildNoStoreHeaders,
-  checkSlidingWindowRateLimit,
+  checkDistributedRateLimit,
   createRequestId,
   extractClientIp,
   hashRateLimitSubject,
@@ -16,7 +16,10 @@ import {
   sanitizeDownloadFilename
 } from "../../../../../../lib/api-security";
 import { generateAuthoritativePdf } from "../../../../../../lib/pdf/document-engine";
-import { resolveDocumentActor } from "../../../../../../lib/server-actor";
+import {
+  createScopedSupabaseClient,
+  resolveDocumentActor
+} from "../../../../../../lib/server-actor";
 
 export async function GET(
   request: NextRequest,
@@ -50,11 +53,31 @@ export async function GET(
     );
   }
 
+  const clientIp = extractClientIp(request.headers);
+  const ipRateLimit = await checkDistributedRateLimit(`pdf-ip:${hashRateLimitSubject(clientIp)}`, {
+    limit: 60,
+    windowMs: 60_000
+  });
+  if (!ipRateLimit.allowed) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Too many document generation requests from this address. Please retry shortly.",
+        requestId
+      },
+      {
+        status: 429,
+        headers: {
+          ...baseHeaders,
+          "Retry-After": String(ipRateLimit.retryAfterSeconds)
+        }
+      }
+    );
+  }
+
   const authorizationHeader = request.headers.get("authorization");
-  const rateSubject = authorizationHeader
-    ? `${authorizationHeader}:${extractClientIp(request.headers)}`
-    : extractClientIp(request.headers);
-  const rateLimit = checkSlidingWindowRateLimit(`pdf:${hashRateLimitSubject(rateSubject)}`, {
+  const rateSubject = authorizationHeader ? `${authorizationHeader}:${clientIp}` : clientIp;
+  const rateLimit = await checkDistributedRateLimit(`pdf:${hashRateLimitSubject(rateSubject)}`, {
     limit: 30,
     windowMs: 60_000
   });
@@ -77,7 +100,10 @@ export async function GET(
 
   try {
     const authContext = await resolveDocumentActor(authorizationHeader);
-    const doc = await generateAuthoritativePdf(type, sanitizedId, authContext);
+    const supabaseClient = createScopedSupabaseClient(authorizationHeader);
+    const doc = await generateAuthoritativePdf(type, sanitizedId, authContext, {
+      supabaseClient
+    });
     const pdfBuffer = doc.output("arraybuffer");
 
     const filename = sanitizeDownloadFilename(
@@ -105,22 +131,31 @@ export async function GET(
 
     if (rawMessage.startsWith("Authorization required") || rawMessage.includes("expired session")) {
       status = 401;
-      clientMessage = rawMessage;
+      clientMessage = "Authentication required or session expired.";
+    } else if (rawMessage.includes("Authorization service is not configured")) {
+      status = 503;
+      clientMessage = "Authorization service is temporarily unavailable.";
     } else if (
+      rawMessage.startsWith("Authorization Error:") ||
       rawMessage.includes("Authorization denied") ||
       rawMessage.includes("Authorization Violation") ||
       rawMessage.includes("Statutory Authority") ||
-      rawMessage.includes("Authorization service is not configured")
+      rawMessage.includes("Insufficient clearance") ||
+      rawMessage.includes("jurisdiction mismatch")
     ) {
-      status = rawMessage.includes("not configured") ? 503 : 403;
+      status = 403;
       clientMessage = rawMessage;
     } else if (
+      rawMessage.startsWith("Document lifecycle violation") ||
       rawMessage.includes("Lifecycle") ||
-      rawMessage.includes("cannot be generated") ||
-      rawMessage.includes("not found")
+      rawMessage.includes("lifecycle") ||
+      rawMessage.includes("cannot be generated")
     ) {
-      status = rawMessage.includes("not found") ? 404 : 400;
+      status = 400;
       clientMessage = rawMessage;
+    } else if (rawMessage.toLowerCase().includes("not found")) {
+      status = 404;
+      clientMessage = "Requested statutory record was not found in accessible jurisdiction.";
     }
 
     return NextResponse.json(

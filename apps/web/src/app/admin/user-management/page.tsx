@@ -393,10 +393,10 @@ export default function UserManagementPage() {
 
   const handleSavePassword = async () => {
     if (!passwordOfficer) return;
-    if (newPassword.length < 6) {
+    if (newPassword.length < 12) {
       setFeedback({
         type: "error",
-        text: "Password must be at least 6 characters as required by authentication service."
+        text: "Password must be at least 12 characters as required by PTAS security policy."
       });
       return;
     }
@@ -514,8 +514,8 @@ export default function UserManagementPage() {
       setFeedback({ type: "error", text: "Officer name and email are mandatory." });
       return;
     }
-    if (!createPassword || createPassword.length < 6) {
-      setFeedback({ type: "error", text: "Initial password must be at least 6 characters." });
+    if (!createPassword || createPassword.length < 12) {
+      setFeedback({ type: "error", text: "Initial password must be at least 12 characters." });
       return;
     }
     if (!createCircleId) {
@@ -636,12 +636,17 @@ export default function UserManagementPage() {
               </button>
             )}
 
-            {officers.find((o) => o.auth_user_id === currentOfficer?.id) && (
+            {officers.find(
+              (o) => o.user_id === currentOfficer?.id || o.auth_user_id === currentOfficer?.id
+            ) && (
               <>
                 <button
                   type="button"
                   onClick={() => {
-                    const self = officers.find((o) => o.auth_user_id === currentOfficer?.id);
+                    const self = officers.find(
+                      (o) =>
+                        o.user_id === currentOfficer?.id || o.auth_user_id === currentOfficer?.id
+                    );
                     if (self) handleOpenEdit(self);
                   }}
                   className="btn-on-dark-outline"
@@ -651,7 +656,10 @@ export default function UserManagementPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    const self = officers.find((o) => o.auth_user_id === currentOfficer?.id);
+                    const self = officers.find(
+                      (o) =>
+                        o.user_id === currentOfficer?.id || o.auth_user_id === currentOfficer?.id
+                    );
                     if (self) handleOpenPassword(self);
                   }}
                   className="btn-on-dark-outline"
@@ -2155,7 +2163,7 @@ export default function UserManagementPage() {
                     htmlFor="ptas-admin-field-13"
                     style={{ fontWeight: 700, fontSize: "0.85rem" }}
                   >
-                    Initial Temporary Password (Minimum 6 characters): *
+                    Initial Temporary Password (Minimum 12 characters): *
                   </label>
                   <input
                     id="ptas-admin-field-13"
@@ -2163,7 +2171,8 @@ export default function UserManagementPage() {
                     className="form-control"
                     value={createPassword}
                     onChange={(e) => setCreatePassword(e.target.value)}
-                    placeholder="At least 6 characters"
+                    placeholder="At least 12 characters"
+                    minLength={12}
                     required
                   />
                 </div>
@@ -2708,7 +2717,7 @@ export default function UserManagementPage() {
                   }}
                 >
                   Passwords are authenticated directly via Supabase Auth and encrypted with bcrypt.
-                  Minimum requirement is <strong>6 characters</strong>.
+                  Minimum requirement is <strong>12 characters</strong>.
                 </div>
 
                 <div className="form-group" style={{ marginBottom: "1rem" }}>
@@ -2725,7 +2734,8 @@ export default function UserManagementPage() {
                       className="form-control"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Minimum 6 characters"
+                      placeholder="Minimum 12 characters"
+                      minLength={12}
                       required
                     />
                     <button

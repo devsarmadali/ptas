@@ -4,20 +4,24 @@ import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { type StoredUnit } from "../../../lib/pilot-store";
 import { loadOperationalSurveyUnitByIdentifier } from "../../../lib/operational-survey";
-import {
-  loadPersistedPotentialUnits,
-  convertPotentialUnitToStoredUnit,
-  type PotentialUnitRecord
-} from "../../../lib/potential-units-storage";
 import { generateFormPFT1 } from "../../../lib/statutory-forms";
 import { StatutoryQrCode } from "../../../components/StatutoryQrCode";
 import { downloadOfficialPdf } from "../../../lib/pdf";
 import { StandalonePageHeader } from "../../../components/ui/StandalonePageHeader";
 
+function safeDecodeQueryParam(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 function FormPft1NoticeContent() {
   const searchParams = useSearchParams();
-  const unitParam =
+  const rawUnitParam =
     searchParams.get("pin") || searchParams.get("pdn") || searchParams.get("unit") || "";
+  const unitParam = safeDecodeQueryParam(rawUnitParam);
 
   const [unit, setUnit] = useState<StoredUnit | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -31,31 +35,10 @@ function FormPft1NoticeContent() {
       return;
     }
     loadOperationalSurveyUnitByIdentifier(unitParam)
-      .catch((err) => {
-        console.warn("Could not load operational survey unit for PFT-1:", err);
-        return null;
-      })
-      .then((matched) => {
-        if (cancelled) return;
-
-        let found = matched;
-
-        if (!found) {
-          const potList = loadPersistedPotentialUnits();
-          const pot = potList.find(
-            (p: PotentialUnitRecord) =>
-              p.pinNumber === unitParam ||
-              p.provincialUin === unitParam ||
-              p.potentialNumber === unitParam ||
-              p.id === unitParam ||
-              decodeURIComponent(unitParam) === p.pinNumber
-          );
-          if (pot) {
-            found = convertPotentialUnitToStoredUnit(pot);
-          }
+      .then((found) => {
+        if (!cancelled) {
+          setUnit(found);
         }
-
-        setUnit(found);
       })
       .catch((error: unknown) => {
         if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));

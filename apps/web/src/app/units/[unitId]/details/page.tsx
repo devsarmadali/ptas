@@ -8,10 +8,6 @@ import {
 } from "../../../../lib/pilot-store";
 import { loadOperationalSurveyUnitByIdentifier } from "../../../../lib/operational-survey";
 import {
-  loadPersistedPotentialUnits,
-  convertPotentialUnitToStoredUnit
-} from "../../../../lib/potential-units-storage";
-import {
   computeUnitFinancialSummary,
   getScheduleEntryLabel
 } from "../../../../lib/statutory-forms";
@@ -24,9 +20,17 @@ interface UnitDetailsPageProps {
   params: Promise<{ unitId: string }>;
 }
 
+function safeDecodeUnitIdentifier(rawValue: string): string {
+  try {
+    return decodeURIComponent(rawValue);
+  } catch {
+    return rawValue;
+  }
+}
+
 export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
   const resolvedParams = use(params);
-  const unitId = resolvedParams.unitId;
+  const unitId = safeDecodeUnitIdentifier(resolvedParams.unitId);
 
   const [unit, setUnit] = useState<StoredUnit | null>(null);
   const [challans, setChallans] = useState<Pft2ChallanRecord[]>([]);
@@ -36,38 +40,16 @@ export default function UnitDetailsPage({ params }: UnitDetailsPageProps) {
   useEffect(() => {
     let cancelled = false;
     loadOperationalSurveyUnitByIdentifier(unitId)
-      .catch((err) => {
-        console.warn("Could not load operational survey unit in details page:", err);
-        return null;
-      })
-      .then((matched) => {
+      .then((found) => {
         if (cancelled) return;
-
-        let found = matched;
-
-        if (!found) {
-          const potentialUnits = loadPersistedPotentialUnits();
-          const decodedId = decodeURIComponent(unitId);
-          const pot = potentialUnits.find(
-            (p) =>
-              p.id === unitId ||
-              p.potentialNumber === unitId ||
-              p.pinNumber === unitId ||
-              p.pinNumber === decodedId ||
-              p.provincialUin === unitId ||
-              p.provincialUin === decodedId ||
-              p.identifierValue === unitId
-          );
-          if (pot) {
-            found = convertPotentialUnitToStoredUnit(pot);
-          }
-        }
-
         if (found) {
           setUnit(found);
           setChallans([]);
           setReceipts([]);
         }
+      })
+      .catch((err) => {
+        console.warn("Could not load operational survey unit in details page:", err);
       })
       .finally(() => {
         if (!cancelled) setIsLoaded(true);

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { loadOperationalSurveyUnits } from "../../../lib/operational-survey";
 import {
   fetchPotentialAssessmentUnitsFromDatabase,
-  loadPersistedPotentialUnits,
   convertPotentialUnitToStoredUnit,
   type PotentialUnitRecord
 } from "../../../lib/potential-units-storage";
@@ -60,12 +59,19 @@ export default function StatutoryCategoryYieldPage() {
     setIsLoadingPotential(true);
 
     void fetchPotentialAssessmentUnitsFromDatabase()
-      .catch(() => null)
       .then((dbPotential) => {
         if (cancelled) return;
-        const resolvedPotential = dbPotential ?? loadPersistedPotentialUnits();
-        setPotentialUnits(resolvedPotential);
+        if (dbPotential === null) {
+          setLoadError("Unable to load potential assessment register from database.");
+          return;
+        }
+        setPotentialUnits(dbPotential);
         setPotentialLoaded(true);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setLoadError(error instanceof Error ? error.message : String(error));
+        }
       })
       .finally(() => {
         if (cancelled) {

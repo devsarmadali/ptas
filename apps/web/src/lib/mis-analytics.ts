@@ -27,6 +27,7 @@ import type {
   StoredUnit
 } from "./pilot-store";
 import type { PotentialUnitRecord } from "./potential-units-storage";
+import { neutralizeCsvFormula } from "./csv-security";
 
 export interface CategoryYieldSummary {
   readonly categoryCode: string;
@@ -575,7 +576,7 @@ export function computeExecutiveMetrics(
  */
 export function escapeCsvCell(val: unknown): string {
   if (val === null || val === undefined) return "";
-  const str = String(val);
+  const str = neutralizeCsvFormula(String(val));
   if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("\r")) {
     return `"${str.replace(/"/g, '""')}"`;
   }

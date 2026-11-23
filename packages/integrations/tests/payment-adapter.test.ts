@@ -164,4 +164,100 @@ describe("MockPaymentAdapter (PTAS-090)", () => {
     expect(deadLetters).toHaveLength(1);
     expect(deadLetters[0]?.attempts).toBe(4);
   });
+
+  it("covers nested metadata fields in HMAC canonicalization so metadata tampering fails verification", async () => {
+    const freshAdapter = new MockPaymentAdapter();
+    const payloadWithMetadata: PaymentConfirmationPayload = {
+      ...validPayload,
+      metadata: { branchCode: "VHR-01", nested: { scrollRef: "SCR-100" } }
+    };
+    const event = freshAdapter.createSignedWebhookEvent(payloadWithMetadata);
+    const tamperedEvent = {
+      ...event,
+      payload: {
+        ...event.payload,
+        metadata: { branchCode: "VHR-01", nested: { scrollRef: "SCR-999" } }
+      }
+    };
+
+    const result = await freshAdapter.processPaymentEvent(
+      tamperedEvent,
+      { correlationId: "corr-tampered-meta" },
+      lookup
+    );
+
+    expect(result.outcome).toBe("DEAD_LETTER");
+    expect(result.deadLetterReason).toContain("Invalid cryptographic HMAC signature");
+    expect(freshAdapter.isProcessed(event.eventId)).toBe(false);
+  });
+
+  it("prevents concurrent duplicate processing of identical in-flight payment events", async () => {
+    const freshAdapter = new MockPaymentAdapter();
+    const event = freshAdapter.createSignedWebhookEvent(validPayload);
+    let lookupCalls = 0;
+
+    const slowLookup = async (psid: string) => {
+      lookupCalls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      return lookup(psid);
+    };
+
+    const [r1, r2] = await Promise.all([
+      freshAdapter.processPaymentEvent(event, { correlationId: "corr-race-1" }, slowLookup),
+      freshAdapter.processPaymentEvent(event, { correlationId: "corr-race-2" }, slowLookup)
+    ]);
+
+    const outcomes = [r1.outcome, r2.outcome].sort();
+    expect(outcomes).toEqual(["DUPLICATE_IGNORED", "PROCESSED"]);
+    expect(lookupCalls).toBe(1);
+    expect(freshAdapter.isProcessed(event.eventId)).toBe(true);
+  });
+
+  it("routes non-PAID statuses and non-positive amounts to dead-letter queue without lookup", async () => {
+    const freshAdapter = new MockPaymentAdapter();
+    let lookupCalled = false;
+    const trackingLookup = (psid: string) => {
+      lookupCalled = true;
+      return lookup(psid);
+    };
+
+    const failedEvent = freshAdapter.createSignedWebhookEvent({
+      ...validPayload,
+      status: "FAILED"
+    });
+    const failedResult = await freshAdapter.processPaymentEvent(
+      failedEvent,
+      { correlationId: "corr-failed-status" },
+      trackingLookup
+    );
+    expect(failedResult.outcome).toBe("DEAD_LETTER");
+    expect(failedResult.deadLetterReason).toContain("Non-settlement payment webhook status");
+
+    const zeroEvent = freshAdapter.createSignedWebhookEvent({
+      ...validPayload,
+      amount: 0
+    });
+    const zeroResult = await freshAdapter.processPaymentEvent(
+      zeroEvent,
+      { correlationId: "corr-zero-amt" },
+      trackingLookup
+    );
+    expect(zeroResult.outcome).toBe("DEAD_LETTER");
+    expect(zeroResult.deadLetterReason).toContain("positive finite number");
+    expect(lookupCalled).toBe(false);
+  });
+
+  it("rejects default or short HMAC secrets when NODE_ENV is production", () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    (process.env as Record<string, string | undefined>).NODE_ENV = "production";
+    try {
+      expect(() => new MockPaymentAdapter()).toThrow("dedicated HMAC secret");
+      expect(() => new MockPaymentAdapter("too-short-secret")).toThrow("dedicated HMAC secret");
+      expect(
+        () => new MockPaymentAdapter("prod-secret-key-with-at-least-32-chars-0123456789")
+      ).not.toThrow();
+    } finally {
+      (process.env as Record<string, string | undefined>).NODE_ENV = prevNodeEnv;
+    }
+  });
 });

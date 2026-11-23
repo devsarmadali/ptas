@@ -285,9 +285,38 @@ export function mapOperationalUnit(value: unknown): StoredUnit {
   };
 }
 
+export interface OperationalRpcClient {
+  rpc(
+    fn: "list_operational_survey_units"
+  ): PromiseLike<{ data: unknown; error: { message: string } | null }>;
+  rpc(
+    fn: "get_operational_survey_unit",
+    params: { p_identifier: string }
+  ): PromiseLike<{ data: unknown; error: { message: string } | null }>;
+  rpc(
+    fn: "list_pft2_challan_registry"
+  ): PromiseLike<{ data: unknown; error: { message: string } | null }>;
+  rpc(
+    fn: "list_pft2_receipt_registry"
+  ): PromiseLike<{ data: unknown; error: { message: string } | null }>;
+}
+
 export async function loadOperationalSurveyUnits(options?: {
   readonly force?: boolean | undefined;
+  readonly client?: OperationalRpcClient | undefined;
 }): Promise<StoredUnit[]> {
+  if (options?.client) {
+    const { data, error } = await options.client.rpc("list_operational_survey_units");
+    if (error) {
+      throw new Error(`Unable to load operational survey units: ${error.message}`);
+    }
+    if (!Array.isArray(data)) {
+      if (data === null) return [];
+      throw new Error("Operational survey query returned an invalid response");
+    }
+    return (data as Json[]).map(mapOperationalUnit);
+  }
+
   return getOrFetchCached(
     PTAS_CACHE_KEYS.OPERATIONAL_UNITS,
     45_000,
@@ -319,7 +348,10 @@ function matchesUnitIdentifier(unit: StoredUnit, identifier: string): boolean {
 
 export async function loadOperationalSurveyUnitByIdentifier(
   identifier: string,
-  options?: { readonly force?: boolean | undefined }
+  options?: {
+    readonly force?: boolean | undefined;
+    readonly client?: OperationalRpcClient | undefined;
+  }
 ): Promise<StoredUnit | null> {
   const trimmed = identifier.trim();
   if (!trimmed) return null;
@@ -329,6 +361,25 @@ export async function loadOperationalSurveyUnitByIdentifier(
     decoded = decodeURIComponent(trimmed);
   } catch {
     decoded = trimmed;
+  }
+
+  if (options?.client) {
+    const { data, error } = await options.client.rpc("get_operational_survey_unit", {
+      p_identifier: decoded
+    });
+    if (error) {
+      throw new Error(`Unable to load operational survey unit: ${error.message}`);
+    }
+    if (data === null || data === undefined || typeof data !== "object") {
+      return null;
+    }
+    if (Array.isArray(data)) {
+      const first = data[0];
+      return first && typeof first === "object" && !Array.isArray(first)
+        ? mapOperationalUnit(first as Json)
+        : null;
+    }
+    return mapOperationalUnit(data as Json);
   }
 
   if (!options?.force) {
@@ -352,8 +403,14 @@ export async function loadOperationalSurveyUnitByIdentifier(
       if (error) {
         throw new Error(`Unable to load operational survey unit: ${error.message}`);
       }
-      if (data === null || data === undefined) {
+      if (data === null || data === undefined || typeof data !== "object") {
         return null;
+      }
+      if (Array.isArray(data)) {
+        const first = data[0];
+        return first && typeof first === "object" && !Array.isArray(first)
+          ? mapOperationalUnit(first as Json)
+          : null;
       }
       return mapOperationalUnit(data as Json);
     },

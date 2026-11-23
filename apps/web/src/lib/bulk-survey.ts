@@ -24,6 +24,7 @@ import {
   maskIdentifier,
   normalizeIdentifier
 } from "@ptas/domain";
+import { neutralizeCsvFormula } from "./csv-security";
 import {
   CIRCLE_VEHARI_ID,
   DISTRICT_VEHARI_CIRCLES,
@@ -79,8 +80,23 @@ export interface BulkSurveyParseResult {
 
 export type SurveyImportPayloadRow = Record<string, string>;
 
+const MAX_WORKBOOK_BYTES = 15 * 1024 * 1024;
+const MAX_WORKBOOK_ROWS = 25_000;
+
+function formatWorkbookCellValue(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+  if (typeof value === "boolean") {
+    return value ? "TRUE" : "FALSE";
+  }
+  return String(value).trim();
+}
+
 function escapeCsvCell(value: string): string {
-  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  const safe = neutralizeCsvFormula(value);
+  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 /**
@@ -89,68 +105,73 @@ function escapeCsvCell(value: string): string {
  * The source workbook itself is never uploaded by this helper.
  */
 export async function convertSurveyWorkbookToCsv(file: File): Promise<string> {
-  const { Workbook } = await import("exceljs");
-  const workbook = new Workbook();
-  const source = await file.arrayBuffer();
-  await workbook.xlsx.load(source as Parameters<typeof workbook.xlsx.load>[0]);
+  if (Number.isFinite(file.size) && (file.size <= 0 || file.size > MAX_WORKBOOK_BYTES)) {
+    throw new Error(
+      `Survey workbook must be non-empty and at most ${MAX_WORKBOOK_BYTES / (1024 * 1024)} MB.`
+    );
+  }
 
+  const { default: readExcelFile } = await import("read-excel-file/universal");
+  const source = await file.arrayBuffer();
+  if (source.byteLength === 0 || source.byteLength > MAX_WORKBOOK_BYTES) {
+    throw new Error(
+      `Survey workbook must be non-empty and at most ${MAX_WORKBOOK_BYTES / (1024 * 1024)} MB.`
+    );
+  }
+
+  const sheets = await readExcelFile(source);
   const expectedHeaders = SURVEY_IMPORT_COLUMNS.map((column) => column.header);
-  const matchingWorksheets = workbook.worksheets.filter((candidate) =>
-    expectedHeaders.every(
-      (header, index) =>
-        candidate
-          .getRow(1)
-          .getCell(index + 1)
-          .text.trim() === header
-    )
-  );
-  if (matchingWorksheets.length === 0) {
+  const matchingSheets = sheets.filter((candidate) => {
+    const headerRow = candidate.data[0];
+    if (!headerRow || headerRow.length < expectedHeaders.length) {
+      return false;
+    }
+    return expectedHeaders.every(
+      (header, index) => formatWorkbookCellValue(headerRow[index]) === header
+    );
+  });
+
+  if (matchingSheets.length === 0) {
     throw new Error("No worksheet matches the approved Survey_Import_Filled column contract.");
   }
 
   // Prioritize worksheet with 'filled' in name, or with highest populated data rows
-  let worksheet = matchingWorksheets.find((candidate) =>
-    candidate.name.toLowerCase().includes("filled")
+  let selectedSheet = matchingSheets.find((candidate) =>
+    candidate.sheet.toLowerCase().includes("filled")
   );
-  if (!worksheet) {
+  if (!selectedSheet) {
     let maxPopulated = -1;
-    for (const candidate of matchingWorksheets) {
+    for (const candidate of matchingSheets) {
       let count = 0;
-      for (let r = 2; r <= Math.min(candidate.actualRowCount, 25); r++) {
-        const legalName = candidate.getRow(r).getCell(10).text?.trim();
-        if (legalName) count++;
+      const sampleEnd = Math.min(candidate.data.length, 25);
+      for (let r = 1; r < sampleEnd; r += 1) {
+        const legalName = formatWorkbookCellValue(candidate.data[r]?.[9]);
+        if (legalName) count += 1;
       }
       if (count > maxPopulated) {
         maxPopulated = count;
-        worksheet = candidate;
+        selectedSheet = candidate;
       }
     }
   }
-  if (!worksheet) {
-    worksheet = matchingWorksheets[0]!;
+  if (!selectedSheet) {
+    selectedSheet = matchingSheets[0]!;
+  }
+
+  if (selectedSheet.data.length > MAX_WORKBOOK_ROWS + 1) {
+    throw new Error(
+      `Survey workbook exceeds the maximum allowed ${MAX_WORKBOOK_ROWS.toLocaleString()} rows.`
+    );
   }
 
   const rows: string[][] = [expectedHeaders];
-  for (let rowNumber = 2; rowNumber <= worksheet.actualRowCount; rowNumber += 1) {
-    const row = worksheet.getRow(rowNumber);
+  for (let rowIndex = 1; rowIndex < selectedSheet.data.length; rowIndex += 1) {
+    const rowData = selectedSheet.data[rowIndex] ?? [];
     // Skip empty template placeholder rows
-    const legalNameCell = row.getCell(10);
-    const legalName = (legalNameCell.text || "").trim();
+    const legalName = formatWorkbookCellValue(rowData[9]);
     if (!legalName) continue;
 
-    const values = expectedHeaders.map((header, index) => {
-      const cell = row.getCell(index + 1);
-      if (header === "Survey Date (Auto)" && cell.value instanceof Date) {
-        return cell.value.toISOString().slice(0, 10);
-      }
-      // Handle Excel formula results safely
-      if (cell.value && typeof cell.value === "object" && "result" in cell.value) {
-        const res = (cell.value as { result: unknown }).result;
-        if (res instanceof Date) return res.toISOString().slice(0, 10);
-        return res !== null && res !== undefined ? String(res).trim() : "";
-      }
-      return cell.text ? cell.text.trim() : "";
-    });
+    const values = expectedHeaders.map((_, index) => formatWorkbookCellValue(rowData[index]));
     if (values.some((value) => value.length > 0)) rows.push(values);
   }
 

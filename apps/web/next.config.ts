@@ -1,17 +1,5 @@
 import type { NextConfig } from "next";
 
-const CSP_HEADER = [
-  "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://*.supabase.co",
-  "font-src 'self' data: https://fonts.gstatic.com",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
-  "frame-ancestors 'self'",
-  "base-uri 'self'",
-  "form-action 'self'"
-].join("; ");
-
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
@@ -62,9 +50,17 @@ const nextConfig: NextConfig = {
         ]
       },
       {
+        source: "/api/(.*)",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: "default-src 'none'; frame-ancestors 'none'"
+          }
+        ]
+      },
+      {
         source: "/(.*)",
         headers: [
-          { key: "Content-Security-Policy", value: CSP_HEADER },
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
